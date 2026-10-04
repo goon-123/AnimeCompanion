@@ -1,26 +1,26 @@
 # Build verification
 
-Verified implementation: `9c5352cec319530703dd2e89fe79bf0855d93c7a`.
+Verified implementation: `aaa52a3f185acd170f9fa8e6447f0c95788034fc`.
 
-[Successful macOS/Xcode workflow](https://github.com/goon-123/AnimeCompanion/actions/runs/37175654375), October 4, 2026.
+[Successful macOS/Xcode workflow](https://github.com/goon-123/AnimeCompanion/actions/runs/37177831116), October 4, 2026.
 
 ## Completed
 
 - Compiled and type-checked the complete SwiftUI app with Xcode for iPhone, in Release configuration.
 - Packaged a real unsigned ARM64 IPA with minimum iOS version 17.0. The downloadable artifact is **AnimeCompanion-unsigned-IPA**.
 - Passed **13 offline core unit tests**. The optional captured-source test was skipped because external captures are not bundled. The three live tests are gated during this offline step and run separately below.
-- Passed **3 live public-client checks**: AniList seasonal/trending browsing, seasonal pagination, search, details, ID lookup and weekly airings; AniSchedule and MyDubList English dub data; Anime News Network RSS.
-- Passed **1 iPhone simulator UI test** covering Explore, Schedule, My Library, News and account settings. It waits for loading indicators to disappear and checks that a fresh installation can read its Keychain without a saved-login warning.
-- Reviewed the simulator screenshots. Anime covers, weekly releases and news headlines display real source data. The signed simulator starts with a clean guest library and settings screen.
-- Preserved the AniList implicit sign-in update that landed during the build: the authorization request sends the client ID and response type, and AniList uses the redirect URI registered for that client. Callback URI, token type, expiry and duplicate parameters are validated.
+- Passed **3 live public-client checks**: AniList seasonal/trending browsing, pagination, search, expanded details, ID lookup and weekly airings; AniSchedule and MyDubList English dub data; Anime News Network RSS. The expanded detail check validates release dates, popularity, staff, recommendations and external links.
+- Passed **2 iPhone simulator UI tests**. The first covers Explore, Schedule, My Library, News and account settings, including Keychain access on a fresh installation. The second covers library search and status controls, opening an entry, expanding/closing its cover and reaching its English dub schedule.
+- Reviewed the simulator screenshots for the reference-style library, detailed entry page, full-screen cover and title-specific dub section. Library preview progress is a Debug-only test fixture with real public metadata; it is excluded from the Release IPA and does not write to an AniList account.
+- Moved Continue watching and Coming up for you to expandable sections in My Library. Explore contains discovery sections.
+- Preserved the AniList implicit sign-in update: authorization sends the client ID and response type, and AniList uses the registered redirect URI. Callback URI, token type, expiry and duplicate parameters are validated.
 
 Simulator builds use local ad-hoc signing to exercise Keychain access. The device IPA is unsigned and still needs signing before installation.
 
-## Remaining device setup and verification
+## Remaining device verification
 
-- Register an AniList application with redirect **animecompanion://oauth/anilist**, then enter its numeric client ID in the app's Settings.
-- Sign and install the IPA through the chosen sideloading method, or configure a development-signed device build in Xcode.
-- Verify the full personal-account flow on a signed device: sign-in, cancellation, token persistence, reconnecting and library mutations. The public-client checks do not authenticate or change an AniList account.
+- Sign and install the updated IPA through the chosen sideloading method, or configure a development-signed device build in Xcode.
+- Verify the full personal-account flow on a signed device using the existing AniList client setup: sign-in, cancellation, token persistence, reconnecting and library mutations. The public-client checks do not authenticate or change an AniList account.
 
 ## Repository
 
