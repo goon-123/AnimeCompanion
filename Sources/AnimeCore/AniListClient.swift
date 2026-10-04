@@ -49,7 +49,7 @@ private struct ScheduledAiring: Decodable { let airingAt: Int; let episode: Int;
 public enum AniListQueries {
     public static let card = """
     fragment AnimeCard on Media {
-      id idMal type countryOfOrigin chapters volumes title { romaji english userPreferred }
+      id idMal title { romaji english userPreferred }
       coverImage { extraLarge large medium } bannerImage
       episodes duration format status season seasonYear averageScore genres isAdult
       nextAiringEpisode { airingAt episode }
@@ -87,8 +87,8 @@ public enum AniListQueries {
     }
     """ + card
     public static let detail = """
-    query Details($id: Int!, $type: MediaType!) {
-      Media(id: $id, type: $type, isAdult: false) {
+    query Details($id: Int!) {
+      Media(id: $id, type: ANIME, isAdult: false) {
         ...AnimeCard description(asHtml: false)
         startDate { year month day } endDate { year month day }
         popularity favourites
@@ -108,14 +108,13 @@ public enum AniListQueries {
     """ + card
     public static let viewer = "query ViewerProfile { Viewer { id name avatar { large } } }"
     public static let browse = """
-    query Browse($page: Int!, $type: MediaType!, $search: String, $genre: String,
+    query Browse($page: Int!, $search: String, $genre: String,
                  $year: Int, $season: MediaSeason, $format: MediaFormat, $status: MediaStatus,
-                 $sort: [MediaSort], $country: CountryCode, $dateLike: String) {
+                 $sort: [MediaSort]) {
       Page(page: $page, perPage: 24) {
         pageInfo { hasNextPage }
-        media(type: $type, search: $search, genre: $genre, seasonYear: $year, season: $season,
-              format: $format, status: $status, sort: $sort, countryOfOrigin: $country,
-              startDate_like: $dateLike, isAdult: false, genre_not_in: ["Hentai"]) {
+        media(type: ANIME, search: $search, genre: $genre, seasonYear: $year, season: $season,
+              format: $format, status: $status, sort: $sort, isAdult: false) {
           ...AnimeCard description(asHtml: false)
         }
       }
@@ -129,14 +128,14 @@ public enum AniListQueries {
     public static let library = """
     query Library($userId: Int!) {
       MediaListCollection(userId: $userId, type: ANIME) {
-        lists { entries { id mediaId status progress score updatedAt media { ...AnimeCard } } }
+        lists { entries { id mediaId status progress score repeat updatedAt media { ...AnimeCard } } }
       }
     }
     """ + card
     public static let save = """
     mutation SaveEntry($id: Int, $mediaId: Int!, $progress: Int!, $status: MediaListStatus!) {
       SaveMediaListEntry(id: $id, mediaId: $mediaId, progress: $progress, status: $status) {
-        id mediaId status progress score updatedAt media { ...AnimeCard }
+        id mediaId status progress score repeat updatedAt media { ...AnimeCard }
       }
     }
     """ + card
@@ -224,8 +223,8 @@ public actor AniListClient {
         let result: PageResponse = try await request(AniListQueries.browse, variables: filters.variables(page: page), bypassCache: refresh)
         return result.Page
     }
-    public func details(id: Int, type: String = "ANIME") async throws -> Anime {
-        let result: DetailResponse = try await request(AniListQueries.detail, variables: ["id": .int(id), "type": .string(type)])
+    public func details(id: Int) async throws -> Anime {
+        let result: DetailResponse = try await request(AniListQueries.detail, variables: ["id": .int(id)])
         guard let media = result.Media else { throw ServiceError.message("Anime not found.") }
         return media
     }

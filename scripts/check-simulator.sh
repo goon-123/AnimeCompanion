@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Preserve reviewable screenshots even when an assertion fails.
+export_attachments() {
+  if [ -d build/SimulatorTests.xcresult ]; then
+    xcrun xcresulttool export attachments --path build/SimulatorTests.xcresult \
+      --output-path build/screenshots || true
+  fi
+}
+trap export_attachments EXIT
+
 simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
@@ -16,5 +25,3 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -derivedDataPath build/Simulator -resultBundlePath build/SimulatorTests.xcresult \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 
-xcrun xcresulttool export attachments --path build/SimulatorTests.xcresult \
-  --output-path build/screenshots

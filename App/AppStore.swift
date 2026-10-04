@@ -6,6 +6,7 @@ import AnimeCore
 final class AppStore: ObservableObject {
     let aniList = AniListClient()
     let dubs = DubClient()
+    let exploreDubs = ExploreDubStore()
     let news = NewsClient()
     private let authentication = AuthSession()
     private var token: OAuthToken?

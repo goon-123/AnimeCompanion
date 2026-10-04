@@ -16,15 +16,16 @@ struct AnimeCover: View {
 struct AnimeCard: View {
     let anime: Anime
     var body: some View {
-        NavigationLink(value: AnimeRoute(id: anime.id, mediaType: anime.type ?? "ANIME")) {
+        NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 8) {
-                AnimeCover(anime: anime)
+                AnimeCover(anime: anime, width: 150)
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
                 HStack(spacing: 5) {
                     if let score = anime.averageScore { Label("\(score)%", systemImage: "star.fill").font(.caption) }
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
                 }
-            }.frame(width: 130).foregroundStyle(.primary)
+                DiscoveryIndicators(anime: anime)
+            }.frame(width: 150).foregroundStyle(.primary)
         }.buttonStyle(.plain)
     }
 }

@@ -174,7 +174,7 @@ public struct LibraryDubProgress: Sendable, Equatable {
         }
         if announced { return "Dub announced · count unknown" }
         switch availability {
-        case .notReported: return "Dub not reported"
+        case .notReported: return "No dub reported yet"
         case .partial: return "Partial dub · count unknown"
         case .dubbed: return "Dub available · count unknown"
         case .unknown: return "Dub status unknown"

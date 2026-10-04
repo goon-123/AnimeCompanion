@@ -28,13 +28,6 @@ final class LiveServiceTests: XCTestCase {
         let browse = try await client.browse(DiscoveryFilters(category: .trending))
         XCTAssertFalse((browse.media ?? []).isEmpty)
         XCTAssertTrue((browse.media ?? []).allSatisfy { $0.isAdult != true })
-        let manhwa = try await client.browse(DiscoveryFilters(category: .matureManhwa))
-        XCTAssertFalse((manhwa.media ?? []).isEmpty)
-        XCTAssertTrue((manhwa.media ?? []).allSatisfy { $0.countryOfOrigin == "KR" && $0.isAdult != true })
-        if let first = manhwa.media?.first {
-            let mangaDetails = try await client.details(id: first.id, type: "MANGA")
-            XCTAssertEqual(mangaDetails.type, "MANGA")
-        }
         let lookup = try await client.media(ids: [1, 5])
         XCTAssertEqual(Set(lookup.map(\.id)), Set([1, 5]))
         let week = try XCTUnwrap(Calendar.current.dateInterval(of: .weekOfYear, for: Date()))

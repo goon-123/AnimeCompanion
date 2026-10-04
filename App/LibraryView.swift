@@ -193,8 +193,6 @@ struct LibraryView: View {
 }
 
 struct SettingsView: View {
-    @AppStorage("discovery.matureOnly") private var matureOnly = false
-    @AppStorage("discovery.matureGenre") private var matureGenre = "Thriller"
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var clientID = AppConfiguration.clientID ?? ""
@@ -220,15 +218,6 @@ struct SettingsView: View {
                         Text("Enter the client ID only. Your AniList password stays on AniList.").font(.caption).foregroundStyle(.secondary)
                     }
                     if let error = store.accountError { Text(error).foregroundStyle(.red) }
-                }
-                Section("Explore preferences") {
-                    Toggle("Mature stories only", isOn: $matureOnly).accessibilityIdentifier("settings-mature-stories")
-                    if matureOnly {
-                        Picker("Story focus", selection: $matureGenre) {
-                            ForEach(DiscoveryFilters.matureGenres, id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-                    Text("Focus Explore on non-explicit horror, thriller and psychological anime and Korean manhwa.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)

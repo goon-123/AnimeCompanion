@@ -3,10 +3,10 @@ import AnimeCore
 
 struct DiscoveryBrowseView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("discovery.layout") private var layout = "list"
     let category: DiscoveryCategory
     let selection: SeasonSelection
-    let matureGenre: String
     var titleOverride: String? = nil
     @State private var filters: DiscoveryFilters
     @State private var results: [Anime] = []
@@ -18,16 +18,14 @@ struct DiscoveryBrowseView: View {
     @State private var requestID = UUID()
     @FocusState private var searching: Bool
 
-    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), matureGenre: String = "Thriller", titleOverride: String? = nil) {
-        self.category = category; self.selection = selection; self.matureGenre = matureGenre; self.titleOverride = titleOverride
-        _filters = State(initialValue: DiscoveryFilters(category: category, selection: selection, matureGenre: matureGenre))
+    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil) {
+        self.category = category; self.selection = selection; self.titleOverride = titleOverride
+        _filters = State(initialValue: DiscoveryFilters(category: category, selection: selection))
     }
     private var genres: [String] {
-        filters.matureOnly ? DiscoveryFilters.matureGenres :
         ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mecha", "Music", "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"]
     }
     private var formats: [(String, String)] {
-        filters.mediaType == "MANGA" ? [("MANGA", "Manga / Manhwa"), ("ONE_SHOT", "One-shot")] :
         [("TV", "TV show"), ("TV_SHORT", "TV short"), ("MOVIE", "Movie"), ("OVA", "OVA"), ("ONA", "ONA"), ("SPECIAL", "Special"), ("MUSIC", "Music")]
     }
     private let statuses = [("RELEASING", "Releasing"), ("NOT_YET_RELEASED", "Not yet released"), ("FINISHED", "Finished"), ("HIATUS", "On hiatus"), ("CANCELLED", "Cancelled")]
@@ -40,13 +38,13 @@ struct DiscoveryBrowseView: View {
                 HStack {
                     Menu {
                         Picker("Display type", selection: $layout) { Text("List").tag("list"); Text("Grid").tag("grid") }
-                    } label: { Label(layout == "grid" ? "Grid" : "List", systemImage: layout == "grid" ? "square.grid.2x2" : "list.bullet").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }
+                    } label: { Label(layout == "grid" ? "Grid" : "List", systemImage: layout == "grid" ? "square.grid.2x2" : "list.bullet").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }.accessibilityIdentifier("discovery-layout")
                     Spacer()
                     Menu {
                         Picker("Sort", selection: $filters.sort) { ForEach(DiscoverySort.allCases, id: \.self) { Text($0.label).tag($0) } }
                     } label: { Label(filters.sort.label, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9)) }
                         .accessibilityIdentifier("discovery-sort")
-                    Button { filters = DiscoveryFilters(category: category, selection: selection, matureGenre: matureGenre) } label: { Image(systemName: "line.3.horizontal.decrease.circle").frame(width: 44, height: 44) }
+                    Button { filters = DiscoveryFilters(category: category, selection: selection) } label: { Image(systemName: "line.3.horizontal.decrease.circle").frame(width: 44, height: 44) }
                         .accessibilityLabel("Reset category filters")
                 }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
@@ -66,11 +64,17 @@ struct DiscoveryBrowseView: View {
                 if results.isEmpty && !loading && error == nil {
                     ContentUnavailableView("No matching titles", systemImage: "magnifyingglass", description: Text("Try changing the search or filters."))
                 }
-                Text("Metadata from AniList").font(.caption2).foregroundStyle(.secondary)
+                DiscoveryDataNote()
             }.padding(12)
         }.background(Theme.background).scrollDismissesKeyboard(.interactively)
-            .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline).animeNavigation()
-            .task(id: filters) { await load() }.refreshable { await load(refresh: true) }
+            .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
+            .task(id: filters) { await load() }
+            .task { await dubs.load(using: store.dubs) }
+            .refreshable {
+                async let metadata: Void = load(refresh: true)
+                async let dubInfo: Void = dubs.load(using: store.dubs, refresh: true)
+                _ = await (metadata, dubInfo)
+            }
     }
     private var searchBar: some View {
         HStack {
@@ -89,19 +93,17 @@ struct DiscoveryBrowseView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 Menu {
-                    if !filters.matureOnly { Button("All genres") { filters.genre = nil } }
+                    Button("All genres") { filters.genre = nil }
                     ForEach(genres, id: \.self) { genre in Button(genre) { filters.genre = genre } }
                 } label: { chip(filters.genre ?? "Genre", selected: filters.genre != nil) }.accessibilityIdentifier("discovery-genre")
                 Menu {
                     Button("All years") { filters.year = nil }
                     ForEach(Array((1970...SeasonSelection.current().year + 2).reversed()), id: \.self) { year in Button(String(year)) { filters.year = year } }
                 } label: { chip(filters.year.map(String.init) ?? "Year", selected: filters.year != nil) }.accessibilityIdentifier("discovery-year")
-                if filters.mediaType == "ANIME" {
-                    Menu {
-                        Button("All seasons") { filters.season = nil }
-                        ForEach(AnimeSeason.allCases, id: \.self) { season in Button(season.label) { filters.season = season } }
-                    } label: { chip(filters.season?.label ?? "Season", selected: filters.season != nil) }.accessibilityIdentifier("discovery-season")
-                }
+                Menu {
+                    Button("All seasons") { filters.season = nil }
+                    ForEach(AnimeSeason.allCases, id: \.self) { season in Button(season.label) { filters.season = season } }
+                } label: { chip(filters.season?.label ?? "Season", selected: filters.season != nil) }.accessibilityIdentifier("discovery-season")
                 Menu {
                     Button("All formats") { filters.format = nil }
                     ForEach(formats, id: \.0) { format in Button(format.1) { filters.format = format.0 } }
@@ -140,13 +142,14 @@ struct DiscoveryBrowseView: View {
 struct DiscoveryAnimeRow: View {
     let anime: Anime
     var body: some View {
-        NavigationLink(value: AnimeRoute(id: anime.id, mediaType: anime.type ?? "ANIME")) {
+        NavigationLink(value: AnimeRoute(id: anime.id)) {
             HStack(alignment: .top, spacing: 12) {
                 AnimeCover(anime: anime, width: 90, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 7) {
                     Text(anime.displayTitle).font(.headline).lineLimit(2)
                     Text(metadata).font(.caption).foregroundStyle(.secondary)
-                    Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                    DiscoveryIndicators(anime: anime)
+                    Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     HStack(spacing: 5) {
                         ForEach(Array((anime.genres ?? []).prefix(3)), id: \.self) { genre in
                             Text(genre).font(.caption2).lineLimit(1).padding(.horizontal, 6).padding(.vertical, 4).background(Theme.background, in: Capsule())
@@ -158,6 +161,7 @@ struct DiscoveryAnimeRow: View {
     }
     private var metadata: String {
         var parts = [anime.format?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Anime"]
+        if let episodes = anime.episodes { parts.append("\(episodes) episodes") }
         if let score = anime.averageScore { parts.append(String(format: "%.1f ★", Double(score) / 10)) }
         return parts.joined(separator: " · ")
     }
@@ -166,11 +170,12 @@ struct DiscoveryAnimeRow: View {
 struct DiscoveryAnimeTile: View {
     let anime: Anime
     var body: some View {
-        NavigationLink(value: AnimeRoute(id: anime.id, mediaType: anime.type ?? "ANIME")) {
+        NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 7) {
                 GeometryReader { geometry in AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8) }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
+                DiscoveryIndicators(anime: anime)
             }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
     }

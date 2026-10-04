@@ -41,6 +41,14 @@ jobs:
         run: swift test -j 2 --filter LiveServiceTests
       - name: Check iPhone simulator tabs
         run: bash scripts/check-simulator.sh
+      - name: Upload screenshot preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-simulator-screenshots
+          path: build/screenshots
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload simulator screenshots
         if: always()
         uses: actions/upload-artifact@v4

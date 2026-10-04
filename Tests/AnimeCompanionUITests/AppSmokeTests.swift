@@ -7,6 +7,7 @@ final class AppSmokeTests: XCTestCase {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["explore-category-trending"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["Continue watching"].exists)
+        waitForLoadingToFinish("Finding your season…", in: app)
         app.buttons["explore-category-trending"].tap()
         XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
         waitForLoadingToFinish("Loading anime…", in: app)
@@ -58,39 +59,48 @@ final class AppSmokeTests: XCTestCase {
     }
 
     @MainActor
-    func testMatureStoriesSettingAndManhwaDetails() throws {
+    func testExploreAtAGlanceLibraryDubAndAiringIndicators() throws {
         continueAfterFailure = false
-        let app = XCUIApplication(); app.launch()
-        XCTAssertTrue(app.buttons["Account and settings"].waitForExistence(timeout: 20))
-        app.buttons["Account and settings"].tap()
-        let toggle = app.switches["settings-mature-stories"]
-        for _ in 0..<4 { if toggle.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(toggle.isHittable)
-        if toggle.value as? String != "1" { toggle.tap() }
-        app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["explore-category-matureAnime"].waitForExistence(timeout: 20))
+        let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
+        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
+        app.tabBars.buttons["Explore"].tap()
         waitForLoadingToFinish("Finding your season…", in: app)
-        XCTAssertFalse(app.buttons["explore-category-trending"].exists)
-        capture("Mature-Stories-Explore")
-        let manhwa = app.buttons["explore-category-matureManhwa"]
-        for _ in 0..<5 { if manhwa.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(manhwa.isHittable); manhwa.tap()
-        waitForLoadingToFinish("Loading anime…", in: app)
-        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).firstMatch
-        XCTAssertTrue(entry.waitForExistence(timeout: 35))
-        capture("Mature-Manhwa-Category")
-        entry.tap()
-        XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
-        XCTAssertTrue(app.navigationBars["Manhwa / Manga"].exists)
-        XCTAssertFalse(app.staticTexts["English dub schedule"].exists)
-        capture("Manhwa-Details")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        app.buttons["Account and settings"].tap()
-        let reset = app.switches["settings-mature-stories"]
-        for _ in 0..<4 { if reset.isHittable { break }; app.swipeUp() }
-        if reset.value as? String == "1" { reset.tap() }
-        app.buttons["Done"].tap()
+        let shelfDub = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-dub-")).firstMatch
+        XCTAssertTrue(shelfDub.waitForExistence(timeout: 20))
+        let shelfStatus = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-library-")).firstMatch
+        XCTAssertTrue(shelfStatus.exists)
+        let shelfNext = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-")).firstMatch
+        XCTAssertTrue(shelfNext.exists)
+        capture("Explore-Glance-Shelves")
+
+        app.buttons["explore-search"].tap()
+        let search = app.textFields["discovery-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 15))
+        app.buttons["discovery-layout"].tap()
+        app.buttons["List"].tap()
+        search.tap(); search.typeText("Cowboy\n")
+        XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 35))
+        let dub = app.staticTexts["explore-dub-1"]
+        XCTAssertTrue(dub.exists)
+        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "26/26"), object: dub)
+        XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
+        XCTAssertEqual(app.staticTexts["explore-library-1"].label, "Watching")
+        XCTAssertTrue(app.staticTexts["explore-library-5"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
+        XCTAssertEqual(app.staticTexts["explore-next-sub-1"].label, "Finished airing")
+        capture("Explore-Glance-List")
+
+        app.buttons["discovery-layout"].tap()
+        app.buttons["Grid"].tap()
+        XCTAssertTrue(app.staticTexts["explore-dub-1"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["explore-dub-1"].label.contains("26/26"))
+        XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
+        XCTAssertTrue(app.staticTexts["explore-next-sub-5"].exists)
+        capture("Explore-Glance-Grid")
+        app.buttons["discovery-layout"].tap()
+        app.buttons["List"].tap()
     }
 
     @MainActor
@@ -180,6 +190,7 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["AniList app ID"].exists)
         XCTAssertTrue(app.buttons["Connect AniList"].exists)
+        XCTAssertFalse(app.switches["settings-mature-stories"].exists)
         capture("Settings")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.navigationBars["My Library"].waitForExistence(timeout: 10))

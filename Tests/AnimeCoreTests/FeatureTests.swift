@@ -31,7 +31,7 @@ final class FeatureTests: XCTestCase {
         let unavailable = LibraryDubProgress(anime: finished, snapshot: nil, index: nil, now: now)
         XCTAssertEqual(unavailable.label(for: finished), "Dub status unknown")
         let absent = LibraryDubProgress(anime: finished, snapshot: nil, index: DubIndex(dubbed: [], partial: []), now: now)
-        XCTAssertEqual(absent.label(for: finished), "Dub not reported")
+        XCTAssertEqual(absent.label(for: finished), "No dub reported yet")
     }
     func testAnnouncedDubDoesNotBecomeAnAvailableEpisodeCount() throws {
         let title = try anime(#"{"id":10,"episodes":12,"status":"RELEASING"}"#)
@@ -87,7 +87,7 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(history.popular(in: .month, now: current).first?.article.title, "A")
         XCTAssertEqual(history.popular(in: .month, now: current).first?.opens, 2)
     }
-    func testDiscoveryFiltersPreserveCategoryAndMangaYearSemantics() throws {
+    func testDiscoveryFiltersPreserveCategoryAndSearchSemantics() throws {
         let selection = SeasonSelection(season: .fall, year: 2026)
         let upcoming = DiscoveryFilters(category: .upcoming, selection: selection)
         let vars = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(upcoming.variables(page: 2))) as? [String: Any])
@@ -95,14 +95,17 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(vars["season"] as? String, "WINTER")
         XCTAssertEqual(vars["status"] as? String, "NOT_YET_RELEASED")
         XCTAssertEqual(vars["page"] as? Int, 2)
-        var manhwa = DiscoveryFilters(category: .matureManhwa, matureGenre: "Unknown")
-        manhwa.year = 2025
-        let manga = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(manhwa.variables(page: 1))) as? [String: Any])
-        XCTAssertEqual(manga["type"] as? String, "MANGA")
-        XCTAssertEqual(manga["country"] as? String, "KR")
-        XCTAssertEqual(manga["dateLike"] as? String, "2025%")
-        XCTAssertEqual(manga["genre"] as? String, "Thriller")
-        XCTAssertNil(manga["year"])
+        var trending = DiscoveryFilters(category: .trending)
+        trending.search = "  Cowboy Bebop  "
+        trending.genre = "Action"; trending.format = "TV"; trending.sort = .rating
+        let search = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(trending.variables(page: 0))) as? [String: Any])
+        XCTAssertEqual(search["page"] as? Int, 1)
+        XCTAssertEqual(search["search"] as? String, "Cowboy Bebop")
+        XCTAssertEqual(search["genre"] as? String, "Action")
+        XCTAssertEqual(search["format"] as? String, "TV")
+        XCTAssertEqual(search["sort"] as? String, "SCORE_DESC")
+        XCTAssertNil(search["year"])
+        XCTAssertNil(search["season"])
         XCTAssertTrue(AniListQueries.browse.contains("isAdult: false"))
     }
 }

@@ -26,10 +26,6 @@ public struct SeasonSelection: Hashable, Sendable {
 public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let id: Int
     public let idMal: Int?
-    public let type: String?
-    public let countryOfOrigin: String?
-    public let chapters: Int?
-    public let volumes: Int?
     public let title: AnimeTitle?
     public let coverImage: AnimeImage?
     public let bannerImage: String?
@@ -71,7 +67,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     }
     public init(id: Int, title: String) {
         self.id = id; self.title = AnimeTitle(english: title)
-        idMal = nil; type = nil; countryOfOrigin = nil; chapters = nil; volumes = nil
+        idMal = nil
         coverImage = nil; bannerImage = nil; description = nil; episodes = nil
         duration = nil; format = nil; status = nil; season = nil; seasonYear = nil
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
@@ -212,7 +208,12 @@ public struct LibraryEntry: Codable, Identifiable, Hashable, Sendable {
     public var progress: Int?
     public let score: Double?
     public let updatedAt: Int?
+    public let repeatCount: Int?
     public let media: Anime?
+    private enum CodingKeys: String, CodingKey {
+        case id, mediaId, status, progress, score, updatedAt, media
+        case repeatCount = "repeat"
+    }
     public var progressValue: Int { progress ?? 0 }
     public static func clampedProgress(_ progress: Int, total: Int?) -> Int {
         guard let total, total > 0 else { return max(0, progress) }
