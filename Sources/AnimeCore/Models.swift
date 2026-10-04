@@ -288,11 +288,11 @@ public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
     public let imageURL: URL?
     public let source: NewsSource
     public var id: String {
-        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        parts?.fragment = nil
-        parts?.queryItems = parts?.queryItems?.filter { !$0.name.hasPrefix("utm_") && $0.name != "fbclid" }
-        if parts?.queryItems?.isEmpty == true { parts?.queryItems = nil }
-        return parts?.url?.absoluteString ?? url.absoluteString
+        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url.absoluteString }
+        parts.fragment = nil
+        let query = parts.queryItems?.filter { !$0.name.hasPrefix("utm_") && $0.name != "fbclid" }
+        parts.queryItems = query?.isEmpty == false ? query : nil
+        return parts.url?.absoluteString ?? url.absoluteString
     }
     public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork) {
         self.title = title; self.url = url; self.publishedAt = publishedAt; self.imageURL = imageURL; self.source = source
