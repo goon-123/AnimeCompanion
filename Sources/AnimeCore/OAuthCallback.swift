@@ -8,7 +8,7 @@ public struct OAuthToken: Codable, Sendable {
 }
 
 public enum OAuthCallback {
-    public static func parse(_ url: URL, expectedState: String, expectedRedirect: URL, now: Date = Date()) throws -> OAuthToken {
+    public static func parse(_ url: URL, expectedRedirect: URL, now: Date = Date()) throws -> OAuthToken {
         guard let actual = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let expected = URLComponents(url: expectedRedirect, resolvingAgainstBaseURL: false),
               actual.scheme?.lowercased() == expected.scheme?.lowercased(),
@@ -20,7 +20,6 @@ public enum OAuthCallback {
             guard values[item.name] == nil else { throw ServiceError.message("Invalid sign-in response.") }
             values[item.name] = item.value
         }
-        guard !expectedState.isEmpty, values["state"] == expectedState else { throw ServiceError.message("Sign-in verification failed. Please try again.") }
         if let error = values["error"] { throw ServiceError.message(values["error_description"] ?? error) }
         guard let token = values["access_token"], !token.isEmpty,
               values["token_type"]?.lowercased() == "bearer" else { throw ServiceError.message("AniList did not return an access token.") }

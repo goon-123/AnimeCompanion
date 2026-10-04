@@ -60,17 +60,16 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(items.first?.imageURL)
         XCTAssertThrowsError(try RSSParser.parse(Data("<rss><broken>".utf8)))
     }
-    func testCallbackRequiresCorrectStateRedirectAndBearerToken() throws {
+    func testCallbackRequiresCorrectRedirectAndBearerToken() throws {
         let expected = try XCTUnwrap(URL(string: "animecompanion://oauth/anilist"))
-        let valid = try XCTUnwrap(URL(string: "animecompanion://oauth/anilist#access_token=test-token&token_type=Bearer&expires_in=3600&state=abc"))
+        let valid = try XCTUnwrap(URL(string: "animecompanion://oauth/anilist#access_token=test-token&token_type=Bearer&expires_in=3600"))
         let now = Date(timeIntervalSince1970: 1000)
-        let token = try OAuthCallback.parse(valid, expectedState: "abc", expectedRedirect: expected, now: now)
+        let token = try OAuthCallback.parse(valid, expectedRedirect: expected, now: now)
         XCTAssertEqual(token.accessToken, "test-token")
         XCTAssertEqual(token.expiresAt, Date(timeIntervalSince1970: 4600))
-        XCTAssertThrowsError(try OAuthCallback.parse(valid, expectedState: "wrong", expectedRedirect: expected))
-        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://attacker/anilist#access_token=x&token_type=Bearer&state=abc")!, expectedState: "abc", expectedRedirect: expected))
-        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://oauth/anilist#access_token=x&token_type=Bearer&state=abc&state=abc")!, expectedState: "abc", expectedRedirect: expected))
-        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://oauth/anilist#access_token=x&token_type=Bearer&expires_in=0&state=abc")!, expectedState: "abc", expectedRedirect: expected))
+        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://attacker/anilist#access_token=x&token_type=Bearer")!, expectedRedirect: expected))
+        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://oauth/anilist#access_token=x&access_token=y&token_type=Bearer")!, expectedRedirect: expected))
+        XCTAssertThrowsError(try OAuthCallback.parse(URL(string: "animecompanion://oauth/anilist#access_token=x&token_type=Bearer&expires_in=0")!, expectedRedirect: expected))
     }
     func testTimestampFormatsAndInvalidValues() throws {
         let seconds = try JSONDecoder().decode(SourceTimestamp.self, from: Data("1000".utf8))

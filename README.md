@@ -18,7 +18,7 @@ The application opens with real provider clients rather than the design prototyp
 2. Name it **Anime Companion** and set its redirect URL to **animecompanion://oauth/anilist**.
 3. In the iPhone app, open Settings, enter the numeric **client ID**, and tap Connect AniList.
 
-Only the client ID is needed. Do not paste a client secret or access token into the source. OAuth opens AniList's sign-in screen; the returned bearer token is stored in this device's Keychain. Expired credentials require signing in again. Callback state and redirect are checked before a token is accepted.
+Only the client ID is needed. Do not paste a client secret or access token into the source. OAuth opens AniList's sign-in screen; the returned bearer token is stored in this device's Keychain. Expired credentials require signing in again. The sign-in request follows AniList's implicit mobile flow by sending only the client ID and response type; AniList uses the redirect URI saved in the developer application. The callback URI is validated before a token is accepted.
 
 ## Build an iPhone IPA with GitHub
 
