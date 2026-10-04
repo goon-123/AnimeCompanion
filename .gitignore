@@ -1,0 +1,9 @@
+.build/
+build/
+Payload/
+*.ipa
+*.xcuserstate
+xcuserdata/
+.DS_Store
+AnimeCompanion.xcodeproj/
+App/Info.plist

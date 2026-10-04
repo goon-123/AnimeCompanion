@@ -1,0 +1,5 @@
+[
+  {"id": 100, "episode": {"aired": 3, "airedAt": "2026-10-03T15:00:00Z"}},
+  {"id": 100, "episode": {"aired": 3, "airedAt": "2026-10-03T15:00:00Z"}},
+  {"id": 100, "episode": {"aired": 99, "airedAt": "2027-01-01T15:00:00Z"}}
+]

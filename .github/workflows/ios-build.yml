@@ -1,0 +1,36 @@
+name: iOS unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core unit tests
+        run: swift test -j 2
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Compile iPhone app
+        run: |
+          xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
+      - name: Upload iPhone build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-unsigned-IPA
+          path: AnimeCompanion-unsigned.ipa
+          retention-days: 30

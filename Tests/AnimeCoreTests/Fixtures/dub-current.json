@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Test series", "episodeDate": "2026-10-03T16:00:00Z", "episodeNumber": 3,
+    "verified": true,
+    "media": {"media": {"id": 100, "idMal": 200, "title": {"english": "Test series"},
+      "airingSchedule": {"nodes": [
+        {"episode": 3, "airingAt": "2026-10-03T16:00:00Z"},
+        {"episode": 4, "airingAt": "2026-10-10T16:00:00Z"},
+        {"episode": 5, "airingAt": "2026-10-17T16:00:00.000Z"}
+      ]}}}
+  },
+  {
+    "title": "Delayed series", "episodeNumber": 7, "episodeDate": "2032-01-01T13:00:00Z",
+    "delayedIndefinitely": true, "delayedText": "On break", "verified": true,
+    "media": {"media": {"id": 101, "title": {"english": "Delayed series"},
+      "airingSchedule": {"nodes": [{"episode": 7, "airingAt": "2032-01-01T13:00:00Z"}]}}}
+  },
+  {
+    "episodeNumber": 1, "episodeDate": "2026-10-04T12:00:00Z", "verified": false,
+    "media": {"media": {"id": 102, "title": {"english": "Unverified series"}}}
+  }
+]
