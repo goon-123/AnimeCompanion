@@ -26,6 +26,12 @@ final class AppStore: ObservableObject {
 
     func restore() async {
         guard !restored else { return }; restored = true
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") {
+            await loadPreviewLibrary()
+            return
+        }
+        #endif
         do {
             guard let stored = try KeychainTokenStore.load() else { return }
             guard !stored.isExpired else { try KeychainTokenStore.delete(); accountError = "Your AniList connection expired. Please sign in again."; return }
@@ -33,6 +39,23 @@ final class AppStore: ObservableObject {
             await reloadLibrary()
         } catch { accountError = error.localizedDescription }
     }
+    #if DEBUG
+    /// Simulator UI fixture: public metadata with synthetic progress, no credentials or server writes.
+    private func loadPreviewLibrary() async {
+        isSignedIn = true; loadingLibrary = true
+        defer { loadingLibrary = false }
+        do {
+            let media = try await aniList.media(ids: [1, 5, 199, 205])
+            let records: [[String: Any]] = try media.enumerated().map { index, anime in
+                let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(anime))
+                return ["id": 900000 + index, "mediaId": anime.id, "status": anime.id == 5 ? "COMPLETED" : "CURRENT",
+                        "progress": anime.id == 1 ? 8 : (anime.id == 5 ? 1 : 0), "updatedAt": 1700000000 + index, "media": object]
+            }
+            entries = try JSONDecoder().decode([LibraryEntry].self, from: JSONSerialization.data(withJSONObject: records))
+            savedAt = Date()
+        } catch { libraryError = error.localizedDescription }
+    }
+    #endif
     func connect() async {
         guard !connecting else { return }
         guard let clientID = AppConfiguration.clientID else { accountError = "Configure the AniList app ID in Settings first."; return }

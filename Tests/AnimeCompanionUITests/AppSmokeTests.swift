@@ -2,6 +2,40 @@ import XCTest
 
 final class AppSmokeTests: XCTestCase {
     @MainActor
+    func testLibrarySearchDetailCoverAndDubSchedule() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-library-preview"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
+        XCTAssertTrue(app.textFields["library-search"].exists)
+        XCTAssertTrue(app.buttons["library-status-CURRENT"].exists)
+        capture("My-Library-Reference")
+
+        app.textFields["library-search"].tap()
+        app.textFields["library-search"].typeText("Cowboy\n")
+        XCTAssertTrue(app.buttons["library-entry-1"].exists)
+        XCTAssertFalse(app.buttons["library-entry-205"].exists)
+        app.buttons["library-entry-1"].tap()
+        XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
+        capture("Anime-detail")
+        app.buttons["expand-anime-cover"].tap()
+        XCTAssertTrue(app.buttons["Close enlarged image"].waitForExistence(timeout: 15))
+        capture("Expanded-cover")
+        app.buttons["Close enlarged image"].tap()
+        XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 15))
+        for _ in 0..<6 {
+            if app.staticTexts["English dub schedule"].isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.staticTexts["English dub schedule"].isHittable)
+        XCTAssertTrue(app.staticTexts["Upcoming releases"].exists)
+        capture("Anime-dub-schedule")
+    }
+
+    @MainActor
     func testFourTabsAndAccountSettings() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

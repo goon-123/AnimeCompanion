@@ -1,0 +1,73 @@
+import SwiftUI
+import AnimeCore
+
+struct LibraryAnimeRow: View {
+    @EnvironmentObject private var store: AppStore
+    let entry: LibraryEntry
+    let anime: Anime
+    let nextDub: ReleaseEvent?
+    @State private var editing = false
+    @State private var error: String?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            NavigationLink(value: AnimeRoute(id: anime.id)) {
+                HStack(alignment: .top, spacing: 11) {
+                    AnimeCover(anime: anime, width: 76, cornerRadius: 6)
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
+                        Text("\(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?") Episodes").font(.subheadline).foregroundStyle(.secondary)
+                        if let next = anime.nextAiringEpisode {
+                            Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))")
+                                .font(.caption).foregroundStyle(Theme.highlight)
+                        }
+                        if let nextDub, let date = nextDub.date {
+                            Text("DUB · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
+                                .font(.caption).foregroundStyle(.mint)
+                        }
+                        if let error { Text(error).font(.caption).foregroundStyle(.red) }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+            Menu {
+                Button("Edit progress and status", systemImage: "pencil") { editing = true }
+                Button("Mark next episode watched", systemImage: "plus") { update(progress: entry.progressValue + 1, status: entry.status ?? .watching) }
+                    .disabled(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
+                Menu("Move to list") {
+                    ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
+                }
+            } label: { Image(systemName: "ellipsis").frame(width: 38, height: 38).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9)) }
+                .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityLabel("Manage \(anime.displayTitle)")
+        }.padding(.vertical, 5)
+            .sheet(isPresented: $editing) {
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: 20) { Text(anime.displayTitle).font(.headline); ProgressControl(anime: anime); Spacer() }.padding()
+                        .navigationTitle("Your progress").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
+                }.presentationDetents([.medium, .large])
+            }
+    }
+    private func update(progress: Int, status: LibraryStatus) {
+        error = nil
+        Task { do { try await store.save(anime: anime, progress: progress, status: status) } catch { self.error = error.localizedDescription } }
+    }
+}
+
+struct LibraryGuestView: View {
+    @EnvironmentObject private var store: AppStore
+    @Binding var showSettings: Bool
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "books.vertical").font(.system(size: 46))
+            Text("Your anime, together").font(.title2.bold())
+            Text("Connect AniList to see your lists and update episode progress.").multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button {
+                if AppConfiguration.clientID == nil { showSettings = true } else { Task { await store.connect() } }
+            } label: {
+                if store.connecting { ProgressView() } else { Text("Connect AniList").frame(maxWidth: .infinity) }
+            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(.white).foregroundStyle(.black)
+            if let error = store.accountError { NoticeView(message: error) }
+            Text("Browsing and news work without an account.").font(.caption).foregroundStyle(.secondary)
+        }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}

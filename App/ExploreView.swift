@@ -7,7 +7,6 @@ struct ExploreView: View {
     @State private var seasonal: [Anime] = []
     @State private var trending: [Anime] = []
     @State private var upcoming: [Anime] = []
-    @State private var personalizedDub: [ReleaseEvent] = []
     @State private var loading = false
     @State private var loadingMore = false
     @State private var page = 1
@@ -25,29 +24,6 @@ struct ExploreView: View {
                     Spacer()
                     NavigationLink { SearchView() } label: { Image(systemName: "magnifyingglass").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Search anime")
                 }.padding(.horizontal)
-                if !store.watching.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Continue watching").font(.title3.bold()).padding(.horizontal)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 14) {
-                                ForEach(store.watching) { entry in
-                                    if let anime = entry.media {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            AnimeCard(anime: anime)
-                                            Text("Episode \(entry.progressValue) / \(anime.episodes.map(String.init) ?? "?")").font(.caption).foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-                            }.padding(.horizontal)
-                        }
-                    }
-                    if !comingUp.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Coming up for you").font(.title3.bold())
-                            ForEach(Array(comingUp.prefix(4))) { ReleaseRow(event: $0) }
-                        }.padding(.horizontal)
-                    }
-                }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
                 if loading && seasonal.isEmpty { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
                 AnimeShelf(title: "Airing now", anime: seasonal.filter { $0.status == "RELEASING" })
@@ -69,8 +45,7 @@ struct ExploreView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showSeasons) { seasonPicker }
             .task(id: selection) { await load() }
-            .task(id: store.watching.map(\.mediaId)) { await loadPersonalizedDubs() }
-            .refreshable { await load(refresh: true); await loadPersonalizedDubs() }
+            .refreshable { await load(refresh: true) }
     }
     private var seasonPicker: some View {
         NavigationStack {
@@ -80,16 +55,6 @@ struct ExploreView: View {
                 Button("Current season") { selection = .current(); showSeasons = false }
             }.navigationTitle("Browse seasons").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showSeasons = false } } }
         }.presentationDetents([.medium])
-    }
-    private var comingUp: [ReleaseEvent] {
-        let original = store.watching.compactMap { entry -> ReleaseEvent? in
-            guard let media = entry.media, let next = media.nextAiringEpisode else { return nil }
-            return ReleaseEvent(anime: media, episode: next.episode, kind: .sub, date: next.date, certainty: .broadcast)
-        }
-        return (original + personalizedDub).filter { event in
-            guard let date = event.date else { return false }
-            return date >= Date() && date < Date().addingTimeInterval(7 * 86400)
-        }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
     }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let selected = selection
@@ -116,16 +81,7 @@ struct ExploreView: View {
             page = nextPage; hasMore = result.pageInfo?.hasNextPage == true
         } catch { if requestID == attempt { self.error = error.localizedDescription } }
     }
-    private func loadPersonalizedDubs() async {
-        let entries = store.watching; let ids = Set(entries.map(\.mediaId))
-        guard !ids.isEmpty else { personalizedDub = []; return }
-        do {
-            let snapshot = try await store.dubs.snapshot()
-            try Task.checkCancellation()
-            let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
-            personalizedDub = snapshot.events(knownMedia: known).filter { ids.contains($0.anime.id) }
-        } catch { personalizedDub = [] }
-    }
+
 }
 
 struct SearchView: View {

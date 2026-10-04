@@ -45,6 +45,15 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let characters: CharacterConnection?
     public let relations: RelationConnection?
     public let trailer: Trailer?
+    public let startDate: AnimeDate?
+    public let endDate: AnimeDate?
+    public let popularity: Int?
+    public let favourites: Int?
+    public let rankings: [AnimeRank]?
+    public let staff: StaffConnection?
+    public let recommendations: RecommendationConnection?
+    public let reviews: ReviewConnection?
+    public let externalLinks: [AnimeExternalLink]?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
     public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
     public var synopsis: String { TextSanitizer.plain(description ?? "Synopsis not available.") }
@@ -54,6 +63,8 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
         duration = nil; format = nil; status = nil; season = nil; seasonYear = nil
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
         airingSchedule = nil; studios = nil; characters = nil; relations = nil; trailer = nil
+        startDate = nil; endDate = nil; popularity = nil; favourites = nil; rankings = nil
+        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil
     }
 }
 
@@ -88,15 +99,81 @@ public struct RelatedAnime: Codable, Hashable, Identifiable, Sendable {
     public let title: AnimeTitle?
     public let type: String?
     public let coverImage: AnimeImage?
+    public let isAdult: Bool?
+    public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
+    public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
 }
 public struct RelationEdge: Codable, Hashable, Sendable { public let relationType: String?; public let node: RelatedAnime? }
 public struct RelationConnection: Codable, Hashable, Sendable { public let edges: [RelationEdge]? }
 public struct Trailer: Codable, Hashable, Sendable {
     public let id: String?
     public let site: String?
+    public let thumbnail: String?
     public var url: URL? {
-        guard site == "youtube", let id, id.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else { return nil }
-        return URL(string: "https://www.youtube.com/watch?v=\(id)")
+        guard let id, id.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else { return nil }
+        if site == "youtube" { return URL(string: "https://www.youtube.com/watch?v=\(id)") }
+        if site == "dailymotion" { return URL(string: "https://www.dailymotion.com/video/\(id)") }
+        return nil
+    }
+}
+
+public struct AnimeDate: Codable, Hashable, Sendable {
+    public let year: Int?
+    public let month: Int?
+    public let day: Int?
+    public var label: String {
+        guard let year, year > 0 else { return "Not announced" }
+        guard let month, (1...12).contains(month) else { return String(year) }
+        let formatter = DateFormatter(); formatter.locale = .current
+        let name = formatter.shortMonthSymbols[month - 1]
+        if let day, (1...31).contains(day) { return "\(name) \(day), \(year)" }
+        return "\(name) \(year)"
+    }
+}
+public struct AnimeRank: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let rank: Int
+    public let type: String
+    public let context: String
+    public let year: Int?
+    public let season: AnimeSeason?
+    public let allTime: Bool?
+    public var label: String {
+        let period = allTime == true ? "All time" : [season?.label, year.map(String.init)].compactMap { $0 }.joined(separator: " ")
+        return "#\(rank) · \(context.capitalized)" + (period.isEmpty ? "" : " · \(period)")
+    }
+}
+public struct AnimeStaff: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let name: CharacterName?
+    public let image: AnimeImage?
+}
+public struct StaffEdge: Codable, Hashable, Sendable {
+    public let id: Int?
+    public let role: String?
+    public let node: AnimeStaff?
+}
+public struct StaffConnection: Codable, Hashable, Sendable { public let edges: [StaffEdge]? }
+public struct AnimeRecommendation: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let mediaRecommendation: RelatedAnime?
+}
+public struct RecommendationConnection: Codable, Hashable, Sendable { public let nodes: [AnimeRecommendation]? }
+public struct AnimeReview: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let summary: String?
+    public let score: Int?
+    public let siteUrl: String?
+}
+public struct ReviewConnection: Codable, Hashable, Sendable { public let nodes: [AnimeReview]? }
+public struct AnimeExternalLink: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let site: String
+    public let url: String?
+    public let isDisabled: Bool?
+    public var safeURL: URL? {
+        guard isDisabled != true, let url, let parsed = URL(string: url), parsed.scheme?.lowercased() == "https", parsed.host != nil else { return nil }
+        return parsed
     }
 }
 

@@ -4,10 +4,11 @@ import AnimeCore
 struct AnimeCover: View {
     let anime: Anime
     var width: CGFloat = 130
+    var cornerRadius: CGFloat = 14
     var body: some View {
         AsyncImage(url: anime.coverURL) { image in image.resizable().scaledToFill() }
         placeholder: { ZStack { Theme.surface; Image(systemName: "sparkles.tv").foregroundStyle(.secondary) } }
-            .frame(width: width, height: width * 1.45).clipShape(RoundedRectangle(cornerRadius: 14))
+            .frame(width: width, height: width * 1.45).clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .accessibilityHidden(true)
     }
 }
@@ -18,7 +19,7 @@ struct AnimeCard: View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 8) {
                 AnimeCover(anime: anime)
-                Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2).frame(height: 42, alignment: .top)
+                Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
                 HStack(spacing: 5) {
                     if let score = anime.averageScore { Label("\(score)%", systemImage: "star.fill").font(.caption) }
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)

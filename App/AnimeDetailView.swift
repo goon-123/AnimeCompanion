@@ -9,128 +9,208 @@ struct AnimeDetailView: View {
     @State private var error: String?
     @State private var dubStatus = DubAvailability.unknown
     @State private var dubEvents: [ReleaseEvent] = []
-    @State private var dubError: String?
+    @State private var availabilityError: String?
+    @State private var scheduleError: String?
     @State private var loadingDub = false
+    @State private var synopsisExpanded = false
     @State private var showSettings = false
+    @State private var imagePreview: AnimeImagePreview?
+    @State private var requestID = UUID()
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
-                if let error { NoticeView(message: error) { Task { await load() } } }
+                if let error { NoticeView(message: error) { Task { await load() } }.padding(.horizontal) }
                 if let anime {
-                    if let banner = anime.bannerImage, let url = URL(string: banner) {
-                        AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                            .frame(height: 150).clipped().clipShape(RoundedRectangle(cornerRadius: 18)).accessibilityHidden(true)
-                    }
-                    HStack(alignment: .top, spacing: 16) {
-                        AnimeCover(anime: anime, width: 95)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(anime.displayTitle).font(.title2.bold())
-                            if let score = anime.averageScore { Label("\(score)% AniList", systemImage: "star.fill").font(.subheadline) }
-                            Text([anime.format?.replacingOccurrences(of: "_", with: " "), anime.seasonYear.map(String.init), anime.episodes.map { "\($0) episodes" }].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                            if let status = anime.status { Text(status.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                    if let next = anime.nextAiringEpisode {
-                        infoCard("Next original broadcast") {
-                            Text("Episode \(next.episode)").font(.headline)
-                            Text(next.date, format: .dateTime.weekday(.wide).month(.abbreviated).day().hour().minute())
-                            Text("Japanese broadcast · Local subtitle release may differ").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    infoCard("English dub") {
-                        if loadingDub { ProgressView("Checking dub information…") }
-                        Label(dubStatus.label, systemImage: "mic").font(.headline)
-                        if let latest = dubEvents.last(where: { $0.certainty == .recorded }) { Text("Episode \(latest.episode) reported released").font(.subheadline) }
-                        ForEach(Array(dubEvents.filter { $0.date == nil || ($0.date ?? .distantPast) >= Date() }.prefix(5))) { event in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Episode \(event.episode)").font(.subheadline.weight(.semibold))
-                                if let date = event.date { Text(date, format: .dateTime.month(.abbreviated).day().hour().minute()).font(.subheadline) }
-                                else { Text(event.note ?? "Date not confirmed").font(.subheadline) }
-                                if event.certainty == .unverified { Text("Unverified date from source").font(.caption).foregroundStyle(.orange) }
-                                if event.certainty == .delayed { Text(event.note ?? "Delayed").font(.caption).foregroundStyle(.orange) }
-                            }
-                        }
-                        if !loadingDub && !dubEvents.contains(where: { $0.date == nil || ($0.date ?? .distantPast) >= Date() }) {
-                            Text("No upcoming dub date listed.").font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
-                        Link("Powered by MyDubList", destination: URL(string: "https://mydublist.com")!).font(.caption)
-                        Text("Dates reported by AniSchedule. They may change.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    infoCard("Your progress") {
-                        if store.isSignedIn { ProgressControl(anime: anime) }
-                        else { Button("Connect AniList") { showSettings = true }.buttonStyle(.borderedProminent) }
-                    }
-                    infoCard("Overview") {
-                        Text(anime.synopsis).font(.body)
-                        if let genres = anime.genres, !genres.isEmpty { Text(genres.joined(separator: " · ")).font(.subheadline).foregroundStyle(Theme.accent) }
-                        if let studios = anime.studios?.nodes, !studios.isEmpty { Text("Studio: " + studios.map(\.name).joined(separator: ", ")).font(.subheadline).foregroundStyle(.secondary) }
-                    }
-                    if let characters = anime.characters?.nodes, !characters.isEmpty {
-                        Text("Characters").font(.title3.bold())
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 16) {
-                                ForEach(characters) { character in
-                                    VStack(spacing: 8) {
-                                        AsyncImage(url: URL(string: character.image?.medium ?? "")) { image in image.resizable().scaledToFill() }
-                                        placeholder: { Theme.surface }
-                                            .frame(width: 64, height: 64).clipShape(Circle()).accessibilityHidden(true)
-                                        Text(character.name?.full ?? "Character").font(.caption).lineLimit(2).multilineTextAlignment(.center)
-                                    }.frame(width: 76)
-                                }
-                            }
-                        }
-                    }
-                    if let relations = anime.relations?.edges, !relations.isEmpty {
-                        infoCard("Related anime") {
-                            ForEach(Array(relations.enumerated()), id: \.offset) { _, edge in
-                                if let related = edge.node, related.type == "ANIME" {
-                                    NavigationLink(value: AnimeRoute(id: related.id)) {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(related.title?.english ?? related.title?.romaji ?? "Anime #\(related.id)")
-                                            Text((edge.relationType ?? "Related").replacingOccurrences(of: "_", with: " ").capitalized).font(.caption).foregroundStyle(.secondary)
-                                        }.padding(.vertical, 6)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let trailer = anime.trailer?.url { Link(destination: trailer) { Label("Watch trailer", systemImage: "play.rectangle").frame(maxWidth: .infinity) }.buttonStyle(.bordered) }
-                    Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.subheadline)
+                    AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
+                    VStack(alignment: .leading, spacing: 20) {
+                        if let next = anime.nextAiringEpisode { DetailCard(title: "Next original broadcast") { BroadcastCountdown(episode: next) } }
+                        synopsis(anime)
+                        metadata(anime)
+                        progress(anime)
+                        AnimeDubSchedule(status: dubStatus, events: dubEvents, loading: loadingDub,
+                                         error: [availabilityError, scheduleError].compactMap { $0 }.isEmpty ? nil : [availabilityError, scheduleError].compactMap { $0 }.joined(separator: "\n"))
+                        related(anime)
+                        characters(anime)
+                        staff(anime)
+                        recommendations(anime)
+                        trailer(anime)
+                        reviews(anime)
+                        externalLinks(anime)
+                        Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption).padding(.bottom)
+                    }.padding(.horizontal, 14)
                 }
-            }.padding()
+            }
         }.background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
-            .task(id: mediaID) { await load() }.refreshable { await load() }.sheet(isPresented: $showSettings) { SettingsView() }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
+                }
+            }
+            .task(id: mediaID) { await load() }.refreshable { await load() }
+            .sheet(isPresented: $showSettings) { SettingsView() }
+            .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
     }
-    private func infoCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) { Text(title).font(.title3.bold()); content() }
-            .frame(maxWidth: .infinity, alignment: .leading).padding().background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+    private func synopsis(_ anime: Anime) -> some View {
+        DetailCard(title: "Synopsis") {
+            Text(anime.synopsis).font(.subheadline).foregroundStyle(.secondary).lineLimit(synopsisExpanded ? nil : 4)
+            Button(synopsisExpanded ? "Show less" : "Read more") { synopsisExpanded.toggle() }.font(.caption.bold())
+                .accessibilityIdentifier("expand-synopsis")
+        }
     }
+    private func metadata(_ anime: Anime) -> some View {
+        DetailCard(title: "Information") {
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 16) {
+                fact("Releasing", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
+                fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
+                fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
+                fact("Studio", anime.studios?.nodes?.map(\.name).joined(separator: ", ") ?? "Not listed")
+                fact("Popularity", anime.popularity.map { $0.formatted() } ?? "Not listed")
+                fact("Favourites", anime.favourites.map { $0.formatted() } ?? "Not listed")
+            }
+            if let ranks = anime.rankings, !ranks.isEmpty {
+                Divider()
+                ForEach(Array(ranks.prefix(4))) { rank in Label(rank.label, systemImage: rank.type == "POPULAR" ? "heart.fill" : "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
+            }
+        }
+    }
+    private func fact(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) { Text(label).font(.caption2).foregroundStyle(.secondary); Text(value).font(.caption.weight(.medium)) }
+    }
+    private func progress(_ anime: Anime) -> some View {
+        DetailCard(title: "Your progress") {
+            if store.isSignedIn { ProgressControl(anime: anime) }
+            else { Button("Connect AniList") { showSettings = true }.buttonStyle(.bordered) }
+        }
+    }
+    @ViewBuilder private func related(_ anime: Anime) -> some View {
+        if let edges = anime.relations?.edges, !edges.isEmpty {
+            sectionTitle("Related")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
+                        if let media = edge.node { RelatedAnimeCard(anime: media, caption: edge.relationType) }
+                    }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func characters(_ anime: Anime) -> some View {
+        if let people = anime.characters?.nodes, !people.isEmpty {
+            sectionTitle("Characters")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(people) { person in
+                        Link(destination: URL(string: "https://anilist.co/character/\(person.id)")!) {
+                            DetailPersonCard(name: person.name?.full ?? "Character", imageURL: URL(string: person.image?.medium ?? ""))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func staff(_ anime: Anime) -> some View {
+        if let edges = anime.staff?.edges, !edges.isEmpty {
+            sectionTitle("Staff")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
+                        if let person = edge.node {
+                            Link(destination: URL(string: "https://anilist.co/staff/\(person.id)")!) {
+                                DetailPersonCard(name: person.name?.full ?? "Staff", imageURL: URL(string: person.image?.large ?? person.image?.medium ?? ""), role: edge.role)
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func recommendations(_ anime: Anime) -> some View {
+        let entries = (anime.recommendations?.nodes ?? []).filter { $0.mediaRecommendation?.isAdult != true && $0.mediaRecommendation != nil }
+        if !entries.isEmpty {
+            sectionTitle("You may also like")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(entries) { entry in if let media = entry.mediaRecommendation { RelatedAnimeCard(anime: media) } }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func trailer(_ anime: Anime) -> some View {
+        if let trailer = anime.trailer, let url = trailer.url {
+            sectionTitle("Trailer")
+            Link(destination: url) {
+                ZStack {
+                    AsyncImage(url: URL(string: trailer.thumbnail ?? "")) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
+                        .frame(height: 190).clipped()
+                    Image(systemName: "play.circle.fill").font(.system(size: 54)).foregroundStyle(.white).shadow(radius: 10)
+                }.clipShape(RoundedRectangle(cornerRadius: 13))
+            }.accessibilityLabel("Watch anime trailer")
+        }
+    }
+    private func reviews(_ anime: Anime) -> some View {
+        DetailCard(title: "Reviews") {
+            let reviews = anime.reviews?.nodes ?? []
+            if reviews.isEmpty { Text("No reviews listed on AniList.").font(.caption).foregroundStyle(.secondary) }
+            ForEach(reviews) { review in
+                if let raw = review.siteUrl, let url = URL(string: raw), url.scheme == "https" {
+                    Link(destination: url) {
+                        HStack {
+                            Text(TextSanitizer.plain(review.summary ?? "Read review on AniList")).font(.subheadline).multilineTextAlignment(.leading).lineLimit(3)
+                            Spacer()
+                            if let score = review.score { Text("\(score)/100").font(.caption.bold()).foregroundStyle(Theme.highlight) }
+                            Image(systemName: "arrow.up.right").font(.caption)
+                        }.padding(.vertical, 5)
+                    }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func externalLinks(_ anime: Anime) -> some View {
+        let links = (anime.externalLinks ?? []).filter { $0.safeURL != nil }
+        if !links.isEmpty {
+            sectionTitle("External links")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 115), alignment: .leading)], alignment: .leading, spacing: 10) {
+                ForEach(links) { link in
+                    if let url = link.safeURL {
+                        Link(destination: url) { Label(link.site, systemImage: "link").font(.caption).padding(.horizontal, 12).padding(.vertical, 9).frame(maxWidth: .infinity).background(Theme.surface, in: Capsule()) }
+                    }
+                }
+            }
+        }
+    }
+    private func sectionTitle(_ title: String) -> some View { Text(title).font(.headline).padding(.top, 3) }
     private func load() async {
+        let attempt = UUID(); requestID = attempt
+        if anime?.id != mediaID { anime = nil; dubEvents = []; dubStatus = .unknown }
         loading = true; error = nil
-        defer { loading = false }
+        defer { if requestID == attempt { loading = false } }
         do {
             let media = try await store.aniList.details(id: mediaID)
-            try Task.checkCancellation(); anime = media
-            await loadDub(media)
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+            try Task.checkCancellation(); guard requestID == attempt else { return }
+            anime = media
+            await loadDub(media, attempt: attempt)
+        } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
     }
-    private func loadDub(_ anime: Anime) async {
-        loadingDub = true; dubError = nil; dubStatus = .unknown; dubEvents = []
-        defer { loadingDub = false }
-        // Keep availability and dates independent when one source is temporarily unavailable.
-        async let status: Void = loadDubStatus(anime)
-        async let schedule: Void = loadDubDates(anime)
-        _ = await (status, schedule)
+    private func loadDub(_ anime: Anime, attempt: UUID) async {
+        loadingDub = true; availabilityError = nil; scheduleError = nil; dubStatus = .unknown; dubEvents = []
+        async let availability: Void = loadAvailability(anime, attempt: attempt)
+        async let dates: Void = loadDates(anime, attempt: attempt)
+        _ = await (availability, dates)
+        if requestID == attempt { loadingDub = false }
     }
-    private func loadDubStatus(_ anime: Anime) async {
-        do { dubStatus = try await store.dubs.availability(malId: anime.idMal) }
-        catch { dubError = "Dub availability could not be checked." }
+    private func loadAvailability(_ anime: Anime, attempt: UUID) async {
+        do {
+            let status = try await store.dubs.availability(malId: anime.idMal)
+            try Task.checkCancellation(); if requestID == attempt { dubStatus = status }
+        } catch is CancellationError {} catch { if requestID == attempt { availabilityError = "Dub availability could not be checked." } }
     }
-    private func loadDubDates(_ anime: Anime) async {
-        do { dubEvents = try await store.dubs.snapshot().events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } }
-        catch { dubError = "Dub dates could not be loaded." }
+    private func loadDates(_ anime: Anime, attempt: UUID) async {
+        do {
+            let snapshot = try await store.dubs.snapshot()
+            try Task.checkCancellation()
+            if requestID == attempt { dubEvents = snapshot.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } }
+        } catch is CancellationError {} catch { if requestID == attempt { scheduleError = "Dub dates could not be loaded." } }
     }
 }
