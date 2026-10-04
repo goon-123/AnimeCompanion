@@ -65,7 +65,8 @@ struct ScheduleView: View {
                 Section { Text("No listed releases for this week.").foregroundStyle(.secondary) }
             }
             Section { Text("English dub dates are reported by AniSchedule and may change. Unverified dates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
-        }.navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
+        }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
+            .navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
             .refreshable { await load(refresh: true) }
             .sheet(isPresented: $pickingDate) {
                 NavigationStack {

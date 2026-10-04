@@ -6,12 +6,13 @@ struct LibraryAnimeRow: View {
     let anime: Anime
     let nextDub: ReleaseEvent?
     var dub: LibraryDubProgress? = nil
+    var posterWidth: CGFloat = 76
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             NavigationLink(value: AnimeRoute(id: anime.id)) {
                 HStack(alignment: .top, spacing: 11) {
-                    AnimeCover(anime: anime, width: 76, cornerRadius: 6)
+                    AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
                         Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
@@ -35,6 +36,7 @@ struct LibraryAnimeTile: View {
     let entry: LibraryEntry
     let anime: Anime
     let dub: LibraryDubProgress?
+    var posterWidth: CGFloat = 360
 
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
@@ -46,9 +48,10 @@ struct LibraryAnimeTile: View {
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
                 LibraryDubLabel(anime: anime, progress: dub)
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
-            }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .topLeading)
+            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, alignment: .topLeading)
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             .overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
+            .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 
@@ -76,7 +79,7 @@ struct LibraryEntryActions: View {
             Menu("Move to list") {
                 ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
             }
-        } label: { Image(systemName: "ellipsis").frame(width: 34, height: 34).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
+        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
             .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityLabel("Manage \(anime.displayTitle)")
             .sheet(isPresented: $editing) {
                 NavigationStack {
@@ -109,6 +112,6 @@ struct LibraryGuestView: View {
             }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(.white).foregroundStyle(.black)
             if let error = store.accountError { NoticeView(message: error) }
             Text("Browsing and news work without an account.").font(.caption).foregroundStyle(.secondary)
-        }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }.padding(28).frame(maxWidth: 480).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -47,7 +47,8 @@ struct NewsView: View {
                 }
                 if !unavailable.isEmpty { Text("Temporarily unavailable: " + unavailable.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
             }
-        }.navigationTitle("Anime News").task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
+        }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
+            .navigationTitle("Anime News").task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
             .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
     }
     private func open(_ article: NewsArticle) {
@@ -68,6 +69,7 @@ struct NewsView: View {
 
 struct NewsArticleRow: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let article: NewsArticle
     var opens: Int? = nil
     let open: (NewsArticle) -> Void
@@ -93,7 +95,8 @@ struct NewsArticleRow: View {
             else {
                 ZStack { Theme.surface; Image(systemName: "newspaper").font(.title2).foregroundStyle(.secondary) }
             }
-        }.frame(width: 96, height: 80).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
+        }.frame(width: sizeClass == .regular ? 132 : 96, height: sizeClass == .regular ? 104 : 80)
+            .clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
     }
 }
 

@@ -1,11 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+device_family="${1:-iphone}"
+if [[ "$device_family" != iphone && "$device_family" != ipad ]]; then
+  echo "Expected iphone or ipad"
+  exit 2
+fi
+result_path="build/SimulatorTests.xcresult"
+screenshot_path="build/screenshots"
+test_class="AppSmokeTests"
+if [[ "$device_family" == ipad ]]; then
+  result_path="build/IPadTests.xcresult"
+  screenshot_path="build/ipad-screenshots"
+  test_class="IPadLayoutTests"
+fi
+
 # Preserve reviewable screenshots even when an assertion fails.
 export_attachments() {
-  if [ -d build/SimulatorTests.xcresult ]; then
-    xcrun xcresulttool export attachments --path build/SimulatorTests.xcresult \
-      --output-path build/screenshots || true
+  if [ -d "$result_path" ]; then
+    xcrun xcresulttool export attachments --path "$result_path" \
+      --output-path "$screenshot_path" || true
   fi
 }
 trap export_attachments EXIT
@@ -13,15 +27,19 @@ trap export_attachments EXIT
 simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
-phones=[d for runtime,items in devices.items() if "iOS" in runtime
-        for d in items if d.get("isAvailable") and d["name"].startswith("iPhone")]
-if not phones:
-    raise SystemExit("No available iPhone simulator on this runner")
-print(phones[0]["udid"])
-')"
+family=sys.argv[1]
+candidates=[d for runtime,items in devices.items() if "iOS" in runtime
+        for d in items if d.get("isAvailable") and
+        (d["name"].startswith("iPhone") if family == "iphone" else
+         d["name"].startswith("iPad Pro") and ("11-inch" in d["name"] or "11 inch" in d["name"]))]
+if not candidates:
+    raise SystemExit("No available " + family + " simulator (iPad must be an 11-inch Pro)")
+print("Testing " + candidates[0]["name"], file=sys.stderr)
+print(candidates[0]["udid"])
+' "$device_family")"
 
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
-  -derivedDataPath build/Simulator -resultBundlePath build/SimulatorTests.xcresult \
+  -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
+  -only-testing:"AnimeCompanionUITests/$test_class" \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
-

@@ -2,6 +2,34 @@ import XCTest
 
 final class AppSmokeTests: XCTestCase {
     @MainActor
+    func testDisplayOptionsAndExploreDensityOnPhone() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launch()
+        app.buttons["explore-display-options"].tap()
+        XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.sliders["explore-list-size"].isHittable)
+        app.sliders["explore-list-size"].adjust(toNormalizedSliderPosition: 0.6)
+        let saved = app.sliders["explore-list-size"].value as? String
+        app.buttons["Done"].tap()
+        app.terminate(); app.launch()
+        app.buttons["explore-display-options"].tap()
+        XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.sliders["explore-list-size"].value as? String, saved)
+        app.buttons["Done"].tap()
+        app.buttons["explore-category-trending"].tap()
+        XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
+        waitForLoadingToFinish("Loading anime…", in: app)
+        if !app.buttons["discovery-layout"].label.contains("Grid") {
+            app.buttons["discovery-layout"].tap(); app.buttons["Grid"].tap()
+        }
+        app.buttons["discovery-columns"].tap()
+        app.buttons["3 per row"].tap()
+        XCTAssertTrue(app.buttons["discovery-columns"].label.contains("3 per row"))
+        capture("Phone-Custom-Explore-Grid")
+        app.buttons["discovery-layout"].tap(); app.buttons["List"].tap()
+    }
+
+    @MainActor
     func testExploreCategoryFilters() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launch()

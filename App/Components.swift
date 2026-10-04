@@ -15,18 +15,19 @@ struct AnimeCover: View {
 
 struct AnimeCard: View {
     let anime: Anime
+    var posterWidth: CGFloat = 150
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 8) {
-                AnimeCover(anime: anime, width: 150)
+                AnimeCover(anime: anime, width: posterWidth)
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
                 HStack(spacing: 5) {
                     if let score = anime.averageScore { Label("\(score)%", systemImage: "star.fill").font(.caption) }
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
                 }
                 DiscoveryIndicators(anime: anime)
-            }.frame(width: 150).foregroundStyle(.primary)
-        }.buttonStyle(.plain)
+            }.frame(width: posterWidth).foregroundStyle(.primary)
+        }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
     }
 }
 
@@ -91,13 +92,15 @@ struct ProgressControl: View {
 }
 
 struct ReleaseRow: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let event: ReleaseEvent
+    var posterWidth: CGFloat? = nil
     var body: some View {
         NavigationLink(value: AnimeRoute(id: event.anime.id)) {
             HStack(spacing: 12) {
-                AnimeCover(anime: event.anime, width: 48)
+                AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48))
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(event.anime.displayTitle).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text(event.anime.displayTitle).font(sizeClass == .regular ? .headline : .subheadline.weight(.semibold)).foregroundStyle(.primary)
                     Label("\(event.kind.rawValue.uppercased()) · Episode \(event.episode)", systemImage: event.kind == .dub ? "mic" : "tv").font(.caption)
                     if let date = event.date {
                         Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).font(.caption).foregroundStyle(.secondary)
@@ -107,6 +110,6 @@ struct ReleaseRow: View {
                 }
                 Spacer(minLength: 0)
             }.padding(.vertical, 5)
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).accessibilityIdentifier("release-entry-\(event.anime.id)-\(event.kind.rawValue)-\(event.episode)")
     }
 }

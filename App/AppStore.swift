@@ -48,7 +48,12 @@ final class AppStore: ObservableObject {
         do {
             let media = try await aniList.media(ids: [1, 5, 199, 205])
             let records: [[String: Any]] = try media.enumerated().map { index, anime in
-                let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(anime))
+                var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(anime)) as! [String: Any]
+                // Deterministic future release ONLY for artwork-sizing UI tests.
+                // This is not a provider date and never appears in Release builds.
+                if ProcessInfo.processInfo.arguments.contains("--ui-layout-preview"), anime.id == 1 {
+                    object["nextAiringEpisode"] = ["episode": 9, "airingAt": Int(Date().addingTimeInterval(86400).timeIntervalSince1970)]
+                }
                 return ["id": 900000 + index, "mediaId": anime.id, "status": anime.id == 5 ? "COMPLETED" : "CURRENT",
                         "progress": anime.id == 1 ? 8 : (anime.id == 5 ? 1 : 0), "updatedAt": 1700000000 + index, "media": object]
             }

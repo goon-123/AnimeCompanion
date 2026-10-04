@@ -12,33 +12,36 @@ struct DetailCard<Content: View>: View {
 }
 
 struct AnimeDetailHero: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let anime: Anime
     let expand: (URL) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .bottom, spacing: 14) {
                 Button { if let url = anime.coverURL { expand(url) } } label: {
-                    AnimeCover(anime: anime, width: 98, cornerRadius: 7)
+                    AnimeCover(anime: anime, width: sizeClass == .regular ? 160 : 98, cornerRadius: 7)
                         .overlay(alignment: .bottomTrailing) { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption2).padding(6).background(.black.opacity(0.65), in: Circle()).padding(5) }
                 }.buttonStyle(.plain).disabled(anime.coverURL == nil).accessibilityLabel("Expand anime cover").accessibilityIdentifier("expand-anime-cover")
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(anime.displayTitle).font(.title3.bold())
-                    Text(metadata).font(.caption).foregroundStyle(.secondary)
+                    Text(anime.displayTitle).font(sizeClass == .regular ? .title.bold() : .title3.bold())
+                    Text(metadata).font(sizeClass == .regular ? .subheadline : .caption).foregroundStyle(.secondary)
                     if let score = anime.averageScore { Text("AniList · \(Double(score) / 10, specifier: "%.1f") ★").font(.caption.bold()).foregroundStyle(Theme.highlight) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             if let genres = anime.genres, !genres.isEmpty { Text(genres.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
-        }.padding(.horizontal, 16).padding(.top, 100).padding(.bottom, 18)
+        }.padding(.horizontal, 16).padding(.top, sizeClass == .regular ? 130 : 100).padding(.bottom, 18)
             .background(alignment: .top) {
+              GeometryReader { geometry in
                 ZStack(alignment: .bottom) {
                     if let value = anime.bannerImage, let url = URL(string: value) {
                         Button { expand(url) } label: {
                             AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                                .frame(height: 220).clipped()
+                                .frame(width: geometry.size.width, height: sizeClass == .regular ? 340 : 220).clipped()
                         }.buttonStyle(.plain).accessibilityLabel("Expand anime banner")
-                    } else { Theme.surface.frame(height: 220) }
+                    } else { Theme.surface.frame(height: sizeClass == .regular ? 340 : 220) }
                     LinearGradient(colors: [.clear, Theme.background.opacity(0.65), Theme.background], startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
-                }.frame(height: 220).clipped()
+                }.frame(height: sizeClass == .regular ? 340 : 220).clipped()
+              }
             }
     }
     private var metadata: String {
@@ -66,6 +69,7 @@ struct BroadcastCountdown: View {
 }
 
 struct RelatedAnimeCard: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let anime: RelatedAnime
     var caption: String? = nil
     var body: some View {
@@ -77,24 +81,25 @@ struct RelatedAnimeCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 7) {
             AsyncImage(url: anime.coverURL) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                .frame(width: 100, height: 145).clipShape(RoundedRectangle(cornerRadius: 7))
+                .frame(width: sizeClass == .regular ? 145 : 100, height: sizeClass == .regular ? 210 : 145).clipShape(RoundedRectangle(cornerRadius: 7))
             if let caption { Text(caption.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption2).foregroundStyle(Theme.highlight).lineLimit(1) }
             Text(anime.displayTitle).font(.caption.weight(.semibold)).lineLimit(2, reservesSpace: true).foregroundStyle(.primary)
-        }.frame(width: 100, alignment: .leading)
+        }.frame(width: sizeClass == .regular ? 145 : 100, alignment: .leading)
     }
 }
 
 struct DetailPersonCard: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let name: String
     let imageURL: URL?
     var role: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             AsyncImage(url: imageURL) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                .frame(width: 90, height: 106).clipShape(RoundedRectangle(cornerRadius: 7))
+                .frame(width: sizeClass == .regular ? 120 : 90, height: sizeClass == .regular ? 142 : 106).clipShape(RoundedRectangle(cornerRadius: 7))
             Text(name).font(.caption.weight(.semibold)).lineLimit(2, reservesSpace: true).foregroundStyle(.primary)
             if let role { Text(role).font(.caption2).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true) }
-        }.frame(width: 90, alignment: .leading)
+        }.frame(width: sizeClass == .regular ? 120 : 90, alignment: .leading)
     }
 }
 

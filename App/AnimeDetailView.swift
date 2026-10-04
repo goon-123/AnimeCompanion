@@ -3,6 +3,7 @@ import AnimeCore
 
 struct AnimeDetailView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let mediaID: Int
     @State private var anime: Anime?
     @State private var loading = false
@@ -41,7 +42,7 @@ struct AnimeDetailView: View {
                         Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption).padding(.bottom)
                     }.padding(.horizontal, 14)
                 }
-            }
+            }.readableContent(width: 940)
         }.background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -61,7 +62,7 @@ struct AnimeDetailView: View {
     }
     private func metadata(_ anime: Anime) -> some View {
         DetailCard(title: "Information") {
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: sizeClass == .regular ? 3 : 2), alignment: .leading, spacing: 16) {
                 fact("Releasing", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
                 fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
                 fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
@@ -143,7 +144,7 @@ struct AnimeDetailView: View {
             Link(destination: url) {
                 ZStack {
                     AsyncImage(url: URL(string: trailer.thumbnail ?? "")) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                        .frame(height: 190).clipped()
+                        .frame(height: sizeClass == .regular ? 280 : 190).clipped()
                     Image(systemName: "play.circle.fill").font(.system(size: 54)).foregroundStyle(.white).shadow(radius: 10)
                 }.clipShape(RoundedRectangle(cornerRadius: 13))
             }.accessibilityLabel("Watch anime trailer")

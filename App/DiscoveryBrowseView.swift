@@ -5,6 +5,9 @@ struct DiscoveryBrowseView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("discovery.layout") private var layout = "list"
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var posters = PosterPreferences(.explore)
+    @State private var showDisplay = false
     let category: DiscoveryCategory
     let selection: SeasonSelection
     var titleOverride: String? = nil
@@ -31,7 +34,9 @@ struct DiscoveryBrowseView: View {
     private let statuses = [("RELEASING", "Releasing"), ("NOT_YET_RELEASED", "Not yet released"), ("FINISHED", "Finished"), ("HIATUS", "On hiatus"), ("CANCELLED", "Cancelled")]
 
     var body: some View {
-        ScrollView {
+        GeometryReader { geometry in
+          let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
+          ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 searchBar
                 filterBar
@@ -39,22 +44,33 @@ struct DiscoveryBrowseView: View {
                     Menu {
                         Picker("Display type", selection: $layout) { Text("List").tag("list"); Text("Grid").tag("grid") }
                     } label: { Label(layout == "grid" ? "Grid" : "List", systemImage: layout == "grid" ? "square.grid.2x2" : "list.bullet").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }.accessibilityIdentifier("discovery-layout")
+                    if layout == "grid" {
+                        Menu {
+                            Picker("Entries per row", selection: $posters.columns) {
+                                ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
+                            }
+                        } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }
+                            .accessibilityIdentifier("discovery-columns")
+                    }
                     Spacer()
+                }
+                HStack {
                     Menu {
                         Picker("Sort", selection: $filters.sort) { ForEach(DiscoverySort.allCases, id: \.self) { Text($0.label).tag($0) } }
                     } label: { Label(filters.sort.label, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9)) }
                         .accessibilityIdentifier("discovery-sort")
+                    Spacer()
                     Button { filters = DiscoveryFilters(category: category, selection: selection) } label: { Image(systemName: "line.3.horizontal.decrease.circle").frame(width: 44, height: 44) }
                         .accessibilityLabel("Reset category filters")
                 }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
                 if loading { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding() }
                 if layout == "grid" {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 18) {
-                        ForEach(results) { DiscoveryAnimeTile(anime: $0) }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 18) {
+                        ForEach(results) { DiscoveryAnimeTile(anime: $0, posterWidth: posters.gridPosterWidth) }
                     }
                 } else {
-                    LazyVStack(spacing: 12) { ForEach(results) { DiscoveryAnimeRow(anime: $0) } }
+                    LazyVStack(spacing: 12) { ForEach(results) { DiscoveryAnimeRow(anime: $0, posterWidth: posters.listPosterWidth(in: contentWidth - 18)) } }
                 }
                 if hasMore {
                     Button { Task { await loadMore() } } label: {
@@ -65,9 +81,17 @@ struct DiscoveryBrowseView: View {
                     ContentUnavailableView("No matching titles", systemImage: "magnifyingglass", description: Text("Try changing the search or filters."))
                 }
                 DiscoveryDataNote()
-            }.padding(12)
-        }.background(Theme.background).scrollDismissesKeyboard(.interactively)
+            }.padding(12).readableContent(width: layout == "grid" ? 1280 : 1000)
+          }.scrollDismissesKeyboard(.interactively)
+        }.background(Theme.background)
             .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
+                }
+            }
+            .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .task(id: filters) { await load() }
             .task { await dubs.load(using: store.dubs) }
             .refreshable {
@@ -141,10 +165,11 @@ struct DiscoveryBrowseView: View {
 
 struct DiscoveryAnimeRow: View {
     let anime: Anime
+    var posterWidth: CGFloat = 90
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             HStack(alignment: .top, spacing: 12) {
-                AnimeCover(anime: anime, width: 90, cornerRadius: 6)
+                AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 7) {
                     Text(anime.displayTitle).font(.headline).lineLimit(2)
                     Text(metadata).font(.caption).foregroundStyle(.secondary)
@@ -169,6 +194,7 @@ struct DiscoveryAnimeRow: View {
 
 struct DiscoveryAnimeTile: View {
     let anime: Anime
+    var posterWidth: CGFloat = 360
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 7) {
@@ -176,7 +202,8 @@ struct DiscoveryAnimeTile: View {
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
                 DiscoveryIndicators(anime: anime)
-            }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, alignment: .leading)
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
+            .frame(maxWidth: .infinity, alignment: .top)
     }
 }

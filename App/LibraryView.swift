@@ -9,12 +9,14 @@ private enum LibrarySort: String, CaseIterable {
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("library.layout") private var layout = "list"
-    @AppStorage("library.columns") private var columns = 2
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var posters = PosterPreferences(.library)
     @AppStorage("library.sort") private var sortValue = LibrarySort.airing.rawValue
     @State private var selected: LibraryStatus = .watching
     @State private var query = ""
     @State private var reversed = false
     @State private var showSettings = false
+    @State private var showDisplay = false
     @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
@@ -68,20 +70,22 @@ struct LibraryView: View {
     var body: some View {
         Group {
             if store.isSignedIn {
+              GeometryReader { geometry in
+                let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         searchBar
-                        comingUpSection
+                        comingUpSection(width: contentWidth)
                         statusTabs
                         layoutControls
                         sortingBar
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                         if layout == "grid" {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: min(4, max(1, columns))), alignment: .leading, spacing: 20) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 20) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id])
+                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
                                     }
                                 }
                             }.accessibilityIdentifier("library-grid")
@@ -89,7 +93,7 @@ struct LibraryView: View {
                             LazyVStack(spacing: 12) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id])
+                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth))
                                     }
                                 }
                             }.accessibilityIdentifier("library-list")
@@ -101,12 +105,20 @@ struct LibraryView: View {
                         if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
-                    }.padding(.horizontal, 12).padding(.vertical)
+                    }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
                 }.scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
+              }
             } else { LibraryGuestView(showSettings: $showSettings) }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .accessibilityLabel("Library display options").accessibilityIdentifier("library-display-options")
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") }
+            }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .task(id: syncKey) { await loadDubs() }
     }
     private var searchBar: some View {
@@ -139,10 +151,10 @@ struct LibraryView: View {
             }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
             if layout == "grid" {
                 Menu {
-                    Picker("Anime per row", selection: $columns) {
-                        ForEach(1...4, id: \.self) { Text("\($0) per row").tag($0) }
+                    Picker("Anime per row", selection: $posters.columns) {
+                        ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
                     }
-                } label: { Text("\(min(4, max(1, columns))) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
+                } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                     .accessibilityIdentifier("library-columns")
             }
         }
@@ -160,12 +172,14 @@ struct LibraryView: View {
                 .accessibilityLabel("Reverse library sort")
         }
     }
-    private var comingUpSection: some View {
+    private func comingUpSection(width: CGFloat) -> some View {
         Group {
             if !store.watching.isEmpty {
                 DisclosureGroup("Coming up for you", isExpanded: $comingExpanded) {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(comingUp.prefix(8))) { ReleaseRow(event: $0) }
+                        ForEach(Array(comingUp.prefix(8))) {
+                            ReleaseRow(event: $0, posterWidth: CGFloat(PosterLayout.listWidth(preferred: min(200, max(60, posters.comingWidth)), availableWidth: Double(width))))
+                        }
                         if comingUp.isEmpty { Text("No listed releases for your watching list in the next seven days.").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.top, 10)
                 }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("library-coming-up")

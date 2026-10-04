@@ -14,9 +14,12 @@ struct ExploreView: View {
     @State private var loadedKey: String?
     @State private var showSeasons = false
     @State private var showSettings = false
+    @State private var showDisplay = false
+    private var posters = PosterPreferences(.explore)
 
     var body: some View {
-        ScrollView {
+        GeometryReader { geometry in
+          ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 HStack {
                     Button { showSeasons = true } label: { Label(selection.label, systemImage: "chevron.down").font(.headline) }
@@ -26,15 +29,23 @@ struct ExploreView: View {
                     }.accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
                 }.padding(.horizontal)
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
-                shelf(.trending, anime: trending)
-                shelf(.seasonal, anime: seasonal)
-                shelf(.upcoming, anime: upcoming)
+                shelf(.trending, anime: trending, availableWidth: geometry.size.width)
+                shelf(.seasonal, anime: seasonal, availableWidth: geometry.size.width)
+                shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
                 if loading && loadedKey == nil { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
                 DiscoveryDataNote().padding(.horizontal)
-            }.padding(.vertical)
+            }.padding(.vertical).readableContent(width: 1280)
+          }
         }.background(Theme.background).navigationTitle("Explore").animeNavigation()
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings") } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings") }
+            }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showSeasons) { seasonPicker }
             .task(id: selection) { await load() }
             .task { await dubs.load(using: store.dubs) }
@@ -44,7 +55,7 @@ struct ExploreView: View {
                 _ = await (metadata, dubInfo)
             }
     }
-    private func shelf(_ category: DiscoveryCategory, anime: [Anime]) -> some View {
+    private func shelf(_ category: DiscoveryCategory, anime: [Anime], availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: DiscoveryRoute(category: category, selection: selection)) {
                 HStack {
@@ -56,7 +67,11 @@ struct ExploreView: View {
             }.buttonStyle(.plain).accessibilityIdentifier("explore-category-\(category.rawValue)")
             if !anime.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 14) { ForEach(Array(anime.prefix(16))) { AnimeCard(anime: $0) } }.padding(.horizontal)
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(Array(anime.prefix(16))) {
+                            AnimeCard(anime: $0, posterWidth: min(CGFloat(min(360, max(120, posters.shelfWidth))), availableWidth * 0.85))
+                        }
+                    }.padding(.horizontal)
                 }
             } else if !loading { Text("No titles listed yet.").font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
         }

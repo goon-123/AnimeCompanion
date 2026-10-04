@@ -9,7 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Core unit tests
@@ -18,7 +18,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Compile iPhone app
+      - name: Compile universal iPhone and iPad app
         run: |
           xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
             -configuration Release -destination 'generic/platform=iOS' \
@@ -28,7 +28,7 @@ jobs:
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
           ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
-      - name: Upload iPhone build
+      - name: Upload universal build
         uses: actions/upload-artifact@v4
         with:
           name: AnimeCompanion-unsigned-IPA
@@ -40,7 +40,20 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
       - name: Check iPhone simulator tabs
-        run: bash scripts/check-simulator.sh
+        run: bash scripts/check-simulator.sh iphone
+      - name: Check 11-inch iPad Pro portrait and landscape layouts
+        run: bash scripts/check-simulator.sh ipad
+      - name: Upload iPad screenshot preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-iPad-screenshots
+          path: |
+            build/ipad-screenshots/*.png
+            build/ipad-screenshots/*.txt
+            build/ipad-screenshots/manifest.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload screenshot preview
         if: always()
         uses: actions/upload-artifact@v4
@@ -60,5 +73,7 @@ jobs:
           path: |
             build/screenshots
             build/SimulatorTests.xcresult
+            build/ipad-screenshots
+            build/IPadTests.xcresult
           if-no-files-found: ignore
           retention-days: 30
