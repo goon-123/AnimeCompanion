@@ -90,6 +90,7 @@ public struct DubIndex: Decodable, Sendable {
     public let dubbed: Set<Int>
     public let partial: Set<Int>
     private enum CodingKeys: String, CodingKey { case dubbed, partial }
+    public init(dubbed: Set<Int>, partial: Set<Int>) { self.dubbed = dubbed; self.partial = partial }
     public init(from decoder: Decoder) throws {
         if let list = try? decoder.singleValueContainer().decode([Int].self) {
             dubbed = Set(list); partial = []
@@ -111,6 +112,7 @@ public actor DubClient {
     public static let scheduleURL = URL(string: "https://raw.githubusercontent.com/Bas1874/AniSchedule/refs/heads/master/raw/dub-schedule.json")!
     public static let feedURL = URL(string: "https://raw.githubusercontent.com/Bas1874/AniSchedule/refs/heads/master/raw/dub-episode-feed.json")!
     public static let indexURL = URL(string: "https://raw.githubusercontent.com/Joelis57/MyDubList/refs/heads/main/dubs/confidence/normal/dubbed_english.json")!
+    public static let countsURL = URL(string: "https://raw.githubusercontent.com/Joelis57/MyDubList/refs/heads/main/dubs/counts/dubbed_english.json")!
     private let transport: any HTTPTransport
     private var cachedSnapshot: DubSnapshot?
     private var cachedIndex: (Date, DubIndex)?
@@ -129,11 +131,53 @@ public actor DubClient {
         cachedSnapshot = snapshot
         return snapshot
     }
+    public func index(refresh: Bool = false) async throws -> DubIndex {
+        if !refresh, let (date, index) = cachedIndex, Date().timeIntervalSince(date) < 86400 { return index }
+        async let complete = load(DubIndex.self, from: Self.indexURL)
+        // Partial dubs are intentionally excluded from MyDubList's confidence tiers.
+        async let supplemental = try? load(PartialDubIndex.self, from: Self.countsURL)
+        let base = try await complete
+        let partial = await supplemental
+        let index = DubIndex(dubbed: base.dubbed, partial: base.partial.union(partial?.partial ?? []))
+        cachedIndex = (Date(), index)
+        return index
+    }
     public func availability(malId: Int?) async throws -> DubAvailability {
         guard malId != nil else { return .unknown }
-        if let (date, index) = cachedIndex, Date().timeIntervalSince(date) < 86400 { return index.availability(malId: malId) }
-        let index = try await load(DubIndex.self, from: Self.indexURL)
-        cachedIndex = (Date(), index)
-        return index.availability(malId: malId)
+        return try await index().availability(malId: malId)
+    }
+}
+
+private struct PartialDubIndex: Decodable { let partial: Set<Int>? }
+
+public struct LibraryDubProgress: Sendable, Equatable {
+    public let released: Int?
+    public let availability: DubAvailability
+    public let announced: Bool
+    public let completeListing: Bool
+    public init(anime: Anime, snapshot: DubSnapshot?, index: DubIndex?, now: Date = Date()) {
+        availability = index?.availability(malId: anime.idMal) ?? .unknown
+        announced = snapshot?.upcoming.contains { $0.media?.media?.id == anime.id } == true
+        let recorded = snapshot?.history.filter {
+            $0.id == anime.id && $0.episode.aired > 0 && ($0.episode.airedAt?.date.map { $0 <= now } ?? false)
+        }.map { $0.episode.aired }.max()
+        // A completed non-partial listing supplies the count for older titles outside the recent feed.
+        completeListing = availability == .dubbed && anime.status == "FINISHED" && (anime.episodes ?? 0) > 0
+        released = completeListing ? anime.episodes : recorded
+    }
+    public func label(for anime: Anime, now: Date = Date()) -> String {
+        if let released {
+            if let aired = anime.releasedEpisodeCount(at: now), aired >= released {
+                return "Dub \(released)/\(aired) released"
+            }
+            return "Dub \(released) released"
+        }
+        if announced { return "Dub announced · count unknown" }
+        switch availability {
+        case .notReported: return "Dub not reported"
+        case .partial: return "Partial dub · count unknown"
+        case .dubbed: return "Dub available · count unknown"
+        case .unknown: return "Dub status unknown"
+        }
     }
 }

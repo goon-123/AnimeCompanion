@@ -26,6 +26,10 @@ public struct SeasonSelection: Hashable, Sendable {
 public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let id: Int
     public let idMal: Int?
+    public let type: String?
+    public let countryOfOrigin: String?
+    public let chapters: Int?
+    public let volumes: Int?
     public let title: AnimeTitle?
     public let coverImage: AnimeImage?
     public let bannerImage: String?
@@ -57,9 +61,18 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
     public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
     public var synopsis: String { TextSanitizer.plain(description ?? "Synopsis not available.") }
+    /// Already broadcast episodes, distinct from the season's planned episode total.
+    public func releasedEpisodeCount(at now: Date = Date()) -> Int? {
+        if status == "NOT_YET_RELEASED" { return 0 }
+        if status == "FINISHED", let episodes, episodes > 0 { return episodes }
+        guard let next = nextAiringEpisode else { return nil }
+        let count = max(0, next.episode - (next.date > now ? 1 : 0))
+        return episodes.flatMap { $0 > 0 ? min(count, $0) : nil } ?? count
+    }
     public init(id: Int, title: String) {
         self.id = id; self.title = AnimeTitle(english: title)
-        idMal = nil; coverImage = nil; bannerImage = nil; description = nil; episodes = nil
+        idMal = nil; type = nil; countryOfOrigin = nil; chapters = nil; volumes = nil
+        coverImage = nil; bannerImage = nil; description = nil; episodes = nil
         duration = nil; format = nil; status = nil; season = nil; seasonYear = nil
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
         airingSchedule = nil; studios = nil; characters = nil; relations = nil; trailer = nil
@@ -240,14 +253,52 @@ public enum DubAvailability: String, Sendable {
     }
 }
 
-public struct NewsArticle: Identifiable, Hashable, Sendable {
+public enum NewsSource: String, CaseIterable, Codable, Sendable {
+    case animeNewsNetwork, crunchyroll, animeCorner
+    public var label: String {
+        switch self {
+        case .animeNewsNetwork: return "Anime News Network"
+        case .crunchyroll: return "Crunchyroll"
+        case .animeCorner: return "Anime Corner"
+        }
+    }
+    public var feedURL: URL {
+        switch self {
+        case .animeNewsNetwork: return URL(string: "https://www.animenewsnetwork.com/news/rss.xml")!
+        case .crunchyroll: return URL(string: "https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss")!
+        case .animeCorner: return URL(string: "https://animecorner.me/feed/")!
+        }
+    }
+    public func accepts(_ url: URL) -> Bool {
+        guard url.scheme == "https", url.user == nil, url.password == nil, let host = url.host?.lowercased() else { return false }
+        let domain: String
+        switch self {
+        case .animeNewsNetwork: domain = "animenewsnetwork.com"
+        case .crunchyroll: domain = "crunchyroll.com"
+        case .animeCorner: domain = "animecorner.me"
+        }
+        return host == domain || host.hasSuffix("." + domain)
+    }
+}
+
+public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
     public let title: String
     public let url: URL
     public let publishedAt: Date?
     public let imageURL: URL?
-    public var id: String { url.absoluteString }
-    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?) {
-        self.title = title; self.url = url; self.publishedAt = publishedAt; self.imageURL = imageURL
+    public let source: NewsSource
+    public var id: String {
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        parts?.fragment = nil
+        parts?.queryItems = parts?.queryItems?.filter { !$0.name.hasPrefix("utm_") && $0.name != "fbclid" }
+        if parts?.queryItems?.isEmpty == true { parts?.queryItems = nil }
+        return parts?.url?.absoluteString ?? url.absoluteString
+    }
+    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork) {
+        self.title = title; self.url = url; self.publishedAt = publishedAt; self.imageURL = imageURL; self.source = source
+    }
+    public func withImage(_ image: URL?) -> Self {
+        Self(title: title, url: url, publishedAt: publishedAt, imageURL: image ?? imageURL, source: source)
     }
 }
 

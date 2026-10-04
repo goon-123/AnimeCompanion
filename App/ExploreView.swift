@@ -3,40 +3,45 @@ import AnimeCore
 
 struct ExploreView: View {
     @EnvironmentObject private var store: AppStore
+    @AppStorage("discovery.matureOnly") private var matureOnly = false
+    @AppStorage("discovery.matureGenre") private var matureGenre = "Thriller"
     @State private var selection = SeasonSelection.current()
     @State private var seasonal: [Anime] = []
     @State private var trending: [Anime] = []
     @State private var upcoming: [Anime] = []
+    @State private var matureAnime: [Anime] = []
+    @State private var matureManhwa: [Anime] = []
     @State private var loading = false
-    @State private var loadingMore = false
-    @State private var page = 1
-    @State private var hasMore = false
     @State private var error: String?
     @State private var requestID = UUID()
-    @State private var loadedSelection: SeasonSelection?
+    @State private var loadedKey: String?
     @State private var showSeasons = false
     @State private var showSettings = false
+    private var requestKey: String { "\(selection.label)-\(matureOnly)-\(matureGenre)" }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 HStack {
-                    Button { showSeasons = true } label: { Label(selection.label, systemImage: "chevron.down").font(.headline) }
+                    if matureOnly {
+                        Text("Mature stories · \(matureGenre)").font(.headline)
+                    } else {
+                        Button { showSeasons = true } label: { Label(selection.label, systemImage: "chevron.down").font(.headline) }
+                    }
                     Spacer()
-                    NavigationLink { SearchView() } label: { Image(systemName: "magnifyingglass").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Search anime")
+                    NavigationLink { DiscoveryBrowseView(category: matureOnly ? .matureAnime : .trending, selection: selection, matureGenre: matureGenre, titleOverride: "Search") }
+                        label: { Image(systemName: "magnifyingglass").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Search anime")
                 }.padding(.horizontal)
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
-                if loading && seasonal.isEmpty { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
-                AnimeShelf(title: "Airing now", anime: seasonal.filter { $0.status == "RELEASING" })
-                AnimeShelf(title: "Popular · \(selection.label)", anime: seasonal)
-                if hasMore {
-                    Button { Task { await loadMore() } } label: {
-                        if loadingMore { ProgressView() } else { Text("More from this season") }
-                    }.buttonStyle(.bordered).disabled(loadingMore).padding(.horizontal)
-                }
-                AnimeShelf(title: "Trending", anime: trending)
-                AnimeShelf(title: "Upcoming · \(selection.advanced(by: 1).label)", anime: upcoming)
-                if !loading && error == nil && seasonal.isEmpty {
-                    ContentUnavailableView("No seasonal entries yet", systemImage: "sparkles", description: Text("Try another season or search for an anime."))
+                if loading && loadedKey == nil { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
+                if matureOnly {
+                    Text("Non-explicit horror, thriller and psychological stories. Change this focus in Settings.").font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+                    shelf(.matureAnime, anime: matureAnime)
+                    shelf(.matureManhwa, anime: matureManhwa)
+                } else {
+                    shelf(.trending, anime: trending)
+                    shelf(.seasonal, anime: seasonal)
+                    shelf(.upcoming, anime: upcoming)
                 }
                 Text("Metadata from AniList").font(.caption).foregroundStyle(.secondary).padding(.horizontal)
             }.padding(.vertical)
@@ -44,8 +49,27 @@ struct ExploreView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings") } }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showSeasons) { seasonPicker }
-            .task(id: selection) { await load() }
+            .task(id: requestKey) { await load() }
             .refreshable { await load(refresh: true) }
+    }
+    private func shelf(_ category: DiscoveryCategory, anime: [Anime]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink {
+                DiscoveryBrowseView(category: category, selection: selection, matureGenre: matureGenre)
+            } label: {
+                HStack {
+                    Text(category.label(season: selection)).font(.title3.bold())
+                    Spacer()
+                    Text("See all").font(.caption)
+                    Image(systemName: "chevron.right").font(.caption.bold())
+                }.foregroundStyle(.primary).frame(minHeight: 44).padding(.horizontal)
+            }.buttonStyle(.plain).accessibilityIdentifier("explore-category-\(category.rawValue)")
+            if !anime.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 14) { ForEach(Array(anime.prefix(16))) { AnimeCard(anime: $0) } }.padding(.horizontal)
+                }
+            } else if !loading { Text("No titles listed yet.").font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
+        }
     }
     private var seasonPicker: some View {
         NavigationStack {
@@ -57,69 +81,25 @@ struct ExploreView: View {
         }.presentationDetents([.medium])
     }
     private func load(refresh: Bool = false) async {
-        let attempt = UUID(); requestID = attempt; let selected = selection
-        if loadedSelection != selected { seasonal = []; trending = []; upcoming = []; hasMore = false }
+        let attempt = UUID(); requestID = attempt; let key = requestKey
+        if loadedKey != key { seasonal = []; trending = []; upcoming = []; matureAnime = []; matureManhwa = []; loadedKey = nil }
         loading = true; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
-            let result = try await store.aniList.explore(selected, refresh: refresh)
-            try Task.checkCancellation(); guard requestID == attempt else { return }
-            seasonal = result.seasonal.media ?? []; trending = result.trending.media ?? []; upcoming = result.upcoming.media ?? []
-            hasMore = result.seasonal.pageInfo?.hasNextPage == true; page = 1
-            loadedSelection = selected
+            if matureOnly {
+                let animeFilters = DiscoveryFilters(category: .matureAnime, matureGenre: matureGenre)
+                let manhwaFilters = DiscoveryFilters(category: .matureManhwa, matureGenre: matureGenre)
+                async let animePage = store.aniList.browse(animeFilters, refresh: refresh)
+                async let manhwaPage = store.aniList.browse(manhwaFilters, refresh: refresh)
+                let (a, m) = try await (animePage, manhwaPage)
+                try Task.checkCancellation(); guard requestID == attempt, requestKey == key else { return }
+                matureAnime = a.media ?? []; matureManhwa = m.media ?? []
+            } else {
+                let result = try await store.aniList.explore(selection, refresh: refresh)
+                try Task.checkCancellation(); guard requestID == attempt, requestKey == key else { return }
+                seasonal = result.seasonal.media ?? []; trending = result.trending.media ?? []; upcoming = result.upcoming.media ?? []
+            }
+            loadedKey = key
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
-    }
-    private func loadMore() async {
-        guard !loadingMore else { return }; loadingMore = true
-        let attempt = requestID; let nextPage = page + 1
-        defer { loadingMore = false }
-        do {
-            let result = try await store.aniList.seasonal(selection, page: nextPage)
-            guard requestID == attempt else { return }
-            let existing = Set(seasonal.map(\.id))
-            seasonal += (result.media ?? []).filter { !existing.contains($0.id) }
-            page = nextPage; hasMore = result.pageInfo?.hasNextPage == true
-        } catch { if requestID == attempt { self.error = error.localizedDescription } }
-    }
-
-}
-
-struct SearchView: View {
-    @EnvironmentObject private var store: AppStore
-    @State private var query = ""
-    @State private var results: [Anime] = []
-    @State private var loading = false
-    @State private var error: String?
-    var body: some View {
-        List {
-            if let error { NoticeView(message: error) }
-            if loading { ProgressView("Searching…") }
-            ForEach(results) { anime in
-                NavigationLink(value: AnimeRoute(id: anime.id)) {
-                    HStack(spacing: 12) {
-                        AnimeCover(anime: anime, width: 50)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(anime.displayTitle).font(.headline)
-                            Text([anime.format?.replacingOccurrences(of: "_", with: " "), anime.seasonYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            if !query.isEmpty && !loading && error == nil && results.isEmpty { Text("No anime found.").foregroundStyle(.secondary) }
-        }.navigationTitle("Search").searchable(text: $query, prompt: "Anime title").animeNavigation()
-            .task(id: query) {
-                let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                results = []; error = nil
-                guard text.count >= 2 else { loading = false; return }
-                loading = true
-                do {
-                    try await Task.sleep(for: .milliseconds(500))
-                    let page = try await store.aniList.search(text)
-                    try Task.checkCancellation()
-                    guard query.trimmingCharacters(in: .whitespacesAndNewlines) == text else { return }
-                    results = page.media ?? []; loading = false
-                } catch is CancellationError {} catch { if query.trimmingCharacters(in: .whitespacesAndNewlines) == text { self.error = error.localizedDescription; loading = false } }
-            }
     }
 }

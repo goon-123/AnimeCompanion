@@ -2,22 +2,27 @@ import SwiftUI
 import AnimeCore
 
 private enum LibrarySort: String, CaseIterable {
-    case airing = "Airing schedule", title = "Title", updated = "Last updated", progress = "Progress", score = "Your score"
+    case airing = "Airing schedule", title = "Title", rating = "AniList rating"
+    case updated = "Last updated", progress = "Progress", score = "Your score"
 }
 
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
+    @AppStorage("library.layout") private var layout = "list"
+    @AppStorage("library.columns") private var columns = 2
+    @AppStorage("library.sort") private var sortValue = LibrarySort.airing.rawValue
     @State private var selected: LibraryStatus = .watching
     @State private var query = ""
-    @State private var sort = LibrarySort.airing
     @State private var reversed = false
     @State private var showSettings = false
-    @State private var continueExpanded = false
     @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
+    @State private var dubProgress: [Int: LibraryDubProgress] = [:]
     @State private var dubError: String?
     @FocusState private var searchFocused: Bool
     private let statuses: [LibraryStatus] = [.watching, .planning, .completed, .dropped, .paused, .rewatching]
+    private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
+    private var syncKey: String { "\(store.isSignedIn)-\(store.viewer?.id ?? 0)-\(store.entries.map(\.mediaId).sorted())" }
 
     private var comingUp: [ReleaseEvent] {
         let originals = store.watching.compactMap { entry -> ReleaseEvent? in
@@ -40,9 +45,12 @@ struct LibraryView: View {
             switch sort {
             case .airing:
                 let first = a.media?.nextAiringEpisode?.date, second = b.media?.nextAiringEpisode?.date
-                // Keep entries without announced airings at the end in either direction.
                 if (first == nil) != (second == nil) { return first != nil }
                 if let first, let second, first != second { return reversed ? first > second : first < second }
+            case .rating:
+                let first = a.media?.averageScore, second = b.media?.averageScore
+                if (first == nil) != (second == nil) { return first != nil }
+                if let first, let second, first != second { return reversed ? first < second : first > second }
             case .title: break
             case .updated:
                 if a.updatedAt != b.updatedAt { return reversed ? (a.updatedAt ?? 0) < (b.updatedAt ?? 0) : (a.updatedAt ?? 0) > (b.updatedAt ?? 0) }
@@ -63,39 +71,49 @@ struct LibraryView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         searchBar
-                        personalSections
+                        comingUpSection
                         statusTabs
+                        layoutControls
                         sortingBar
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
-                        LazyVStack(spacing: 12) {
-                            ForEach(filtered) { entry in
-                                if let anime = entry.media {
-                                    LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id))
+                        if layout == "grid" {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: min(4, max(1, columns))), alignment: .leading, spacing: 20) {
+                                ForEach(filtered) { entry in
+                                    if let anime = entry.media {
+                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id])
+                                    }
                                 }
-                            }
+                            }.accessibilityIdentifier("library-grid")
+                        } else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(filtered) { entry in
+                                    if let anime = entry.media {
+                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id])
+                                    }
+                                }
+                            }.accessibilityIdentifier("library-list")
                         }
                         if filtered.isEmpty && !store.loadingLibrary && store.libraryError == nil {
                             ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
                                                    systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
+                        if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
+                        Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.horizontal, 12).padding(.vertical)
                 }.scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
-            } else {
-                LibraryGuestView(showSettings: $showSettings)
-            }
+            } else { LibraryGuestView(showSettings: $showSettings) }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") } }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .task(id: store.entries.map(\.mediaId)) { await loadDubs() }
+            .task(id: syncKey) { await loadDubs() }
     }
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField("Search your anime", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
-                .focused($searchFocused).submitLabel(.search).onSubmit { searchFocused = false }
-                .accessibilityIdentifier("library-search")
+                .focused($searchFocused).submitLabel(.search).onSubmit { searchFocused = false }.accessibilityIdentifier("library-search")
             if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear library search") }
         }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
     }
@@ -113,63 +131,70 @@ struct LibraryView: View {
             }
         }
     }
+    private var layoutControls: some View {
+        HStack {
+            Picker("Library layout", selection: $layout) {
+                Label("List", systemImage: "list.bullet").tag("list")
+                Label("Grid", systemImage: "square.grid.2x2").tag("grid")
+            }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
+            if layout == "grid" {
+                Menu {
+                    Picker("Anime per row", selection: $columns) {
+                        ForEach(1...4, id: \.self) { Text("\($0) per row").tag($0) }
+                    }
+                } label: { Text("\(min(4, max(1, columns))) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
+                    .accessibilityIdentifier("library-columns")
+            }
+        }
+    }
     private var sortingBar: some View {
         HStack {
             Text("\(filtered.count)").font(.subheadline.bold()).padding(.horizontal, 11).padding(.vertical, 5).background(Theme.surface, in: Capsule())
                 .accessibilityLabel("\(filtered.count) anime in this list")
             Spacer()
             Menu {
-                Picker("Sort your library", selection: $sort) { ForEach(LibrarySort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                Picker("Sort your library", selection: $sortValue) { ForEach(LibrarySort.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
             } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
+                .accessibilityIdentifier("library-sort")
             Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }
                 .accessibilityLabel("Reverse library sort")
         }
     }
-    private var personalSections: some View {
-        VStack(spacing: 12) {
+    private var comingUpSection: some View {
+        Group {
             if !store.watching.isEmpty {
-                DisclosureGroup("Continue watching", isExpanded: $continueExpanded) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 14) {
-                            ForEach(store.watching) { entry in
-                                if let anime = entry.media {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        AnimeCard(anime: anime)
-                                        Text("\(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?") episodes").font(.caption).foregroundStyle(.secondary)
-                                    }.frame(width: 130)
-                                }
-                            }
-                        }.padding(.vertical, 10)
-                    }
-                }.accessibilityIdentifier("library-continue-watching")
                 DisclosureGroup("Coming up for you", isExpanded: $comingExpanded) {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(comingUp.prefix(8))) { ReleaseRow(event: $0) }
                         if comingUp.isEmpty { Text("No listed releases for your watching list in the next seven days.").font(.caption).foregroundStyle(.secondary) }
-                        if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
                     }.padding(.top, 10)
-                }.accessibilityIdentifier("library-coming-up")
+                }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("library-coming-up")
             }
-        }.font(.subheadline.weight(.semibold))
+        }
     }
     private func nextDub(for id: Int) -> ReleaseEvent? {
         dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) >= Date() }
     }
     private func loadDubs(refresh: Bool = false) async {
-        let entries = store.entries; let ids = Set(entries.map(\.mediaId))
-        dubEvents = []; dubError = nil
-        guard !ids.isEmpty else { return }
-        do {
-            let snapshot = try await store.dubs.snapshot(refresh: refresh)
-            try Task.checkCancellation()
-            guard ids == Set(store.entries.map(\.mediaId)) else { return }
-            let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
-            dubEvents = snapshot.events(knownMedia: known).filter { ids.contains($0.anime.id) }
-        } catch is CancellationError {} catch { if ids == Set(store.entries.map(\.mediaId)) { dubError = "Dub dates are temporarily unavailable." } }
+        let entries = store.entries; let key = syncKey
+        dubEvents = []; dubProgress = [:]; dubError = nil
+        guard !entries.isEmpty else { return }
+        async let snapshotResult = fetchSnapshot(refresh: refresh)
+        async let indexResult = fetchIndex(refresh: refresh)
+        let (snapshot, index) = await (snapshotResult, indexResult)
+        guard !Task.isCancelled, key == syncKey else { return }
+        let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
+        if let snapshot { dubEvents = snapshot.events(knownMedia: known).filter { known[$0.anime.id] != nil } }
+        dubProgress = known.mapValues { LibraryDubProgress(anime: $0, snapshot: snapshot, index: index) }
+        if snapshot == nil || index == nil { dubError = "Some dub information is temporarily unavailable. Existing counts are shown where known." }
     }
+    private func fetchSnapshot(refresh: Bool) async -> DubSnapshot? { try? await store.dubs.snapshot(refresh: refresh) }
+    private func fetchIndex(refresh: Bool) async -> DubIndex? { try? await store.dubs.index(refresh: refresh) }
 }
 
 struct SettingsView: View {
+    @AppStorage("discovery.matureOnly") private var matureOnly = false
+    @AppStorage("discovery.matureGenre") private var matureGenre = "Thriller"
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var clientID = AppConfiguration.clientID ?? ""
@@ -196,6 +221,15 @@ struct SettingsView: View {
                     }
                     if let error = store.accountError { Text(error).foregroundStyle(.red) }
                 }
+                Section("Explore preferences") {
+                    Toggle("Mature stories only", isOn: $matureOnly).accessibilityIdentifier("settings-mature-stories")
+                    if matureOnly {
+                        Picker("Story focus", selection: $matureGenre) {
+                            ForEach(DiscoveryFilters.matureGenres, id: \.self) { Text($0).tag($0) }
+                        }
+                    }
+                    Text("Focus Explore on non-explicit horror, thriller and psychological anime and Korean manhwa.").font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)
                     Link("Dub dates · AniSchedule by Bas1874", destination: URL(string: "https://github.com/Bas1874/AniSchedule")!)
@@ -204,6 +238,8 @@ struct SettingsView: View {
                     Text("Data is matched by IDs and formatted for display; no source records are edited.").font(.caption).foregroundStyle(.secondary)
                     Link("Report inaccurate dub data", destination: URL(string: "https://github.com/Joelis57/MyDubList/issues/new/choose")!)
                     Link("News · Anime News Network", destination: URL(string: "https://www.animenewsnetwork.com")!)
+                    Link("News · Crunchyroll", destination: URL(string: "https://www.crunchyroll.com/news")!)
+                    Link("News · Anime Corner", destination: URL(string: "https://animecorner.me")!)
                 }
                 Section("About") {
                     Text("Anime Companion · First build")

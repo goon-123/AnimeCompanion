@@ -16,7 +16,7 @@ struct AnimeCover: View {
 struct AnimeCard: View {
     let anime: Anime
     var body: some View {
-        NavigationLink(value: AnimeRoute(id: anime.id)) {
+        NavigationLink(value: AnimeRoute(id: anime.id, mediaType: anime.type ?? "ANIME")) {
             VStack(alignment: .leading, spacing: 8) {
                 AnimeCover(anime: anime)
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)

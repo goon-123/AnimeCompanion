@@ -2,43 +2,82 @@ import SwiftUI
 import AnimeCore
 
 struct LibraryAnimeRow: View {
-    @EnvironmentObject private var store: AppStore
     let entry: LibraryEntry
     let anime: Anime
     let nextDub: ReleaseEvent?
-    @State private var editing = false
-    @State private var error: String?
+    var dub: LibraryDubProgress? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             NavigationLink(value: AnimeRoute(id: anime.id)) {
                 HStack(alignment: .top, spacing: 11) {
                     AnimeCover(anime: anime, width: 76, cornerRadius: 6)
-                    VStack(alignment: .leading, spacing: 9) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
-                        Text("\(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?") Episodes").font(.subheadline).foregroundStyle(.secondary)
+                        Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
+                        LibraryDubLabel(anime: anime, progress: dub)
+                        if let score = anime.averageScore { Label("AniList \(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
                         if let next = anime.nextAiringEpisode {
-                            Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))")
-                                .font(.caption).foregroundStyle(Theme.highlight)
+                            Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(Theme.highlight)
                         }
                         if let nextDub, let date = nextDub.date {
-                            Text("DUB · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
-                                .font(.caption).foregroundStyle(.mint)
+                            Text("DUB · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.mint)
                         }
-                        if let error { Text(error).font(.caption).foregroundStyle(.red) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-            Menu {
-                Button("Edit progress and status", systemImage: "pencil") { editing = true }
-                Button("Mark next episode watched", systemImage: "plus") { update(progress: entry.progressValue + 1, status: entry.status ?? .watching) }
-                    .disabled(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
-                Menu("Move to list") {
-                    ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
-                }
-            } label: { Image(systemName: "ellipsis").frame(width: 38, height: 38).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9)) }
-                .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityLabel("Manage \(anime.displayTitle)")
+            LibraryEntryActions(entry: entry, anime: anime)
         }.padding(.vertical, 5)
+    }
+}
+
+struct LibraryAnimeTile: View {
+    let entry: LibraryEntry
+    let anime: Anime
+    let dub: LibraryDubProgress?
+
+    var body: some View {
+        NavigationLink(value: AnimeRoute(id: anime.id)) {
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geometry in
+                    AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
+                }.aspectRatio(1 / 1.45, contentMode: .fit)
+                Text(anime.displayTitle).font(.caption.bold()).lineLimit(2, reservesSpace: true)
+                Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
+                LibraryDubLabel(anime: anime, progress: dub)
+                if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
+            }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .topLeading)
+        }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+            .overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
+    }
+}
+
+struct LibraryDubLabel: View {
+    let anime: Anime
+    let progress: LibraryDubProgress?
+    var body: some View {
+        Text(progress?.label(for: anime) ?? "Checking dub…").font(.caption2.weight(.medium))
+            .foregroundStyle(progress?.released != nil ? Color.mint : Color.secondary)
+            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("library-dub-\(anime.id)")
+    }
+}
+
+struct LibraryEntryActions: View {
+    @EnvironmentObject private var store: AppStore
+    let entry: LibraryEntry
+    let anime: Anime
+    @State private var editing = false
+    @State private var error: String?
+    var body: some View {
+        Menu {
+            Button("Edit progress and status", systemImage: "pencil") { editing = true }
+            Button("Mark next episode watched", systemImage: "plus") { update(progress: entry.progressValue + 1, status: entry.status ?? .watching) }
+                .disabled(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
+            Menu("Move to list") {
+                ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
+            }
+        } label: { Image(systemName: "ellipsis").frame(width: 34, height: 34).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
+            .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityLabel("Manage \(anime.displayTitle)")
             .sheet(isPresented: $editing) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 20) { Text(anime.displayTitle).font(.headline); ProgressControl(anime: anime); Spacer() }.padding()
@@ -46,9 +85,11 @@ struct LibraryAnimeRow: View {
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
                 }.presentationDetents([.medium, .large])
             }
+            .alert("Couldn’t update your library", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("OK") { error = nil }
+            } message: { Text(error ?? "") }
     }
     private func update(progress: Int, status: LibraryStatus) {
-        error = nil
         Task { do { try await store.save(anime: anime, progress: progress, status: status) } catch { self.error = error.localizedDescription } }
     }
 }

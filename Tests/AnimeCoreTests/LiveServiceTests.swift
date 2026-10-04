@@ -25,6 +25,16 @@ final class LiveServiceTests: XCTestCase {
         XCTAssertFalse((details.staff?.edges ?? []).isEmpty)
         XCTAssertFalse((details.recommendations?.nodes ?? []).isEmpty)
         XCTAssertFalse((details.externalLinks ?? []).isEmpty)
+        let browse = try await client.browse(DiscoveryFilters(category: .trending))
+        XCTAssertFalse((browse.media ?? []).isEmpty)
+        XCTAssertTrue((browse.media ?? []).allSatisfy { $0.isAdult != true })
+        let manhwa = try await client.browse(DiscoveryFilters(category: .matureManhwa))
+        XCTAssertFalse((manhwa.media ?? []).isEmpty)
+        XCTAssertTrue((manhwa.media ?? []).allSatisfy { $0.countryOfOrigin == "KR" && $0.isAdult != true })
+        if let first = manhwa.media?.first {
+            let mangaDetails = try await client.details(id: first.id, type: "MANGA")
+            XCTAssertEqual(mangaDetails.type, "MANGA")
+        }
         let lookup = try await client.media(ids: [1, 5])
         XCTAssertEqual(Set(lookup.map(\.id)), Set([1, 5]))
         let week = try XCTUnwrap(Calendar.current.dateInterval(of: .weekOfYear, for: Date()))
@@ -39,13 +49,23 @@ final class LiveServiceTests: XCTestCase {
         let client = DubClient()
         let snapshot = try await client.snapshot(refresh: true)
         XCTAssertFalse(snapshot.events().isEmpty)
-        let availability = try await client.availability(malId: 1)
+        let index = try await client.index(refresh: true)
+        XCTAssertFalse(index.partial.isEmpty)
+        let availability = index.availability(malId: 1)
         XCTAssertEqual(availability, .dubbed)
     }
 
     func testAnimeNewsNetworkFeed() async throws {
         try requireLiveServices()
-        let articles = try await NewsClient().articles(refresh: true)
+        let client = NewsClient()
+        let snapshot = try await client.snapshot(refresh: true)
+        let articles = snapshot.articles
+        XCTAssertEqual(Set(articles.map(\.source)), Set(NewsSource.allCases))
+        XCTAssertTrue(articles.contains { $0.imageURL != nil })
+        if let ann = articles.first(where: { $0.source == .animeNewsNetwork }) {
+            let image = await client.thumbnail(for: ann)
+            XCTAssertNotNil(image)
+        }
         XCTAssertFalse(articles.isEmpty)
         XCTAssertTrue(articles.allSatisfy { !$0.title.isEmpty && $0.url.scheme == "https" })
     }

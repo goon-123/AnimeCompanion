@@ -4,6 +4,7 @@ import AnimeCore
 struct AnimeDetailView: View {
     @EnvironmentObject private var store: AppStore
     let mediaID: Int
+    var mediaType = "ANIME"
     @State private var anime: Anime?
     @State private var loading = false
     @State private var error: String?
@@ -28,9 +29,11 @@ struct AnimeDetailView: View {
                         if let next = anime.nextAiringEpisode { DetailCard(title: "Next original broadcast") { BroadcastCountdown(episode: next) } }
                         synopsis(anime)
                         metadata(anime)
-                        progress(anime)
-                        AnimeDubSchedule(status: dubStatus, events: dubEvents, loading: loadingDub,
-                                         error: [availabilityError, scheduleError].compactMap { $0 }.isEmpty ? nil : [availabilityError, scheduleError].compactMap { $0 }.joined(separator: "\n"))
+                        if mediaType == "ANIME" {
+                            progress(anime)
+                            AnimeDubSchedule(status: dubStatus, events: dubEvents, loading: loadingDub,
+                                             error: [availabilityError, scheduleError].compactMap { $0 }.isEmpty ? nil : [availabilityError, scheduleError].compactMap { $0 }.joined(separator: "\n"))
+                        }
                         related(anime)
                         characters(anime)
                         staff(anime)
@@ -38,11 +41,11 @@ struct AnimeDetailView: View {
                         trailer(anime)
                         reviews(anime)
                         externalLinks(anime)
-                        Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption).padding(.bottom)
+                        Link("View on AniList", destination: URL(string: "https://anilist.co/\(mediaType == "MANGA" ? "manga" : "anime")/\(anime.id)")!).font(.caption).padding(.bottom)
                     }.padding(.horizontal, 14)
                 }
             }
-        }.background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
+        }.background(Theme.background).navigationTitle(mediaType == "MANGA" ? "Manhwa / Manga" : "Anime").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
@@ -63,9 +66,15 @@ struct AnimeDetailView: View {
         DetailCard(title: "Information") {
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 16) {
                 fact("Releasing", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
-                fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
-                fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
-                fact("Studio", anime.studios?.nodes?.map(\.name).joined(separator: ", ") ?? "Not listed")
+                if mediaType == "MANGA" {
+                    fact("Chapters", anime.chapters.map(String.init) ?? "Ongoing / Not listed")
+                    fact("Volumes", anime.volumes.map(String.init) ?? "Not listed")
+                    fact("Origin", anime.countryOfOrigin == "KR" ? "South Korea" : (anime.countryOfOrigin ?? "Not listed"))
+                } else {
+                    fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
+                    fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
+                    fact("Studio", anime.studios?.nodes?.map(\.name).joined(separator: ", ") ?? "Not listed")
+                }
                 fact("Popularity", anime.popularity.map { $0.formatted() } ?? "Not listed")
                 fact("Favourites", anime.favourites.map { $0.formatted() } ?? "Not listed")
             }
@@ -90,7 +99,7 @@ struct AnimeDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
-                        if let media = edge.node { RelatedAnimeCard(anime: media, caption: edge.relationType) }
+                        if let media = edge.node, media.isAdult != true { RelatedAnimeCard(anime: media, caption: edge.relationType) }
                     }
                 }
             }
@@ -187,10 +196,10 @@ struct AnimeDetailView: View {
         loading = true; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
-            let media = try await store.aniList.details(id: mediaID)
+            let media = try await store.aniList.details(id: mediaID, type: mediaType)
             try Task.checkCancellation(); guard requestID == attempt else { return }
             anime = media
-            await loadDub(media, attempt: attempt)
+            if mediaType == "ANIME" { await loadDub(media, attempt: attempt) }
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
     }
     private func loadDub(_ anime: Anime, attempt: UUID) async {

@@ -4,41 +4,96 @@ import AnimeCore
 
 struct NewsView: View {
     @EnvironmentObject private var store: AppStore
+    @AppStorage("news.readingHistory") private var historyJSON = ""
+    @AppStorage("news.popularPeriod") private var periodValue = NewsPeriod.week.rawValue
     @State private var articles: [NewsArticle] = []
+    @State private var unavailable: [String] = []
+    @State private var sourceFilter = "all"
     @State private var loading = false
     @State private var error: String?
     @State private var selected: NewsArticle?
+    private var history: NewsReadingHistory { (try? JSONDecoder().decode(NewsReadingHistory.self, from: Data(historyJSON.utf8))) ?? NewsReadingHistory() }
+    private var period: NewsPeriod { NewsPeriod(rawValue: periodValue) ?? .week }
+    private var filtered: [NewsArticle] { articles.filter { sourceFilter == "all" || $0.source.rawValue == sourceFilter } }
+
     var body: some View {
         List {
-            Section { Text("Anime News Network").font(.subheadline).foregroundStyle(.secondary) }
-            if loading && articles.isEmpty { ProgressView("Loading headlines…") }
-            if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
-            ForEach(Array(articles.enumerated()), id: \.element.id) { index, article in
-                Button { selected = article } label: {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if let imageURL = article.imageURL {
-                            AsyncImage(url: imageURL) { image in image.resizable().scaledToFill() }
-                            placeholder: { Theme.surface }
-                                .frame(height: index == 0 ? 180 : 120).clipped().clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
-                        }
-                        if index == 0 { Label("Latest story", systemImage: "newspaper").font(.caption).foregroundStyle(Theme.accent) }
-                        Text(article.title).font(index == 0 ? .title3.bold() : .headline).foregroundStyle(.primary).multilineTextAlignment(.leading)
-                        HStack {
-                            Text("Anime News Network")
-                            if let date = article.publishedAt { Text("·"); Text(date, style: .relative) }
-                        }.font(.caption).foregroundStyle(.secondary)
-                    }.padding(.vertical, 8)
-                }.buttonStyle(.plain)
+            Section {
+                Picker("News sources", selection: $sourceFilter) {
+                    Text("All sources").tag("all")
+                    ForEach(NewsSource.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
+                }.accessibilityIdentifier("news-sources")
+                Text("Anime News Network · Crunchyroll · Anime Corner").font(.caption).foregroundStyle(.secondary)
             }
-            if articles.isEmpty && !loading && error == nil { ContentUnavailableView("No news yet", systemImage: "newspaper", description: Text("Pull to refresh for the latest headlines.")) }
+            Section("Popular \(period.label.lowercased())") {
+                Picker("Popular news period", selection: $periodValue) {
+                    ForEach(NewsPeriod.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
+                }.pickerStyle(.segmented).accessibilityIdentifier("news-popular-period")
+                Text("Most opened on this device in the last \(period.days) days.").font(.caption).foregroundStyle(.secondary)
+                let popular = history.popular(in: period)
+                if popular.isEmpty {
+                    Text("Your most-opened stories will appear here as you read.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(Array(popular.prefix(5))) { item in
+                    NewsArticleRow(article: item.article, opens: item.opens, open: open)
+                }
+            }
+            Section("Latest news") {
+                if loading && articles.isEmpty { ProgressView("Loading headlines…") }
+                if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
+                ForEach(filtered) { article in NewsArticleRow(article: article, open: open) }
+                if filtered.isEmpty && !loading && error == nil {
+                    Text("No headlines from this source yet. Pull to refresh.").foregroundStyle(.secondary)
+                }
+                if !unavailable.isEmpty { Text("Temporarily unavailable: " + unavailable.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+            }
         }.navigationTitle("Anime News").task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
             .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
+    }
+    private func open(_ article: NewsArticle) {
+        var updated = history; updated.record(article)
+        if let data = try? JSONEncoder().encode(updated), let text = String(data: data, encoding: .utf8) { historyJSON = text }
+        selected = article
     }
     private func load(refresh: Bool = false) async {
         guard !loading else { return }; loading = true; error = nil
         defer { loading = false }
-        do { articles = try await store.news.articles(refresh: refresh) }
-        catch { self.error = error.localizedDescription }
+        do {
+            let snapshot = try await store.news.snapshot(refresh: refresh)
+            try Task.checkCancellation()
+            articles = snapshot.articles; unavailable = snapshot.unavailableSources
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+}
+
+struct NewsArticleRow: View {
+    @EnvironmentObject private var store: AppStore
+    let article: NewsArticle
+    var opens: Int? = nil
+    let open: (NewsArticle) -> Void
+    @State private var imageURL: URL?
+    var body: some View {
+        Button { open(article.withImage(imageURL)) } label: {
+            HStack(alignment: .top, spacing: 12) {
+                thumbnail
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(article.title).font(.subheadline.bold()).foregroundStyle(.primary).multilineTextAlignment(.leading).lineLimit(4)
+                    Text(article.source.label).font(.caption2).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        if let date = article.publishedAt { Text(date, style: .relative) }
+                        if let opens { Text("· \(opens) \(opens == 1 ? "open" : "opens")") }
+                    }.font(.caption2).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.padding(.vertical, 7)
+        }.buttonStyle(.plain).task(id: article.id) { imageURL = await store.news.thumbnail(for: article) }
+    }
+    private var thumbnail: some View {
+        AsyncImage(url: imageURL ?? article.imageURL) { phase in
+            if let image = phase.image { image.resizable().scaledToFill() }
+            else {
+                ZStack { Theme.surface; Image(systemName: "newspaper").font(.title2).foregroundStyle(.secondary) }
+            }
+        }.frame(width: 96, height: 80).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
     }
 }
 

@@ -6,14 +6,16 @@ private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub
 struct ScheduleView: View {
     @EnvironmentObject private var store: AppStore
     @State private var anchor = Date()
-    @State private var filter = ScheduleFilter.all
-    @State private var libraryOnly = false
+    @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
+    @AppStorage("schedule.libraryOnly") private var libraryOnly = false
+    @State private var pickingDate = false
     @State private var subEvents: [ReleaseEvent] = []
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var subError: String?
     @State private var dubError: String?
     @State private var loading = false
     @State private var requestID = UUID()
+    private var filter: ScheduleFilter { ScheduleFilter(rawValue: filterValue) ?? .all }
     private var window: DateInterval {
         Calendar.current.dateInterval(of: .weekOfYear, for: anchor) ?? DateInterval(start: anchor, duration: 7 * 86400)
     }
@@ -21,7 +23,7 @@ struct ScheduleView: View {
         let ids = Set(store.watching.map(\.mediaId))
         return (subEvents + dubEvents).filter {
             guard filter == .all || (filter == .sub && $0.kind == .sub) || (filter == .dub && $0.kind == .dub) else { return false }
-            return !libraryOnly || ids.contains($0.anime.id)
+            return !libraryOnly || !store.isSignedIn || ids.contains($0.anime.id)
         }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
     }
     private var days: [Date] {
@@ -33,12 +35,18 @@ struct ScheduleView: View {
                 HStack {
                     Button { shift(-7) } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Previous week")
                     Spacer()
-                    Text(window.start.formatted(.dateTime.month(.abbreviated).day()) + " – " + window.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day())).font(.headline)
+                    Button { pickingDate = true } label: {
+                        Label(window.start.formatted(.dateTime.month(.abbreviated).day()) + " – " + window.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day()), systemImage: "calendar")
+                            .font(.subheadline.bold())
+                    }.accessibilityLabel("Choose schedule date")
+                        .accessibilityIdentifier("schedule-week")
+                        .accessibilityValue(window.start.formatted(.dateTime.year().month().day()))
                     Spacer()
                     Button { shift(7) } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Next week")
-                }
+                }.buttonStyle(.borderless)
                 Button("This week") { anchor = Date() }
-                Picker("Release type", selection: $filter) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                Picker("Release type", selection: $filterValue) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
+                    .pickerStyle(.segmented).accessibilityIdentifier("schedule-release-type")
                 if store.isSignedIn { Toggle("My watching list only", isOn: $libraryOnly) }
                 Text("Times in \(TimeZone.current.identifier). Sub times are original Japanese broadcasts.").font(.caption).foregroundStyle(.secondary)
             }
@@ -59,6 +67,13 @@ struct ScheduleView: View {
             Section { Text("English dub dates are reported by AniSchedule and may change. Unverified dates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
         }.navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
             .refreshable { await load(refresh: true) }
+            .sheet(isPresented: $pickingDate) {
+                NavigationStack {
+                    DatePicker("Schedule date", selection: $anchor, displayedComponents: .date).datePickerStyle(.graphical).padding()
+                        .navigationTitle("Choose a date").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { pickingDate = false } } }
+                }.presentationDetents([.medium, .large])
+            }
             .onChange(of: store.isSignedIn) { _, signedIn in if !signedIn { libraryOnly = false } }
     }
     private func shift(_ days: Int) { anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor }
