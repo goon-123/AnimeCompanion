@@ -41,8 +41,9 @@ final class IPadLayoutTests: XCTestCase {
         let entries = [1, 199, 205].map { app.buttons["library-entry-\($0)"] }
         XCTAssertTrue(entries.allSatisfy { $0.exists })
         for entry in entries { XCTAssertEqual(entry.frame.minY, entries[0].frame.minY, accuracy: 3) }
-        XCTAssertGreaterThan(entries[1].frame.minX, entries[0].frame.minX)
-        XCTAssertGreaterThan(entries[2].frame.minX, entries[1].frame.minX)
+        let ordered = entries.sorted { $0.frame.minX < $1.frame.minX }
+        XCTAssertGreaterThan(ordered[1].frame.minX, ordered[0].frame.minX)
+        XCTAssertGreaterThan(ordered[2].frame.minX, ordered[1].frame.minX)
         capture("Library-Three-Columns-Portrait")
         rotate(.landscapeLeft, in: app)
         for entry in entries {

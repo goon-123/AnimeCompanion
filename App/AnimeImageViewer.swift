@@ -37,6 +37,10 @@ struct AnimeImageViewer: View {
                         ProgressView("Loading image…").frame(width: geometry.size.width, height: geometry.size.height)
                     }
                 }
+                .onChange(of: geometry.size) { _, _ in
+                    // Refit after rotation/window resizing instead of retaining an offscreen pan.
+                    scale = 1; startScale = 1; offset = .zero; startOffset = .zero
+                }
             }.clipped()
             HStack {
                 Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).background(.black.opacity(0.65), in: Circle()) }
