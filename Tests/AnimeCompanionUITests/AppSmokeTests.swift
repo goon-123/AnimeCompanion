@@ -73,13 +73,24 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(shelfStatus.exists)
         let shelfNext = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-")).firstMatch
         XCTAssertTrue(shelfNext.exists)
+        let nextTimes = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-time-"))
+        for time in nextTimes.allElementsBoundByIndex {
+            // A card inside the horizontal viewport must expose its complete date.
+            if time.frame.minX >= 0, time.frame.maxX <= app.frame.width,
+               time.frame.minY >= app.navigationBars.firstMatch.frame.maxY,
+               time.frame.maxY <= app.tabBars.firstMatch.frame.minY {
+                XCTAssertTrue(time.isHittable, "A visible card's next-airing date was clipped")
+            }
+        }
         capture("Explore-Glance-Shelves")
 
         app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 15))
-        app.buttons["discovery-layout"].tap()
-        app.buttons["List"].tap()
+        if app.buttons["discovery-layout"].label.contains("Grid") {
+            app.buttons["discovery-layout"].tap()
+            app.buttons["List"].tap()
+        }
         search.tap(); search.typeText("Cowboy\n")
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 35))
         let dub = app.staticTexts["explore-dub-1"]

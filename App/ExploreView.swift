@@ -52,11 +52,11 @@ struct ExploreView: View {
                     Spacer()
                     Text("See all").font(.caption)
                     Image(systemName: "chevron.right").font(.caption.bold())
-                }.foregroundStyle(.primary).frame(minHeight: 44).padding(.horizontal)
+                }.foregroundStyle(.primary).frame(minHeight: 44).padding(.horizontal).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("explore-category-\(category.rawValue)")
             if !anime.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 14) { ForEach(Array(anime.prefix(16))) { AnimeCard(anime: $0) } }.padding(.horizontal)
+                    HStack(alignment: .top, spacing: 14) { ForEach(Array(anime.prefix(16))) { AnimeCard(anime: $0) } }.padding(.horizontal)
                 }
             } else if !loading { Text("No titles listed yet.").font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
         }
