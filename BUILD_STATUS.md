@@ -1,27 +1,32 @@
 # Build verification
 
-Verified implementation: `aaa52a3f185acd170f9fa8e6447f0c95788034fc`.
+Verified implementation: `4bdd36f313740b0939748953b6df94d3d0246f7f`.
 
-[Successful macOS/Xcode workflow](https://github.com/goon-123/AnimeCompanion/actions/runs/37177831116), October 4, 2026.
+[Successful macOS/Xcode workflow](https://github.com/goon-123/AnimeCompanion/actions/runs/37217762663), October 4, 2026.
 
 ## Completed
 
-- Compiled and type-checked the complete SwiftUI app with Xcode for iPhone, in Release configuration.
-- Packaged a real unsigned ARM64 IPA with minimum iOS version 17.0. The downloadable artifact is **AnimeCompanion-unsigned-IPA**.
-- Passed **13 offline core unit tests**. The optional captured-source test was skipped because external captures are not bundled. The three live tests are gated during this offline step and run separately below.
-- Passed **3 live public-client checks**: AniList seasonal/trending browsing, pagination, search, expanded details, ID lookup and weekly airings; AniSchedule and MyDubList English dub data; Anime News Network RSS. The expanded detail check validates release dates, popularity, staff, recommendations and external links.
-- Passed **2 iPhone simulator UI tests**. The first covers Explore, Schedule, My Library, News and account settings, including Keychain access on a fresh installation. The second covers library search and status controls, opening an entry, expanding/closing its cover and reaching its English dub schedule.
-- Reviewed the simulator screenshots for the reference-style library, detailed entry page, full-screen cover and title-specific dub section. Library preview progress is a Debug-only test fixture with real public metadata; it is excluded from the Release IPA and does not write to an AniList account.
-- Moved Continue watching and Coming up for you to expandable sections in My Library. Explore contains discovery sections.
-- Preserved the AniList implicit sign-in update: authorization sends the client ID and response type, and AniList uses the registered redirect URI. Callback URI, token type, expiry and duplicate parameters are validated.
+- Compiled and type-checked the complete SwiftUI app for iPhone in Release configuration.
+- Packaged and checked an unsigned ARM64 IPA for iOS 17 or newer. Its SHA-256 is `0fce2a6617387ffa6e66bc1c3879e7c0ef525ebc4eade26c84339ad8d672bb32`. The Debug-only sample-library launch argument is excluded from the device binary.
+- Passed **21 offline core tests**. The optional captured-source test was skipped because captures are not bundled. Three live checks are gated during the offline step and run separately below.
+- Passed **3 live public-client checks** covering AniList browsing, filters, details and airings; AniSchedule/MyDubList dub information and partial listings; and all three news publishers, including thumbnail retrieval.
+- Passed **6 iPhone simulator UI tests** covering Explore shelf/list/grid dub, library and Completed indicators; complete visible next-airing dates; category navigation and format filtering; all four tabs and settings; persistent library grid density and AniList-rating sorting; switching from Grid back to List after reopening; library search, details and cover expansion; schedule week navigation, date-picker access and saved Dub selection.
+- Reviewed the final simulator screenshots, including Watching and Completed badges alongside dub counts, next-episode dates in Explore, the restored library list, three-column library grid, news images, entry details, expanded artwork and schedule controls.
+- Removed the mature-story settings, categories and associated native manga browsing routes.
+- Removed Continue watching. Coming up for you remains an expandable section in My Library. Explore shows Trending first, Popular this season and Upcoming, with full filtered category pages.
+- Dub counts distinguish already broadcast original episodes from planned season totals. Missing counts remain unknown; unreported dubs and unverified or delayed dates are labeled.
+- News combines Anime News Network, Crunchyroll and Anime Corner with images where available. Weekly/monthly Popular uses reading history on this device and is labeled accordingly.
+- Preserved the existing AniList implicit sign-in flow, callback validation and confirmed-server-write behavior for library changes.
 
-Simulator builds use local ad-hoc signing to exercise Keychain access. The device IPA is unsigned and still needs signing before installation.
+Simulator preview progress is a Debug-only fixture using public metadata. It does not authenticate or write to an AniList account. Simulator builds use local ad-hoc signing to exercise Keychain access.
 
 ## Remaining device verification
 
-- Sign and install the updated IPA through the chosen sideloading method, or configure a development-signed device build in Xcode.
-- Verify the full personal-account flow on a signed device using the existing AniList client setup: sign-in, cancellation, token persistence, reconnecting and library mutations. The public-client checks do not authenticate or change an AniList account.
+- Sign and install the IPA through the existing sideloading method, or configure a development-signed device build in Xcode.
+- Verify personal-account sign-in, token persistence and library mutations on the signed device using the existing AniList client setup. The automated public-client checks do not authenticate or change an account.
 
-## Repository
+## Repository and artifacts
 
-The current source is available at [goon-123/AnimeCompanion](https://github.com/goon-123/AnimeCompanion). A source push to main starts the included **iOS unsigned IPA** workflow. Public-provider checks are diagnostic so a temporary service outage does not prevent packaging the app; inspect their step result separately. Simulator screenshots and the XCTest result bundle are uploaded as **AnimeCompanion-simulator-check**.
+The source is available at [goon-123/AnimeCompanion](https://github.com/goon-123/AnimeCompanion). Source pushes to main start the iOS unsigned IPA workflow. Public-provider diagnostics are checked separately because that step allows temporary provider outages.
+
+The verified run provides **AnimeCompanion-unsigned-IPA**, **AnimeCompanion-simulator-screenshots** and **AnimeCompanion-simulator-check** artifacts. Screenshot export also runs after a test failure; the smaller screenshot artifact contains PNGs, text diagnostics and the attachment manifest.

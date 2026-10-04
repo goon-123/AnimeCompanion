@@ -70,4 +70,4 @@ Seanime plugins were inspected to locate upstream sources and understand their s
 
 ## Current verification
 
-See `BUILD_STATUS.md` for the completed checks and remaining iPhone build steps. Download a compiled IPA only from a successful workflow run; the source ZIP is not an installable app.
+See `BUILD_STATUS.md` for the completed checks and remaining signed-device verification. Download a compiled IPA only from a successful workflow run; the source ZIP is not an installable app.
