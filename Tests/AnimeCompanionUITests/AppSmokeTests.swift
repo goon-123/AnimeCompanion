@@ -13,6 +13,11 @@ final class AppSmokeTests: XCTestCase {
             tab.tap()
             let navigationTitle = title == "News" ? "Anime News" : title
             XCTAssertTrue(app.navigationBars[navigationTitle].waitForExistence(timeout: 10))
+            if title == "Explore" { waitForLoadingToFinish("Finding your season…", in: app) }
+            if title == "Schedule" { waitForLoadingToFinish("Loading releases…", in: app) }
+            if title == "News" { waitForLoadingToFinish("Loading headlines…", in: app) }
+            XCTAssertFalse(app.staticTexts["Unable to read the saved AniList connection."].exists,
+                           "The signed simulator app must be able to read its Keychain.")
             capture(title)
         }
 
@@ -24,6 +29,14 @@ final class AppSmokeTests: XCTestCase {
         capture("Settings")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.navigationBars["My Library"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func waitForLoadingToFinish(_ label: String, in app: XCUIApplication) {
+        let indicator = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: indicator)
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 45), .completed,
+                       "Loading did not finish: \(label)")
     }
 
     @MainActor

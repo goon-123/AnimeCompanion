@@ -14,7 +14,7 @@ print(phones[0]["udid"])
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath build/SimulatorTests.xcresult \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 
 xcrun xcresulttool export attachments --path build/SimulatorTests.xcresult \
   --output-path build/screenshots

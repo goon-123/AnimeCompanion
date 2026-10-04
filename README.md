@@ -50,7 +50,7 @@ Tests cover season rollover, local dates, unknown episode totals, real-vs-estima
 
 An optional `LIVE_FIXTURE_DIR` environment variable lets tests read externally captured source responses. Captured upstream datasets are not bundled into this source package.
 
-For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=1 swift test --filter LiveServiceTests`. These checks do not log in or write to an AniList account. Run the simulator smoke test with `bash scripts/check-simulator.sh` after generating the Xcode project.
+For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=1 swift test --filter LiveServiceTests`. These checks do not log in or write to an AniList account. Run the simulator smoke test with `bash scripts/check-simulator.sh` after generating the Xcode project. Simulator builds use local ad-hoc signing so Keychain access can be checked; the downloadable device IPA remains unsigned.
 
 ## Data sources and attribution
 
