@@ -9,6 +9,7 @@ struct AnimeCover: View {
         AsyncImage(url: anime.coverURL) { image in image.resizable().scaledToFill() }
         placeholder: { ZStack { Theme.surface; Image(systemName: "sparkles.tv").foregroundStyle(.secondary) } }
             .frame(width: width, height: width * 1.45).clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .contentShape(Rectangle())
             .accessibilityHidden(true)
     }
 }
@@ -26,7 +27,7 @@ struct AnimeCard: View {
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
                 }
                 DiscoveryIndicators(anime: anime)
-            }.frame(width: posterWidth).foregroundStyle(.primary)
+            }.frame(width: posterWidth).foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
     }
 }

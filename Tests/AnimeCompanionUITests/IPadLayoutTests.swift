@@ -108,6 +108,15 @@ final class IPadLayoutTests: XCTestCase {
 
         app.buttons["discovery-layout"].tap(); app.buttons["Grid"].tap()
         chooseRows(2, button: "discovery-columns", in: app)
+        let initialGridWidth = entry.frame.width
+        openDisplay("explore", in: app)
+        app.sliders["explore-grid-size"].adjust(toNormalizedSliderPosition: 0.25)
+        app.buttons["Done"].tap()
+        XCTAssertLessThan(entry.frame.width, initialGridWidth - 70,
+                          "Maximum grid poster size must change the artwork even with the same row count")
+        openDisplay("explore", in: app)
+        app.sliders["explore-grid-size"].adjust(toNormalizedSliderPosition: 1)
+        app.buttons["Done"].tap()
         let twoColumnWidth = entry.frame.width
         chooseRows(3, button: "discovery-columns", in: app)
         XCTAssertGreaterThan(twoColumnWidth, entry.frame.width + 70)
@@ -115,6 +124,7 @@ final class IPadLayoutTests: XCTestCase {
         rotate(.landscapeLeft, in: app)
         capture("Explore-Three-Columns-Landscape")
         chooseRows(8, button: "discovery-columns", in: app)
+        capture("Explore-Eight-Columns-Landscape")
         let firstRow = Array(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).allElementsBoundByIndex.prefix(8))
         XCTAssertEqual(firstRow.count, 8)
         for tile in firstRow {
@@ -122,7 +132,6 @@ final class IPadLayoutTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(tile.frame.minX, 0)
             XCTAssertLessThanOrEqual(tile.frame.maxX, app.frame.width)
         }
-        capture("Explore-Eight-Columns-Landscape")
         chooseRows(3, button: "discovery-columns", in: app)
         app.terminate(); app.launch()
         openDisplay("explore", in: app)
@@ -132,6 +141,11 @@ final class IPadLayoutTests: XCTestCase {
         openDisplay("library", in: app)
         XCTAssertEqual(app.sliders["library-list-size"].value as? String, originalLibrarySize)
         app.buttons["Done"].tap()
+        selectTab("Explore", in: app)
+        app.buttons["explore-category-trending"].tap()
+        XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["discovery-layout"].label.contains("Grid"))
+        XCTAssertTrue(app.buttons["discovery-columns"].label.contains("3 per row"))
         XCUIDevice.shared.orientation = .portrait
     }
 

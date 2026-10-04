@@ -65,6 +65,10 @@ struct DiscoveryBrowseView: View {
                 }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
                 if loading { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding() }
+                if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
+                    Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if layout == "grid" {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 18) {
                         ForEach(results) { DiscoveryAnimeTile(anime: $0, posterWidth: posters.gridPosterWidth) }
@@ -202,8 +206,9 @@ struct DiscoveryAnimeTile: View {
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
                 DiscoveryIndicators(anime: anime)
-            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, alignment: .leading)
+            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
+                .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

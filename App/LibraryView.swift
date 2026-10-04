@@ -79,6 +79,10 @@ struct LibraryView: View {
                         statusTabs
                         layoutControls
                         sortingBar
+                        if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
+                            Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                         if layout == "grid" {
@@ -175,14 +179,22 @@ struct LibraryView: View {
     private func comingUpSection(width: CGFloat) -> some View {
         Group {
             if !store.watching.isEmpty {
-                DisclosureGroup("Coming up for you", isExpanded: $comingExpanded) {
-                    VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Button { withAnimation { comingExpanded.toggle() } } label: {
+                        HStack {
+                            Text("Coming up for you").font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: comingExpanded ? "chevron.down" : "chevron.right").font(.subheadline.bold())
+                        }.frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("library-coming-up")
+                        .accessibilityValue(comingExpanded ? "Expanded" : "Collapsed")
+                    if comingExpanded {
                         ForEach(Array(comingUp.prefix(8))) {
                             ReleaseRow(event: $0, posterWidth: CGFloat(PosterLayout.listWidth(preferred: min(200, max(60, posters.comingWidth)), availableWidth: Double(width))))
                         }
                         if comingUp.isEmpty { Text("No listed releases for your watching list in the next seven days.").font(.caption).foregroundStyle(.secondary) }
-                    }.padding(.top, 10)
-                }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("library-coming-up")
+                    }
+                }
             }
         }
     }

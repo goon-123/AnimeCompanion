@@ -48,10 +48,11 @@ struct LibraryAnimeTile: View {
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
                 LibraryDubLabel(anime: anime, progress: dub)
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
-            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, alignment: .topLeading)
+            }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
+                .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             .overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 

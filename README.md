@@ -1,15 +1,16 @@
 # Anime Companion
 
-An iPhone-first SwiftUI app for seasonal anime discovery, AniList library tracking, English dub information and anime news. The name is a working title. Requires iOS 17 or newer.
+A universal iPhone and iPad SwiftUI app for seasonal anime discovery, AniList library tracking, English dub information and anime news. The name is a working title. Requires iOS/iPadOS 17 or newer. iPad supports portrait, upside-down portrait and both landscape orientations.
 
 ## Features
 
 - **Explore:** Trending first, Popular this season and Upcoming. Shelf cards and category lists/grids show English dub release counts or availability, your AniList library status, Completed/Watched before badges, the next original broadcast and the next listed dub date. Unknown counts and unverified or delayed dates are labeled. Every category opens a full paginated list with title search, genre/year/season/format/status filters, rating/popularity/trending/newest/title sorting and list/grid display.
 - **Schedule:** weekly original broadcasts and English dub entries, local times, previous/next week, a graphical date picker and a watching-list filter. All/Sub/Dub and watching-only preferences are saved across launches. Week-navigation buttons have independent actions.
-- **My Library:** saved list/grid display with one to four cards per row, title search, Watching/Planning/Completed/Dropped/Paused/Rewatching tabs, counts and sorting including AniList rating. Continue watching is removed; Coming up for you remains expandable. Both layouts show watched progress and dub release counts without opening details. Each entry has a menu for progress and status. Changes display after AniList confirms them; an unsuccessful write preserves saved progress.
+- **My Library:** saved list/grid display with one to eight entries per row, adjustable list/grid artwork, title search, Watching/Planning/Completed/Dropped/Paused/Rewatching tabs, counts and sorting including AniList rating. Continue watching is removed; Coming up for you remains expandable with its own poster-size control. Both layouts show watched progress and dub release counts without opening details. Each entry has a menu for progress and status. Changes display after AniList confirms them; an unsuccessful write preserves saved progress.
 - **News:** Anime News Network, Crunchyroll and Anime Corner, with publisher filters and thumbnails beside headlines. Feed thumbnails are used first; visible stories can retrieve the publisher's Open Graph image. Missing images show a neutral news icon. Articles open at their original source in Safari. The weekly/monthly Popular section uses reading counts saved on this device and is labeled accordingly; it does not claim publisher-wide readership statistics.
 - **Anime details:** cover and banner, expandable synopsis, season/status, score, genres, release dates, episodes, duration, studio, popularity, favourites and rankings. Includes characters, staff, related titles, recommendations, a trailer, reviews, external links and AniList controls. Upcoming original broadcasts have a live countdown. Each title has its own English dub availability, recorded release history and upcoming schedule when the sources list dates.
-- **Artwork viewer:** tap a cover or banner on the detail page to expand it, then pinch to zoom, drag while zoomed or double-tap to zoom/reset.
+- **Artwork viewer:** tap a cover or banner on the detail page to expand it, then pinch to zoom, drag while zoomed or double-tap to zoom/reset. Rotation/window resizing refits the image instead of retaining an offscreen pan.
+- **Display options:** the sliders icon in Explore, expanded categories and My Library opens independent, automatically saved image-size controls. Choose list-poster width, maximum grid-poster width and one to eight entries per row. Explore has a shelf-poster control; My Library has a Coming-up poster control. Defaults are larger on iPad. Fewer grid entries give covers more room to grow, while a maximum width prevents enormous single-column images on wide screens. Narrow windows and accessibility-size text can temporarily reduce columns without losing the saved choice. Long-form detail, news and schedule content stays centered at a readable width.
 
 The application opens with real provider clients rather than the design prototype's sample data. Each provider can fail independently. AniList requests are spaced and public responses are cached briefly in memory. Login is not required for public browsing.
 
@@ -17,19 +18,19 @@ The application opens with real provider clients rather than the design prototyp
 
 1. Visit https://anilist.co/settings/developer and create an application.
 2. Name it **Anime Companion** and set its redirect URL to **animecompanion://oauth/anilist**.
-3. In the iPhone app, open Settings, enter the numeric **client ID**, and tap Connect AniList.
+3. In the app, open Settings, enter the numeric **client ID**, and tap Connect AniList. Existing users can keep their configured client ID; no new AniList developer registration is needed for this update.
 
 Only the client ID is needed. Do not paste a client secret or access token into the source. OAuth opens AniList's sign-in screen; the returned bearer token is stored in this device's Keychain. Expired credentials require signing in again. The sign-in request follows AniList's implicit mobile flow by sending only the client ID and response type; AniList uses the redirect URI saved in the developer application. The callback URI is validated before a token is accepted.
 
-## Build an iPhone IPA with GitHub
+## Build a universal iPhone/iPad IPA with GitHub
 
 The project is hosted at [goon-123/AnimeCompanion](https://github.com/goon-123/AnimeCompanion). The included **iOS unsigned IPA** workflow runs when main is updated and can also be started from Actions → iOS unsigned IPA → Run workflow.
 
-On a successful run, download **AnimeCompanion-unsigned-IPA** from the run's Artifacts section. Extract the ZIP to get **AnimeCompanion-unsigned.ipa**. This is an unsigned build and needs signing through your chosen installation method before it can run on an iPhone. It is not a TestFlight upload.
+On a successful run, download **AnimeCompanion-unsigned-IPA** from the run's Artifacts section. Extract the ZIP to get **AnimeCompanion-unsigned.ipa**. The same unsigned build supports iPhone and iPad and needs signing through your chosen installation method before installation. It is not a TestFlight upload.
 
 The workflow uses a macOS Xcode runner, runs core unit tests, generates the project with XcodeGen, compiles the app and packages the IPA. No credentials or signing keys are required for an unsigned build.
 
-After packaging, the workflow also checks the public AniList, dub and news providers. Six iPhone simulator tests cover all four tabs, account settings, library search, list/grid preferences, dub labels, rating sorting, expanded category filters, Explore dub/library/completed/airing indicators in shelves and both layouts, week navigation, date-picker access, persistent Dub selection, entry details and cover expansion. Simulator screenshots and the test result bundle are uploaded separately. Public-provider diagnostics can fail during a service outage; check that step's logs for the result.
+After packaging, the workflow also checks the public AniList, dub and news providers. Seven iPhone simulator tests cover all four tabs, account settings, library search, display controls and persistence, list/grid preferences, dub labels, rating sorting, expanded category filters, Explore dub/library/completed/airing indicators, week navigation, date-picker access, persistent Dub selection, entry details and cover expansion. Three additional tests select an actual 11-inch iPad Pro simulator and check artwork growth, Coming-up sizing, two/three/eight-column grids, independent saved preferences, portrait/landscape rotation, all four tabs, details and full-screen artwork. iPhone and iPad screenshots and the test result bundle are uploaded separately. Public-provider diagnostics can fail during a service outage; check that step's logs for the result.
 
 ## Build on a Mac
 
@@ -39,7 +40,7 @@ Install Xcode and XcodeGen (`brew install xcodegen`), then run:
 bash scripts/build-ios.sh
 ```
 
-For simulator testing, run `xcodegen generate`, open `AnimeCompanion.xcodeproj`, select an iPhone simulator and run the AnimeCompanion scheme. For a development-signed device build, configure your Apple development team in Xcode.
+For simulator testing, run `xcodegen generate`, open `AnimeCompanion.xcodeproj`, select an iPhone or iPad simulator and run the AnimeCompanion scheme. For a development-signed device build, configure your Apple development team in Xcode.
 
 ## Check the data layer
 
@@ -51,9 +52,9 @@ Tests cover season rollover, local dates, unknown episode totals, real-vs-estima
 
 An optional `LIVE_FIXTURE_DIR` environment variable lets tests read externally captured source responses. Captured upstream datasets are not bundled into this source package.
 
-For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=1 swift test --filter LiveServiceTests`. These checks do not log in or write to an AniList account. Run the simulator smoke test with `bash scripts/check-simulator.sh` after generating the Xcode project. Simulator builds use local ad-hoc signing so Keychain access can be checked; the downloadable device IPA remains unsigned.
+For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=1 swift test --filter LiveServiceTests`. These checks do not log in or write to an AniList account. After generating the Xcode project, run `bash scripts/check-simulator.sh iphone` or `bash scripts/check-simulator.sh ipad`. The iPad command requires an available 11-inch Pro simulator and fails clearly if none exists. Simulator builds use local ad-hoc signing so Keychain access can be checked; the downloadable device IPA remains unsigned.
 
-The library UI tests use the Debug-only `--ui-library-preview` launch argument: real public metadata with synthetic local progress. This fixture does not authenticate or write to AniList and is excluded from Release builds.
+The library UI tests use the Debug-only `--ui-library-preview` launch argument: real public metadata with synthetic local progress. Only the Coming-up artwork-sizing test also uses `--ui-layout-preview` to add a deterministic synthetic future release. That date is a test fixture, not a provider claim. Neither fixture authenticates or writes to AniList, and both are excluded from Release builds.
 
 ## Data sources and attribution
 
