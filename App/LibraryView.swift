@@ -151,7 +151,7 @@ struct LibraryView: View {
             }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
             if layout == "grid" {
                 Menu {
-                    Picker("Anime per row", selection: $posters.columns) {
+                    Picker("Anime per row", selection: posters.$columns) {
                         ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
                     }
                 } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }

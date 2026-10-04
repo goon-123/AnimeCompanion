@@ -56,26 +56,26 @@ struct DisplayOptionsView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Section("List view") {
-                    sizeControl("List poster width", value: $preferences.listWidth, range: 60...240, key: "list-size")
+                    sizeControl("List poster width", value: preferences.$listWidth, range: 60...240, key: "list-size")
                     Text("Larger covers leave less room for text. Narrow windows keep enough space to read episode and dub information.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Grid view") {
-                    Picker("Entries per row", selection: $preferences.columns) {
+                    Picker("Entries per row", selection: preferences.$columns) {
                         ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
                     }.accessibilityIdentifier("\(preferences.scope.rawValue)-display-columns")
-                    sizeControl("Maximum grid poster width", value: $preferences.gridWidth, range: 120...480, key: "grid-size")
+                    sizeControl("Maximum grid poster width", value: preferences.$gridWidth, range: 120...480, key: "grid-size")
                     Text("Choose fewer entries per row for bigger images. Covers grow up to your maximum width. Narrow windows may temporarily fit fewer entries; your chosen density is remembered.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if preferences.scope == .explore {
                     Section("Explore shelves") {
-                        sizeControl("Shelf poster width", value: $preferences.shelfWidth, range: 120...360, key: "shelf-size")
+                        sizeControl("Shelf poster width", value: preferences.$shelfWidth, range: 120...360, key: "shelf-size")
                         Text("Applies to Trending, Popular this season and Upcoming.").font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
                     Section("Coming up for you") {
-                        sizeControl("Coming-up poster width", value: $preferences.comingWidth, range: 60...200, key: "coming-size")
+                        sizeControl("Coming-up poster width", value: preferences.$comingWidth, range: 60...200, key: "coming-size")
                     }
                 }
                 Section {

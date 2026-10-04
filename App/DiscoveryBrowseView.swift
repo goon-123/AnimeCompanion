@@ -46,7 +46,7 @@ struct DiscoveryBrowseView: View {
                     } label: { Label(layout == "grid" ? "Grid" : "List", systemImage: layout == "grid" ? "square.grid.2x2" : "list.bullet").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }.accessibilityIdentifier("discovery-layout")
                     if layout == "grid" {
                         Menu {
-                            Picker("Entries per row", selection: $posters.columns) {
+                            Picker("Entries per row", selection: posters.$columns) {
                                 ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
                             }
                         } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }
