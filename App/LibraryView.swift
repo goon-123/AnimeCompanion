@@ -134,8 +134,8 @@ struct LibraryView: View {
     private var layoutControls: some View {
         HStack {
             Picker("Library layout", selection: $layout) {
-                Label("List", systemImage: "list.bullet").tag("list")
-                Label("Grid", systemImage: "square.grid.2x2").tag("grid")
+                Text("List").tag("list")
+                Text("Grid").tag("grid")
             }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
             if layout == "grid" {
                 Menu {

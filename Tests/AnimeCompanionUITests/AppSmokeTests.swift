@@ -55,6 +55,10 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["library-columns"].label.contains("3 per row"))
         XCTAssertTrue(app.buttons["library-sort"].label.contains("AniList rating"))
         app.segmentedControls["library-layout"].buttons["List"].tap()
+        let selectedList = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"),
+            object: app.segmentedControls["library-layout"].buttons["List"])
+        XCTAssertEqual(XCTWaiter.wait(for: [selectedList], timeout: 10), .completed)
+        XCTAssertFalse(app.buttons["library-columns"].exists)
         capture("Library-List-Dub-Counts")
     }
 
