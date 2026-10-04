@@ -34,3 +34,20 @@ jobs:
           name: AnimeCompanion-unsigned-IPA
           path: AnimeCompanion-unsigned.ipa
           retention-days: 30
+      - name: Check public data providers
+        continue-on-error: true
+        env:
+          ANIMECOMPANION_LIVE_SERVICES: '1'
+        run: swift test -j 2 --filter LiveServiceTests
+      - name: Check iPhone simulator tabs
+        run: bash scripts/check-simulator.sh
+      - name: Upload simulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-simulator-check
+          path: |
+            build/screenshots
+            build/SimulatorTests.xcresult
+          if-no-files-found: ignore
+          retention-days: 30

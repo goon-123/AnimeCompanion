@@ -28,6 +28,8 @@ On a successful run, download **AnimeCompanion-unsigned-IPA** from the run's Art
 
 The workflow uses a macOS Xcode runner, runs core unit tests, generates the project with XcodeGen, compiles the app and packages the IPA. No credentials or signing keys are required for an unsigned build.
 
+After packaging, the workflow also checks the public AniList, dub and news providers and opens all four tabs and account settings in an iPhone simulator. Simulator screenshots and the test result bundle are uploaded separately. Public-provider diagnostics can fail during a service outage; check that step's logs for the result.
+
 ## Build on a Mac
 
 Install Xcode and XcodeGen (`brew install xcodegen`), then run:
@@ -47,6 +49,8 @@ swift test -j 2
 Tests cover season rollover, local dates, unknown episode totals, real-vs-estimated dub date priority, indefinite delays, missing dub IDs, RSS dates/CDATA/unsafe links, OAuth callback validation, request headers, public response caching, custom-list deduplication, mutation IDs, error responses and airing pagination.
 
 An optional `LIVE_FIXTURE_DIR` environment variable lets tests read externally captured source responses. Captured upstream datasets are not bundled into this source package.
+
+For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=1 swift test --filter LiveServiceTests`. These checks do not log in or write to an AniList account. Run the simulator smoke test with `bash scripts/check-simulator.sh` after generating the Xcode project.
 
 ## Data sources and attribution
 

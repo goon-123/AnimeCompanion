@@ -46,6 +46,18 @@ targets:
     dependencies:
       - package: AnimeCore
         product: AnimeCore
+  AnimeCompanionUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/AnimeCompanionUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.animecompanion.ios.uitests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: AnimeCompanion
+    dependencies:
+      - target: AnimeCompanion
 schemes:
   AnimeCompanion:
     build:
@@ -53,5 +65,9 @@ schemes:
         AnimeCompanion: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - AnimeCompanionUITests
     archive:
       config: Release
