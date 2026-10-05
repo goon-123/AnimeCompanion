@@ -24,7 +24,7 @@ struct FeaturedAnimeCarousel: View {
                             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { selected = index }
                         } label: {
                             Capsule().fill(selected == index ? Color.white : Color.white.opacity(0.28))
-                                .frame(width: selected == index ? 26 : 7, height: 7).frame(minWidth: 32, minHeight: 32)
+                                .frame(width: selected == index ? 26 : 7, height: 7).frame(minWidth: 44, minHeight: 44)
                         }.buttonStyle(.plain).accessibilityLabel("Featured title \(index + 1) of \(anime.count)")
                             .accessibilityValue(selected == index ? "Selected" : "")
                             .accessibilityIdentifier("featured-page-\(index)")
@@ -83,7 +83,10 @@ private struct FeaturedAnimePanel: View {
     private func poster(width: CGFloat, height: CGFloat) -> some View {
         AsyncImage(url: anime.coverURL) { image in image.resizable().aspectRatio(contentMode: wide ? .fit : .fill) }
             placeholder: { ZStack { Theme.surface; Image(systemName: "sparkles.tv").font(.largeTitle) } }
-            .frame(width: width, height: height).clipped().accessibilityHidden(true)
+            .frame(width: width, height: height).clipped().contentShape(Rectangle())
+            .onTapGesture {
+                if let url = anime.coverURL { preview = AnimeImagePreview(url: url, title: anime.displayTitle) }
+            }.accessibilityHidden(true)
     }
     private var information: some View {
         VStack(alignment: wide ? .leading : .center, spacing: 13) {

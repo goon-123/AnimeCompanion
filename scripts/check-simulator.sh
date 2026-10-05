@@ -38,6 +38,18 @@ print("Testing " + candidates[0]["name"], file=sys.stderr)
 print(candidates[0]["udid"])
 ' "$device_family")"
 
+# Bring the iOS 26 device to a ready state before XCTest starts its runner.
+# Bound this separately so a stalled simulator reports a clear startup failure.
+xcrun simctl boot "$simulator_id" 2>/dev/null || true
+python3 - "$simulator_id" <<'PY'
+import subprocess,sys
+try:
+    completed=subprocess.run(['xcrun','simctl','bootstatus',sys.argv[1],'-b'],timeout=180)
+    raise SystemExit(completed.returncode)
+except subprocess.TimeoutExpired:
+    raise SystemExit('Simulator startup exceeded 180 seconds; rerun on a fresh runner.')
+PY
+
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \

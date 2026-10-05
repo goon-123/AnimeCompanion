@@ -58,15 +58,15 @@ public enum AniListQueries {
     public static let explore = """
     query Explore($season: MediaSeason!, $year: Int!, $nextSeason: MediaSeason!, $nextYear: Int!) {
       seasonal: Page(page: 1, perPage: 24) {
-        media(type: ANIME, season: $season, seasonYear: $year, isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard }
+        media(type: ANIME, season: $season, seasonYear: $year, isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
         pageInfo { hasNextPage }
       }
       trending: Page(page: 1, perPage: 12) {
-        media(type: ANIME, isAdult: false, sort: TRENDING_DESC) { ...AnimeCard }
+        media(type: ANIME, isAdult: false, sort: TRENDING_DESC) { ...AnimeCard description(asHtml: false) }
       }
       upcoming: Page(page: 1, perPage: 12) {
         media(type: ANIME, season: $nextSeason, seasonYear: $nextYear, status: NOT_YET_RELEASED,
-              isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard }
+              isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
       }
     }
     """ + card
