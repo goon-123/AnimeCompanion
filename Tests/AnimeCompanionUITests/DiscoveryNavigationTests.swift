@@ -9,8 +9,15 @@ final class DiscoveryNavigationTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launch()
         let display = app.buttons["explore-display-options"]
-        XCTAssertTrue(display.waitForExistence(timeout: 15)); display.tap()
-        XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
+        XCTAssertTrue(display.waitForExistence(timeout: 15))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: display)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        display.tap()
+        let options = app.navigationBars["Display options"]
+        // A cold simulator may publish a toolbar before accepting its first tap.
+        // Retry the same visible control once, retaining every navigation check.
+        if !options.waitForExistence(timeout: 10), display.isHittable { display.tap() }
+        XCTAssertTrue(options.waitForExistence(timeout: 10))
         reveal(app.buttons["explore-display-reset"], scrolling: app, upward: true)
         app.buttons["explore-display-reset"].tap(); app.buttons["Done"].tap()
 

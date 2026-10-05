@@ -87,8 +87,16 @@ final class IPadLayoutTests: XCTestCase {
         let originalShelfWidth = shelf.frame.width
         openDisplay("explore", in: app)
         let shelfSize = app.sliders["explore-shelf-size"]
-        reveal(shelfSize, in: app); shelfSize.adjust(toNormalizedSliderPosition: 0.9)
+        reveal(shelfSize, in: app)
+        // The iOS 26 thumb can stop short of XCTest's requested position.
+        // Confirm the actual chosen width before checking rendered growth.
+        for _ in 0..<3 {
+            shelfSize.adjust(toNormalizedSliderPosition: 1)
+            if sliderPoints(shelfSize) >= 320 { break }
+        }
+        XCTAssertGreaterThanOrEqual(sliderPoints(shelfSize), 320)
         let savedShelf = shelfSize.value as? String
+        capture("Explore-Shelf-Size-Control")
         app.buttons["Done"].tap()
         reveal(shelf, in: app)
         let enlargedShelf = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -229,6 +237,13 @@ final class IPadLayoutTests: XCTestCase {
             app.swipeUp()
         }
         XCTAssertTrue(element.isHittable)
+    }
+    @MainActor
+    private func sliderPoints(_ slider: XCUIElement) -> Double {
+        guard let value = slider.value as? String,
+              let number = value.split(separator: " ").first,
+              let points = Double(number) else { return -1 }
+        return points
     }
     @MainActor
     private func rotate(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
