@@ -41,6 +41,8 @@ final class IPadLayoutTests: XCTestCase {
         let entries = [1, 199, 205].map { app.buttons["library-entry-\($0)"] }
         XCTAssertTrue(entries.allSatisfy { $0.exists })
         for entry in entries { XCTAssertEqual(entry.frame.minY, entries[0].frame.minY, accuracy: 3) }
+        XCTAssertTrue(app.staticTexts["library-genres-1"].exists)
+        XCTAssertTrue(app.staticTexts["library-genres-1"].label.contains("Sci-Fi"))
         let ordered = entries.sorted { $0.frame.minX < $1.frame.minX }
         XCTAssertGreaterThan(ordered[1].frame.minX, ordered[0].frame.minX)
         XCTAssertGreaterThan(ordered[2].frame.minX, ordered[1].frame.minX)
@@ -125,6 +127,9 @@ final class IPadLayoutTests: XCTestCase {
         capture("Explore-Three-Columns-Landscape")
         chooseRows(8, button: "discovery-columns", in: app)
         capture("Explore-Eight-Columns-Landscape")
+        let genres = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-genres-")).firstMatch
+        XCTAssertTrue(genres.exists)
+        XCTAssertTrue(genres.label.hasPrefix("Genres: "))
         let firstRow = Array(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).allElementsBoundByIndex.prefix(8))
         XCTAssertEqual(firstRow.count, 8)
         for tile in firstRow {

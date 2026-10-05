@@ -27,8 +27,21 @@ struct AnimeCard: View {
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
                 }
                 DiscoveryIndicators(anime: anime)
+                AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             }.frame(width: posterWidth).foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
+    }
+}
+
+/// Wrap every reported genre without truncating metadata in a narrow grid cell.
+struct AnimeGenres: View {
+    let anime: Anime
+    var body: some View {
+        if let genres = anime.genres, !genres.isEmpty {
+            Text(genres.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("Genres: \(genres.joined(separator: ", "))")
+        }
     }
 }
 

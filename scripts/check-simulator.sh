@@ -42,4 +42,5 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
   -only-testing:"AnimeCompanionUITests/$test_class" \
+  -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

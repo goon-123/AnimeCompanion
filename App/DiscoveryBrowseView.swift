@@ -19,6 +19,7 @@ struct DiscoveryBrowseView: View {
     @State private var loadingMore = false
     @State private var error: String?
     @State private var requestID = UUID()
+    @State private var loadedFilters: DiscoveryFilters?
     @FocusState private var searching: Bool
 
     init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil) {
@@ -36,9 +37,11 @@ struct DiscoveryBrowseView: View {
     var body: some View {
         GeometryReader { geometry in
           let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
-          ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                searchBar
+          ScrollViewReader { scroll in
+           ScrollView {
+            // Keep controls mounted while the lazy results preserve their scroll layout.
+            VStack(alignment: .leading, spacing: 16) {
+                searchBar.id("discovery-top")
                 filterBar
                 HStack {
                     Menu {
@@ -53,6 +56,8 @@ struct DiscoveryBrowseView: View {
                             .accessibilityIdentifier("discovery-columns")
                     }
                     Spacer()
+                    Text("\(results.count) titles").font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("discovery-count")
                 }
                 HStack {
                     Menu {
@@ -86,7 +91,10 @@ struct DiscoveryBrowseView: View {
                 }
                 DiscoveryDataNote()
             }.padding(12).readableContent(width: layout == "grid" ? 1280 : 1000)
-          }.scrollDismissesKeyboard(.interactively)
+           }.scrollDismissesKeyboard(.interactively)
+               .accessibilityIdentifier("discovery-scroll")
+               .onChange(of: filters) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
+          }
         }.background(Theme.background)
             .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -144,15 +152,22 @@ struct DiscoveryBrowseView: View {
         }
     }
     private func load(refresh: Bool = false) async {
+        // SwiftUI restarts this task after popping details. Keep the complete loaded
+        // page, including appended titles, instead of collapsing its scroll content.
+        guard !Task.isCancelled, refresh || loadedFilters != filters else { return }
         let attempt = UUID(); requestID = attempt; let selected = filters
-        results = []; loading = true; loadingMore = false; error = nil; page = 1; hasMore = false
+        if loadedFilters != selected {
+            results = []; loadedFilters = nil; page = 1; hasMore = false
+        }
+        loading = true; loadingMore = false; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
             if !refresh && !selected.search.isEmpty { try await Task.sleep(for: .milliseconds(400)) }
             let response = try await store.aniList.browse(selected, refresh: refresh)
             try Task.checkCancellation(); guard requestID == attempt, filters == selected else { return }
-            results = response.media ?? []; hasMore = response.pageInfo?.hasNextPage == true
-        } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
+            results = response.media ?? []; page = 1; hasMore = response.pageInfo?.hasNextPage == true
+            loadedFilters = selected
+        } catch is CancellationError {} catch { if !Task.isCancelled, requestID == attempt { self.error = error.localizedDescription } }
     }
     private func loadMore() async {
         guard !loading, !loadingMore, hasMore else { return }
@@ -206,6 +221,7 @@ struct DiscoveryAnimeTile: View {
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
                 DiscoveryIndicators(anime: anime)
+                AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")

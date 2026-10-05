@@ -48,6 +48,7 @@ struct LibraryAnimeTile: View {
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
                 LibraryDubLabel(anime: anime, progress: dub)
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
+                AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
