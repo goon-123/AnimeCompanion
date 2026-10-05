@@ -39,11 +39,6 @@ export_attachments() {
 }
 trap export_attachments EXIT
 
-# iOS 26 wallpaper/APNS background loops can monopolize hosted VM CPUs.
-# The watcher checks executable runtime paths and never targets the app or XCTest.
-python3 scripts/simulator-background.py &
-background_watcher_pid="$!"
-
 simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
@@ -72,6 +67,12 @@ try:
 except subprocess.TimeoutExpired:
     raise SystemExit('Simulator startup timed out; rerun on a fresh runner.')
 PY
+
+# Start the runtime-only background watcher after readiness. Suspending apsd
+# while launchd is still bootstrapping can prevent a fresh device from booting.
+# It never targets the app or XCTest, and cleanup resumes every paused service.
+python3 scripts/simulator-background.py &
+background_watcher_pid="$!"
 
 # Permit one retry for a cold hosted simulator's first-launch timeout.
 # Both attempts stay in xcresult; repeated failures still fail the job.

@@ -59,7 +59,8 @@ final class ImmersivePlaybackTests: XCTestCase {
         let field = app.textFields["playback-episode-number"]
         field.tap(); field.typeText(XCUIKeyboardKey.delete.rawValue + "10")
         app.buttons["Go"].tap()
-        XCTAssertTrue(app.staticTexts["Preview · anilist:1:10.json"].waitForExistence(timeout: 10))
+        let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "anilist:1:10.json"), object: source)
+        XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 10), .completed)
         source.tap()
         XCTAssertTrue(app.staticTexts["Preview launch · Episode 10"].waitForExistence(timeout: 10))
         capture("One-Tap-Player-Launch")
