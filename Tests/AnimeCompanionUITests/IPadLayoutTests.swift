@@ -19,10 +19,10 @@ final class IPadLayoutTests: XCTestCase {
         openDisplay("library", in: app)
         let listSize = app.sliders["library-list-size"]
         XCTAssertTrue(listSize.isHittable)
-        setSlider(listSize, position: 1, accepting: 210...240)
+        setSlider(listSize, position: 1, bounds: 60...240, accepting: 210...240)
         let savedList = listSize.value as? String
         let comingSize = app.sliders["library-coming-size"]
-        reveal(comingSize, in: app); setSlider(comingSize, position: 1, accepting: 180...200)
+        reveal(comingSize, in: app); setSlider(comingSize, position: 1, bounds: 60...200, accepting: 180...200)
         let savedComing = comingSize.value as? String
         capture("Library-Display-Options")
         app.buttons["Done"].tap()
@@ -88,7 +88,7 @@ final class IPadLayoutTests: XCTestCase {
         openDisplay("explore", in: app)
         let shelfSize = app.sliders["explore-shelf-size"]
         reveal(shelfSize, in: app)
-        setSlider(shelfSize, position: 1, accepting: 320...360)
+        setSlider(shelfSize, position: 1, bounds: 120...360, accepting: 320...360)
         let savedShelf = shelfSize.value as? String
         capture("Explore-Shelf-Size-Control")
         app.buttons["Done"].tap()
@@ -110,7 +110,7 @@ final class IPadLayoutTests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 35))
         let initialListHeight = entry.frame.height
         openDisplay("explore", in: app)
-        setSlider(app.sliders["explore-list-size"], position: 1, accepting: 220...240)
+        setSlider(app.sliders["explore-list-size"], position: 1, bounds: 60...240, accepting: 220...240)
         capture("Explore-List-Size-Control")
         app.buttons["Done"].tap()
         XCTAssertGreaterThan(entry.frame.height, initialListHeight + 60)
@@ -121,12 +121,12 @@ final class IPadLayoutTests: XCTestCase {
         chooseRows(2, button: "discovery-columns", in: app)
         let initialGridWidth = entry.frame.width
         openDisplay("explore", in: app)
-        setSlider(app.sliders["explore-grid-size"], position: 0, accepting: 120...200)
+        setSlider(app.sliders["explore-grid-size"], position: 0, bounds: 120...480, accepting: 120...200)
         app.buttons["Done"].tap()
         XCTAssertLessThan(entry.frame.width, initialGridWidth - 70,
                           "Maximum grid poster size must change the artwork even with the same row count")
         openDisplay("explore", in: app)
-        setSlider(app.sliders["explore-grid-size"], position: 1, accepting: 420...480)
+        setSlider(app.sliders["explore-grid-size"], position: 1, bounds: 120...480, accepting: 420...480)
         app.buttons["Done"].tap()
         let twoColumnWidth = entry.frame.width
         chooseRows(3, button: "discovery-columns", in: app)
@@ -234,16 +234,26 @@ final class IPadLayoutTests: XCTestCase {
         XCTAssertTrue(element.isHittable)
     }
     @MainActor
-    private func setSlider(_ slider: XCUIElement, position: CGFloat, accepting range: ClosedRange<Double>) {
-        // On iOS 26 XCTest can stop the native thumb short of its requested
-        // position. Verify the user's actual selection before measuring layout.
+    private func setSlider(_ slider: XCUIElement, position: CGFloat,
+                           bounds: ClosedRange<Double>, accepting range: ClosedRange<Double>) {
+        // The accessibility value is expressed in points, not a percentage.
+        // Drag the visible thumb from its actual value rather than relying on
+        // XCTest's percentage-based slider adjustment to interpret that label.
         XCTAssertTrue(slider.isHittable)
         for _ in 0..<3 {
-            slider.adjust(toNormalizedSliderPosition: position)
+            let normalized = min(1, max(0, (sliderPoints(slider) - bounds.lowerBound) /
+                                      (bounds.upperBound - bounds.lowerBound)))
+            let travel = max(1, slider.frame.width - 28)
+            let origin = slider.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: 14 + travel * CGFloat(normalized),
+                                                   dy: slider.frame.height / 2))
+            let end = origin.withOffset(CGVector(dx: 14 + travel * position,
+                                                 dy: slider.frame.height / 2))
+            start.press(forDuration: 0.1, thenDragTo: end)
             if range.contains(sliderPoints(slider)) { break }
         }
         XCTAssertTrue(range.contains(sliderPoints(slider)),
-                      "The slider must reach the chosen point range before checking poster growth")
+                      "\(slider.identifier) selected \(sliderPoints(slider)) points; expected \(range)")
     }
     @MainActor
     private func sliderPoints(_ slider: XCUIElement) -> Double {
