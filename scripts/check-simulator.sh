@@ -9,10 +9,19 @@ fi
 result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
+test_scope="${2:-full}"
+if [[ "$test_scope" != full && "$test_scope" != focused ]]; then
+  echo "Expected full or focused test scope"
+  exit 2
+fi
 if [[ "$device_family" == ipad ]]; then
   result_path="build/IPadTests.xcresult"
   screenshot_path="build/ipad-screenshots"
   test_class="IPadLayoutTests"
+fi
+if [[ "$test_scope" == focused ]]; then
+  result_path="build/Focused-${device_family}.xcresult"
+  screenshot_path="build/focused-${device_family}-screenshots"
 fi
 
 # Bound the workaround to this disposable test runner and resume paused services.
@@ -66,12 +75,16 @@ PY
 
 # Permit one retry for a cold hosted simulator's first-launch timeout.
 # Both attempts stay in xcresult; repeated failures still fail the job.
+test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests)
+if [[ "$test_scope" == full ]]; then
+  test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
+    -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests
+    -only-testing:AnimeCompanionUITests/ExploreUpgradeTests
+    -only-testing:AnimeCompanionUITests/PlaybackUITests)
+fi
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
-  -only-testing:"AnimeCompanionUITests/$test_class" \
-  -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests \
-  -only-testing:AnimeCompanionUITests/ExploreUpgradeTests \
-  -only-testing:AnimeCompanionUITests/PlaybackUITests \
+  "${test_arguments[@]}" \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

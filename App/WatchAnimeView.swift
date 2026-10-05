@@ -16,7 +16,6 @@ struct WatchAnimeView: View {
     @State private var filter = ""
     @State private var playableOnly = true
     @State private var restart = false
-    @State private var selected: SourceSelection?
     @State private var searchTask: Task<Void, Never>?
     @State private var lookupID = UUID()
     @State private var initialized = false
@@ -39,9 +38,7 @@ struct WatchAnimeView: View {
                         }
                     }
                     if playback.ready {
-                        Button { loadSources() } label: { Label(loading ? "Searching sources…" : "Find sources", systemImage: "magnifyingglass") }
-                            .disabled(loading).accessibilityIdentifier("find-playback-sources")
-                        if loading { ProgressView("AIOStreams can take a moment to search its providers.") }
+                        if loading { ProgressView("Finding sources…").accessibilityIdentifier("playback-loading") }
                     } else {
                         Text(playback.addon == nil ? "Connect your streaming add-on to find sources." : "Your streaming add-on is disabled.")
                         NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
@@ -67,7 +64,7 @@ struct WatchAnimeView: View {
                             Toggle("Playable sources only", isOn: $playableOnly)
                             if visible.isEmpty { Text("No sources match. Clear the search or show all sources.").foregroundStyle(.secondary) }
                             ForEach(visible, id: \.offset) { index, stream in
-                                Button { selected = SourceSelection(stream: stream) } label: {
+                                Button { play(stream) } label: {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Label(stream.displayName, systemImage: stream.unavailableReason == nil ? "play.circle.fill" : "exclamationmark.circle").font(.headline)
                                         Text(stream.details).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -75,33 +72,51 @@ struct WatchAnimeView: View {
                                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
                                 }.buttonStyle(.plain).disabled(stream.unavailableReason != nil || playback.openingPlayer)
                                     .accessibilityIdentifier("playback-source-\(index)")
+                                    .contextMenu {
+                                        if stream.unavailableReason == nil {
+                                            Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, fromBeginning: true) }
+                                            ForEach(Array((stream.subtitles ?? []).filter { $0.videoURL != nil }.enumerated()), id: \.offset) { index, subtitle in
+                                                Button("Play with \(subtitle.lang ?? "track \(index + 1)") subtitles") { play(stream, subtitle: subtitle.videoURL) }
+                                            }
+                                        }
+                                    }
                             }
                         }
                         if skipped > 0 { Text("\(skipped) malformed source entries were skipped.").font(.caption).foregroundStyle(.secondary) }
                     }
                     Section {
+                        Text("Tap a source to open VidHub. Touch and hold for subtitles or to play from the beginning.")
                         Text("Source names, quality and language information come from your add-on. Dub availability on the anime page does not guarantee that each source includes English audio.")
                         Text("VidHub resume is saved on this device. AniList progress changes only when you use the watched-progress controls.")
                     }.font(.caption).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Watch in VidHub").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .onAppear {
-                    guard !initialized else { return }; initialized = true
-                    episode = min(limit, max(1, playback.resumeEpisode(animeID: anime.id) ?? ((store.entry(for: anime.id)?.progressValue ?? 0) + 1)))
-                    episodeText = String(episode)
-                    playback.playerMessage = nil
-                }
-                .onChange(of: playback.enabled) { _, _ in resetSources() }
-                .onChange(of: playback.addon?.endpoint) { _, _ in resetSources() }
-                .onDisappear { searchTask?.cancel() }
-                .sheet(item: $selected) { selection in
-                    SourcePlaybackView(stream: selection.stream) { subtitle in
-                        selected = nil
-                        Task { await playback.play(stream: selection.stream, anime: anime, episode: episode, subtitle: subtitle, restart: restart) }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        if playback.ready {
+                            Button { loadSources() } label: { Image(systemName: "arrow.clockwise") }
+                                .disabled(loading || playback.openingPlayer).accessibilityLabel("Reload sources")
+                                .accessibilityIdentifier("reload-playback-sources")
+                        }
                     }
                 }
-        }
+                .onAppear {
+                    if !initialized {
+                        initialized = true
+                        episode = min(limit, max(1, playback.resumeEpisode(animeID: anime.id) ?? ((store.entry(for: anime.id)?.progressValue ?? 0) + 1)))
+                        episodeText = String(episode)
+                        playback.playerMessage = nil
+                    }
+                    if !searched && !loading { loadSources() }
+                }
+                .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
+                .onChange(of: playback.addon?.endpoint) { _, _ in resetSources(); loadSources() }
+                .onDisappear {
+                    searchTask?.cancel()
+                    if loading { lookupID = UUID(); loading = false }
+                }
+        }.disabled(playback.openingPlayer)
     }
     private var episodeControls: some View {
         HStack {
@@ -116,7 +131,11 @@ struct WatchAnimeView: View {
     }
     private func selectEpisode(_ value: Int) {
         let next = min(limit, max(1, value))
-        if next != episode { resetSources(); episode = next; restart = false }
+        if next != episode {
+            resetSources(); episode = next; restart = false
+            playback.playerMessage = nil
+            loadSources()
+        }
         episodeText = String(episode)
     }
     private func commitEpisode() { selectEpisode(Int(episodeText) ?? episode) }
@@ -124,7 +143,6 @@ struct WatchAnimeView: View {
         searchTask?.cancel(); lookupID = UUID(); streams = []; skipped = 0; searched = false; loading = false; error = nil; filter = ""
     }
     private func loadSources() {
-        commitEpisode()
         guard let addon = playback.addon, playback.enabled else { return }
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
@@ -139,6 +157,10 @@ struct WatchAnimeView: View {
             } catch is CancellationError {} catch { if lookupID == attempt { self.error = error.localizedDescription } }
         }
     }
+    private func play(_ stream: StremioStream, subtitle: URL? = nil, fromBeginning: Bool? = nil) {
+        let requestedEpisode = episode, requestedRestart = fromBeginning ?? restart
+        Task { await playback.play(stream: stream, anime: anime, episode: requestedEpisode, subtitle: subtitle, restart: requestedRestart) }
+    }
     private func markWatched() {
         let progress = max(episode, store.entry(for: anime.id)?.progressValue ?? 0)
         let complete = anime.episodes.map { $0 > 0 && progress >= $0 } ?? false
@@ -152,34 +174,5 @@ struct WatchAnimeView: View {
     private func timeLabel(_ seconds: Double) -> String {
         let value = Int(min(VidHubPlayback.maximumPosition, max(0, seconds.isFinite ? seconds : 0)))
         return value >= 3600 ? String(format: "%d:%02d:%02d", value / 3600, value / 60 % 60, value % 60) : String(format: "%d:%02d", value / 60, value % 60)
-    }
-}
-
-private struct SourceSelection: Identifiable {
-    let id = UUID()
-    let stream: StremioStream
-}
-private struct SourcePlaybackView: View {
-    let stream: StremioStream
-    let play: (URL?) -> Void
-    @State private var subtitleIndex = -1
-    private var subtitles: [StreamSubtitle] { (stream.subtitles ?? []).filter { $0.videoURL != nil } }
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section { Text(stream.displayName).font(.headline); Text(stream.details).font(.caption) }
-                if !subtitles.isEmpty {
-                    Section("External subtitles") {
-                        Picker("Subtitle", selection: $subtitleIndex) {
-                            Text("Use VidHub / embedded subtitles").tag(-1)
-                            ForEach(Array(subtitles.enumerated()), id: \.offset) { index, item in Text(item.lang ?? "Subtitle \(index + 1)").tag(index) }
-                        }
-                    }
-                }
-                Button("Play in VidHub", systemImage: "play.fill") {
-                    play(subtitles.indices.contains(subtitleIndex) ? subtitles[subtitleIndex].videoURL : nil)
-                }.accessibilityIdentifier("launch-vidhub")
-            }.navigationTitle("Selected source").navigationBarTitleDisplayMode(.inline)
-        }.presentationDetents([.medium, .large])
     }
 }

@@ -50,7 +50,7 @@ public enum AniListQueries {
     public static let card = """
     fragment AnimeCard on Media {
       id idMal title { romaji english userPreferred }
-      coverImage { extraLarge large medium } bannerImage
+      coverImage { extraLarge large medium color } bannerImage
       episodes duration format status season seasonYear averageScore genres isAdult
       nextAiringEpisode { airingAt episode }
     }

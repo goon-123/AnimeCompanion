@@ -36,7 +36,7 @@ private enum AddonKeychain {
 
 @MainActor
 final class PlaybackStore: ObservableObject {
-    let client = StremioClient()
+    let client: StremioClient
     @Published private(set) var addon: InstalledAddon?
     @Published var enabled = UserDefaults.standard.object(forKey: "playback.enabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(enabled, forKey: "playback.enabled") }
@@ -51,6 +51,15 @@ final class PlaybackStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
+            client = StremioClient(transport: PlaybackPreviewTransport())
+            addon = try? PlaybackPreviewTransport.addon()
+            enabled = true
+            return
+        }
+        #endif
+        client = StremioClient()
         if let data = defaults.data(forKey: "playback.positions"), let saved = try? JSONDecoder().decode([String: PlaybackProgress].self, from: data) { progress = saved }
         if let data = defaults.data(forKey: "playback.pending"), let saved = try? JSONDecoder().decode(PendingPlayback.self, from: data), Date().timeIntervalSince(saved.createdAt) < 86400 { pending = saved }
         do { addon = try AddonKeychain.load() } catch { setupError = error.localizedDescription }
@@ -91,6 +100,15 @@ final class PlaybackStore: ObservableObject {
         do {
             let start = restart ? 0 : saved(animeID: anime.id, episode: episode)?.position ?? 0
             let url = try VidHubPlayback.launchURL(stream: stream, pending: record, position: start, subtitle: subtitle)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
+                // Test the production URL builder and tap path without opening a third-party app.
+                // No real add-on, Keychain change, network request or saved playback is involved.
+                let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" } ? " · External subtitles" : "")
+                return
+            }
+            #endif
             pending = record
             defaults.set(try JSONEncoder().encode(record), forKey: "playback.pending")
             let opened = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in

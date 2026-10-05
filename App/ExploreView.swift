@@ -5,6 +5,8 @@ struct ExploreView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
+    @Environment(\.dynamicTypeSize) private var textSize
+    @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @State private var seasonal: [Anime] = []
     @State private var trending: [Anime] = []
@@ -22,11 +24,15 @@ struct ExploreView: View {
     var body: some View {
         GeometryReader { geometry in
           ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 0) {
                 if !featured.isEmpty {
-                    FeaturedAnimeCarousel(anime: featured, height: CGFloat(min(max(400, geometry.size.height - 55), min(950, max(400, posters.featuredHeight)))))
-                        .padding(.horizontal, geometry.size.width >= 700 ? 20 : 10)
+                    FeaturedAnimeCarousel(anime: featured,
+                        height: CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
+                            viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
+                            fillScreen: posters.fillFeaturedScreen)) + (textSize.isAccessibilitySize ? 240 : 0),
+                        topInset: geometry.safeAreaInsets.top, background: $posterBackground)
                 }
+                VStack(alignment: .leading, spacing: 26) {
                 HStack {
                     Button { showSeasons = true } label: {
                         Label(selection.label, systemImage: "chevron.down").font(.subheadline.weight(.semibold))
@@ -44,9 +50,14 @@ struct ExploreView: View {
                 shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
                 if loading && loadedKey == nil { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
                 DiscoveryDataNote().padding(.horizontal)
-            }.padding(.vertical).readableContent(width: 1280)
-          }.accessibilityIdentifier("explore-scroll")
-        }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
+                }.padding(.top, featured.isEmpty ? geometry.safeAreaInsets.top + 20 : 14)
+                    .padding(.bottom, 24).readableContent(width: 1280)
+            }
+          }.ignoresSafeArea(.container, edges: .top).accessibilityIdentifier("explore-scroll")
+        }.background(posterBackground.color.ignoresSafeArea())
+            .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showDubFilters = true } label: { Image(systemName: "line.3.horizontal.decrease") }

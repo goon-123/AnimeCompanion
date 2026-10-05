@@ -9,6 +9,34 @@ permissions:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  focused-ui:
+    name: Focused ${{ matrix.device }} layout and playback
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Verify full-bleed artwork and direct playback
+        run: |
+          sudo mdutil -a -i off || true
+          bash scripts/check-simulator.sh ${{ matrix.device }} focused
+      - name: Upload focused screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-focused-${{ matrix.device }}
+          path: |
+            build/focused-${{ matrix.device }}-screenshots
+            build/Focused-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   build:
     runs-on: macos-15
     timeout-minutes: 40

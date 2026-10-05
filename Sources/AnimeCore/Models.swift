@@ -84,6 +84,7 @@ public struct AnimeTitle: Codable, Hashable, Sendable {
     public init(english: String) { self.english = english; romaji = nil; userPreferred = nil }
 }
 public struct AnimeImage: Codable, Hashable, Sendable {
+    public let color: String?
     public let extraLarge: String?
     public let large: String?
     public let medium: String?
