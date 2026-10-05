@@ -49,7 +49,7 @@ struct ExploreView: View {
         }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showDubFilters = true } label: { Image(systemName: "mic.badge.plus") }
+                    Button { showDubFilters = true } label: { Image(systemName: "line.3.horizontal.decrease") }
                         .accessibilityLabel("Dub filters").accessibilityIdentifier("explore-dub-filter-toolbar")
                 }
                 ToolbarItem(placement: .topBarLeading) {

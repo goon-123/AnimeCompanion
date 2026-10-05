@@ -47,7 +47,7 @@ struct DubFiltersView: View {
                     Picker("Minimum AniList rating", selection: $filters.selection.minimumScore) {
                         Text("Any rating").tag(0)
                         ForEach([50, 60, 70, 80, 90], id: \.self) { Text("\(Double($0) / 10, specifier: "%.1f") or higher").tag($0) }
-                    }.accessibilityIdentifier("dub-filter-rating")
+                    }.pickerStyle(.menu).accessibilityIdentifier("dub-filter-rating")
                     Toggle("Hide completed anime", isOn: $filters.selection.hideCompleted).accessibilityIdentifier("dub-filter-hide-completed")
                     if !store.isSignedIn {
                         Text("Connect AniList in Settings to hide titles you have completed.").font(.caption).foregroundStyle(.secondary)
