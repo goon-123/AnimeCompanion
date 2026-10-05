@@ -97,7 +97,11 @@ final class DiscoveryNavigationTests: XCTestCase {
     }
     @MainActor
     private func chooseColumns(_ columns: Int, in app: XCUIApplication) {
-        app.buttons["discovery-columns"].tap(); app.buttons["\(columns) per row"].tap()
+        app.buttons["discovery-columns"].tap()
+        // The menu trigger and the selected popup item have the same label.
+        let option = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@",
+            "\(columns) per row", "discovery-columns")).firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 10)); option.tap()
     }
     @MainActor
     private func waitForTitles(in app: XCUIApplication) {

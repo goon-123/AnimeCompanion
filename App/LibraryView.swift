@@ -73,12 +73,13 @@ struct LibraryView: View {
               GeometryReader { geometry in
                 let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    // Keep controls stable while the results below remain lazy.
+                    VStack(alignment: .leading, spacing: 18) {
                         searchBar
                         comingUpSection(width: contentWidth)
                         statusTabs
-                        layoutControls
-                        sortingBar
+                        layoutControls.zIndex(1)
+                        sortingBar.zIndex(1)
                         if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
                             Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
                                 .font(.caption).foregroundStyle(.secondary)
