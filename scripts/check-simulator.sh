@@ -28,7 +28,7 @@ simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
 family=sys.argv[1]
-candidates=[d for runtime,items in devices.items() if "iOS" in runtime
+candidates=[d for runtime,items in devices.items() if "iOS-26" in runtime
         for d in items if d.get("isAvailable") and
         (d["name"].startswith("iPhone") if family == "iphone" else
          d["name"].startswith("iPad Pro") and ("11-inch" in d["name"] or "11 inch" in d["name"]))]
@@ -43,4 +43,5 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
   -only-testing:"AnimeCompanionUITests/$test_class" \
   -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests \
+  -only-testing:AnimeCompanionUITests/ExploreUpgradeTests \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

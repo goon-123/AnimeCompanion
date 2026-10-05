@@ -16,6 +16,7 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.sliders["explore-list-size"].value as? String, saved)
         app.buttons["Done"].tap()
+        revealExplore(app.buttons["explore-category-trending"], in: app)
         app.buttons["explore-category-trending"].tap()
         XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
         waitForLoadingToFinish("Loading anime…", in: app)
@@ -36,6 +37,7 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["explore-category-trending"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["Continue watching"].exists)
         waitForLoadingToFinish("Finding your season…", in: app)
+        revealExplore(app.buttons["explore-category-trending"], in: app)
         app.buttons["explore-category-trending"].tap()
         XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
         waitForLoadingToFinish("Loading anime…", in: app)
@@ -104,6 +106,7 @@ final class AppSmokeTests: XCTestCase {
         waitForLoadingToFinish("Finding your season…", in: app)
         let shelfDub = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-dub-")).firstMatch
         XCTAssertTrue(shelfDub.waitForExistence(timeout: 20))
+        revealExplore(shelfDub, in: app)
         let shelfStatus = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-library-")).firstMatch
         XCTAssertTrue(shelfStatus.exists)
         let shelfNext = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-")).firstMatch
@@ -243,6 +246,13 @@ final class AppSmokeTests: XCTestCase {
         capture("Settings")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.navigationBars["My Library"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func revealExplore(_ element: XCUIElement, in app: XCUIApplication) {
+        let scroll = app.scrollViews["explore-scroll"]
+        for _ in 0..<12 { if element.isHittable { return }; scroll.swipeUp() }
+        XCTAssertTrue(element.isHittable)
     }
 
     @MainActor

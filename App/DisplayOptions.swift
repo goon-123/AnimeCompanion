@@ -14,6 +14,7 @@ struct PosterPreferences: DynamicProperty {
     @AppStorage var shelfWidth: Double
     @AppStorage var comingWidth: Double
     @AppStorage var columns: Int
+    @AppStorage var featuredHeight: Double
     let scope: DisplayScope
 
     init(_ scope: DisplayScope) {
@@ -23,6 +24,7 @@ struct PosterPreferences: DynamicProperty {
         _gridWidth = AppStorage(wrappedValue: pad ? 360 : 280, "\(scope.rawValue).poster.grid")
         _shelfWidth = AppStorage(wrappedValue: pad ? 230 : 150, "\(scope.rawValue).poster.shelf")
         _comingWidth = AppStorage(wrappedValue: pad ? 110 : 64, "\(scope.rawValue).poster.coming")
+        _featuredHeight = AppStorage(wrappedValue: pad ? 700 : 620, "\(scope.rawValue).poster.featured")
         // Preserve the previously saved library density.
         _columns = AppStorage(wrappedValue: pad ? 4 : 2, scope == .library ? "library.columns" : "discovery.columns")
     }
@@ -40,6 +42,7 @@ struct PosterPreferences: DynamicProperty {
         listWidth = pad ? 140 : (scope == .library ? 76 : 90)
         gridWidth = pad ? 360 : 280; shelfWidth = pad ? 230 : 150
         comingWidth = pad ? 110 : 64; columns = pad ? 4 : 2
+        featuredHeight = pad ? 700 : 620
     }
 }
 
@@ -69,6 +72,10 @@ struct DisplayOptionsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if preferences.scope == .explore {
+                    Section("Featured poster") {
+                        sizeControl("Featured poster height", value: preferences.$featuredHeight, range: 400...950, key: "featured-size")
+                        Text("Swipe through featured titles. Wide iPad layouts show the full poster beside its information.").font(.caption).foregroundStyle(.secondary)
+                    }
                     Section("Explore shelves") {
                         sizeControl("Shelf poster width", value: preferences.$shelfWidth, range: 120...360, key: "shelf-size")
                         Text("Applies to Trending, Popular this season and Upcoming.").font(.caption).foregroundStyle(.secondary)

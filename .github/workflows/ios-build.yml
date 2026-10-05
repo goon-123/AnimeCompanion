@@ -6,12 +6,18 @@ on:
   pull_request:
 permissions:
   contents: read
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Liquid Glass SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
       - name: Core unit tests
         run: swift test -j 2
       - name: Generate Xcode project
@@ -61,6 +67,10 @@ jobs:
             result-artifact: AnimeCompanion-iPad-simulator-check
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Liquid Glass SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
       - name: Generate Xcode project
         run: |
           brew install xcodegen

@@ -110,11 +110,11 @@ public enum AniListQueries {
     public static let browse = """
     query Browse($page: Int!, $search: String, $genre: String,
                  $year: Int, $season: MediaSeason, $format: MediaFormat, $status: MediaStatus,
-                 $sort: [MediaSort]) {
+                 $sort: [MediaSort], $minimumScore: Int) {
       Page(page: $page, perPage: 24) {
         pageInfo { hasNextPage }
         media(type: ANIME, search: $search, genre: $genre, seasonYear: $year, season: $season,
-              format: $format, status: $status, sort: $sort, isAdult: false) {
+              format: $format, status: $status, sort: $sort, averageScore_greater: $minimumScore, isAdult: false) {
           ...AnimeCard description(asHtml: false)
         }
       }

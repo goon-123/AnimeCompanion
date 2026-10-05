@@ -4,9 +4,10 @@ import AnimeCore
 @main
 struct AnimeCompanionApp: App {
     @StateObject private var store = AppStore()
+    @StateObject private var discoveryFilters = DiscoveryFilterStore()
     var body: some Scene {
         WindowGroup {
-            AppTabs().environmentObject(store).environmentObject(store.exploreDubs).tint(Theme.accent)
+            AppTabs().environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { await store.restore() }
         }
     }
@@ -14,8 +15,8 @@ struct AnimeCompanionApp: App {
 
 enum Theme {
     static let accent = Color.white
-    static let background = Color(red: 0.115, green: 0.115, blue: 0.153)
-    static let surface = Color(red: 0.15, green: 0.15, blue: 0.19)
+    static let background = Color(red: 0.045, green: 0.05, blue: 0.065)
+    static let surface = Color(red: 0.09, green: 0.105, blue: 0.135)
     static let highlight = Color.yellow
 }
 
@@ -27,13 +28,16 @@ struct DiscoveryRoute: Hashable {
 }
 
 struct AppTabs: View {
+    @Environment(\.horizontalSizeClass) private var contentSizeClass
     var body: some View {
         TabView {
-            NavigationStack { ExploreView() }.tabItem { Label("Explore", systemImage: "safari") }
-            NavigationStack { ScheduleView() }.tabItem { Label("Schedule", systemImage: "calendar") }
-            NavigationStack { LibraryView() }.tabItem { Label("My Library", systemImage: "books.vertical") }
-            NavigationStack { NewsView() }.tabItem { Label("News", systemImage: "newspaper") }
+            NavigationStack { ExploreView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Explore", systemImage: "safari") }
+            NavigationStack { ScheduleView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Schedule", systemImage: "calendar") }
+            NavigationStack { LibraryView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("My Library", systemImage: "books.vertical") }
+            NavigationStack { NewsView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("News", systemImage: "newspaper") }
         }
+        // Keep the native floating bottom bar on iPad while preserving tablet content layouts.
+        .environment(\.horizontalSizeClass, .compact)
     }
 }
 
