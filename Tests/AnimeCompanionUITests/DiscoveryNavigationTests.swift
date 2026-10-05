@@ -95,16 +95,26 @@ final class DiscoveryNavigationTests: XCTestCase {
     @MainActor
     private func choose(_ layout: String, in app: XCUIApplication) {
         if !app.buttons["discovery-layout"].label.contains(layout) {
-            app.buttons["discovery-layout"].tap(); app.buttons[layout].tap()
+            app.buttons["discovery-layout"].tap()
+            let option = app.buttons["discovery-layout-option-\(layout.lowercased())"]
+            XCTAssertTrue(option.waitForExistence(timeout: 10)); option.tap()
+            waitForMenuToClose(option)
+            XCTAssertTrue(app.buttons["discovery-layout"].label.contains(layout))
         }
     }
     @MainActor
     private func chooseColumns(_ columns: Int, in app: XCUIApplication) {
         app.buttons["discovery-columns"].tap()
-        // The menu trigger and the selected popup item have the same label.
-        let option = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@",
-            "\(columns) per row", "discovery-columns")).firstMatch
+        let option = app.buttons["discovery-column-option-\(columns)"]
         XCTAssertTrue(option.waitForExistence(timeout: 10)); option.tap()
+        waitForMenuToClose(option)
+        XCTAssertTrue(app.buttons["discovery-columns"].label.contains("\(columns) per row"))
+    }
+    @MainActor
+    private func waitForMenuToClose(_ option: XCUIElement) {
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: option)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed,
+                       "Selecting a display option must dismiss the menu so cards can be tapped")
     }
     @MainActor
     private func waitForTitles(in app: XCUIApplication) {

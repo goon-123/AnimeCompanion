@@ -45,6 +45,22 @@ struct AnimeGenres: View {
     }
 }
 
+/// A single menu choice closes immediately after updating its saved preference.
+struct MenuChoice: View {
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            if selected { Label(title, systemImage: "checkmark") }
+            else { Text(title) }
+        }
+        .accessibilityLabel(title)
+        .accessibilityValue(selected ? "Selected" : "")
+        .menuActionDismissBehavior(.enabled)
+    }
+}
+
 struct AnimeShelf: View {
     let title: String
     let anime: [Anime]

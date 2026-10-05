@@ -209,8 +209,12 @@ final class IPadLayoutTests: XCTestCase {
     @MainActor
     private func chooseRows(_ count: Int, button: String, in app: XCUIApplication) {
         app.buttons[button].tap()
-        XCTAssertTrue(app.buttons["\(count) per row"].waitForExistence(timeout: 10))
-        app.buttons["\(count) per row"].tap()
+        let scope = button == "library-columns" ? "library" : "discovery"
+        let option = app.buttons["\(scope)-column-option-\(count)"]
+        XCTAssertTrue(option.waitForExistence(timeout: 10)); option.tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: option)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed)
+        XCTAssertTrue(app.buttons[button].label.contains("\(count) per row"))
     }
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {

@@ -42,15 +42,19 @@ struct DiscoveryBrowseView: View {
             // Keep controls mounted while the lazy results preserve their scroll layout.
             VStack(alignment: .leading, spacing: 16) {
                 searchBar.id("discovery-top")
-                filterBar
+                filterBar.zIndex(1)
                 HStack {
                     Menu {
-                        Picker("Display type", selection: $layout) { Text("List").tag("list"); Text("Grid").tag("grid") }
+                        MenuChoice(title: "List", selected: layout == "list") { layout = "list" }
+                            .accessibilityIdentifier("discovery-layout-option-list")
+                        MenuChoice(title: "Grid", selected: layout == "grid") { layout = "grid" }
+                            .accessibilityIdentifier("discovery-layout-option-grid")
                     } label: { Label(layout == "grid" ? "Grid" : "List", systemImage: layout == "grid" ? "square.grid.2x2" : "list.bullet").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }.accessibilityIdentifier("discovery-layout")
                     if layout == "grid" {
                         Menu {
-                            Picker("Entries per row", selection: posters.$columns) {
-                                ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
+                            ForEach(1...8, id: \.self) { count in
+                                MenuChoice(title: "\(count) per row", selected: posters.preferredColumns == count) { posters.columns = count }
+                                    .accessibilityIdentifier("discovery-column-option-\(count)")
                             }
                         } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: Capsule()) }
                             .accessibilityIdentifier("discovery-columns")
@@ -58,16 +62,18 @@ struct DiscoveryBrowseView: View {
                     Spacer()
                     Text("\(results.count) titles").font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("discovery-count")
-                }
+                }.zIndex(1)
                 HStack {
                     Menu {
-                        Picker("Sort", selection: $filters.sort) { ForEach(DiscoverySort.allCases, id: \.self) { Text($0.label).tag($0) } }
+                        ForEach(DiscoverySort.allCases, id: \.self) { order in
+                            MenuChoice(title: order.label, selected: filters.sort == order) { filters.sort = order }
+                        }
                     } label: { Label(filters.sort.label, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9)) }
                         .accessibilityIdentifier("discovery-sort")
                     Spacer()
                     Button { filters = DiscoveryFilters(category: category, selection: selection) } label: { Image(systemName: "line.3.horizontal.decrease.circle").frame(width: 44, height: 44) }
                         .accessibilityLabel("Reset category filters")
-                }
+                }.zIndex(1)
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
                 if loading { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding() }
                 if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {

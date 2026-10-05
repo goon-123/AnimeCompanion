@@ -14,6 +14,8 @@ A universal iPhone and iPad SwiftUI app for seasonal anime discovery, AniList li
 
 Grid cards in Explore and My Library, plus Explore shelf cards, show all reported genres as wrapping text. Returning from an anime's details keeps the expanded category's loaded pages, selected filters and scroll position. Changing filters starts a new result set at the top; pull to refresh still reloads the current category.
 
+Layout, grid-density and sorting menus use single-action choices that dismiss after selection. Native UI checks verify that the density menu closes and the selected row count persists after relaunch.
+
 The application opens with real provider clients rather than the design prototype's sample data. Each provider can fail independently. AniList requests are spaced and public responses are cached briefly in memory. Login is not required for public browsing.
 
 ## AniList sign-in setup

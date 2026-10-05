@@ -156,8 +156,9 @@ struct LibraryView: View {
             }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
             if layout == "grid" {
                 Menu {
-                    Picker("Anime per row", selection: posters.$columns) {
-                        ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
+                    ForEach(1...8, id: \.self) { count in
+                        MenuChoice(title: "\(count) per row", selected: posters.preferredColumns == count) { posters.columns = count }
+                            .accessibilityIdentifier("library-column-option-\(count)")
                     }
                 } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                     .accessibilityIdentifier("library-columns")
@@ -170,7 +171,9 @@ struct LibraryView: View {
                 .accessibilityLabel("\(filtered.count) anime in this list")
             Spacer()
             Menu {
-                Picker("Sort your library", selection: $sortValue) { ForEach(LibrarySort.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
+                ForEach(LibrarySort.allCases, id: \.self) { order in
+                    MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue }
+                }
             } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                 .accessibilityIdentifier("library-sort")
             Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }
