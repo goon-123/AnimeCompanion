@@ -39,41 +39,52 @@ jobs:
         env:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
-      - name: Check iPhone simulator tabs
-        run: bash scripts/check-simulator.sh iphone
-      - name: Check 11-inch iPad Pro portrait and landscape layouts
-        run: bash scripts/check-simulator.sh ipad
-      - name: Upload iPad screenshot preview
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimeCompanion-iPad-screenshots
-          path: |
-            build/ipad-screenshots/*.png
-            build/ipad-screenshots/*.txt
-            build/ipad-screenshots/manifest.json
-          if-no-files-found: ignore
-          retention-days: 30
+  simulator:
+    name: ${{ matrix.label }}
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: iphone
+            label: iPhone simulator
+            screenshots: build/screenshots
+            results: build/SimulatorTests.xcresult
+            screenshot-artifact: AnimeCompanion-simulator-screenshots
+            result-artifact: AnimeCompanion-simulator-check
+          - device: ipad
+            label: 11-inch iPad Pro simulator
+            screenshots: build/ipad-screenshots
+            results: build/IPadTests.xcresult
+            screenshot-artifact: AnimeCompanion-iPad-screenshots
+            result-artifact: AnimeCompanion-iPad-simulator-check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Check native layout and navigation
+        run: bash scripts/check-simulator.sh ${{ matrix.device }}
       - name: Upload screenshot preview
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AnimeCompanion-simulator-screenshots
+          name: ${{ matrix.screenshot-artifact }}
           path: |
-            build/screenshots/*.png
-            build/screenshots/*.txt
-            build/screenshots/manifest.json
+            ${{ matrix.screenshots }}/*.png
+            ${{ matrix.screenshots }}/*.txt
+            ${{ matrix.screenshots }}/manifest.json
           if-no-files-found: ignore
           retention-days: 30
       - name: Upload simulator screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AnimeCompanion-simulator-check
+          name: ${{ matrix.result-artifact }}
           path: |
-            build/screenshots
-            build/SimulatorTests.xcresult
-            build/ipad-screenshots
-            build/IPadTests.xcresult
+            ${{ matrix.screenshots }}
+            ${{ matrix.results }}
           if-no-files-found: ignore
           retention-days: 30
