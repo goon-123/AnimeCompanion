@@ -249,6 +249,10 @@ struct SettingsView: View {
                     }
                     if let error = store.accountError { Text(error).foregroundStyle(.red) }
                 }
+                Section("Watching") {
+                    NavigationLink { PlaybackSettingsView() } label: { Label("Add-ons & playback", systemImage: "play.rectangle") }
+                        .accessibilityIdentifier("playback-settings")
+                }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)
                     Link("Dub dates · AniSchedule by Bas1874", destination: URL(string: "https://github.com/Bas1874/AniSchedule")!)
@@ -261,7 +265,7 @@ struct SettingsView: View {
                     Link("News · Anime Corner", destination: URL(string: "https://animecorner.me")!)
                 }
                 Section("About") {
-                    Text("Anime Companion · First build")
+                    Text("Anime Companion · VidHub playback")
                     Text("Broadcast times and dub dates may change. Times use your device timezone. Original Japanese broadcasts do not guarantee local subtitle availability.")
                         .font(.caption).foregroundStyle(.secondary)
                 }

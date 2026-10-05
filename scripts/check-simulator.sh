@@ -72,5 +72,6 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -only-testing:"AnimeCompanionUITests/$test_class" \
   -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests \
   -only-testing:AnimeCompanionUITests/ExploreUpgradeTests \
+  -only-testing:AnimeCompanionUITests/PlaybackUITests \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

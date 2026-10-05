@@ -21,6 +21,24 @@ Layout, grid-density and sorting menus use single-action choices that dismiss af
 
 The application opens with real provider clients rather than the design prototype's sample data. Each provider can fail independently. AniList requests are spaced and public responses are cached briefly in memory. Login is not required for public browsing.
 
+## AIOStreams and VidHub playback
+
+Version 0.2 adds **Settings → Add-ons & playback** and **Watch in VidHub** on released anime pages.
+
+1. Install a current VidHub version on the same iPhone or iPad.
+2. Open **Settings → Add-ons & playback**, paste your personal AIOStreams install link and tap **Connect add-on**. Both a base install link and a URL ending in `/manifest.json` work; `stremio://` links are normalized to HTTPS.
+3. Open an anime, tap **Watch in VidHub**, choose an episode and tap **Find sources**. Select a source, optionally select a supplied external subtitle, then tap **Play in VidHub**.
+
+The full add-on URL is stored only in this device's Keychain, never bundled in the app, committed to this repository, or written to request logs. Add-on requests use an ephemeral network session. Returned video URLs remain in memory and are passed only to the chosen player. Replacing an add-on validates it before changing the saved connection.
+
+The client honors the manifest's stream resource types and ID prefixes. It requests the anime's AniList ID and entry-relative episode number, then tries its MyAnimeList ID if the first response is empty or the identifier is rejected. Movies use movie IDs without a fabricated season or episode suffix. AIOStreams remains responsible for matching those IDs to provider content, source ordering, and reported quality/language details. The app does not infer that every stream is dubbed from the title's general dub availability.
+
+Direct HTTP(S) video links are supported. Torrent-only results, webpage links and streams requiring custom playback headers are labeled unavailable; enable a streaming service or playback proxy in AIOStreams for these. This version supports one active Stremio streaming add-on accepting AniList/MAL IDs. It does not run Nuvio JavaScript plugins or import add-on catalogs.
+
+VidHub's `/play` interface supports external subtitles and resume. A random per-play request ID associates its callback with the selected episode. Stopped playback saves a local position; finished playback clears that episode's resume point and marks it finished locally. Errors and cancellation preserve existing progress. Missing callbacks (for example, after force-quitting VidHub) cannot update the saved position. Callbacks never change AniList automatically; use the watched-progress controls or **Mark episode watched on AniList** after a finished playback.
+
+References: [VidHub integration](https://vidhub.okaapps.com/3rd-party-app-integration/), [Stremio stream protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md), [AIOStreams ID parser](https://github.com/Viren070/AIOStreams/blob/main/packages/core/src/utils/id-parser.ts).
+
 ## AniList sign-in setup
 
 1. Visit https://anilist.co/settings/developer and create an application.

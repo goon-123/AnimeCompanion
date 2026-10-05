@@ -15,6 +15,7 @@ struct AnimeDetailView: View {
     @State private var loadingDub = false
     @State private var synopsisExpanded = false
     @State private var showSettings = false
+    @State private var showPlayback = false
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
 
@@ -30,6 +31,10 @@ struct AnimeDetailView: View {
                         synopsis(anime)
                         metadata(anime)
                         progress(anime)
+                        Button { showPlayback = true } label: {
+                            Label("Watch in VidHub", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity).padding(.vertical, 5)
+                        }.buttonStyle(.bordered).controlSize(.large).disabled(anime.status == "NOT_YET_RELEASED")
+                            .accessibilityIdentifier("watch-in-vidhub")
                         AnimeDubSchedule(status: dubStatus, events: dubEvents, loading: loadingDub,
                                          error: [availabilityError, scheduleError].compactMap { $0 }.isEmpty ? nil : [availabilityError, scheduleError].compactMap { $0 }.joined(separator: "\n"))
                         related(anime)
@@ -51,6 +56,7 @@ struct AnimeDetailView: View {
             }
             .task(id: mediaID) { await load() }.refreshable { await load() }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showPlayback) { if let anime { WatchAnimeView(anime: anime) } }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
     }
     private func synopsis(_ anime: Anime) -> some View {
