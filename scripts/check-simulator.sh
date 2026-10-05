@@ -15,14 +15,25 @@ if [[ "$device_family" == ipad ]]; then
   test_class="IPadLayoutTests"
 fi
 
+# Bound the workaround to this disposable test runner and resume paused services.
+background_watcher_pid=""
 # Preserve reviewable screenshots even when an assertion fails.
 export_attachments() {
+  if [ -n "$background_watcher_pid" ]; then
+    kill -TERM "$background_watcher_pid" 2>/dev/null || true
+    wait "$background_watcher_pid" || true
+  fi
   if [ -d "$result_path" ]; then
     xcrun xcresulttool export attachments --path "$result_path" \
       --output-path "$screenshot_path" || true
   fi
 }
 trap export_attachments EXIT
+
+# iOS 26 wallpaper/APNS background loops can monopolize hosted VM CPUs.
+# The watcher checks executable runtime paths and never targets the app or XCTest.
+python3 scripts/simulator-background.py &
+background_watcher_pid="$!"
 
 simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
