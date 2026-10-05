@@ -83,13 +83,19 @@ final class IPadLayoutTests: XCTestCase {
         openDisplay("explore", in: app)
         reveal(app.buttons["explore-display-reset"], in: app)
         app.buttons["explore-display-reset"].tap(); app.buttons["Done"].tap()
+        reveal(shelf, in: app)
         let originalShelfWidth = shelf.frame.width
         openDisplay("explore", in: app)
         let shelfSize = app.sliders["explore-shelf-size"]
         reveal(shelfSize, in: app); shelfSize.adjust(toNormalizedSliderPosition: 0.9)
         let savedShelf = shelfSize.value as? String
         app.buttons["Done"].tap()
-        XCTAssertGreaterThan(shelf.frame.width, originalShelfWidth + 70)
+        reveal(shelf, in: app)
+        let enlargedShelf = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            shelf.frame.width > originalShelfWidth + 70
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [enlargedShelf], timeout: 10), .completed,
+                       "The visible shelf must grow after the display sheet finishes dismissing")
         capture("Explore-Large-Shelves-Portrait")
 
         app.buttons["explore-category-trending"].tap()

@@ -44,6 +44,7 @@ final class ExploreUpgradeTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
+        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
         app.tabBars.buttons["My Library"].tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 40))
         app.tabBars.buttons["Explore"].tap()
@@ -60,7 +61,12 @@ final class ExploreUpgradeTests: XCTestCase {
         XCTAssertTrue(app.buttons["8.0 or higher"].waitForExistence(timeout: 10))
         app.buttons["8.0 or higher"].tap()
         reveal(app.switches["dub-filter-hide-completed"], in: app)
-        app.switches["dub-filter-hide-completed"].tap()
+        let hideCompleted = app.switches["dub-filter-hide-completed"]
+        // SwiftUI exposes the whole labelled row as a Switch on iOS 26.
+        // Tap its actual trailing thumb and verify the selected state.
+        hideCompleted.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: hideCompleted)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed)
         capture("Saved-Dub-Filters")
         app.buttons["Done"].tap()
         let dub = app.staticTexts["explore-dub-1"]
@@ -68,7 +74,8 @@ final class ExploreUpgradeTests: XCTestCase {
         let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "26/26"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
         XCTAssertTrue(app.buttons["discovery-entry-1"].exists)
-        XCTAssertFalse(app.buttons["discovery-entry-5"].exists)
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["discovery-entry-5"])
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 15), .completed)
         XCTAssertEqual(app.buttons["explore-dub-filters"].value as? String, "Dub available · 8.0+ ★ · Hide completed")
         capture("Dub-Available-Hide-Completed-Results")
         app.buttons["discovery-layout"].tap(); app.buttons["discovery-layout-option-grid"].tap()
