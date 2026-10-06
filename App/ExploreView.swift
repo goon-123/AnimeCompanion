@@ -15,6 +15,8 @@ struct ExploreView: View {
     @State private var error: String?
     @State private var requestID = UUID()
     @State private var loadedKey: String?
+    @State private var savedCatalogDate: Date?
+    @State private var needsCatalogRefresh = true
     @State private var showSeasons = false
     @State private var showSettings = false
     @State private var showDisplay = false
@@ -32,7 +34,7 @@ struct ExploreView: View {
                             fillScreen: posters.fillFeaturedScreen)) + (textSize.isAccessibilitySize ? 240 : 0),
                         topInset: geometry.safeAreaInsets.top, background: $posterBackground)
                 }
-                VStack(alignment: .leading, spacing: 26) {
+                LazyVStack(alignment: .leading, spacing: 26) {
                 HStack {
                     Button { showSeasons = true } label: {
                         Label(selection.label, systemImage: "chevron.down").font(.subheadline.weight(.semibold))
@@ -48,7 +50,13 @@ struct ExploreView: View {
                 shelf(.trending, anime: trending, availableWidth: geometry.size.width)
                 shelf(.seasonal, anime: seasonal, availableWidth: geometry.size.width)
                 shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
-                if loading && loadedKey == nil { ProgressView("Finding your season…").frame(maxWidth: .infinity).padding(40) }
+                if loading && loadedKey == nil { ProgressView("Loading Explore…").frame(maxWidth: .infinity).padding(40) }
+                if let savedCatalogDate {
+                    HStack(spacing: 6) {
+                        if loading { ProgressView().controlSize(.mini) }
+                        Text("Saved catalog · Updated \(savedCatalogDate.formatted(.relative(presentation: .named)))")
+                    }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+                }
                 DiscoveryDataNote().padding(.horizontal)
                 }.padding(.top, featured.isEmpty ? geometry.safeAreaInsets.top + 20 : 14)
                     .padding(.bottom, 24).readableContent(width: 1280)
@@ -127,16 +135,27 @@ struct ExploreView: View {
         }.presentationDetents([.medium])
     }
     private func load(refresh: Bool = false) async {
-        guard !Task.isCancelled, refresh || loadedKey != selection.label else { return }
-        let attempt = UUID(); requestID = attempt; let key = selection.label
-        if loadedKey != key { seasonal = []; trending = []; upcoming = []; loadedKey = nil }
-        loading = true; error = nil
+        guard !Task.isCancelled, refresh || loadedKey != selection.label || needsCatalogRefresh else { return }
+        let attempt = UUID(); requestID = attempt; let requestedSelection = selection; let key = requestedSelection.label
+        let needsRestore = loadedKey != key
+        if needsRestore { seasonal = []; trending = []; upcoming = []; loadedKey = nil; savedCatalogDate = nil }
+        loading = true; error = nil; needsCatalogRefresh = true
         defer { if requestID == attempt { loading = false } }
         do {
-            let result = try await store.aniList.explore(selection, refresh: refresh)
+            if needsRestore, let saved = await store.exploreCache.load(requestedSelection) {
+                try Task.checkCancellation(); guard requestID == attempt, selection.label == key else { return }
+                show(saved.response, key: key)
+                savedCatalogDate = saved.savedAt
+                if !refresh && !saved.needsRefresh() { needsCatalogRefresh = false; return }
+            }
+            let result = try await store.aniList.explore(requestedSelection, refresh: refresh)
             try Task.checkCancellation(); guard requestID == attempt, selection.label == key else { return }
-            seasonal = result.seasonal.media ?? []; trending = result.trending.media ?? []; upcoming = result.upcoming.media ?? []
-            loadedKey = key
+            show(result, key: key); savedCatalogDate = nil; needsCatalogRefresh = false
+            await store.exploreCache.save(ExploreSnapshot(response: result, selection: requestedSelection))
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
+    }
+    private func show(_ result: ExploreResponse, key: String) {
+        seasonal = result.seasonal.media ?? []; trending = result.trending.media ?? []; upcoming = result.upcoming.media ?? []
+        loadedKey = key
     }
 }

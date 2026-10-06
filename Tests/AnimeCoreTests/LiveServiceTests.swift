@@ -28,6 +28,11 @@ final class LiveServiceTests: XCTestCase {
         let browse = try await client.browse(DiscoveryFilters(category: .trending))
         XCTAssertFalse((browse.media ?? []).isEmpty)
         XCTAssertTrue((browse.media ?? []).allSatisfy { $0.isAdult != true })
+        var ecchi = DiscoveryFilters(category: .trending)
+        ecchi.genre = "Ecchi"
+        let genreResults = try await client.browse(ecchi)
+        XCTAssertFalse((genreResults.media ?? []).isEmpty)
+        XCTAssertTrue((genreResults.media ?? []).allSatisfy { ($0.genres ?? []).contains("Ecchi") })
         let lookup = try await client.media(ids: [1, 5])
         XCTAssertEqual(Set(lookup.map(\.id)), Set([1, 5]))
         let week = try XCTUnwrap(Calendar.current.dateInterval(of: .weekOfYear, for: Date()))

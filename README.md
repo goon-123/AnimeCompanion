@@ -21,6 +21,8 @@ Layout, grid-density and sorting menus use single-action choices that dismiss af
 
 The application opens with real provider clients rather than the design prototype's sample data. Each provider can fail independently. AniList requests are spaced and public responses are cached briefly in memory. Login is not required for public browsing.
 
+Version 0.2.2 also saves the public Explore catalog on the device, separately for each season. On later launches, saved titles appear before a network refresh; snapshots under five minutes old avoid an unnecessary request. Older snapshots refresh in the background and remain visible if the request fails. Snapshots expire after seven days, at most six seasons are retained, and pull to refresh always requests fresh data. The first launch still needs an internet connection. Explore fetches only the seasonal titles shown in its shelf and defers offscreen shelves. Search and category genre menus now include **Ecchi**.
+
 ## AIOStreams and VidHub playback
 
 Version 0.2 adds **Settings → Add-ons & playback** and **Watch in VidHub** on released anime pages.

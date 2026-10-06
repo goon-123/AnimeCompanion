@@ -89,6 +89,20 @@ final class CoreTests: XCTestCase {
         let payload = try JSONSerialization.jsonObject(with: XCTUnwrap(requests.first?.httpBody)) as? [String: Any]
         XCTAssertEqual((payload?["variables"] as? [String: Any])?["search"] as? String, "Test")
     }
+    func testEcchiGenreReachesTheBrowseRequestAndCanBeCleared() async throws {
+        XCTAssertTrue(DiscoveryGenres.all.contains("Ecchi"))
+        let transport = MockTransport([.json(#"{"data":{"Page":{"media":[]}}}"#)])
+        let api = AniListClient(transport: transport, minimumRequestInterval: 0)
+        var filters = DiscoveryFilters(category: .trending)
+        filters.genre = "Ecchi"
+        _ = try await api.browse(filters)
+        let requests = await transport.recorded()
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
+        XCTAssertEqual((payload["variables"] as? [String: Any])?["genre"] as? String, "Ecchi")
+        XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization"))
+        filters.genre = nil
+        XCTAssertNil(filters.variables(page: 1)["genre"])
+    }
     func testCollectionIncludesCustomListsAndDeduplicatesMedia() async throws {
         let entry = "{\"id\":55,\"mediaId\":100,\"status\":\"CURRENT\",\"progress\":7}"
         let custom = "{\"id\":56,\"mediaId\":101,\"status\":\"PAUSED\",\"progress\":4}"

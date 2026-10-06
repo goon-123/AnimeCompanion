@@ -1,5 +1,9 @@
 import Foundation
 
+public enum DiscoveryGenres {
+    public static let all = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mecha", "Music", "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"]
+}
+
 public enum DiscoveryCategory: String, Hashable, Sendable {
     case trending, seasonal, upcoming
     public func label(season: SeasonSelection) -> String {
