@@ -181,15 +181,123 @@ final class DubEvidenceTests: XCTestCase {
         XCTAssertEqual(calls[DubClient.feedURL], 1)
         XCTAssertEqual(calls[DubClient.scheduleURL], 1)
     }
+
+    func testStalledSuccessfulFeedUsesNewerAlternateWithoutReplacingFreshSchedule() async throws {
+        let current = Date(), old = current.addingTimeInterval(-4 * 86400)
+        let legacy = DubProvider.legacy
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, #"[{"episodeNumber":3,"media":{"media":{"id":10}}}]"#),
+            DubClient.feedURL: (200, #"[{"id":10,"episode":{"aired":1,"airedAt":1000}}]"#),
+            DubClient.manifestURL: (200, "{\"dubbed\":{\"schedule\":\(current.timeIntervalSince1970),\"episodes\":\(old.timeIntervalSince1970)}}"),
+            legacy.url(for: "last-updated.json"): (200, "{\"dubbed\":{\"schedule\":\(old.timeIntervalSince1970),\"episodes\":\(current.timeIntervalSince1970)}}"),
+            legacy.url(for: "dub-episode-feed.json"): (200, #"[{"id":10,"episode":{"aired":2,"airedAt":1000}}]"#)
+        ])
+        let data = try await DubClient(transport: transport).snapshot(refresh: true)
+        XCTAssertEqual(data.history.first?.episode.aired, 2)
+        XCTAssertEqual(data.historyProvider, .legacy)
+        XCTAssertEqual(data.historyUpdatedAt, current)
+        XCTAssertEqual(data.scheduleProvider, .current)
+        XCTAssertEqual(data.upcoming.first?.episodeNumber, 3)
+        XCTAssertFalse(data.warnings().contains { $0.contains("has not updated") })
+        let calls = await transport.calls
+        XCTAssertNil(calls[legacy.url(for: "dub-schedule.json")])
+    }
+
+    func testOlderAlternateCannotReplaceAStalledPrimaryFeed() async throws {
+        let old = Date().addingTimeInterval(-4 * 86400), older = Date().addingTimeInterval(-30 * 86400)
+        let legacy = DubProvider.legacy
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, "[]"), DubClient.feedURL: (200, #"[{"id":10,"episode":{"aired":2,"airedAt":1000}}]"#),
+            DubClient.manifestURL: (200, "{\"dubbed\":{\"schedule\":\(old.timeIntervalSince1970),\"episodes\":\(old.timeIntervalSince1970)}}"),
+            legacy.url(for: "last-updated.json"): (200, "{\"dubbed\":{\"schedule\":\(older.timeIntervalSince1970),\"episodes\":\(older.timeIntervalSince1970)}}")
+        ])
+        let data = try await DubClient(transport: transport).snapshot()
+        XCTAssertEqual(data.historyProvider, .current)
+        XCTAssertEqual(data.history.first?.episode.aired, 2)
+        XCTAssertTrue(data.warnings().contains { $0.contains("release feed has not updated") })
+        let calls = await transport.calls
+        XCTAssertNil(calls[legacy.url(for: "dub-episode-feed.json")])
+    }
+
+    func testFreshPrimaryDoesNotRequestTheAlternate() async throws {
+        let current = Date().timeIntervalSince1970
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, "[]"), DubClient.feedURL: (200, "[]"),
+            DubClient.manifestURL: (200, "{\"dubbed\":{\"schedule\":\(current),\"episodes\":\(current)}}")
+        ])
+        let data = try await DubClient(transport: transport).snapshot()
+        XCTAssertTrue(data.warnings().isEmpty)
+        let calls = await transport.calls
+        XCTAssertNil(calls[DubProvider.legacy.url(for: "last-updated.json")])
+    }
+
+    func testFailedNewerAlternatePreservesPrimaryEpisodesAndStaleNotice() async throws {
+        let current = Date().timeIntervalSince1970, old = Date().addingTimeInterval(-4 * 86400).timeIntervalSince1970
+        let legacy = DubProvider.legacy
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, "[]"), DubClient.feedURL: (200, #"[{"id":10,"episode":{"aired":2,"airedAt":1000}}]"#),
+            DubClient.manifestURL: (200, "{\"dubbed\":{\"schedule\":\(current),\"episodes\":\(old)}}"),
+            legacy.url(for: "last-updated.json"): (200, "{\"dubbed\":{\"episodes\":\(current)}}"),
+            legacy.url(for: "dub-episode-feed.json"): (503, "")
+        ])
+        let data = try await DubClient(transport: transport).snapshot()
+        XCTAssertEqual(data.historyProvider, .current)
+        XCTAssertEqual(data.history.first?.episode.aired, 2)
+        XCTAssertTrue(data.warnings().contains { $0.contains("release feed has not updated") })
+    }
+
+    func testForcedRefreshGetsNewEpisodesAndAvailabilityDespiteFreshCaches() async throws {
+        let current = Date().timeIntervalSince1970
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, "[]"), DubClient.feedURL: (200, #"[{"id":10,"episode":{"aired":1,"airedAt":1000}}]"#),
+            DubClient.manifestURL: (200, "{\"dubbed\":{\"schedule\":\(current),\"episodes\":\(current)}}"),
+            DubClient.indexURL: (200, #"{"dubbed":[20]}"#), DubClient.countsURL: (200, #"{"20":2,"partial":[]}"#)
+        ])
+        let client = DubClient(transport: transport)
+        _ = try await client.snapshot(); _ = try await client.index()
+        await transport.setResponse(for: DubClient.feedURL, status: 200, body: #"[{"id":10,"episode":{"aired":2,"airedAt":1000}}]"#)
+        await transport.setResponse(for: DubClient.countsURL, status: 200, body: #"{"20":2,"30":4,"partial":[]}"#)
+        let cached = try await client.snapshot(), cachedIndex = try await client.index()
+        XCTAssertEqual(cached.history.first?.episode.aired, 1)
+        XCTAssertEqual(cachedIndex.availability(malId: 30), .notReported)
+        let updated = try await client.snapshot(refresh: true), updatedIndex = try await client.index(refresh: true)
+        XCTAssertEqual(updated.history.first?.episode.aired, 2)
+        XCTAssertEqual(updatedIndex.availability(malId: 30), .dubbed)
+        let calls = await transport.calls, policies = await transport.cachePolicies
+        XCTAssertEqual(calls[DubClient.feedURL], 2)
+        XCTAssertEqual(calls[DubClient.countsURL], 2)
+        XCTAssertTrue(policies.allSatisfy { $0 == .reloadIgnoringLocalCacheData })
+    }
+
+    func testRefreshCanRecoverAfterAFailedRequestAndKeepsThePreviousCache() async throws {
+        let transport = DubEvidenceTransport([
+            DubClient.scheduleURL: (200, "[]"), DubClient.feedURL: (200, #"[{"id":10,"episode":{"aired":1,"airedAt":1000}}]"#)
+        ])
+        let client = DubClient(transport: transport)
+        _ = try await client.snapshot()
+        await transport.setResponse(for: DubClient.scheduleURL, status: 503, body: "")
+        await transport.setResponse(for: DubClient.feedURL, status: 503, body: "")
+        do { _ = try await client.snapshot(refresh: true); XCTFail("A total outage must not appear as a successful empty feed.") }
+        catch { }
+        let cached = try await client.snapshot()
+        XCTAssertEqual(cached.history.first?.episode.aired, 1)
+        await transport.setResponse(for: DubClient.feedURL, status: 200, body: #"[{"id":10,"episode":{"aired":2,"airedAt":1000}}]"#)
+        let recovered = try await client.snapshot(refresh: true)
+        XCTAssertEqual(recovered.history.first?.episode.aired, 2)
+    }
 }
 
 private actor DubEvidenceTransport: HTTPTransport {
-    let responses: [URL: (Int, String)]
+    private var responses: [URL: (Int, String)]
     private(set) var calls: [URL: Int] = [:]
+    private(set) var cachePolicies: [URLRequest.CachePolicy] = []
     init(_ responses: [URL: (Int, String)]) { self.responses = responses }
+    func setResponse(for url: URL, status: Int, body: String) { responses[url] = (status, body) }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        guard let url = request.url, let (status, body) = responses[url] else { throw ServiceError.invalidResponse }
+        guard let url = request.url else { throw ServiceError.invalidResponse }
         calls[url, default: 0] += 1
+        cachePolicies.append(request.cachePolicy)
+        guard let (status, body) = responses[url] else { throw ServiceError.invalidResponse }
         try await Task.sleep(nanoseconds: 1_000_000)
         return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }

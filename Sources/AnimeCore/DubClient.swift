@@ -53,9 +53,22 @@ public enum DubProvider: String, Sendable, Hashable {
     public var repositoryURL: URL {
         URL(string: "https://github.com/\(self == .current ? "RockinChaos" : "Bas1874")/AniSchedule")!
     }
-    public var label: String { self == .current ? "AniSchedule · RockinChaos" : "AniSchedule · older mirror" }
+    public var label: String { self == .current ? "AniSchedule · RockinChaos" : "AniSchedule · Bas1874" }
     public func url(for file: String) -> URL {
         URL(string: "https://raw.githubusercontent.com/\(self == .current ? "RockinChaos" : "Bas1874")/AniSchedule/refs/heads/master/raw/\(file)")!
+    }
+}
+
+public enum DubRefreshPolicy {
+    public static let activeInterval: TimeInterval = 600
+    public static let retryInterval: TimeInterval = 60
+    public static let staleAfter: TimeInterval = 3 * 86400
+    public static func isStale(_ updatedAt: Date?, now: Date = Date()) -> Bool {
+        updatedAt.map { now.timeIntervalSince($0) > staleAfter } ?? false
+    }
+    public static func shouldUseAlternate(primary: Date?, alternate: Date?, now: Date = Date()) -> Bool {
+        guard isStale(primary, now: now), let primary, let alternate else { return false }
+        return alternate > primary
     }
 }
 
@@ -79,13 +92,16 @@ public struct DubSnapshot: Sendable {
         if scheduleProvider == nil { messages.append("Upcoming dub dates could not be loaded.") }
         if historyProvider == nil { messages.append("Dub episode history could not be loaded. Counts may be estimated.") }
         if scheduleProvider == .legacy || historyProvider == .legacy {
-            messages.append("Using an older dub source as a fallback; recent releases may be missing.")
+            messages.append("Using the alternate AniSchedule source as a fallback.")
         }
-        if let updated = historyUpdatedAt, now.timeIntervalSince(updated) > 3 * 86400 {
+        if DubRefreshPolicy.isStale(historyUpdatedAt, now: now) {
             messages.append("The dub release feed has not updated for over three days. Counts may be behind.")
         }
-        if let updated = scheduleUpdatedAt, now.timeIntervalSince(updated) > 3 * 86400 {
+        if DubRefreshPolicy.isStale(scheduleUpdatedAt, now: now) {
             messages.append("The dub schedule has not updated for over three days. Dates may be out of date.")
+        }
+        if (scheduleProvider != nil && scheduleUpdatedAt == nil) || (historyProvider != nil && historyUpdatedAt == nil) {
+            messages.append("Source update times could not be checked.")
         }
         return messages
     }
@@ -198,13 +214,13 @@ public actor DubClient {
     private var indexTask: Task<DubIndex, Error>?
     public init(transport: any HTTPTransport = URLSessionTransport()) { self.transport = transport }
     private func load<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
-        var request = URLRequest(url: url); request.timeoutInterval = 20
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData); request.timeoutInterval = 20
         let (data, response) = try await transport.data(for: request)
         try HTTPValidation.check(response)
         return try JSONDecoder().decode(type, from: data)
     }
     public func snapshot(refresh: Bool = false) async throws -> DubSnapshot {
-        if !refresh, let cachedSnapshot, Date().timeIntervalSince(cachedSnapshot.fetchedAt) < 600 { return cachedSnapshot }
+        if !refresh, let cachedSnapshot, Date().timeIntervalSince(cachedSnapshot.fetchedAt) < DubRefreshPolicy.activeInterval { return cachedSnapshot }
         if let snapshotTask { return try await snapshotTask.value }
         let work = Task { try await self.fetchSnapshot() }
         snapshotTask = work
@@ -229,13 +245,30 @@ public actor DubClient {
         async let dates = try? endpoint([RawDubItem].self, file: "dub-schedule.json")
         async let episodes = try? endpoint([RawDubFeedItem].self, file: "dub-episode-feed.json")
         async let manifest = try? load(DubUpdateManifest.self, from: Self.manifestURL)
-        let (schedule, history, updates) = await (dates, episodes, manifest)
+        let (primarySchedule, primaryHistory, updates) = await (dates, episodes, manifest)
+        var schedule = primarySchedule
+        var history = primaryHistory
         try Task.checkCancellation()
         guard schedule != nil || history != nil else { throw ServiceError.message("Dub release sources are temporarily unavailable.") }
         let legacyUpdates: DubUpdateManifest?
-        if schedule?.provider == .legacy || history?.provider == .legacy {
+        if schedule?.provider == .legacy || history?.provider == .legacy
+            || DubRefreshPolicy.isStale(updates?.dubbed.schedule?.date)
+            || DubRefreshPolicy.isStale(updates?.dubbed.episodes?.date) {
             legacyUpdates = try? await load(DubUpdateManifest.self, from: DubProvider.legacy.url(for: "last-updated.json"))
         } else { legacyUpdates = nil }
+        // A successful HTTP response can still contain a stalled feed. Compare source update
+        // times per endpoint; a newer alternate must load successfully before replacing it.
+        if schedule?.provider == .current,
+           DubRefreshPolicy.shouldUseAlternate(primary: updates?.dubbed.schedule?.date, alternate: legacyUpdates?.dubbed.schedule?.date),
+           let newer = try? await load([RawDubItem].self, from: DubProvider.legacy.url(for: "dub-schedule.json")) {
+            schedule = DubEndpoint(value: newer, provider: .legacy)
+        }
+        if history?.provider == .current,
+           DubRefreshPolicy.shouldUseAlternate(primary: updates?.dubbed.episodes?.date, alternate: legacyUpdates?.dubbed.episodes?.date),
+           let newer = try? await load([RawDubFeedItem].self, from: DubProvider.legacy.url(for: "dub-episode-feed.json")) {
+            history = DubEndpoint(value: newer, provider: .legacy)
+        }
+        try Task.checkCancellation()
         return DubSnapshot(upcoming: schedule?.value ?? [], history: history?.value ?? [],
             scheduleProvider: schedule?.provider, historyProvider: history?.provider,
             scheduleUpdatedAt: (schedule?.provider == .legacy ? legacyUpdates : updates)?.dubbed.schedule?.date,

@@ -19,6 +19,7 @@ struct WatchAnimeView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var lookupID = UUID()
     @State private var initialized = false
+    @FocusState private var episodeFocused: Bool
     private var limit: Int { anime.format == "MOVIE" ? 1 : max(1, anime.episodes ?? 100_000) }
     private var visible: [(offset: Int, element: StremioStream)] {
         streams.enumerated().filter { (!playableOnly || $0.element.unavailableReason == nil) &&
@@ -122,9 +123,10 @@ struct WatchAnimeView: View {
         HStack {
             Text("Episode")
             TextField("Episode number", text: $episodeText).keyboardType(.numberPad).frame(width: 70)
-                .textFieldStyle(.roundedBorder).accessibilityIdentifier("playback-episode-number")
+                .textFieldStyle(.roundedBorder).focused($episodeFocused).accessibilityIdentifier("playback-episode-number")
                 .onSubmit { commitEpisode() }
-            Button("Go") { commitEpisode() }.disabled(Int(episodeText) == nil)
+            Button("Go") { commitEpisode() }.buttonStyle(.borderless).disabled(Int(episodeText) == nil)
+                .accessibilityIdentifier("playback-episode-go")
             Spacer()
             Stepper("Episode", value: Binding(get: { episode }, set: { selectEpisode($0) }), in: 1...limit).labelsHidden().accessibilityLabel("Choose episode")
         }
@@ -138,7 +140,7 @@ struct WatchAnimeView: View {
         }
         episodeText = String(episode)
     }
-    private func commitEpisode() { selectEpisode(Int(episodeText) ?? episode) }
+    private func commitEpisode() { episodeFocused = false; selectEpisode(Int(episodeText) ?? episode) }
     private func resetSources() {
         searchTask?.cancel(); lookupID = UUID(); streams = []; skipped = 0; searched = false; loading = false; error = nil; filter = ""
     }
@@ -176,3 +178,4 @@ struct WatchAnimeView: View {
         return value >= 3600 ? String(format: "%d:%02d:%02d", value / 3600, value / 60 % 60, value % 60) : String(format: "%d:%02d", value / 60, value % 60)
     }
 }
+

@@ -8,6 +8,7 @@ private enum LibrarySort: String, CaseIterable {
 
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
     private var posters = PosterPreferences(.library)
@@ -20,7 +21,6 @@ struct LibraryView: View {
     @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
-    @State private var dubError: String?
     @FocusState private var searchFocused: Bool
     private let statuses: [LibraryStatus] = [.watching, .planning, .completed, .dropped, .paused, .rewatching]
     private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
@@ -107,7 +107,7 @@ struct LibraryView: View {
                             ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
                                                    systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
-                        if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
+                        if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
@@ -125,6 +125,7 @@ struct LibraryView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .task(id: syncKey) { await loadDubs() }
+            .task(id: dubs.revision) { applyDubs() }
     }
     private var searchBar: some View {
         HStack(spacing: 10) {
@@ -206,22 +207,17 @@ struct LibraryView: View {
         dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) >= Date() }
     }
     private func loadDubs(refresh: Bool = false) async {
-        let entries = store.entries; let key = syncKey
-        dubEvents = []; dubProgress = [:]; dubError = nil
-        guard !entries.isEmpty else { return }
-        async let snapshotResult = fetchSnapshot(refresh: refresh)
-        async let indexResult = fetchIndex(refresh: refresh)
-        let (snapshot, index) = await (snapshotResult, indexResult)
+        let key = syncKey
+        guard !store.entries.isEmpty else { applyDubs(); return }
+        await dubs.load(using: store.dubs, refresh: refresh)
         guard !Task.isCancelled, key == syncKey else { return }
-        let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
-        if let snapshot { dubEvents = snapshot.events(knownMedia: known).filter { known[$0.anime.id] != nil } }
-        dubProgress = known.mapValues { LibraryDubProgress(anime: $0, snapshot: snapshot, index: index) }
-        let warnings = snapshot?.warnings() ?? []
-        if snapshot == nil || index == nil { dubError = "Some dub information is temporarily unavailable. Existing counts are shown where known." }
-        else if !warnings.isEmpty { dubError = warnings.joined(separator: "\n") }
+        applyDubs()
     }
-    private func fetchSnapshot(refresh: Bool) async -> DubSnapshot? { try? await store.dubs.snapshot(refresh: refresh) }
-    private func fetchIndex(refresh: Bool) async -> DubIndex? { try? await store.dubs.index(refresh: refresh) }
+    private func applyDubs() {
+        let known = Dictionary(uniqueKeysWithValues: store.entries.compactMap { $0.media.map { ($0.id, $0) } })
+        dubEvents = dubs.snapshot?.events(knownMedia: known).filter { known[$0.anime.id] != nil } ?? []
+        dubProgress = dubs.loaded ? known.mapValues { LibraryDubProgress(anime: $0, snapshot: dubs.snapshot, index: dubs.index) } : [:]
+    }
 }
 
 struct SettingsView: View {

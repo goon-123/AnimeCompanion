@@ -1,7 +1,7 @@
 import SwiftUI
 import AnimeCore
 
-/// One shared fetch for all visible Explore cards and category pages.
+/// Shared, continuously refreshed dub evidence for discovery, details, library and schedule.
 @MainActor
 final class ExploreDubStore: ObservableObject {
     @Published private(set) var snapshot: DubSnapshot?
@@ -9,16 +9,29 @@ final class ExploreDubStore: ObservableObject {
     @Published private(set) var loaded = false
     @Published private(set) var loading = false
     @Published private(set) var unavailable = false
+    @Published private(set) var notice: String?
+    @Published private(set) var revision = 0
     private var nextReleases: [Int: ReleaseEvent] = [:]
     private var fetchTask: Task<Void, Never>?
+    private var refreshFailed = false
 
     func load(using client: DubClient, refresh: Bool = false) async {
         if let fetchTask { await fetchTask.value; return }
-        guard refresh || !loaded || snapshot.map({ Date().timeIntervalSince($0.fetchedAt) >= 600 }) == true else { return }
+        guard refresh || !loaded || snapshot == nil || snapshot.map({ Date().timeIntervalSince($0.fetchedAt) >= DubRefreshPolicy.activeInterval }) == true else { return }
         let work = Task { await fetch(using: client, refresh: refresh) }
         fetchTask = work
         await work.value
         fetchTask = nil
+    }
+    /// The scene task is cancelled on backgrounding and starts with a fresh request on return.
+    func keepUpdated(using client: DubClient) async {
+        while !Task.isCancelled {
+            await load(using: client, refresh: true)
+            guard !Task.isCancelled else { return }
+            let interval = refreshFailed ? DubRefreshPolicy.retryInterval : DubRefreshPolicy.activeInterval
+            do { try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000)) }
+            catch { return }
+        }
     }
     private func fetch(using client: DubClient, refresh: Bool) async {
         loading = true
@@ -26,8 +39,22 @@ final class ExploreDubStore: ObservableObject {
         async let dates = try? client.snapshot(refresh: refresh)
         async let availability = try? client.index(refresh: refresh)
         let (newSnapshot, newIndex) = await (dates, availability)
-        snapshot = newSnapshot ?? snapshot; index = newIndex ?? index
-        unavailable = newSnapshot == nil || newIndex == nil || !(newSnapshot?.warnings().isEmpty ?? true)
+        if let fresh = newSnapshot, let previous = snapshot {
+            snapshot = DubSnapshot(
+                upcoming: fresh.scheduleProvider == nil ? previous.upcoming : fresh.upcoming,
+                history: fresh.historyProvider == nil ? previous.history : fresh.history, fetchedAt: fresh.fetchedAt,
+                scheduleProvider: fresh.scheduleProvider ?? previous.scheduleProvider,
+                historyProvider: fresh.historyProvider ?? previous.historyProvider,
+                scheduleUpdatedAt: fresh.scheduleProvider == nil ? previous.scheduleUpdatedAt : fresh.scheduleUpdatedAt,
+                historyUpdatedAt: fresh.historyProvider == nil ? previous.historyUpdatedAt : fresh.historyUpdatedAt)
+        } else { snapshot = newSnapshot ?? snapshot }
+        index = newIndex ?? index
+        refreshFailed = newSnapshot == nil || newIndex == nil || newSnapshot?.historyProvider == nil || newSnapshot?.scheduleProvider == nil
+        var warnings = newSnapshot?.warnings() ?? snapshot?.warnings() ?? []
+        if newSnapshot == nil { warnings.insert("Dub releases could not be refreshed. Showing previously loaded information where available.", at: 0) }
+        if newIndex == nil { warnings.append("Dub availability could not be refreshed.") }
+        notice = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
+        unavailable = notice != nil
         var next: [Int: ReleaseEvent] = [:]
         for event in snapshot?.events() ?? [] {
             guard event.certainty != .recorded,
@@ -37,6 +64,7 @@ final class ExploreDubStore: ObservableObject {
         }
         nextReleases = next
         loaded = true
+        revision += 1
     }
     func progress(for anime: Anime) -> LibraryDubProgress? {
         loaded ? LibraryDubProgress(anime: anime, snapshot: snapshot, index: index) : nil
@@ -134,7 +162,7 @@ struct DiscoveryDataNote: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Green: reported dub releases or availability. Amber: estimates. Yellow: announced dubs. Dub counts compare English releases with original episodes already aired. Times use your device timezone.")
             if dubs.unavailable {
-                Text("Some dub information is temporarily unavailable.")
+                Text(dubs.notice ?? "Some dub information is temporarily unavailable.")
                 Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)
             }
             Text("Metadata · AniList   Dubs · AniSchedule / MyDubList")

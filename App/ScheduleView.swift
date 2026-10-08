@@ -5,6 +5,7 @@ private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub
 
 struct ScheduleView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @State private var anchor = Date()
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
     @AppStorage("schedule.libraryOnly") private var libraryOnly = false
@@ -15,9 +16,15 @@ struct ScheduleView: View {
     @State private var dubError: String?
     @State private var loading = false
     @State private var requestID = UUID()
+    @State private var dubRequestID = UUID()
     private var filter: ScheduleFilter { ScheduleFilter(rawValue: filterValue) ?? .all }
     private var window: DateInterval {
         Calendar.current.dateInterval(of: .weekOfYear, for: anchor) ?? DateInterval(start: anchor, duration: 7 * 86400)
+    }
+    private var dubPresentationKey: String { "\(window.start.timeIntervalSince1970)-\(dubs.revision)" }
+    private var dubNotice: String? {
+        let notices = [dubs.notice, dubError].compactMap { $0 }
+        return notices.isEmpty ? nil : notices.joined(separator: "\n")
     }
     private var visible: [ReleaseEvent] {
         let ids = Set(store.watching.map(\.mediaId))
@@ -52,7 +59,7 @@ struct ScheduleView: View {
             }
             if loading { ProgressView("Loading releases…") }
             if filter != .dub, let error = subError { NoticeView(message: "Original schedule: \(error)") { Task { await load(refresh: true) } } }
-            if filter != .sub, let error = dubError { NoticeView(message: "Dub schedule: \(error)") { Task { await load(refresh: true) } } }
+            if filter != .sub, let error = dubNotice { NoticeView(message: "Dub schedule: \(error)") { Task { await load(refresh: true) } } }
             ForEach(days, id: \.self) { date in
                 Section(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
                     ForEach(visible.filter { event in event.date.map { Calendar.current.isDate($0, inSameDayAs: date) } ?? false }) { ReleaseRow(event: $0) }
@@ -67,6 +74,7 @@ struct ScheduleView: View {
             Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
         }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
             .navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
+            .task(id: dubPresentationKey) { await presentDubs() }
             .refreshable { await load(refresh: true) }
             .sheet(isPresented: $pickingDate) {
                 NavigationStack {
@@ -80,9 +88,9 @@ struct ScheduleView: View {
     private func shift(_ days: Int) { anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let selected = window
-        loading = true; subError = nil; dubError = nil; subEvents = []; dubEvents = []
+        loading = true; subError = nil; subEvents = []
         async let original: Void = loadSub(selected, attempt: attempt, refresh: refresh)
-        async let dubbed: Void = loadDub(selected, attempt: attempt, refresh: refresh)
+        async let dubbed: Void = dubs.load(using: store.dubs, refresh: refresh)
         _ = await (original, dubbed)
         if requestID == attempt { loading = false }
     }
@@ -92,35 +100,40 @@ struct ScheduleView: View {
             try Task.checkCancellation(); if requestID == attempt { subEvents = events }
         } catch is CancellationError {} catch { if requestID == attempt { subError = error.localizedDescription } }
     }
-    private func loadDub(_ window: DateInterval, attempt: UUID, refresh: Bool) async {
+    private func presentDubs() async {
+        let attempt = UUID(); dubRequestID = attempt
+        let selected = window; let revision = dubs.revision
+        dubError = nil
+        guard let snapshot = dubs.snapshot else { dubEvents = []; return }
         do {
-            let snapshot = try await store.dubs.snapshot(refresh: refresh)
-            let warnings = snapshot.warnings()
             let known = Dictionary(uniqueKeysWithValues: store.entries.compactMap { $0.media.map { ($0.id, $0) } })
             let initial = snapshot.events(knownMedia: known).filter { event in
                 guard let date = event.date else { return true }
-                return date >= window.start && date < window.end
+                return date >= selected.start && date < selected.end
             }
             try Task.checkCancellation()
-            guard requestID == attempt else { return }
+            guard dubRequestID == attempt, revision == dubs.revision, selected == window else { return }
             dubEvents = initial
-            if !warnings.isEmpty { dubError = warnings.joined(separator: "\n") }
             let missing = initial.filter { $0.anime.title?.english == "Anime #\($0.anime.id)" }.map { $0.anime.id }
             if !missing.isEmpty {
                 do {
                     let found = try await store.aniList.media(ids: missing)
                     try Task.checkCancellation()
                     let hydrated = known.merging(Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })) { _, new in new }
-                    if requestID == attempt {
+                    if dubRequestID == attempt, revision == dubs.revision, selected == window {
                         dubEvents = snapshot.events(knownMedia: hydrated).filter { event in
                             guard event.anime.isAdult != true else { return false }
                             guard let date = event.date else { return true }
-                            return date >= window.start && date < window.end
+                            return date >= selected.start && date < selected.end
                         }
                     }
-                } catch { if requestID == attempt { dubError = "Some titles could not be resolved. " + error.localizedDescription } }
+                } catch is CancellationError {} catch {
+                    if dubRequestID == attempt, revision == dubs.revision, selected == window {
+                        dubError = "Some titles could not be resolved. " + error.localizedDescription
+                    }
+                }
             }
-        } catch is CancellationError {} catch { if requestID == attempt { dubError = error.localizedDescription } }
+        } catch is CancellationError {} catch { if dubRequestID == attempt { dubError = error.localizedDescription } }
     }
 }
 
