@@ -132,7 +132,7 @@ struct DiscoveryDataNote: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Green: reported dub releases or availability. Amber: estimated counts or dates. Dub counts compare English releases with original episodes already aired. Times use your device timezone.")
+            Text("Green: reported dub releases or availability. Amber: estimates. Yellow: announced dubs. Dub counts compare English releases with original episodes already aired. Times use your device timezone.")
             if dubs.unavailable {
                 Text("Some dub information is temporarily unavailable.")
                 Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)

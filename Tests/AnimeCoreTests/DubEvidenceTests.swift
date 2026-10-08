@@ -83,13 +83,17 @@ final class DubEvidenceTests: XCTestCase {
 
     func testMALMappingResolvesHistoryButRejectsContradictoryIDsAndImpossibleEpisodes() throws {
         let title = try anime(#"{"id":10,"idMal":20,"episodes":12,"status":"RELEASING"}"#)
-        let data = try snapshot("[]", #"[{"id":999,"idMal":20,"episode":{"aired":2,"airedAt":1000}},{"id":10,"idMal":99,"episode":{"aired":8,"airedAt":1000}},{"id":10,"episode":{"aired":13,"airedAt":1000}},{"id":10,"episode":{"aired":3,"airedAt":3000}}]"#)
+        let data = try snapshot(
+            #"[{"route":"example-anime","episodeNumber":3,"episodeDate":3000,"verified":true,"media":{"media":{"id":999,"idMal":20}}}]"#,
+            #"[{"id":999,"idMal":20,"episode":{"aired":2,"airedAt":1000}},{"id":10,"idMal":99,"episode":{"aired":8,"airedAt":1000}},{"id":10,"episode":{"aired":13,"airedAt":1000}},{"id":10,"episode":{"aired":3,"airedAt":3000}}]"#)
         let progress = LibraryDubProgress(anime: title, snapshot: data, index: nil, now: now)
         XCTAssertEqual(progress.released, 2)
         let events = data.events(knownMedia: [title.id: title], now: now)
-        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.count, 2)
+        XCTAssertTrue(events.allSatisfy { $0.anime.id == title.id })
         XCTAssertEqual(events.first?.anime.id, title.id)
         XCTAssertEqual(events.first?.episode, 2)
+        XCTAssertEqual(data.schedulePage(for: title)?.absoluteString, "https://animeschedule.net/anime/example-anime")
     }
 
     func testCompletedListingInferenceIsLabeledEstimated() throws {
@@ -144,6 +148,17 @@ final class DubEvidenceTests: XCTestCase {
         XCTAssertEqual(index.availability(malId: 30), .unknown)
         XCTAssertEqual(index.availability(malId: 40), .partial)
         XCTAssertEqual(index.agreeingSources(malId: 20), 4)
+    }
+
+    func testCorroboratedCountsCanFillAnAvailabilityIndexThatIsBehind() async throws {
+        let transport = DubEvidenceTransport([
+            DubClient.indexURL: (200, #"{"dubbed":[50]}"#),
+            DubClient.countsURL: (200, #"{"20":4,"30":1,"partial":[]}"#)
+        ])
+        let index = try await DubClient(transport: transport).index()
+        XCTAssertEqual(index.availability(malId: 20), .dubbed)
+        XCTAssertEqual(index.availability(malId: 30), .unknown)
+        XCTAssertEqual(index.availability(malId: 50), .dubbed, "Curated listings remain available even without a source-count entry.")
     }
 
     func testStaleFeedIsDetectedEvenWhenDownloadSucceeds() throws {

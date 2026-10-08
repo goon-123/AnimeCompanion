@@ -123,7 +123,8 @@ public struct DubSnapshot: Sendable {
         // A recorded release overrides a schedule estimate for the same exact AniList ID and episode.
         for item in history {
             guard item.episode.aired > 0, let date = item.episode.airedAt?.date, date <= now else { continue }
-            let anime = media[item.id] ?? item.idMal.flatMap { byMAL[$0] } ?? Anime(id: item.id, title: "Anime #\(item.id)")
+            let mapped = item.idMal.flatMap { byMAL[$0] }
+            let anime = knownMedia[item.id] ?? mapped ?? media[item.id] ?? Anime(id: item.id, title: "Anime #\(item.id)")
             guard item.idMal == nil || anime.idMal == nil || item.idMal == anime.idMal,
                   anime.isAdult != true,
                   anime.episodes.map({ $0 <= 0 || item.episode.aired <= $0 }) ?? true else { continue }
@@ -141,7 +142,7 @@ public struct DubSnapshot: Sendable {
             else { expanded = [] }
             let indefinite = item.delayedIndefinitely == true
             let postponed = item.delayedUntil?.date.map { $0 > now } ?? false
-            for (episode, date) in expanded where episode > 0 {
+            for (episode, date) in expanded where episode > 0 && (anime.episodes.map { $0 <= 0 || episode <= $0 } ?? true) {
                 let certainty: ScheduleCertainty = indefinite || postponed ? .delayed : (item.verified == true ? .verified : .unverified)
                 let releaseDate = postponed && episode == item.episodeNumber ? item.delayedUntil?.date : date
                 let event = ReleaseEvent(anime: anime, episode: episode, kind: .dub, date: indefinite ? nil : releaseDate,
@@ -259,7 +260,7 @@ public actor DubClient {
         try Task.checkCancellation()
         guard base != nil || counts != nil else { throw ServiceError.message("Dub availability sources are temporarily unavailable.") }
         let corroborated = Set(counts?.sources.filter { $0.value >= 2 }.map(\.key) ?? [])
-        return DubIndex(dubbed: base?.dubbed ?? corroborated,
+        return DubIndex(dubbed: (base?.dubbed ?? []).union(corroborated),
                         partial: (base?.partial ?? []).union(counts?.partial ?? []), sourceCounts: counts?.sources ?? [:])
     }
     public func availability(malId: Int?) async throws -> DubAvailability {

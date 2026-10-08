@@ -142,7 +142,7 @@ struct AnimeDubSchedule: View {
                 if recorded.count > 6 { Button(expandedHistory ? "Show recent episodes" : "Show all \(recorded.count) recorded episodes") { expandedHistory.toggle() }.font(.caption.bold()) }
             }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            Text("Green shows reported releases. Amber marks estimated counts or dates. Release reports can differ from availability in your streaming service or region.").font(.caption2).foregroundStyle(.secondary)
+            Text("Green shows reported releases or availability. Amber marks estimates; yellow marks announcements. Release reports can differ from availability in your streaming service or region.").font(.caption2).foregroundStyle(.secondary)
             if let snapshot {
                 Text("Checked \(snapshot.fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))").font(.caption2).foregroundStyle(.secondary)
                 if let updated = snapshot.historyUpdatedAt { Text("Episode feed updated \(updated.formatted(.dateTime.month(.abbreviated).day().hour().minute()))").font(.caption2).foregroundStyle(.secondary) }
