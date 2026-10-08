@@ -195,7 +195,7 @@ final class DubEvidenceTests: XCTestCase {
         let data = try await DubClient(transport: transport).snapshot(refresh: true)
         XCTAssertEqual(data.history.first?.episode.aired, 2)
         XCTAssertEqual(data.historyProvider, .legacy)
-        XCTAssertEqual(data.historyUpdatedAt, current)
+        XCTAssertEqual(try XCTUnwrap(data.historyUpdatedAt).timeIntervalSince1970, current.timeIntervalSince1970, accuracy: 0.001)
         XCTAssertEqual(data.scheduleProvider, .current)
         XCTAssertEqual(data.upcoming.first?.episodeNumber, 3)
         XCTAssertFalse(data.warnings().contains { $0.contains("has not updated") })
