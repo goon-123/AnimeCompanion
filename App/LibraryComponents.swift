@@ -22,7 +22,8 @@ struct LibraryAnimeRow: View {
                             Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(Theme.highlight)
                         }
                         if let nextDub, let date = nextDub.date {
-                            Text("DUB · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.mint)
+                            Text("\(nextDub.certainty == .unverified ? "DUB ESTIMATE" : "DUB") · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
+                                .font(.caption).foregroundStyle(nextDub.certainty == .verified ? Color.mint : Color.orange)
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.contentShape(Rectangle())
@@ -61,9 +62,7 @@ struct LibraryDubLabel: View {
     let anime: Anime
     let progress: LibraryDubProgress?
     var body: some View {
-        Text(progress?.label(for: anime) ?? "Checking dub…").font(.caption2.weight(.medium))
-            .foregroundStyle(progress?.released != nil ? Color.mint : Color.secondary)
-            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("library-dub-\(anime.id)")
+        DubStatusBadge(anime: anime, progress: progress).accessibilityIdentifier("library-dub-\(anime.id)")
     }
 }
 
@@ -117,3 +116,4 @@ struct LibraryGuestView: View {
         }.padding(28).frame(maxWidth: 480).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+

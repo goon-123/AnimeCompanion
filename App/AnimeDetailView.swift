@@ -8,7 +8,8 @@ struct AnimeDetailView: View {
     @State private var anime: Anime?
     @State private var loading = false
     @State private var error: String?
-    @State private var dubStatus = DubAvailability.unknown
+    @State private var dubSnapshot: DubSnapshot?
+    @State private var dubIndex: DubIndex?
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var availabilityError: String?
     @State private var scheduleError: String?
@@ -35,7 +36,7 @@ struct AnimeDetailView: View {
                             Label("Watch in VidHub", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity).padding(.vertical, 5)
                         }.buttonStyle(.bordered).controlSize(.large).disabled(anime.status == "NOT_YET_RELEASED")
                             .accessibilityIdentifier("watch-in-vidhub")
-                        AnimeDubSchedule(status: dubStatus, events: dubEvents, loading: loadingDub,
+                        AnimeDubSchedule(anime: anime, progress: dubProgress, snapshot: dubSnapshot, events: dubEvents, loading: loadingDub,
                                          error: [availabilityError, scheduleError].compactMap { $0 }.isEmpty ? nil : [availabilityError, scheduleError].compactMap { $0 }.joined(separator: "\n"))
                         related(anime)
                         characters(anime)
@@ -54,7 +55,7 @@ struct AnimeDetailView: View {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
                 }
             }
-            .task(id: mediaID) { await load() }.refreshable { await load() }
+            .task(id: mediaID) { await load() }.refreshable { await load(refresh: true) }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showPlayback) { if let anime { WatchAnimeView(anime: anime) } }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
@@ -188,36 +189,45 @@ struct AnimeDetailView: View {
         }
     }
     private func sectionTitle(_ title: String) -> some View { Text(title).font(.headline).padding(.top, 3) }
-    private func load() async {
+    private var dubProgress: LibraryDubProgress? {
+        guard let anime, !loadingDub || dubSnapshot != nil || dubIndex != nil else { return nil }
+        return LibraryDubProgress(anime: anime, snapshot: dubSnapshot, index: dubIndex)
+    }
+    private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt
-        if anime?.id != mediaID { anime = nil; dubEvents = []; dubStatus = .unknown }
+        if anime?.id != mediaID { anime = nil; dubEvents = []; dubSnapshot = nil; dubIndex = nil }
         loading = true; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
             let media = try await store.aniList.details(id: mediaID)
             try Task.checkCancellation(); guard requestID == attempt else { return }
             anime = media
-            await loadDub(media, attempt: attempt)
+            await loadDub(media, attempt: attempt, refresh: refresh)
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
     }
-    private func loadDub(_ anime: Anime, attempt: UUID) async {
-        loadingDub = true; availabilityError = nil; scheduleError = nil; dubStatus = .unknown; dubEvents = []
-        async let availability: Void = loadAvailability(anime, attempt: attempt)
-        async let dates: Void = loadDates(anime, attempt: attempt)
+    private func loadDub(_ anime: Anime, attempt: UUID, refresh: Bool) async {
+        loadingDub = true; availabilityError = nil; scheduleError = nil
+        async let availability: Void = loadAvailability(anime, attempt: attempt, refresh: refresh)
+        async let dates: Void = loadDates(anime, attempt: attempt, refresh: refresh)
         _ = await (availability, dates)
         if requestID == attempt { loadingDub = false }
     }
-    private func loadAvailability(_ anime: Anime, attempt: UUID) async {
+    private func loadAvailability(_ anime: Anime, attempt: UUID, refresh: Bool) async {
         do {
-            let status = try await store.dubs.availability(malId: anime.idMal)
-            try Task.checkCancellation(); if requestID == attempt { dubStatus = status }
+            let index = try await store.dubs.index(refresh: refresh)
+            try Task.checkCancellation(); if requestID == attempt { dubIndex = index }
         } catch is CancellationError {} catch { if requestID == attempt { availabilityError = "Dub availability could not be checked." } }
     }
-    private func loadDates(_ anime: Anime, attempt: UUID) async {
+    private func loadDates(_ anime: Anime, attempt: UUID, refresh: Bool) async {
         do {
-            let snapshot = try await store.dubs.snapshot()
+            let snapshot = try await store.dubs.snapshot(refresh: refresh)
             try Task.checkCancellation()
-            if requestID == attempt { dubEvents = snapshot.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } }
+            if requestID == attempt {
+                dubSnapshot = snapshot
+                dubEvents = snapshot.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id }
+                scheduleError = snapshot.warnings().isEmpty ? nil : snapshot.warnings().joined(separator: "\n")
+            }
         } catch is CancellationError {} catch { if requestID == attempt { scheduleError = "Dub dates could not be loaded." } }
     }
 }
+

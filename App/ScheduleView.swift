@@ -64,7 +64,7 @@ struct ScheduleView: View {
             if visible.isEmpty && !loading {
                 Section { Text("No listed releases for this week.").foregroundStyle(.secondary) }
             }
-            Section { Text("English dub dates are reported by AniSchedule and may change. Unverified dates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
+            Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
         }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
             .navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
             .refreshable { await load(refresh: true) }
@@ -95,6 +95,7 @@ struct ScheduleView: View {
     private func loadDub(_ window: DateInterval, attempt: UUID, refresh: Bool) async {
         do {
             let snapshot = try await store.dubs.snapshot(refresh: refresh)
+            let warnings = snapshot.warnings()
             let known = Dictionary(uniqueKeysWithValues: store.entries.compactMap { $0.media.map { ($0.id, $0) } })
             let initial = snapshot.events(knownMedia: known).filter { event in
                 guard let date = event.date else { return true }
@@ -103,6 +104,7 @@ struct ScheduleView: View {
             try Task.checkCancellation()
             guard requestID == attempt else { return }
             dubEvents = initial
+            if !warnings.isEmpty { dubError = warnings.joined(separator: "\n") }
             let missing = initial.filter { $0.anime.title?.english == "Anime #\($0.anime.id)" }.map { $0.anime.id }
             if !missing.isEmpty {
                 do {
@@ -121,3 +123,4 @@ struct ScheduleView: View {
         } catch is CancellationError {} catch { if requestID == attempt { dubError = error.localizedDescription } }
     }
 }
+

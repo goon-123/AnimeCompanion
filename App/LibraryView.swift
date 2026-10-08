@@ -216,7 +216,9 @@ struct LibraryView: View {
         let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
         if let snapshot { dubEvents = snapshot.events(knownMedia: known).filter { known[$0.anime.id] != nil } }
         dubProgress = known.mapValues { LibraryDubProgress(anime: $0, snapshot: snapshot, index: index) }
+        let warnings = snapshot?.warnings() ?? []
         if snapshot == nil || index == nil { dubError = "Some dub information is temporarily unavailable. Existing counts are shown where known." }
+        else if !warnings.isEmpty { dubError = warnings.joined(separator: "\n") }
     }
     private func fetchSnapshot(refresh: Bool) async -> DubSnapshot? { try? await store.dubs.snapshot(refresh: refresh) }
     private func fetchIndex(refresh: Bool) async -> DubIndex? { try? await store.dubs.index(refresh: refresh) }
@@ -255,7 +257,8 @@ struct SettingsView: View {
                 }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)
-                    Link("Dub dates · AniSchedule by Bas1874", destination: URL(string: "https://github.com/Bas1874/AniSchedule")!)
+                    Link("Dub dates · AniSchedule by RockinChaos", destination: DubProvider.current.repositoryURL)
+                    Link("Dub source fallback · AniSchedule by Bas1874", destination: DubProvider.legacy.repositoryURL)
                     Link("Dub data © MyDubList · CC BY 4.0", destination: URL(string: "https://mydublist.com")!)
                     Link("MyDubList dataset license", destination: URL(string: "https://creativecommons.org/licenses/by/4.0/")!)
                     Text("Data is matched by IDs and formatted for display; no source records are edited.").font(.caption).foregroundStyle(.secondary)
@@ -276,3 +279,4 @@ struct SettingsView: View {
         }
     }
 }
+

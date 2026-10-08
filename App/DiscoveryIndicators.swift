@@ -14,7 +14,7 @@ final class ExploreDubStore: ObservableObject {
 
     func load(using client: DubClient, refresh: Bool = false) async {
         if let fetchTask { await fetchTask.value; return }
-        guard refresh || !loaded else { return }
+        guard refresh || !loaded || snapshot.map({ Date().timeIntervalSince($0.fetchedAt) >= 600 }) == true else { return }
         let work = Task { await fetch(using: client, refresh: refresh) }
         fetchTask = work
         await work.value
@@ -26,10 +26,10 @@ final class ExploreDubStore: ObservableObject {
         async let dates = try? client.snapshot(refresh: refresh)
         async let availability = try? client.index(refresh: refresh)
         let (newSnapshot, newIndex) = await (dates, availability)
-        snapshot = newSnapshot; index = newIndex
-        unavailable = newSnapshot == nil || newIndex == nil
+        snapshot = newSnapshot ?? snapshot; index = newIndex ?? index
+        unavailable = newSnapshot == nil || newIndex == nil || !(newSnapshot?.warnings().isEmpty ?? true)
         var next: [Int: ReleaseEvent] = [:]
-        for event in newSnapshot?.events() ?? [] {
+        for event in snapshot?.events() ?? [] {
             guard event.certainty != .recorded,
                   event.date.map({ $0 > Date() }) ?? (event.certainty == .delayed),
                   next[event.anime.id] == nil else { continue }
@@ -66,11 +66,8 @@ struct DiscoveryIndicators: View {
                     Label("Watched before", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
                 }
             }
-            let progress = dubs.progress(for: anime)
-            HStack(alignment: .top, spacing: 4) {
-                Image(systemName: "mic.fill").accessibilityHidden(true)
-                Text(progress?.label(for: anime) ?? "Checking dub…").accessibilityIdentifier("explore-dub-\(anime.id)")
-            }.foregroundStyle(progress?.released != nil ? Color.mint : Color.secondary)
+            DubStatusBadge(anime: anime, progress: dubs.progress(for: anime))
+                .accessibilityIdentifier("explore-dub-\(anime.id)")
             if let next = anime.nextAiringEpisode, next.date > Date() {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Next sub · Ep \(next.episode)").foregroundStyle(Theme.highlight).accessibilityIdentifier("explore-next-sub-\(anime.id)")
@@ -82,7 +79,7 @@ struct DiscoveryIndicators: View {
             }
             if let next = dubs.nextDub(for: anime.id) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(dubAiringLabel(next)).foregroundStyle(next.certainty == .delayed ? Color.orange : Color.mint)
+                    Text(dubAiringLabel(next)).foregroundStyle(next.certainty == .verified ? Color.mint : Color.orange)
                     if let date = next.date {
                         Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).foregroundStyle(.secondary)
                     } else { Text("Date unconfirmed").foregroundStyle(.secondary) }
@@ -135,7 +132,7 @@ struct DiscoveryDataNote: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Dub counts compare English releases with original episodes already aired. Missing counts stay unknown. Times use your device timezone.")
+            Text("Green: reported dub releases or availability. Amber: estimated counts or dates. Dub counts compare English releases with original episodes already aired. Times use your device timezone.")
             if dubs.unavailable {
                 Text("Some dub information is temporarily unavailable.")
                 Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)
@@ -144,3 +141,28 @@ struct DiscoveryDataNote: View {
         }.font(.caption2).foregroundStyle(.secondary)
     }
 }
+
+extension DubStatusTone {
+    var color: Color {
+        switch self {
+        case .available: return .mint
+        case .estimated: return .orange
+        case .announced: return .yellow
+        case .neutral: return .secondary
+        }
+    }
+}
+
+struct DubStatusBadge: View {
+    let anime: Anime
+    let progress: LibraryDubProgress?
+    private var color: Color { (progress?.tone ?? .neutral).color }
+    var body: some View {
+        Label(progress?.label(for: anime) ?? "Checking dub…", systemImage: "mic.fill")
+            .font(.caption.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 6))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+

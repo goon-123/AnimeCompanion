@@ -106,11 +106,10 @@ private struct FeaturedAnimePanel: View {
             }.font(.caption.weight(.semibold))
             Text((anime.genres ?? []).joined(separator: " · ")).font(.caption.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("featured-genres-\(anime.id)")
-            Label(dubs.progress(for: anime)?.label(for: anime) ?? "Checking dub…", systemImage: "mic.fill")
-                .font(.caption.weight(.semibold)).accessibilityIdentifier("featured-dub-\(anime.id)")
+            DubStatusBadge(anime: anime, progress: dubs.progress(for: anime)).accessibilityIdentifier("featured-dub-\(anime.id)")
             if let next = dubs.nextDub(for: anime.id) {
                 Text(next.certainty == .delayed ? "Dub delayed · Episode \(next.episode)" : "\(next.certainty == .unverified ? "Dub estimate" : "Next dub") · Episode \(next.episode)\(next.date.map { " · " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "")")
-                    .font(.caption)
+                    .font(.caption).foregroundStyle(next.certainty == .verified ? Color.mint : Color.orange)
             } else if let next = anime.nextAiringEpisode, next.date > Date() {
                 Text("Next sub · Episode \(next.episode) · \(next.date.formatted(.dateTime.month(.abbreviated).day()))").font(.caption)
             }
@@ -122,3 +121,4 @@ private struct FeaturedAnimePanel: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+

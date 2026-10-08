@@ -47,10 +47,21 @@ final class LiveServiceTests: XCTestCase {
         let client = DubClient()
         let snapshot = try await client.snapshot(refresh: true)
         XCTAssertFalse(snapshot.events().isEmpty)
+        XCTAssertEqual(snapshot.scheduleProvider, .current)
+        XCTAssertEqual(snapshot.historyProvider, .current)
+        let historyUpdated = try XCTUnwrap(snapshot.historyUpdatedAt)
+        XCTAssertLessThan(Date().timeIntervalSince(historyUpdated), 3 * 86400, "Detect a stalled release feed instead of passing on old data.")
         let index = try await client.index(refresh: true)
         XCTAssertFalse(index.partial.isEmpty)
         let availability = index.availability(malId: 1)
         XCTAssertEqual(availability, .dubbed)
+        XCTAssertGreaterThan(index.agreeingSources(malId: 1) ?? 0, 0)
+        // Probe an anime from the missing-count report using live metadata, not a hardcoded count.
+        let title = try await AniListClient().details(id: 169581)
+        let progress = LibraryDubProgress(anime: title, snapshot: snapshot, index: index)
+        XCTAssertGreaterThan(progress.released ?? 0, 0)
+        XCTAssertEqual(progress.confidence, .reported)
+        XCTAssertTrue(snapshot.events(knownMedia: [title.id: title]).contains { $0.anime.id == title.id })
     }
 
     func testAnimeNewsNetworkFeed() async throws {
