@@ -1,6 +1,6 @@
 # Build verification
 
-## Version 0.3.1 / build 11
+## Version 0.3.1 / build 12
 
 Adds currently-airing library catch-up cards: green Caught up, yellow episodes behind, watched/aired episode numbers, the next airing time, a behind-only filter and Behind first sorting. Original broadcast and English dub comparisons are separately selectable and labeled. Unknown/stale original schedules and estimated dub counts cannot create a confirmed green/yellow status.
 
@@ -8,7 +8,11 @@ VidHub searches the next unwatched AniList episode for tracked titles, ignoring 
 
 The first candidate, [build 10 / run 37939078512](https://github.com/goon-123/AnimeCompanion/actions/runs/37939078512), compiled successfully. All 99 active core tests (104 enumerated, five skipped), all four live-provider checks and all seven focused native cases on each device family passed. Screenshot review found an unavailable SF Symbol rendering the library next-episode button blank. Build 11 replaces it with an explicit +1 label and adds a colored catch-up marker on grid posters. Its native grid check also reveals the full airing panel, and playback screenshots capture the automatically selected episode before manual override.
 
-Build 11 compilation, archive inspection, screenshots and native regression results remain pending. Whitespace and shell syntax checks passed locally. The earlier temporary local Swift toolchain is no longer available. Previous candidate results do not validate these final visual changes.
+Build 10's full iPad suite passed all 15 cases. Its full iPhone suite passed 17 of 19 unique cases, but the discovery edge-swipe case failed twice and the saved-dub-filter case failed twice; the workflow did not pass. The failure hierarchy retained active filters after the bottom Reset button was tapped, and the retry inherited those filters. Build 12 moves Reset into the always-reachable toolbar and adds explicit reset-state assertions. The automated edge swipe is slower, with every original return/scroll/pagination assertion retained. Full jobs have a 35-minute limit so startup and artifact export do not cut off the larger suites.
+
+[Build 11 / run 37941696936](https://github.com/goon-123/AnimeCompanion/actions/runs/37941696936), source `ae81ce87192d286d59f04afef141771ad794c17a`, compiled with all 99 active core tests and all four live-provider checks passing. Its inspected universal ARM64 IPA is intact and unsigned with no Debug fixtures, version 0.3.1/build 11, minimum OS 17 and all iPad orientations. IPA SHA-256: `e02387ae6b4a105de9a3d418665b615974ca848e3ae520d419543bf9c9958e18`. Native checks are still running; this is not a claim that the full workflow passed.
+
+Build 12 compilation, archive inspection, screenshots and native regression results remain pending. Whitespace and shell syntax checks passed locally. The earlier temporary local Swift toolchain is no longer available. Previous candidate results do not validate these final changes.
 
 ## Version 0.3.0 / build 9
 

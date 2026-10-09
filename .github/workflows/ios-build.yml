@@ -76,7 +76,7 @@ jobs:
   simulator:
     name: ${{ matrix.label }}
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

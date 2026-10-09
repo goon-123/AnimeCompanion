@@ -61,11 +61,14 @@ struct DubFiltersView: View {
                         Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)
                     }
                 }
-                Section {
-                    Button("Reset dub filters") { filters.selection = DiscoveryPreferences() }.accessibilityIdentifier("dub-filter-reset")
-                }
             }.navigationTitle("Dub filters").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Reset") { filters.selection = DiscoveryPreferences() }
+                            .accessibilityLabel("Reset dub filters").accessibilityIdentifier("dub-filter-reset")
+                    }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
         }
     }
 }

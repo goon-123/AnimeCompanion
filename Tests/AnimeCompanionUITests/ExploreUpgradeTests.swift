@@ -106,7 +106,12 @@ final class ExploreUpgradeTests: XCTestCase {
     private func resetFilters(in app: XCUIApplication) {
         openFilters(in: app)
         reveal(app.buttons["dub-filter-reset"], in: app)
-        app.buttons["dub-filter-reset"].tap(); app.buttons["Done"].tap()
+        app.buttons["dub-filter-reset"].tap()
+        let reset = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: app.buttons["dub-filter-all"])
+        XCTAssertEqual(XCTWaiter.wait(for: [reset], timeout: 10), .completed, "Reset must select All anime before leaving the sheet")
+        reveal(app.switches["dub-filter-hide-completed"], in: app)
+        XCTAssertEqual(app.switches["dub-filter-hide-completed"].value as? String, "0")
+        app.buttons["Done"].tap()
     }
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
