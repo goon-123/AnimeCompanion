@@ -37,7 +37,7 @@ final class ImmersivePlaybackTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-library-preview", "--ui-playback-preview"]
+        app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences"]
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
         app.tabBars.buttons["My Library"].tap()

@@ -33,13 +33,13 @@ struct AnimeDetailView: View {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
                     VStack(alignment: .leading, spacing: 20) {
                         if let next = anime.nextAiringEpisode { DetailCard(title: "Next original broadcast") { BroadcastCountdown(episode: next) } }
+                        Button { showPlayback = true } label: {
+                            Label("Watch in VidHub", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity).padding(.vertical, 5)
+                        }.buttonStyle(.borderedProminent).controlSize(.large).disabled(anime.status == "NOT_YET_RELEASED")
+                            .accessibilityIdentifier("watch-in-vidhub")
                         progress(anime)
                         synopsis(anime)
                         metadata(anime)
-                        Button { showPlayback = true } label: {
-                            Label("Watch in VidHub", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity).padding(.vertical, 5)
-                        }.buttonStyle(.bordered).controlSize(.large).disabled(anime.status == "NOT_YET_RELEASED")
-                            .accessibilityIdentifier("watch-in-vidhub")
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                                          events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
                         related(anime)

@@ -1,5 +1,13 @@
 # Verified integration references
 
+## Library catch-up comparisons
+
+The original-broadcast comparison is only shown for AniList `RELEASING` titles. A future, valid next-airing episode determines the number already broadcast; the planned season total is not a released count. Missing, expired or contradictory next-airing data stays unknown until refreshed. The displayed next episode/time is supplied by the source, never extrapolated.
+
+The separately selected English-dub comparison requires an ongoing next dub event and a reported release count from the dub feed. An estimate cannot create a confirmed caught-up/behind badge. An unverified upcoming date remains labeled as an estimate. A finished original can still have an ongoing dub; first-episode announcements are not ongoing releases. Both comparisons use confirmed AniList watched progress, and dates display in the device timezone.
+
+## Integration references
+
 Sources inspected during implementation on October 4–8, 2026 UTC:
 
 - AniList official authentication guide: https://github.com/AniList/docs/blob/master/docs/guide/auth/index.md

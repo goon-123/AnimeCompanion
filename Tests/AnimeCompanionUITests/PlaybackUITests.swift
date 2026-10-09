@@ -5,7 +5,7 @@ final class PlaybackUITests: XCTestCase {
     @MainActor
     func testPlaybackSetupRejectsInvalidURLAndKeepsAccountSettingsAccessible() throws {
         continueAfterFailure = false
-        let app = XCUIApplication(); app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--ui-reset-content-preferences"]; app.launch()
         let settings = app.buttons["Account and settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 20)); settings.tap()
         let playback = app.buttons["playback-settings"]
@@ -26,7 +26,7 @@ final class PlaybackUITests: XCTestCase {
     @MainActor
     func testWatchEpisodeDefaultsToNextAniListEpisodeAndAllowsSetup() throws {
         continueAfterFailure = false
-        let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview", "--ui-reset-content-preferences"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20)); app.tabBars.buttons["My Library"].tap()
         let entry = app.buttons["library-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); entry.tap()

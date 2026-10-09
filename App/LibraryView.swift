@@ -3,7 +3,7 @@ import AnimeCore
 
 private enum LibrarySort: String, CaseIterable {
     case airing = "Airing schedule", title = "Title", rating = "AniList rating"
-    case updated = "Last updated", progress = "Progress", score = "Your score"
+    case updated = "Last updated", progress = "Progress", score = "Your score", behind = "Behind first"
 }
 
 struct LibraryView: View {
@@ -11,6 +11,7 @@ struct LibraryView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.scenePhase) private var scenePhase
     private var posters = PosterPreferences(.library)
     @AppStorage("library.sort") private var sortValue = LibrarySort.airing.rawValue
     @State private var selected: LibraryStatus = .watching
@@ -21,6 +22,8 @@ struct LibraryView: View {
     @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
+    @State private var now = Date()
+    @State private var behindOnly = false
     @FocusState private var searchFocused: Bool
     private let statuses: [LibraryStatus] = [.watching, .planning, .completed, .dropped, .paused, .rewatching]
     private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
@@ -39,12 +42,16 @@ struct LibraryView: View {
     }
     private var filtered: [LibraryEntry] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let entries = store.visibleEntries.filter { entry in
+        let entries = selectedEntries.filter { entry in
             guard entry.status == selected, let anime = entry.media else { return false }
+            if behindOnly && airing(for: entry)?.state != .behind { return false }
             return text.isEmpty || [anime.displayTitle, anime.title?.romaji ?? "", anime.title?.english ?? ""].contains { $0.localizedCaseInsensitiveContains(text) }
         }
         return entries.sorted { a, b in
             switch sort {
+            case .behind:
+                let first = airing(for: a)?.behindCount ?? 0, second = airing(for: b)?.behindCount ?? 0
+                if first != second { return reversed ? first < second : first > second }
             case .airing:
                 let first = a.media?.nextAiringEpisode?.date, second = b.media?.nextAiringEpisode?.date
                 if (first == nil) != (second == nil) { return first != nil }
@@ -84,6 +91,7 @@ struct LibraryView: View {
                         }
                         comingUpSection(width: contentWidth)
                         statusTabs
+                        airingSummary
                         layoutControls.zIndex(1)
                         sortingBar.zIndex(1)
                         if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
@@ -96,7 +104,7 @@ struct LibraryView: View {
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 20) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
+                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth, airing: airing(for: entry))
                                     }
                                 }
                             }.accessibilityIdentifier("library-grid")
@@ -104,14 +112,14 @@ struct LibraryView: View {
                             LazyVStack(spacing: 12) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth))
+                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth), airing: airing(for: entry))
                                     }
                                 }
                             }.accessibilityIdentifier("library-list")
                         }
                         if filtered.isEmpty && !store.loadingLibrary && store.libraryError == nil {
-                            ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
-                                                   systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
+                            ContentUnavailableView(behindOnly ? "No episodes behind" : (query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime"),
+                                                   systemImage: behindOnly ? "checkmark.circle" : "books.vertical", description: Text(behindOnly ? "No currently airing titles with confirmed released counts are behind in this list." : (query.isEmpty ? "Add a title from Explore." : "Try another title or list status.")))
                         }
                         if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
@@ -132,6 +140,52 @@ struct LibraryView: View {
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .task(id: syncKey) { await loadDubs() }
             .task(id: dubs.revision) { applyDubs() }
+            .onChange(of: selected) { _, _ in behindOnly = false }
+            .onChange(of: store.airingProgressSource) { _, _ in behindOnly = false }
+            .task(id: "\(store.isSignedIn)-\(scenePhase)") {
+                guard scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    now = Date()
+                    await store.refreshLibraryIfNeeded(now: now)
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                }
+            }
+    }
+    private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { $0.status == selected } }
+    private func airing(for entry: LibraryEntry) -> LibraryAiringProgress? {
+        guard let anime = entry.media else { return nil }
+        return LibraryAiringProgress(anime: anime, watched: entry.progressValue, source: store.airingProgressSource,
+                                    dub: dubProgress[anime.id], nextDub: nextDub(for: anime.id), now: now)
+    }
+    @ViewBuilder private var airingSummary: some View {
+        let statuses = selectedEntries.compactMap { airing(for: $0) }
+        if !statuses.isEmpty || store.airingProgressSource == .dub {
+            let behind = statuses.filter { $0.state == .behind }.count
+            let caughtUp = statuses.filter { $0.state == .caughtUp }.count
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Airing now").font(.subheadline.bold())
+                    Spacer()
+                    Menu {
+                        Picker("Compare watched progress with", selection: $store.airingProgressSource) {
+                            ForEach(AiringProgressSource.allCases) { Text($0.label).tag($0) }
+                        }
+                    } label: { Label(store.airingProgressSource.label, systemImage: "antenna.radiowaves.left.and.right").font(.caption) }
+                        .accessibilityIdentifier("library-airing-source")
+                }
+                HStack(spacing: 14) {
+                    Button { behindOnly.toggle() } label: {
+                        Label("\(behind) behind", systemImage: "clock.badge.exclamationmark").font(.caption.bold())
+                            .foregroundStyle(.yellow).padding(.horizontal, 10).padding(.vertical, 8)
+                            .background(Color.yellow.opacity(behindOnly ? 0.2 : 0.07), in: Capsule())
+                    }.buttonStyle(.plain).accessibilityIdentifier("library-behind-filter")
+                        .accessibilityValue(behindOnly ? "Behind only" : "All titles")
+                    Label("\(caughtUp) caught up", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
+                }
+                if behindOnly { Text("Showing behind titles only. Tap the yellow count to show all titles.").font(.caption2).foregroundStyle(.secondary) }
+                if statuses.isEmpty { Text("No ongoing English-dub schedule is listed for this list.").font(.caption2).foregroundStyle(.secondary) }
+            }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        }
     }
     private var searchBar: some View {
         HStack(spacing: 10) {
@@ -210,7 +264,7 @@ struct LibraryView: View {
         }
     }
     private func nextDub(for id: Int) -> ReleaseEvent? {
-        dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) >= Date() }
+        dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) > now }
     }
     private func loadDubs(refresh: Bool = false) async {
         let key = syncKey
@@ -268,6 +322,11 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Tracking") {
+                    Picker("Airing catch-up comparison", selection: $store.airingProgressSource) {
+                        ForEach(AiringProgressSource.allCases) { Text($0.label).tag($0) }
+                    }.accessibilityIdentifier("settings-airing-progress-source")
+                    Text("Green means caught up; yellow means behind the released episodes. Only ongoing airings show this status. English dub uses reported dub releases, not the original broadcast count.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Toggle("Complete at the final episode", isOn: $store.automaticallyComplete).accessibilityIdentifier("settings-auto-complete")
                     Text("Marking the final known episode watched moves the title to Completed. Finishing a rewatch also increases the rewatch count. You can undo the last saved change.")
                         .font(.caption).foregroundStyle(.secondary)

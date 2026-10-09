@@ -1,5 +1,13 @@
 # Build verification
 
+## Version 0.3.1 / build 10
+
+Adds currently-airing library catch-up cards: green Caught up, yellow episodes behind, watched/aired episode numbers, the next airing time, a behind-only filter and Behind first sorting. Original broadcast and English dub comparisons are separately selectable and labeled. Unknown/stale original schedules and estimated dub counts cannot create a confirmed green/yellow status.
+
+VidHub searches the next unwatched AniList episode for tracked titles, ignoring stale local episode-one resumes while preserving the selected episode's resume position. Library cards provide a direct Watch button; details place Watch before longer metadata. Active-library refreshes preserve Undo only if confirmed tracking fields remain unchanged. This version also fixes inherited LiveChart control identifiers and Debug preference reset persistence discovered in the build 9 native results.
+
+Whitespace and shell syntax checks passed locally. New core and native regression tests are prepared. Swift/Xcode compilation, the core suite, native iPhone/iPad checks, archive inspection and screenshot review are pending the published build; the earlier temporary local Swift toolchain is no longer available. Prior results below do not validate this version.
+
 ## Version 0.3.0 / build 9
 
 Adds LiveChart web metadata switching with ID-matched AniList tracking, a persistent adult-content setting, an episode/rating/notes editor, next-episode actions, optional completion, and confirmed-save Undo. Native adult filtering and discovery caches are connected throughout the app.
@@ -9,7 +17,8 @@ Local validation on October 9, 2026 UTC:
 - Swift 6.2 core suite: 93 tests enumerated, 88 active tests passed, five optional/live checks skipped, zero failures. New tests cover bidirectional ID matching and ambiguous seasons, shared mapping downloads, every adult-query filter, separate discovery caches, tracking bounds/completion/rewatches, preservation and explicit clearing of tracking fields, confirmed deletion, and metadata refresh.
 - Direct Swift frontend type checking of AnimeCore and syntax parsing of all App/UI-test sources passed. Shell syntax and patch whitespace checks passed.
 - Live checks: LiveChart ID matching and news passed. AniList public requests returned HTTP 403 in this environment, also preventing the dub test's AniList metadata probe. This is not a claim that AniList is unavailable on devices; repeat those checks from the hosted build runner.
-- An updated IPA has not been generated. iPhone/iPad native type checking, simulator checks and visual inspection remain pending; older build results below do not validate this version. The prepared UI suite covers source switching with unchanged tracking, the native editor, persistent adult filtering, and rejected out-of-range edits. Hosted simulator checks prefer a supported iOS 18 runtime when available because the previous iOS 26 runner repeatedly stalled before app launch; Release builds still use the iOS 26 SDK.
+- [Published run 37880226775](https://github.com/goon-123/AnimeCompanion/actions/runs/37880226775), source commit `c9cfce4f92d85968d11471bd258d751efb28128f`: universal ARM64 Release compiled with Xcode 26.0.1/iOS 26 SDK. All 88 active core tests and all four live-provider checks passed on GitHub, including AniList and LiveChart matching. The inspected IPA has intact ZIP layers, version 0.3.0/build 9, iPhone/iPad families, minimum OS 17, all four iPad orientations, an executable ARM64 app, no signature and no Debug preview strings. IPA SHA-256: `e7b8efddc3b6d745c64537c633516379265d9d1982954f4883ad0f2f2b3d8063`.
+- Native checks ran on iOS/iPadOS 18.5. Immersive artwork/source-launch checks, adult-setting persistence and invalid-episode rejection passed on both families. The overall native workflow failed: the LiveChart edit-button test could not locate its identifier because the parent identifier overwrote child identifiers; its reset also did not persist the source choice and affected later playback tests. Some full iPhone discovery/filter checks also failed. Version 0.3.1 fixes the identified identifier/reset issues and reruns the assertions rather than treating that failed workflow as a pass.
 
 ## Earlier build verification
 

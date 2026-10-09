@@ -37,3 +37,12 @@ public struct TrackingEdit: Equatable, Sendable {
         return Self(progress: progress, status: status, repeatCount: repeats)
     }
 }
+
+extension LibraryEntry {
+    /// Metadata refreshes may change broadcast dates without changing the user's confirmed tracking.
+    public func hasSameTracking(as other: LibraryEntry) -> Bool {
+        id == other.id && mediaId == other.mediaId && progressValue == other.progressValue && status == other.status
+            && (score ?? 0) == (other.score ?? 0) && (notes ?? "") == (other.notes ?? "")
+            && (repeatCount ?? 0) == (other.repeatCount ?? 0)
+    }
+}

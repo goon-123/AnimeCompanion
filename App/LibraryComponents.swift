@@ -7,8 +7,10 @@ struct LibraryAnimeRow: View {
     let nextDub: ReleaseEvent?
     var dub: LibraryDubProgress? = nil
     var posterWidth: CGFloat = 76
+    var airing: LibraryAiringProgress? = nil
 
     var body: some View {
+      VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .top, spacing: 12) {
             NavigationLink(value: AnimeRoute(id: anime.id)) {
                 HStack(alignment: .top, spacing: 11) {
@@ -18,7 +20,7 @@ struct LibraryAnimeRow: View {
                         Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
                         LibraryDubLabel(anime: anime, progress: dub)
                         if let score = anime.averageScore { Label("AniList \(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
-                        if let next = anime.nextAiringEpisode {
+                        if airing == nil, let next = anime.nextAiringEpisode, next.date > Date() {
                             Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(Theme.highlight)
                         }
                         if let nextDub, let date = nextDub.date {
@@ -29,7 +31,10 @@ struct LibraryAnimeRow: View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             LibraryEntryActions(entry: entry, anime: anime)
-        }.padding(.vertical, 5)
+        }
+        if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
+      }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Color.white.opacity(0.06), lineWidth: 1) }
     }
 }
 
@@ -38,8 +43,10 @@ struct LibraryAnimeTile: View {
     let anime: Anime
     let dub: LibraryDubProgress?
     var posterWidth: CGFloat = 360
+    var airing: LibraryAiringProgress? = nil
 
     var body: some View {
+      VStack(alignment: .leading, spacing: 8) {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geometry in
@@ -53,7 +60,8 @@ struct LibraryAnimeTile: View {
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-            .overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
+        if let airing { LibraryAiringStatus(status: airing, animeID: anime.id, compact: true) }
+      }.overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
@@ -71,9 +79,15 @@ struct LibraryEntryActions: View {
     let entry: LibraryEntry
     let anime: Anime
     @State private var editing = false
+    @State private var watching = false
     @State private var error: String?
     var body: some View {
         VStack(spacing: 4) {
+            Button { watching = true } label: {
+                Image(systemName: "play.fill").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9))
+            }.disabled(anime.status == "NOT_YET_RELEASED")
+                .accessibilityLabel("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)) of \(anime.displayTitle) in VidHub")
+                .accessibilityIdentifier("library-watch-\(anime.id)")
             Button {
                 Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
             } label: { Image(systemName: "checkmark.badge.plus").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
@@ -95,6 +109,7 @@ struct LibraryEntryActions: View {
             .sheet(isPresented: $editing) {
                 TrackingEditorView(anime: anime, entry: store.entry(for: anime.id))
             }
+            .sheet(isPresented: $watching) { WatchAnimeView(anime: anime) }
             .alert("Couldn’t update your library", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
