@@ -51,6 +51,13 @@ struct LibraryAnimeTile: View {
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geometry in
                     AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
+                        .overlay(alignment: .topLeading) {
+                            if let airing, airing.state == .caughtUp || airing.state == .behind {
+                                Image(systemName: airing.state.symbol).font(.title3.bold()).foregroundStyle(airing.state.color)
+                                    .padding(7).background(Theme.background.opacity(0.9), in: Circle()).padding(6)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                 }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.caption.bold()).lineLimit(2, reservesSpace: true)
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
@@ -90,7 +97,7 @@ struct LibraryEntryActions: View {
                 .accessibilityIdentifier("library-watch-\(anime.id)")
             Button {
                 Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
-            } label: { Image(systemName: "checkmark.badge.plus").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
+            } label: { Text("+1").font(.headline).frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
                 .disabled(store.loadingLibrary || store.savedAt == nil || store.savingMedia.contains(anime.id) || (anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false))
                 .accessibilityLabel("Mark next episode of \(anime.displayTitle) watched").accessibilityIdentifier("library-next-\(anime.id)")
         Menu {

@@ -1,12 +1,14 @@
 # Build verification
 
-## Version 0.3.1 / build 10
+## Version 0.3.1 / build 11
 
 Adds currently-airing library catch-up cards: green Caught up, yellow episodes behind, watched/aired episode numbers, the next airing time, a behind-only filter and Behind first sorting. Original broadcast and English dub comparisons are separately selectable and labeled. Unknown/stale original schedules and estimated dub counts cannot create a confirmed green/yellow status.
 
 VidHub searches the next unwatched AniList episode for tracked titles, ignoring stale local episode-one resumes while preserving the selected episode's resume position. Library cards provide a direct Watch button; details place Watch before longer metadata. Active-library refreshes preserve Undo only if confirmed tracking fields remain unchanged. This version also fixes inherited LiveChart control identifiers and Debug preference reset persistence discovered in the build 9 native results.
 
-Whitespace and shell syntax checks passed locally. New core and native regression tests are prepared. Swift/Xcode compilation, the core suite, native iPhone/iPad checks, archive inspection and screenshot review are pending the published build; the earlier temporary local Swift toolchain is no longer available. Prior results below do not validate this version.
+The first candidate, [build 10 / run 37939078512](https://github.com/goon-123/AnimeCompanion/actions/runs/37939078512), compiled successfully. All 99 active core tests (104 enumerated, five skipped), all four live-provider checks and all seven focused native cases on each device family passed. Screenshot review found an unavailable SF Symbol rendering the library next-episode button blank. Build 11 replaces it with an explicit +1 label and adds a colored catch-up marker on grid posters. Its native grid check also reveals the full airing panel, and playback screenshots capture the automatically selected episode before manual override.
+
+Build 11 compilation, archive inspection, screenshots and native regression results remain pending. Whitespace and shell syntax checks passed locally. The earlier temporary local Swift toolchain is no longer available. Previous candidate results do not validate these final visual changes.
 
 ## Version 0.3.0 / build 9
 

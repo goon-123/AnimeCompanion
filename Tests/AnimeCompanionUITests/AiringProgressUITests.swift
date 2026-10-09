@@ -29,7 +29,8 @@ final class AiringProgressUITests: XCTestCase {
         XCTAssertFalse(app.buttons["library-entry-990102"].exists)
         let layout = app.segmentedControls["library-layout"]
         reveal(layout, app: app, upward: false); layout.buttons["Grid"].tap()
-        XCTAssertTrue(behind.waitForExistence(timeout: 10)); capture("Airing-Behind-Grid")
+        XCTAssertTrue(behind.waitForExistence(timeout: 10)); capture("Airing-Behind-Grid-Poster-Marker")
+        reveal(behind, app: app); capture("Airing-Behind-Grid")
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             XCTAssertTrue(behind.exists); capture("Airing-Behind-iPad-Landscape")
@@ -50,6 +51,7 @@ final class AiringProgressUITests: XCTestCase {
         let source = app.buttons["playback-source-0"]
         XCTAssertTrue(source.waitForExistence(timeout: 15)); XCTAssertTrue(source.label.contains("anilist:1:9.json"))
         XCTAssertTrue(app.staticTexts["playback-anilist-progress"].label.contains("8 episodes watched"))
+        capture("AniList-Default-VidHub-Episode")
         source.tap(); XCTAssertTrue(app.staticTexts["Preview launch · Episode 9"].waitForExistence(timeout: 10))
         field.tap(); field.typeText(XCUIKeyboardKey.delete.rawValue + "10")
         app.buttons["playback-episode-go"].tap()
