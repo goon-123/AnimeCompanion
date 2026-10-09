@@ -14,19 +14,28 @@ struct AnimeDetailView: View {
     @State private var showPlayback = false
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
+    @State private var liveChartMediaID: Int?
 
     var body: some View {
+        Group {
+          if store.metadataSource == .liveChart, let anime, store.isVisible(anime) {
+            LiveChartAnimeView(anime: anime) { liveChartMediaID = $0.id }
+          } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
                 if let error { NoticeView(message: error) { Task { await load() } }.padding(.horizontal) }
-                if let anime {
+                if let anime, !store.isVisible(anime) {
+                    ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash", description: Text("Enable adult anime in Settings to view this title."))
+                    Button("Open content settings") { showSettings = true }.buttonStyle(.bordered)
+                }
+                if let anime, store.isVisible(anime) {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
                     VStack(alignment: .leading, spacing: 20) {
                         if let next = anime.nextAiringEpisode { DetailCard(title: "Next original broadcast") { BroadcastCountdown(episode: next) } }
+                        progress(anime)
                         synopsis(anime)
                         metadata(anime)
-                        progress(anime)
                         Button { showPlayback = true } label: {
                             Label("Watch in VidHub", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity).padding(.vertical, 5)
                         }.buttonStyle(.bordered).controlSize(.large).disabled(anime.status == "NOT_YET_RELEASED")
@@ -45,12 +54,15 @@ struct AnimeDetailView: View {
                 }
             }.readableContent(width: 940)
         }.background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
+          }
+        }.navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top, spacing: 0) { MetadataSourcePicker().padding(12).background(Theme.background) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
                 }
             }
-            .task(id: mediaID) { await load() }.refreshable { await load(refresh: true) }
+            .task(id: "\(mediaID)-\(store.includeAdult)-\(store.metadataSource.rawValue)") { await load() }.refreshable { await load(refresh: true) }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showPlayback) { if let anime { WatchAnimeView(anime: anime) } }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
@@ -93,7 +105,7 @@ struct AnimeDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
-                        if let media = edge.node, media.isAdult != true { RelatedAnimeCard(anime: media, caption: edge.relationType) }
+                        if let media = edge.node, store.includeAdult || media.isAdult != true { RelatedAnimeCard(anime: media, caption: edge.relationType) }
                     }
                 }
             }
@@ -130,7 +142,7 @@ struct AnimeDetailView: View {
         }
     }
     @ViewBuilder private func recommendations(_ anime: Anime) -> some View {
-        let entries = (anime.recommendations?.nodes ?? []).filter { $0.mediaRecommendation?.isAdult != true && $0.mediaRecommendation != nil }
+        let entries = (anime.recommendations?.nodes ?? []).filter { (store.includeAdult || $0.mediaRecommendation?.isAdult != true) && $0.mediaRecommendation != nil }
         if !entries.isEmpty {
             sectionTitle("You may also like")
             ScrollView(.horizontal, showsIndicators: false) {
@@ -188,13 +200,15 @@ struct AnimeDetailView: View {
         dubs.snapshot?.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } ?? []
     }
     private func load(refresh: Bool = false) async {
-        let attempt = UUID(); requestID = attempt
-        if anime?.id != mediaID { anime = nil }
+        let attempt = UUID(); requestID = attempt; let requestedAdult = store.includeAdult
+        let targetID = liveChartMediaID ?? mediaID
+        if anime?.id != targetID { anime = nil }
+        if let anime, !store.isVisible(anime) { error = nil; return }
         loading = true; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
-            let media = try await store.aniList.details(id: mediaID)
-            try Task.checkCancellation(); guard requestID == attempt else { return }
+            let media = try await store.aniList.details(id: targetID, includeAdult: requestedAdult, refresh: refresh)
+            try Task.checkCancellation(); guard requestID == attempt, store.includeAdult == requestedAdult else { return }
             anime = media
             await dubs.load(using: store.dubs, refresh: refresh)
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }

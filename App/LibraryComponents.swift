@@ -73,21 +73,27 @@ struct LibraryEntryActions: View {
     @State private var editing = false
     @State private var error: String?
     var body: some View {
+        VStack(spacing: 4) {
+            Button {
+                Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
+            } label: { Image(systemName: "checkmark.badge.plus").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
+                .disabled(store.loadingLibrary || store.savedAt == nil || store.savingMedia.contains(anime.id) || (anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false))
+                .accessibilityLabel("Mark next episode of \(anime.displayTitle) watched").accessibilityIdentifier("library-next-\(anime.id)")
         Menu {
-            Button("Edit progress and status", systemImage: "pencil") { editing = true }
-            Button("Mark next episode watched", systemImage: "plus") { update(progress: entry.progressValue + 1, status: entry.status ?? .watching) }
+            Button("Edit tracking, rating and notes", systemImage: "pencil") { editing = true }
+            Button("Mark next episode watched", systemImage: "plus") {
+                Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
+            }
                 .disabled(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
             Menu("Move to list") {
                 ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
             }
         } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
-            .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityLabel("Manage \(anime.displayTitle)")
+            .accessibilityLabel("Manage \(anime.displayTitle)")
+        }
+            .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
             .sheet(isPresented: $editing) {
-                NavigationStack {
-                    VStack(alignment: .leading, spacing: 20) { Text(anime.displayTitle).font(.headline); ProgressControl(anime: anime); Spacer() }.padding()
-                        .navigationTitle("Your progress").navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
-                }.presentationDetents([.medium, .large])
+                TrackingEditorView(anime: anime, entry: store.entry(for: anime.id))
             }
             .alert("Couldn’t update your library", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }

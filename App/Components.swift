@@ -87,40 +87,6 @@ struct NoticeView: View {
     }
 }
 
-struct ProgressControl: View {
-    @EnvironmentObject private var store: AppStore
-    let anime: Anime
-    @State private var error: String?
-    var body: some View {
-        let entry = store.entry(for: anime.id)
-        let progress = entry?.progressValue ?? 0
-        let busy = store.savingMedia.contains(anime.id) || store.loadingLibrary
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Button { update(progress - 1, entry?.status ?? .watching) } label: { Image(systemName: "minus").frame(minWidth: 44, minHeight: 44) }
-                    .disabled(busy || progress == 0).accessibilityLabel("Decrease watched episodes")
-                Spacer()
-                if busy { ProgressView().accessibilityLabel("Saving to AniList") }
-                else { Text("\(progress) / \(anime.episodes.map(String.init) ?? "?")").font(.headline.monospacedDigit()) }
-                Spacer()
-                Button { update(progress + 1, entry?.status ?? .watching) } label: { Image(systemName: "plus").frame(minWidth: 44, minHeight: 44) }
-                    .disabled(busy || (anime.episodes.map { $0 > 0 && progress >= $0 } ?? false)).accessibilityLabel("Increase watched episodes")
-            }.buttonStyle(.bordered)
-            Menu {
-                ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress, status) } }
-            } label: { Label(entry?.status?.label ?? "Add to AniList", systemImage: "checklist").frame(minHeight: 44) }.disabled(busy)
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
-        }
-    }
-    private func update(_ progress: Int, _ status: LibraryStatus) {
-        error = nil
-        Task {
-            do { try await store.save(anime: anime, progress: progress, status: status) }
-            catch { self.error = error.localizedDescription }
-        }
-    }
-}
-
 struct ReleaseRow: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let event: ReleaseEvent

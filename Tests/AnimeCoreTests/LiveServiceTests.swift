@@ -3,6 +3,14 @@ import XCTest
 
 /// Opt-in checks against the same public clients used by the app. Ordinary unit tests stay offline.
 final class LiveServiceTests: XCTestCase {
+    func testLiveChartIDMatchingSource() async throws {
+        try requireLiveServices()
+        let client = LiveChartClient()
+        let liveChartID = try await client.liveChartID(aniListID: 1)
+        XCTAssertEqual(liveChartID, 3418)
+        let aniListID = try await client.aniListID(liveChartID: 3418)
+        XCTAssertEqual(aniListID, 1)
+    }
     private func requireLiveServices() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["ANIMECOMPANION_LIVE_SERVICES"] == "1",
                           "Set ANIMECOMPANION_LIVE_SERVICES=1 to check public providers.")

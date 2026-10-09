@@ -106,7 +106,7 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(search["sort"] as? String, "SCORE_DESC")
         XCTAssertNil(search["year"])
         XCTAssertNil(search["season"])
-        XCTAssertTrue(AniListQueries.browse.contains("isAdult: false"))
+        XCTAssertTrue(AniListQueries.browse.contains("isAdult: $isAdult"))
     }
 }
 

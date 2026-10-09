@@ -210,9 +210,10 @@ public struct LibraryEntry: Codable, Identifiable, Hashable, Sendable {
     public let score: Double?
     public let updatedAt: Int?
     public let repeatCount: Int?
+    public let notes: String?
     public let media: Anime?
     private enum CodingKeys: String, CodingKey {
-        case id, mediaId, status, progress, score, updatedAt, media
+        case id, mediaId, status, progress, score, updatedAt, media, notes
         case repeatCount = "repeat"
     }
     public var progressValue: Int { progress ?? 0 }

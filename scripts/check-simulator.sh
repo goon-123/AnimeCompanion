@@ -43,14 +43,18 @@ simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
 family=sys.argv[1]
-candidates=[d for runtime,items in devices.items() if "iOS-26" in runtime
+candidates=[(runtime,d) for runtime,items in devices.items() if "iOS-18" in runtime or "iOS-26" in runtime
         for d in items if d.get("isAvailable") and
         (d["name"].startswith("iPhone") if family == "iphone" else
          d["name"].startswith("iPad Pro") and ("11-inch" in d["name"] or "11 inch" in d["name"]))]
 if not candidates:
     raise SystemExit("No available " + family + " simulator (iPad must be an 11-inch Pro)")
-print("Testing " + candidates[0]["name"], file=sys.stderr)
-print(candidates[0]["udid"])
+# The hosted iOS 26 runtime has repeatedly stalled before app launch. Exercise
+# the supported iOS 18 runtime when present; builds still use the iOS 26 SDK.
+candidates.sort(key=lambda item: (0 if "iOS-18" in item[0] else 1, item[0], item[1]["name"]))
+runtime,device=candidates[0]
+print("Testing " + device["name"] + " with " + runtime, file=sys.stderr)
+print(device["udid"])
 ' "$device_family")"
 
 # Bring the iOS 26 device to a ready state before XCTest starts its runner.
@@ -68,15 +72,13 @@ except subprocess.TimeoutExpired:
     raise SystemExit('Simulator startup timed out; rerun on a fresh runner.')
 PY
 
-# Start the runtime-only background watcher after readiness. Suspending apsd
-# while launchd is still bootstrapping can prevent a fresh device from booting.
-# It never targets the app or XCTest, and cleanup resumes every paused service.
-python3 scripts/simulator-background.py &
-background_watcher_pid="$!"
+# Leave simulator services running normally. Suspending system services can
+# interfere with browser navigation, account UI, and XCTest app launch.
 
 # Permit one retry for a cold hosted simulator's first-launch timeout.
 # Both attempts stay in xcresult; repeated failures still fail the job.
-test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests)
+test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
+  -only-testing:AnimeCompanionUITests/MetadataTrackingUITests)
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
     -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests

@@ -39,7 +39,7 @@ struct LibraryView: View {
     }
     private var filtered: [LibraryEntry] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let entries = store.entries.filter { entry in
+        let entries = store.visibleEntries.filter { entry in
             guard entry.status == selected, let anime = entry.media else { return false }
             return text.isEmpty || [anime.displayTitle, anime.title?.romaji ?? "", anime.title?.english ?? ""].contains { $0.localizedCaseInsensitiveContains(text) }
         }
@@ -76,6 +76,12 @@ struct LibraryView: View {
                     // Keep controls stable while the results below remain lazy.
                     VStack(alignment: .leading, spacing: 18) {
                         searchBar
+                        if let anime = store.lastTrackedAnime, store.isVisible(anime), store.canUndo(anime.id) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(anime.displayTitle).font(.caption.bold())
+                                TrackingFeedback(anime: anime)
+                            }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        }
                         comingUpSection(width: contentWidth)
                         statusTabs
                         layoutControls.zIndex(1)
@@ -231,7 +237,7 @@ struct SettingsView: View {
                 Section("AniList connection") {
                     if store.isSignedIn {
                         Text(store.viewer.map { "Signed in as \($0.name)" } ?? "Connected to AniList")
-                        Button("Refresh library") { Task { await store.reloadLibrary() } }.disabled(store.loadingLibrary)
+                        Button("Refresh library") { Task { await store.reloadLibrary() } }.disabled(store.loadingLibrary || !store.savingMedia.isEmpty)
                         Button("Disconnect", role: .destructive) { confirmation = true }.disabled(!store.savingMedia.isEmpty)
                     } else {
                         TextField("AniList app ID", text: $clientID).keyboardType(.numberPad)
@@ -251,8 +257,26 @@ struct SettingsView: View {
                     NavigationLink { PlaybackSettingsView() } label: { Label("Add-ons & playback", systemImage: "play.rectangle") }
                         .accessibilityIdentifier("playback-settings")
                 }
+                Section("Browsing and content") {
+                    Picker("Default metadata source", selection: $store.metadataSource) {
+                        ForEach(MetadataSource.allCases) { Text($0.label).tag($0) }
+                    }.accessibilityIdentifier("settings-metadata-source")
+                    Text("Switch between AniList details and LiveChart’s in-app web listings. Your progress always saves to AniList.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Show adult anime (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
+                    Text("Applies to this app’s catalog, search, details, library, and schedules. Hidden entries stay in AniList. LiveChart web pages use LiveChart’s own website preferences.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Tracking") {
+                    Toggle("Complete at the final episode", isOn: $store.automaticallyComplete).accessibilityIdentifier("settings-auto-complete")
+                    Text("Marking the final known episode watched moves the title to Completed. Finishing a rewatch also increases the rewatch count. You can undo the last saved change.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)
+                    Link("Alternate metadata · LiveChart.me", destination: URL(string: "https://www.livechart.me")!)
+                    Link("ID matching · AnimeAPI / Anime Offline Database", destination: URL(string: "https://github.com/nattadasu/animeApi")!)
+                    Link("Mapping database license · ODbL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
                     Link("Dub dates · AniSchedule by RockinChaos", destination: DubProvider.current.repositoryURL)
                     Link("Dub source fallback · AniSchedule by Bas1874", destination: DubProvider.legacy.repositoryURL)
                     Link("Dub data © MyDubList · CC BY 4.0", destination: URL(string: "https://mydublist.com")!)
@@ -264,7 +288,7 @@ struct SettingsView: View {
                     Link("News · Anime Corner", destination: URL(string: "https://animecorner.me")!)
                 }
                 Section("About") {
-                    Text("Anime Companion · VidHub playback")
+                    Text("Anime Companion · LiveChart & AniList tracking")
                     Text("Broadcast times and dub dates may change. Times use your device timezone. Original Japanese broadcasts do not guarantee local subtitle availability.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
