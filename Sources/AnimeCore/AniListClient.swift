@@ -39,6 +39,8 @@ private struct PageResponse: Decodable { let Page: MediaPage }
 private struct DetailResponse: Decodable { let Media: Anime? }
 private struct ViewerResponse: Decodable { let Viewer: Viewer }
 private struct MutationResponse: Decodable { let SaveMediaListEntry: LibraryEntry }
+private struct DeleteResponse: Decodable { let DeleteMediaListEntry: DeletedEntry }
+private struct DeletedEntry: Decodable { let deleted: Bool? }
 private struct CollectionResponse: Decodable { let MediaListCollection: ListCollection? }
 private struct ListCollection: Decodable { let lists: [ListGroup]? }
 private struct ListGroup: Decodable { let entries: [LibraryEntry]? }
@@ -56,39 +58,39 @@ public enum AniListQueries {
     }
     """
     public static let explore = """
-    query Explore($season: MediaSeason!, $year: Int!, $nextSeason: MediaSeason!, $nextYear: Int!) {
+    query Explore($season: MediaSeason!, $year: Int!, $nextSeason: MediaSeason!, $nextYear: Int!, $isAdult: Boolean) {
       seasonal: Page(page: 1, perPage: 16) {
-        media(type: ANIME, season: $season, seasonYear: $year, isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
+        media(type: ANIME, season: $season, seasonYear: $year, isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
         pageInfo { hasNextPage }
       }
       trending: Page(page: 1, perPage: 12) {
-        media(type: ANIME, isAdult: false, sort: TRENDING_DESC) { ...AnimeCard description(asHtml: false) }
+        media(type: ANIME, isAdult: $isAdult, sort: TRENDING_DESC) { ...AnimeCard description(asHtml: false) }
       }
       upcoming: Page(page: 1, perPage: 12) {
         media(type: ANIME, season: $nextSeason, seasonYear: $nextYear, status: NOT_YET_RELEASED,
-              isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
+              isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
       }
     }
     """ + card
     public static let seasonal = """
-    query Season($season: MediaSeason!, $year: Int!, $page: Int!) {
+    query Season($season: MediaSeason!, $year: Int!, $page: Int!, $isAdult: Boolean) {
       Page(page: $page, perPage: 24) {
         pageInfo { hasNextPage }
-        media(type: ANIME, season: $season, seasonYear: $year, isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard }
+        media(type: ANIME, season: $season, seasonYear: $year, isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard }
       }
     }
     """ + card
     public static let search = """
-    query Search($search: String!, $page: Int!) {
+    query Search($search: String!, $page: Int!, $isAdult: Boolean) {
       Page(page: $page, perPage: 24) {
         pageInfo { hasNextPage }
-        media(type: ANIME, search: $search, isAdult: false, sort: SEARCH_MATCH) { ...AnimeCard }
+        media(type: ANIME, search: $search, isAdult: $isAdult, sort: SEARCH_MATCH) { ...AnimeCard }
       }
     }
     """ + card
     public static let detail = """
-    query Details($id: Int!) {
-      Media(id: $id, type: ANIME, isAdult: false) {
+    query Details($id: Int!, $isAdult: Boolean) {
+      Media(id: $id, type: ANIME, isAdult: $isAdult) {
         ...AnimeCard description(asHtml: false)
         startDate { year month day } endDate { year month day }
         popularity favourites
@@ -110,11 +112,11 @@ public enum AniListQueries {
     public static let browse = """
     query Browse($page: Int!, $search: String, $genre: String,
                  $year: Int, $season: MediaSeason, $format: MediaFormat, $status: MediaStatus,
-                 $sort: [MediaSort], $minimumScore: Int) {
+                 $sort: [MediaSort], $minimumScore: Int, $isAdult: Boolean) {
       Page(page: $page, perPage: 24) {
         pageInfo { hasNextPage }
         media(type: ANIME, search: $search, genre: $genre, seasonYear: $year, season: $season,
-              format: $format, status: $status, sort: $sort, averageScore_greater: $minimumScore, isAdult: false) {
+              format: $format, status: $status, sort: $sort, averageScore_greater: $minimumScore, isAdult: $isAdult) {
           ...AnimeCard description(asHtml: false)
         }
       }
@@ -128,17 +130,18 @@ public enum AniListQueries {
     public static let library = """
     query Library($userId: Int!) {
       MediaListCollection(userId: $userId, type: ANIME) {
-        lists { entries { id mediaId status progress score repeat updatedAt media { ...AnimeCard } } }
+        lists { entries { id mediaId status progress score(format: POINT_100) repeat notes updatedAt media { ...AnimeCard } } }
       }
     }
     """ + card
     public static let save = """
-    mutation SaveEntry($id: Int, $mediaId: Int!, $progress: Int!, $status: MediaListStatus!) {
-      SaveMediaListEntry(id: $id, mediaId: $mediaId, progress: $progress, status: $status) {
-        id mediaId status progress score repeat updatedAt media { ...AnimeCard }
+    mutation SaveEntry($id: Int, $mediaId: Int!, $progress: Int!, $status: MediaListStatus!, $scoreRaw: Int, $notes: String, $repeat: Int) {
+      SaveMediaListEntry(id: $id, mediaId: $mediaId, progress: $progress, status: $status, scoreRaw: $scoreRaw, notes: $notes, repeat: $repeat) {
+        id mediaId status progress score(format: POINT_100) repeat notes updatedAt media { ...AnimeCard }
       }
     }
     """ + card
+    public static let delete = "mutation DeleteEntry($id: Int!) { DeleteMediaListEntry(id: $id) { deleted } }"
     public static let airings = """
     query Airings($start: Int!, $end: Int!, $page: Int!) {
       Page(page: $page, perPage: 50) {
@@ -205,26 +208,35 @@ public actor AniListClient {
         guard let result = response.data else { throw ServiceError.invalidResponse }
         return result
     }
-    public func explore(_ selection: SeasonSelection, refresh: Bool = false) async throws -> ExploreResponse {
+    public func explore(_ selection: SeasonSelection, refresh: Bool = false, includeAdult: Bool = false) async throws -> ExploreResponse {
         let next = selection.advanced(by: 1)
-        return try await request(AniListQueries.explore, variables: ["season": .string(selection.season.rawValue),
-            "year": .int(selection.year), "nextSeason": .string(next.season.rawValue), "nextYear": .int(next.year)], bypassCache: refresh)
+        var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue),
+            "year": .int(selection.year), "nextSeason": .string(next.season.rawValue), "nextYear": .int(next.year)]
+        if !includeAdult { vars["isAdult"] = .bool(false) }
+        return try await request(AniListQueries.explore, variables: vars, bypassCache: refresh)
     }
-    public func seasonal(_ selection: SeasonSelection, page: Int) async throws -> MediaPage {
-        let result: PageResponse = try await request(AniListQueries.seasonal, variables: [
-            "season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)])
+    public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
+        var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]
+        if !includeAdult { vars["isAdult"] = .bool(false) }
+        let result: PageResponse = try await request(AniListQueries.seasonal, variables: vars)
         return result.Page
     }
-    public func search(_ text: String, page: Int = 1) async throws -> MediaPage {
-        let result: PageResponse = try await request(AniListQueries.search, variables: ["search": .string(text), "page": .int(page)])
+    public func search(_ text: String, page: Int = 1, includeAdult: Bool = false) async throws -> MediaPage {
+        var vars: [String: QueryValue] = ["search": .string(text), "page": .int(page)]
+        if !includeAdult { vars["isAdult"] = .bool(false) }
+        let result: PageResponse = try await request(AniListQueries.search, variables: vars)
         return result.Page
     }
-    public func browse(_ filters: DiscoveryFilters, page: Int = 1, refresh: Bool = false) async throws -> MediaPage {
-        let result: PageResponse = try await request(AniListQueries.browse, variables: filters.variables(page: page), bypassCache: refresh)
+    public func browse(_ filters: DiscoveryFilters, page: Int = 1, refresh: Bool = false, includeAdult: Bool = false) async throws -> MediaPage {
+        var vars = filters.variables(page: page)
+        if !includeAdult { vars["isAdult"] = .bool(false) }
+        let result: PageResponse = try await request(AniListQueries.browse, variables: vars, bypassCache: refresh)
         return result.Page
     }
-    public func details(id: Int) async throws -> Anime {
-        let result: DetailResponse = try await request(AniListQueries.detail, variables: ["id": .int(id)])
+    public func details(id: Int, includeAdult: Bool = false, refresh: Bool = false) async throws -> Anime {
+        var vars: [String: QueryValue] = ["id": .int(id)]
+        if !includeAdult { vars["isAdult"] = .bool(false) }
+        let result: DetailResponse = try await request(AniListQueries.detail, variables: vars, bypassCache: refresh)
         guard let media = result.Media else { throw ServiceError.message("Anime not found.") }
         return media
     }
@@ -249,13 +261,21 @@ public actor AniListClient {
         var seen = Set<Int>()
         return entries.filter { seen.insert($0.mediaId).inserted }
     }
-    public func save(mediaId: Int, entryId: Int?, progress: Int, status: LibraryStatus, token: String) async throws -> LibraryEntry {
+    public func save(mediaId: Int, entryId: Int?, progress: Int, status: LibraryStatus, token: String,
+                     scoreRaw: Int? = nil, notes: String? = nil, repeatCount: Int? = nil) async throws -> LibraryEntry {
         var vars: [String: QueryValue] = ["mediaId": .int(mediaId), "progress": .int(max(0, progress)), "status": .string(status.rawValue)]
         if let entryId { vars["id"] = .int(entryId) }
+        if let scoreRaw { vars["scoreRaw"] = .int(scoreRaw) }
+        if let notes { vars["notes"] = .string(notes) }
+        if let repeatCount { vars["repeat"] = .int(repeatCount) }
         let result: MutationResponse = try await request(AniListQueries.save, variables: vars, token: token)
         return result.SaveMediaListEntry
     }
-    public func airings(in window: DateInterval, refresh: Bool = false) async throws -> [ReleaseEvent] {
+    public func delete(entryId: Int, token: String) async throws {
+        let result: DeleteResponse = try await request(AniListQueries.delete, variables: ["id": .int(entryId)], token: token)
+        guard result.DeleteMediaListEntry.deleted == true else { throw ServiceError.message("AniList did not confirm removal. Refresh your library and try again.") }
+    }
+    public func airings(in window: DateInterval, refresh: Bool = false, includeAdult: Bool = false) async throws -> [ReleaseEvent] {
         var events: [ReleaseEvent] = []; var page = 1
         while true {
             try Task.checkCancellation()
@@ -263,7 +283,7 @@ public actor AniListClient {
                 "start": .int(Int(window.start.timeIntervalSince1970) - 1), "end": .int(Int(window.end.timeIntervalSince1970)),
                 "page": .int(page)], bypassCache: refresh)
             events += (result.Page.airingSchedules ?? []).compactMap { airing in
-                guard let media = airing.media, media.isAdult != true else { return nil }
+                guard let media = airing.media, includeAdult || media.isAdult != true else { return nil }
                 return ReleaseEvent(anime: media, episode: airing.episode, kind: .sub,
                     date: Date(timeIntervalSince1970: Double(airing.airingAt)), certainty: .broadcast)
             }

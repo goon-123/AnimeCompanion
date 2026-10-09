@@ -1,5 +1,18 @@
 # Build verification
 
+## Version 0.3.0 / build 9
+
+Adds LiveChart web metadata switching with ID-matched AniList tracking, a persistent adult-content setting, an episode/rating/notes editor, next-episode actions, optional completion, and confirmed-save Undo. Native adult filtering and discovery caches are connected throughout the app.
+
+Local validation on October 9, 2026 UTC:
+
+- Swift 6.2 core suite: 93 tests enumerated, 88 active tests passed, five optional/live checks skipped, zero failures. New tests cover bidirectional ID matching and ambiguous seasons, shared mapping downloads, every adult-query filter, separate discovery caches, tracking bounds/completion/rewatches, preservation and explicit clearing of tracking fields, confirmed deletion, and metadata refresh.
+- Direct Swift frontend type checking of AnimeCore and syntax parsing of all App/UI-test sources passed. Shell syntax and patch whitespace checks passed.
+- Live checks: LiveChart ID matching and news passed. AniList public requests returned HTTP 403 in this environment, also preventing the dub test's AniList metadata probe. This is not a claim that AniList is unavailable on devices; repeat those checks from the hosted build runner.
+- An updated IPA has not been generated. iPhone/iPad native type checking, simulator checks and visual inspection remain pending; older build results below do not validate this version. The prepared UI suite covers source switching with unchanged tracking, the native editor, persistent adult filtering, and rejected out-of-range edits. Hosted simulator checks prefer a supported iOS 18 runtime when available because the previous iOS 26 runner repeatedly stalled before app launch; Release builds still use the iOS 26 SDK.
+
+## Earlier build verification
+
 Verified app implementation: `470380ee4fbe00450faaa3d0794c19d8fd688914`.
 
 [Successful universal build and native iPhone/iPad workflow](https://github.com/goon-123/AnimeCompanion/actions/runs/37328305383), October 5, 2026 (UTC).

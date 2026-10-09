@@ -7,6 +7,10 @@ Sources inspected during implementation on October 4–8, 2026 UTC:
 - AniList media-list guidance: https://github.com/AniList/docs/blob/master/docs/guide/graphql/queries/media-list.md
 - AniList page fields: https://github.com/AniList/docs/blob/master/docs/reference/object/page.md
 - AniList mutations: https://github.com/AniList/docs/blob/master/docs/reference/mutation.md
+- LiveChart official FAQ and public-API limitation: https://www.livechart.me/pages/faq
+- LiveChart public season and anime pages: https://www.livechart.me/fall-2026/tv and https://www.livechart.me/anime/3418
+- AnimeAPI ID mapping schema and licensing: https://github.com/nattadasu/animeApi/blob/v3/README.md
+- Public ID mapping TSV (on-demand, daily cache): https://raw.githubusercontent.com/nattadasu/animeApi/v3/database/animeapi.tsv
 - AniList rate limiting: https://github.com/AniList/docs/blob/master/docs/guide/rate-limiting.md
 - MyDubList schema and attribution: https://github.com/Joelis57/MyDubList/blob/main/README.md
 - MyDubList English index: https://raw.githubusercontent.com/Joelis57/MyDubList/refs/heads/main/dubs/confidence/normal/dubbed_english.json
@@ -20,6 +24,10 @@ Sources inspected during implementation on October 4–8, 2026 UTC:
 - XcodeGen package specification: https://github.com/yonaskolb/XcodeGen/blob/master/Docs/ProjectSpec.md
 
 ## Important schema findings
+
+LiveChart does not offer a public metadata API. Automated fetching returned a Cloudflare challenge during implementation; the app therefore uses an ordinary in-app WKWebView for LiveChart's own pages, with reload and system-browser fallback. It does not relabel AniList fields as LiveChart data or call undocumented private endpoints. The October 8 AnimeAPI mapping file confirms AniList 1 ↔ LiveChart 3418. The mapping parser rejects malformed rows and non-unique mappings in either direction. Matching failures do not authorize progress updates for a guessed title. LiveChart webpage preferences are independent of this app's native adult-content setting.
+
+AniList's optional `isAdult` filter must be false when adult content is hidden and omitted when adult content is enabled; setting it true would return only adult entries. List scores are requested in POINT_100 and edits use scoreRaw, while quick progress updates omit untouched scores, notes and rewatch counts. DeleteMediaListEntry must confirm `deleted: true` before local removal. Details refresh now bypasses the public metadata cache.
 
 AniSchedule uses nested `media.media.id` AniList identifiers. Upcoming node dates can span multiple weeks; dates are not extrapolated. Some records use an indefinite delay with a placeholder year of 2032. Such dates are suppressed and shown as delayed. `verified: false` remains visibly unverified. Recorded history overrides an estimate for the same media and episode, and future records are not presented as already released.
 

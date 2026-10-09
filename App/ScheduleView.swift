@@ -29,7 +29,7 @@ struct ScheduleView: View {
     private var visible: [ReleaseEvent] {
         let ids = Set(store.watching.map(\.mediaId))
         return (subEvents + dubEvents).filter {
-            guard filter == .all || (filter == .sub && $0.kind == .sub) || (filter == .dub && $0.kind == .dub) else { return false }
+            guard store.isVisible($0.anime), filter == .all || (filter == .sub && $0.kind == .sub) || (filter == .dub && $0.kind == .dub) else { return false }
             return !libraryOnly || !store.isSignedIn || ids.contains($0.anime.id)
         }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
     }
@@ -73,7 +73,7 @@ struct ScheduleView: View {
             }
             Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
         }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
-            .navigationTitle("Schedule").animeNavigation().task(id: window.start) { await load() }
+            .navigationTitle("Schedule").animeNavigation().task(id: "\(window.start)-\(store.includeAdult)") { await load() }
             .task(id: dubPresentationKey) { await presentDubs() }
             .refreshable { await load(refresh: true) }
             .sheet(isPresented: $pickingDate) {
@@ -96,7 +96,7 @@ struct ScheduleView: View {
     }
     private func loadSub(_ window: DateInterval, attempt: UUID, refresh: Bool) async {
         do {
-            let events = try await store.aniList.airings(in: window, refresh: refresh)
+            let events = try await store.aniList.airings(in: window, refresh: refresh, includeAdult: store.includeAdult)
             try Task.checkCancellation(); if requestID == attempt { subEvents = events }
         } catch is CancellationError {} catch { if requestID == attempt { subError = error.localizedDescription } }
     }
@@ -122,7 +122,7 @@ struct ScheduleView: View {
                     let hydrated = known.merging(Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })) { _, new in new }
                     if dubRequestID == attempt, revision == dubs.revision, selected == window {
                         dubEvents = snapshot.events(knownMedia: hydrated).filter { event in
-                            guard event.anime.isAdult != true else { return false }
+                            guard store.isVisible(event.anime) else { return false }
                             guard let date = event.date else { return true }
                             return date >= selected.start && date < selected.end
                         }

@@ -1,6 +1,8 @@
 import SwiftUI
 import AnimeCore
 
+private struct DiscoveryRequestKey: Hashable { let filters: DiscoveryFilters; let includeAdult: Bool }
+
 struct DiscoveryBrowseView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
@@ -22,6 +24,7 @@ struct DiscoveryBrowseView: View {
     @State private var error: String?
     @State private var requestID = UUID()
     @State private var loadedFilters: DiscoveryFilters?
+    @State private var loadedAdult: Bool?
     @FocusState private var searching: Bool
 
     init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil) {
@@ -36,7 +39,7 @@ struct DiscoveryBrowseView: View {
     private var queryFilters: DiscoveryFilters {
         var query = filters; query.minimumScore = dubFilters.selection.minimumScore; return query
     }
-    private var visibleResults: [Anime] { results.filter { dubFilters.includes($0, dubs: dubs, library: store) } }
+    private var visibleResults: [Anime] { results.filter { store.isVisible($0) && dubFilters.includes($0, dubs: dubs, library: store) } }
 
     var body: some View {
         GeometryReader { geometry in
@@ -125,7 +128,7 @@ struct DiscoveryBrowseView: View {
             }
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
-            .task(id: queryFilters) { await load(); await fillFilteredPages() }
+            .task(id: DiscoveryRequestKey(filters: queryFilters, includeAdult: store.includeAdult)) { await load(); await fillFilteredPages() }
             .task(id: dubFilters.selection) { await dubs.load(using: store.dubs); await fillFilteredPages() }
             .refreshable {
                 async let metadata: Void = load(refresh: true)
@@ -175,28 +178,30 @@ struct DiscoveryBrowseView: View {
     private func load(refresh: Bool = false) async {
         // SwiftUI restarts this task after popping details. Keep the complete loaded
         // page, including appended titles, instead of collapsing its scroll content.
-        guard !Task.isCancelled, refresh || loadedFilters != queryFilters else { return }
+        let requestedAdult = store.includeAdult
+        guard !Task.isCancelled, refresh || loadedFilters != queryFilters || loadedAdult != requestedAdult else { return }
         let attempt = UUID(); requestID = attempt; let selected = queryFilters
-        if loadedFilters != selected {
+        if loadedFilters != selected || loadedAdult != requestedAdult {
             results = []; loadedFilters = nil; page = 1; hasMore = false
         }
         loading = true; loadingMore = false; error = nil
         defer { if requestID == attempt { loading = false } }
         do {
             if !refresh && !selected.search.isEmpty { try await Task.sleep(for: .milliseconds(400)) }
-            let response = try await store.aniList.browse(selected, refresh: refresh)
-            try Task.checkCancellation(); guard requestID == attempt, queryFilters == selected else { return }
+            let response = try await store.aniList.browse(selected, refresh: refresh, includeAdult: requestedAdult)
+            try Task.checkCancellation(); guard requestID == attempt, queryFilters == selected, store.includeAdult == requestedAdult else { return }
             results = response.media ?? []; page = 1; hasMore = response.pageInfo?.hasNextPage == true
             loadedFilters = selected
+            loadedAdult = requestedAdult
         } catch is CancellationError {} catch { if !Task.isCancelled, requestID == attempt { self.error = error.localizedDescription } }
     }
     private func loadMore() async {
         guard !loading, !loadingMore, hasMore else { return }
-        loadingMore = true; let attempt = requestID; let selected = queryFilters; let nextPage = page + 1
+        loadingMore = true; let attempt = requestID; let selected = queryFilters; let nextPage = page + 1; let requestedAdult = store.includeAdult
         defer { if requestID == attempt { loadingMore = false } }
         do {
-            let response = try await store.aniList.browse(selected, page: nextPage)
-            try Task.checkCancellation(); guard requestID == attempt, queryFilters == selected else { return }
+            let response = try await store.aniList.browse(selected, page: nextPage, includeAdult: requestedAdult)
+            try Task.checkCancellation(); guard requestID == attempt, queryFilters == selected, store.includeAdult == requestedAdult else { return }
             let ids = Set(results.map(\.id)); results += (response.media ?? []).filter { !ids.contains($0.id) }
             page = nextPage; hasMore = response.pageInfo?.hasNextPage == true
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }

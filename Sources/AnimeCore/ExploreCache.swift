@@ -7,15 +7,18 @@ public struct ExploreSnapshot: Codable, Sendable {
     public let season: AnimeSeason
     public let year: Int
     public let version: Int
+    public let includesAdult: Bool?
 
-    public init(response: ExploreResponse, selection: SeasonSelection, savedAt: Date = Date()) {
+    public init(response: ExploreResponse, selection: SeasonSelection, savedAt: Date = Date(), includeAdult: Bool = false) {
         self.response = response; self.savedAt = savedAt
         season = selection.season; year = selection.year; version = 1
+        includesAdult = includeAdult
     }
     public func needsRefresh(at now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) >= 300 }
-    public func isUsable(for selection: SeasonSelection, at now: Date = Date()) -> Bool {
+    public func isUsable(for selection: SeasonSelection, at now: Date = Date(), includeAdult: Bool = false) -> Bool {
         let age = now.timeIntervalSince(savedAt)
-        return version == 1 && season == selection.season && year == selection.year && age >= -300 && age < 7 * 86400
+        return version == 1 && season == selection.season && year == selection.year &&
+            (includesAdult ?? false) == includeAdult && age >= -300 && age < 7 * 86400
     }
 }
 
@@ -29,21 +32,21 @@ public actor ExploreCache {
     private var memory: [String: ExploreSnapshot] = [:]
     public init(directory: URL? = ExploreCache.defaultDirectory) { self.directory = directory }
 
-    public func load(_ selection: SeasonSelection, now: Date = Date()) -> ExploreSnapshot? {
-        let key = key(for: selection)
-        if let snapshot = memory[key], snapshot.isUsable(for: selection, at: now) { return snapshot }
+    public func load(_ selection: SeasonSelection, now: Date = Date(), includeAdult: Bool = false) -> ExploreSnapshot? {
+        let key = key(for: selection, includeAdult: includeAdult)
+        if let snapshot = memory[key], snapshot.isUsable(for: selection, at: now, includeAdult: includeAdult) { return snapshot }
         guard let file = directory?.appendingPathComponent(key),
               let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 4 * 1024 * 1024,
               let data = try? Data(contentsOf: file),
               let snapshot = try? JSONDecoder().decode(ExploreSnapshot.self, from: data),
-              snapshot.isUsable(for: selection, at: now) else { return nil }
+              snapshot.isUsable(for: selection, at: now, includeAdult: includeAdult) else { return nil }
         remember(snapshot, key: key)
         return snapshot
     }
     @discardableResult
     public func save(_ snapshot: ExploreSnapshot) -> Bool {
         let selection = SeasonSelection(season: snapshot.season, year: snapshot.year)
-        let key = key(for: selection)
+        let key = key(for: selection, includeAdult: snapshot.includesAdult ?? false)
         remember(snapshot, key: key)
         guard let directory else { return false }
         do {
@@ -67,5 +70,7 @@ public actor ExploreCache {
             memory.removeValue(forKey: oldest)
         }
     }
-    private func key(for selection: SeasonSelection) -> String { "explore-v1-\(selection.year)-\(selection.season.rawValue).json" }
+    private func key(for selection: SeasonSelection, includeAdult: Bool) -> String {
+        "explore-v1-\(selection.year)-\(selection.season.rawValue)\(includeAdult ? "-adult" : "").json"
+    }
 }
