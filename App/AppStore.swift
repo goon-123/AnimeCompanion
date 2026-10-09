@@ -32,7 +32,10 @@ final class AppStore: ObservableObject {
     @Published var automaticallyComplete = UserDefaults.standard.object(forKey: "tracking.automaticallyComplete") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticallyComplete, forKey: "tracking.automaticallyComplete") }
     }
-    private struct UndoRecord { let previous: LibraryEntry?; let confirmedID: Int; let confirmedProgress: Int; let confirmedStatus: LibraryStatus? }
+    @Published var airingProgressSource = AiringProgressSource(rawValue: UserDefaults.standard.string(forKey: "library.airingProgressSource") ?? "") ?? .broadcast {
+        didSet { UserDefaults.standard.set(airingProgressSource.rawValue, forKey: "library.airingProgressSource") }
+    }
+    private struct UndoRecord { let previous: LibraryEntry?; let confirmed: LibraryEntry }
     @Published private var undoRecords: [Int: UndoRecord] = [:]
     @Published var trackingMessages: [Int: String] = [:]
     @Published var lastTrackedAnime: Anime?
@@ -41,6 +44,12 @@ final class AppStore: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             includeAdult = false; metadataSource = .aniList; automaticallyComplete = true
+            airingProgressSource = .broadcast
+            // Property observers do not run for assignments during initialization.
+            UserDefaults.standard.set(false, forKey: "content.includeAdult")
+            UserDefaults.standard.set(MetadataSource.aniList.rawValue, forKey: "metadata.source")
+            UserDefaults.standard.set(true, forKey: "tracking.automaticallyComplete")
+            UserDefaults.standard.set(AiringProgressSource.broadcast.rawValue, forKey: "library.airingProgressSource")
         }
         #endif
     }
@@ -54,6 +63,10 @@ final class AppStore: ObservableObject {
         guard !restored else { return }; restored = true
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-airing-preview") {
+                UserDefaults.standard.set("list", forKey: "library.layout")
+                UserDefaults.standard.set("Airing schedule", forKey: "library.sort")
+            }
             await loadPreviewLibrary()
             return
         }
@@ -86,6 +99,20 @@ final class AppStore: ObservableObject {
             if ProcessInfo.processInfo.arguments.contains("--ui-content-preview") {
                 let fixture = Data(#"{"id":990001,"mediaId":990001,"status":"CURRENT","progress":2,"media":{"id":990001,"title":{"english":"Adult content setting fixture"},"isAdult":true}}"#.utf8)
                 entries.append(try JSONDecoder().decode(LibraryEntry.self, from: fixture))
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-airing-preview") {
+                let next = Int(Date().addingTimeInterval(86400).timeIntervalSince1970)
+                let records: [[String: Any]] = [
+                    ["id": 990101, "mediaId": 990101, "status": "CURRENT", "progress": 4,
+                     "media": ["id": 990101, "title": ["english": "Airing preview · behind"], "status": "RELEASING", "episodes": 12,
+                               "nextAiringEpisode": ["episode": 7, "airingAt": next]]],
+                    ["id": 990102, "mediaId": 990102, "status": "CURRENT", "progress": 6,
+                     "media": ["id": 990102, "title": ["english": "Airing preview · caught up"], "status": "RELEASING", "episodes": 12,
+                               "nextAiringEpisode": ["episode": 7, "airingAt": next]]],
+                    ["id": 990103, "mediaId": 990103, "status": "CURRENT", "progress": 2,
+                     "media": ["id": 990103, "title": ["english": "Finished preview"], "status": "FINISHED", "episodes": 12]],
+                ]
+                entries.insert(contentsOf: try JSONDecoder().decode([LibraryEntry].self, from: JSONSerialization.data(withJSONObject: records)), at: 0)
             }
             savedAt = Date()
         } catch { libraryError = error.localizedDescription }
@@ -121,7 +148,7 @@ final class AppStore: ObservableObject {
         guard let token, !token.isExpired else { throw ServiceError.unauthorized }
         return token
     }
-    func reloadLibrary() async {
+    func reloadLibrary(preserveUndo: Bool = false) async {
         guard !loadingLibrary, savingMedia.isEmpty else { return }
         let attempt = generation
         loadingLibrary = true; libraryError = nil
@@ -134,14 +161,26 @@ final class AppStore: ObservableObject {
             guard generation == attempt else { return }
             viewer = profile
             entries = collection.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }
-            undoRecords = [:]; trackingMessages = [:]
-            lastTrackedAnime = nil
+            if preserveUndo {
+                undoRecords = undoRecords.filter { id, record in entries.contains { $0.mediaId == id && $0.hasSameTracking(as: record.confirmed) } }
+                trackingMessages = trackingMessages.filter { undoRecords[$0.key] != nil }
+                if let anime = lastTrackedAnime, undoRecords[anime.id] == nil { lastTrackedAnime = nil }
+            } else {
+                undoRecords = [:]; trackingMessages = [:]; lastTrackedAnime = nil
+            }
             savedAt = Date()
         } catch {
             guard generation == attempt else { return }
             if (error as? ServiceError) == .unauthorized { disconnect(); accountError = error.localizedDescription }
             else { libraryError = error.localizedDescription }
         }
+    }
+    func refreshLibraryIfNeeded(now: Date = Date()) async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") { return }
+        #endif
+        guard isSignedIn, let savedAt, now.timeIntervalSince(savedAt) >= 300 else { return }
+        await reloadLibrary(preserveUndo: true)
     }
     /// UI updates only after the server confirms; failed writes preserve confirmed progress.
     func save(anime: Anime, progress: Int, status: LibraryStatus) async throws {
@@ -171,7 +210,7 @@ final class AppStore: ObservableObject {
             guard generation == attempt else { throw CancellationError() }
             entries.removeAll { $0.mediaId == anime.id }; entries.insert(saved, at: 0); savedAt = Date()
             if rememberUndo {
-                undoRecords[anime.id] = UndoRecord(previous: existing, confirmedID: saved.id, confirmedProgress: saved.progressValue, confirmedStatus: saved.status)
+                undoRecords[anime.id] = UndoRecord(previous: existing, confirmed: saved)
             } else { undoRecords.removeValue(forKey: anime.id) }
             trackingMessages[anime.id] = rememberUndo ? "Saved to AniList" : "Change undone in AniList"
             lastTrackedAnime = anime
@@ -182,7 +221,7 @@ final class AppStore: ObservableObject {
     }
     func undo(anime: Anime) async throws {
         guard let record = undoRecords[anime.id], let current = entry(for: anime.id),
-              current.id == record.confirmedID, current.progressValue == record.confirmedProgress, current.status == record.confirmedStatus else {
+              current.hasSameTracking(as: record.confirmed) else {
             throw ServiceError.message("Refresh your library before undoing this change.")
         }
         if let previous = record.previous {

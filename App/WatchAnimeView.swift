@@ -19,8 +19,12 @@ struct WatchAnimeView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var lookupID = UUID()
     @State private var initialized = false
+    @State private var episodeChangedByUser = false
     @FocusState private var episodeFocused: Bool
-    private var limit: Int { anime.format == "MOVIE" ? 1 : max(1, anime.episodes ?? 100_000) }
+    private var limit: Int { anime.format == "MOVIE" ? 1 : min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000)) }
+    private var initializationKey: String {
+        "\(anime.id)-\(store.isSignedIn)-\(store.loadingLibrary)-\(store.entry(for: anime.id)?.progressValue ?? -1)-\(store.libraryError ?? "")"
+    }
     private var visible: [(offset: Int, element: StremioStream)] {
         streams.enumerated().filter { (!playableOnly || $0.element.unavailableReason == nil) &&
             (filter.isEmpty || ($0.element.displayName + " " + $0.element.details).localizedCaseInsensitiveContains(filter)) }
@@ -30,7 +34,25 @@ struct WatchAnimeView: View {
             List {
                 Section {
                     Text(anime.displayTitle).font(.title3.bold())
-                    if anime.format != "MOVIE" { episodeControls }
+                    if anime.format != "MOVIE" {
+                        if initialized {
+                            episodeControls
+                            if let entry = store.entry(for: anime.id) {
+                                Text("AniList · \(entry.progressValue) episodes watched").font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("playback-anilist-progress")
+                                if let total = anime.episodes, total > 0, entry.progressValue >= total {
+                                    Text("All known episodes are watched. Choose an episode to replay.").font(.caption).foregroundStyle(.secondary)
+                                } else {
+                                    Text("Next unwatched: episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)).")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        } else { ProgressView("Loading AniList progress…") }
+                    }
+                    if let notice = store.libraryError {
+                        Text("AniList progress could not refresh: \(notice) Choose the episode manually if needed.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                     if let saved = playback.saved(animeID: anime.id, episode: episode) {
                         if saved.finished { Label("Finished in VidHub on this device", systemImage: "checkmark.circle").foregroundStyle(.mint) }
                         else if saved.position > 0 {
@@ -102,15 +124,7 @@ struct WatchAnimeView: View {
                         }
                     }
                 }
-                .onAppear {
-                    if !initialized {
-                        initialized = true
-                        episode = min(limit, max(1, playback.resumeEpisode(animeID: anime.id) ?? ((store.entry(for: anime.id)?.progressValue ?? 0) + 1)))
-                        episodeText = String(episode)
-                        playback.playerMessage = nil
-                    }
-                    if !searched && !loading { loadSources() }
-                }
+                .task(id: initializationKey) { initializeEpisode() }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addon?.endpoint) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
@@ -118,6 +132,19 @@ struct WatchAnimeView: View {
                     if loading { lookupID = UUID(); loading = false }
                 }
         }.disabled(playback.openingPlayer)
+    }
+    private func initializeEpisode() {
+        guard !episodeChangedByUser else { return }
+        if store.isSignedIn && (store.loadingLibrary || (store.savedAt == nil && store.libraryError == nil)) {
+            resetSources(); initialized = false; return
+        }
+        let next = PlaybackEpisodeSelection.initial(anime: anime, entry: store.entry(for: anime.id),
+                                                   resumeEpisode: playback.resumeEpisode(animeID: anime.id))
+        if !initialized || next != episode {
+            resetSources(); episode = next; episodeText = String(next); restart = false
+            playback.playerMessage = nil; initialized = true
+        }
+        if !searched && !loading { loadSources() }
     }
     private var episodeControls: some View {
         HStack {
@@ -132,6 +159,7 @@ struct WatchAnimeView: View {
         }
     }
     private func selectEpisode(_ value: Int) {
+        episodeChangedByUser = true
         let next = min(limit, max(1, value))
         if next != episode {
             resetSources(); episode = next; restart = false
@@ -145,7 +173,7 @@ struct WatchAnimeView: View {
         searchTask?.cancel(); lookupID = UUID(); streams = []; skipped = 0; searched = false; loading = false; error = nil; filter = ""
     }
     private func loadSources() {
-        guard let addon = playback.addon, playback.enabled else { return }
+        guard initialized, let addon = playback.addon, playback.enabled else { return }
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
         let requestedEpisode = episode

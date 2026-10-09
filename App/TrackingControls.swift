@@ -185,7 +185,7 @@ struct CompactTrackingBar: View {
             Text("Tracking uses AniList’s episode numbering.").font(.caption2).foregroundStyle(.secondary)
             TrackingFeedback(anime: anime)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
-        }.padding(12).background(.ultraThinMaterial).accessibilityIdentifier("livechart-tracking-bar")
+        }.padding(12).background(.ultraThinMaterial)
             .sheet(isPresented: $editing) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
             .sheet(isPresented: $settings) { SettingsView() }
             .sheet(isPresented: $playback) { WatchAnimeView(anime: anime) }

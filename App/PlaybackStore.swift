@@ -56,6 +56,9 @@ final class PlaybackStore: ObservableObject {
             client = StremioClient(transport: PlaybackPreviewTransport())
             addon = try? PlaybackPreviewTransport.addon()
             enabled = true
+            if ProcessInfo.processInfo.arguments.contains("--ui-playback-stale-resume") {
+                progress["1:1"] = PlaybackProgress(position: 120, duration: 1440, finished: false)
+            }
             return
         }
         #endif

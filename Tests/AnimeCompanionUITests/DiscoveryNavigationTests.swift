@@ -84,11 +84,12 @@ final class DiscoveryNavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
         if swipeBack {
             // A percentage inset moves the start farther from the screen edge
-            // on iPad. Begin at one point on both devices and use a direct swipe.
+            // on iPad. Begin at one point on both devices and use a deliberate
+            // edge swipe rather than the hosted runner's near-zero fast press.
             let origin = app.coordinate(withNormalizedOffset: .zero)
             let edge = origin.withOffset(CGVector(dx: 1, dy: app.frame.height * 0.5))
             let end = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: app.frame.height * 0.5))
-            edge.press(forDuration: 0.01, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
+            edge.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
         } else { app.navigationBars.buttons.firstMatch.tap() }
         XCTAssertTrue(app.navigationBars["Popular this season"].waitForExistence(timeout: 10))
         let retained = app.buttons[identifier]
