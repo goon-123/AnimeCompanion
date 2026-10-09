@@ -28,9 +28,7 @@ struct DiscoveryBrowseView: View {
         self.category = category; self.selection = selection; self.titleOverride = titleOverride
         _filters = State(initialValue: DiscoveryFilters(category: category, selection: selection))
     }
-    private var genres: [String] {
-        ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Horror", "Mecha", "Music", "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"]
-    }
+    private var genres: [String] { DiscoveryGenres.all }
     private var formats: [(String, String)] {
         [("TV", "TV show"), ("TV_SHORT", "TV short"), ("MOVIE", "Movie"), ("OVA", "OVA"), ("ONA", "ONA"), ("SPECIAL", "Special"), ("MUSIC", "Music")]
     }

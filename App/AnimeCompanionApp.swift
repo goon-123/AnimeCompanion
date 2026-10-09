@@ -5,10 +5,17 @@ import AnimeCore
 struct AnimeCompanionApp: App {
     @StateObject private var store = AppStore()
     @StateObject private var discoveryFilters = DiscoveryFilterStore()
+    @StateObject private var playback = PlaybackStore()
+    @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
             AppTabs().environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+                .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { await store.restore() }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    await store.exploreDubs.keepUpdated(using: store.dubs)
+                }
         }
     }
 }
@@ -50,3 +57,4 @@ struct AnimeNavigation: ViewModifier {
     }
 }
 extension View { func animeNavigation() -> some View { modifier(AnimeNavigation()) } }
+

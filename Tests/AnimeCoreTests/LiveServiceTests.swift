@@ -28,6 +28,11 @@ final class LiveServiceTests: XCTestCase {
         let browse = try await client.browse(DiscoveryFilters(category: .trending))
         XCTAssertFalse((browse.media ?? []).isEmpty)
         XCTAssertTrue((browse.media ?? []).allSatisfy { $0.isAdult != true })
+        var ecchi = DiscoveryFilters(category: .trending)
+        ecchi.genre = "Ecchi"
+        let genreResults = try await client.browse(ecchi)
+        XCTAssertFalse((genreResults.media ?? []).isEmpty)
+        XCTAssertTrue((genreResults.media ?? []).allSatisfy { ($0.genres ?? []).contains("Ecchi") })
         let lookup = try await client.media(ids: [1, 5])
         XCTAssertEqual(Set(lookup.map(\.id)), Set([1, 5]))
         let week = try XCTUnwrap(Calendar.current.dateInterval(of: .weekOfYear, for: Date()))
@@ -42,10 +47,21 @@ final class LiveServiceTests: XCTestCase {
         let client = DubClient()
         let snapshot = try await client.snapshot(refresh: true)
         XCTAssertFalse(snapshot.events().isEmpty)
+        XCTAssertEqual(snapshot.scheduleProvider, .current)
+        XCTAssertEqual(snapshot.historyProvider, .current)
+        let historyUpdated = try XCTUnwrap(snapshot.historyUpdatedAt)
+        XCTAssertLessThan(Date().timeIntervalSince(historyUpdated), 3 * 86400, "Detect a stalled release feed instead of passing on old data.")
         let index = try await client.index(refresh: true)
         XCTAssertFalse(index.partial.isEmpty)
         let availability = index.availability(malId: 1)
         XCTAssertEqual(availability, .dubbed)
+        XCTAssertGreaterThan(index.agreeingSources(malId: 1) ?? 0, 0)
+        // Probe an anime from the missing-count report using live metadata, not a hardcoded count.
+        let title = try await AniListClient().details(id: 169581)
+        let progress = LibraryDubProgress(anime: title, snapshot: snapshot, index: index)
+        XCTAssertGreaterThan(progress.released ?? 0, 0)
+        XCTAssertEqual(progress.confidence, .reported)
+        XCTAssertTrue(snapshot.events(knownMedia: [title.id: title]).contains { $0.anime.id == title.id })
     }
 
     func testAnimeNewsNetworkFeed() async throws {

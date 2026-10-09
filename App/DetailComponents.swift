@@ -104,7 +104,9 @@ struct DetailPersonCard: View {
 }
 
 struct AnimeDubSchedule: View {
-    let status: DubAvailability
+    let anime: Anime
+    let progress: LibraryDubProgress?
+    let snapshot: DubSnapshot?
     let events: [ReleaseEvent]
     let loading: Bool
     let error: String?
@@ -114,10 +116,24 @@ struct AnimeDubSchedule: View {
 
     var body: some View {
         DetailCard(title: "English dub schedule") {
-            Label(status.label, systemImage: "mic.fill").font(.subheadline.bold())
+            DubStatusBadge(anime: anime, progress: progress).accessibilityIdentifier("detail-dub-count")
+            if let progress {
+                if let total = anime.episodes, total > 0 { Text("\(total) episodes planned for this title").font(.caption).foregroundStyle(.secondary) }
+                Text(progress.explanation).font(.caption).foregroundStyle(.secondary)
+                if let date = progress.lastReleaseAt {
+                    Text("Latest reported dub release: \(date.formatted(.dateTime.month(.abbreviated).day().year()))").font(.caption).foregroundStyle(.secondary)
+                }
+                if let sources = progress.agreeingSources {
+                    Text("Dub availability supported by \(sources) \(sources == 1 ? "source" : "sources") via MyDubList.")
+                        .font(.caption).foregroundStyle(progress.tone.color).accessibilityIdentifier("detail-dub-source-count")
+                }
+            }
             if loading { ProgressView("Checking this anime’s dub releases…") }
             Text("Upcoming releases").font(.subheadline.bold()).padding(.top, 3)
-            if !loading && upcoming.isEmpty { Text("No upcoming English dub date is listed for this anime.").font(.caption).foregroundStyle(.secondary) }
+            if !loading && upcoming.isEmpty {
+                Text(progress?.completeListing == true ? "No further dub episodes are expected from the completed listing." : "No next dub date is supplied by the release sources yet. Pull to refresh to check again.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             ForEach(upcoming) { event in release(event) }
             if !recorded.isEmpty {
                 Divider()
@@ -126,7 +142,15 @@ struct AnimeDubSchedule: View {
                 if recorded.count > 6 { Button(expandedHistory ? "Show recent episodes" : "Show all \(recorded.count) recorded episodes") { expandedHistory.toggle() }.font(.caption.bold()) }
             }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            Text("Dub dates reported by AniSchedule. Unverified dates are estimates; delays may change.").font(.caption2).foregroundStyle(.secondary)
+            Text("Green shows reported releases or availability. Amber marks estimates; yellow marks announcements. Release reports can differ from availability in your streaming service or region.").font(.caption2).foregroundStyle(.secondary)
+            if let snapshot {
+                Text("Checked \(snapshot.fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))").font(.caption2).foregroundStyle(.secondary)
+                if let updated = snapshot.historyUpdatedAt { Text("Episode feed updated \(updated.formatted(.dateTime.month(.abbreviated).day().hour().minute()))").font(.caption2).foregroundStyle(.secondary) }
+                ForEach(Array(Set([snapshot.historyProvider, snapshot.scheduleProvider].compactMap { $0 })).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { provider in
+                    Link("Dub episodes and dates · \(provider.label)", destination: provider.repositoryURL).font(.caption2)
+                }
+            }
+            Link("Check AnimeSchedule", destination: snapshot?.schedulePage(for: anime) ?? URL(string: "https://animeschedule.net")!).font(.caption2)
             Link("Dub availability © MyDubList", destination: URL(string: "https://mydublist.com")!).font(.caption2)
         }.accessibilityIdentifier("anime-dub-schedule")
     }
@@ -135,12 +159,13 @@ struct AnimeDubSchedule: View {
             Text("Episode \(event.episode)").font(.caption.bold())
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                if let date = event.date { Text(date, format: .dateTime.month(.abbreviated).day().hour().minute()).font(.caption) }
+                if let date = event.date { Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).font(.caption) }
                 else { Text(event.note ?? "Date not confirmed").font(.caption) }
-                if event.certainty == .unverified { Text("Unverified").font(.caption2).foregroundStyle(.orange) }
+                if event.certainty == .unverified { Text("Estimated date").font(.caption2).foregroundStyle(.orange) }
                 if event.certainty == .delayed { Text(event.note ?? "Delayed").font(.caption2).foregroundStyle(.orange) }
                 if event.certainty == .recorded { Text("Reported released").font(.caption2).foregroundStyle(.mint) }
             }
         }.padding(.vertical, 3)
     }
 }
+

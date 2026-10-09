@@ -27,7 +27,7 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(complete.completeListing)
         let partial = LibraryDubProgress(anime: finished, snapshot: nil, index: DubIndex(dubbed: [], partial: [20]), now: now)
         XCTAssertNil(partial.released)
-        XCTAssertEqual(partial.label(for: finished), "Partial dub · count unknown")
+        XCTAssertEqual(partial.label(for: finished), "Partial dub · episodes not listed")
         let unavailable = LibraryDubProgress(anime: finished, snapshot: nil, index: nil, now: now)
         XCTAssertEqual(unavailable.label(for: finished), "Dub status unknown")
         let absent = LibraryDubProgress(anime: finished, snapshot: nil, index: DubIndex(dubbed: [], partial: []), now: now)
@@ -38,7 +38,7 @@ final class FeatureTests: XCTestCase {
         let planned = try JSONDecoder().decode([RawDubItem].self, from: Data(#"[{"episodeNumber":1,"episodeDate":3000,"media":{"media":{"id":10}}}]"#.utf8))
         let progress = LibraryDubProgress(anime: title, snapshot: DubSnapshot(upcoming: planned, history: []), index: nil, now: now)
         XCTAssertNil(progress.released)
-        XCTAssertEqual(progress.label(for: title), "Dub announced · count unknown")
+        XCTAssertEqual(progress.label(for: title), "Dub announced · episodes not listed")
         XCTAssertNil(title.releasedEpisodeCount(at: now))
     }
     func testNewsImagesHandleAttributeOrderRelativeURLsAndUnsafeSchemes() throws {
@@ -118,3 +118,4 @@ private actor FeedTransport: HTTPTransport {
         return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }
 }
+

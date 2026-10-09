@@ -22,12 +22,12 @@ public enum QueryValue: Codable, Sendable {
         }
     }
 }
-public struct MediaPage: Decodable, Sendable {
+public struct MediaPage: Codable, Sendable {
     public let media: [Anime]?
     public let pageInfo: PageInfo?
 }
-public struct PageInfo: Decodable, Sendable { public let hasNextPage: Bool? }
-public struct ExploreResponse: Decodable, Sendable {
+public struct PageInfo: Codable, Sendable { public let hasNextPage: Bool? }
+public struct ExploreResponse: Codable, Sendable {
     public let seasonal: MediaPage
     public let trending: MediaPage
     public let upcoming: MediaPage
@@ -50,14 +50,14 @@ public enum AniListQueries {
     public static let card = """
     fragment AnimeCard on Media {
       id idMal title { romaji english userPreferred }
-      coverImage { extraLarge large medium } bannerImage
+      coverImage { extraLarge large medium color } bannerImage
       episodes duration format status season seasonYear averageScore genres isAdult
       nextAiringEpisode { airingAt episode }
     }
     """
     public static let explore = """
     query Explore($season: MediaSeason!, $year: Int!, $nextSeason: MediaSeason!, $nextYear: Int!) {
-      seasonal: Page(page: 1, perPage: 24) {
+      seasonal: Page(page: 1, perPage: 16) {
         media(type: ANIME, season: $season, seasonYear: $year, isAdult: false, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
         pageInfo { hasNextPage }
       }

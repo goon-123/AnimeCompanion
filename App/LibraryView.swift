@@ -8,6 +8,7 @@ private enum LibrarySort: String, CaseIterable {
 
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
     private var posters = PosterPreferences(.library)
@@ -20,7 +21,6 @@ struct LibraryView: View {
     @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
-    @State private var dubError: String?
     @FocusState private var searchFocused: Bool
     private let statuses: [LibraryStatus] = [.watching, .planning, .completed, .dropped, .paused, .rewatching]
     private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
@@ -107,7 +107,7 @@ struct LibraryView: View {
                             ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
                                                    systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
-                        if let dubError { Text(dubError).font(.caption).foregroundStyle(.secondary) }
+                        if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
@@ -125,6 +125,7 @@ struct LibraryView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .task(id: syncKey) { await loadDubs() }
+            .task(id: dubs.revision) { applyDubs() }
     }
     private var searchBar: some View {
         HStack(spacing: 10) {
@@ -206,20 +207,17 @@ struct LibraryView: View {
         dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) >= Date() }
     }
     private func loadDubs(refresh: Bool = false) async {
-        let entries = store.entries; let key = syncKey
-        dubEvents = []; dubProgress = [:]; dubError = nil
-        guard !entries.isEmpty else { return }
-        async let snapshotResult = fetchSnapshot(refresh: refresh)
-        async let indexResult = fetchIndex(refresh: refresh)
-        let (snapshot, index) = await (snapshotResult, indexResult)
+        let key = syncKey
+        guard !store.entries.isEmpty else { applyDubs(); return }
+        await dubs.load(using: store.dubs, refresh: refresh)
         guard !Task.isCancelled, key == syncKey else { return }
-        let known = Dictionary(uniqueKeysWithValues: entries.compactMap { $0.media.map { ($0.id, $0) } })
-        if let snapshot { dubEvents = snapshot.events(knownMedia: known).filter { known[$0.anime.id] != nil } }
-        dubProgress = known.mapValues { LibraryDubProgress(anime: $0, snapshot: snapshot, index: index) }
-        if snapshot == nil || index == nil { dubError = "Some dub information is temporarily unavailable. Existing counts are shown where known." }
+        applyDubs()
     }
-    private func fetchSnapshot(refresh: Bool) async -> DubSnapshot? { try? await store.dubs.snapshot(refresh: refresh) }
-    private func fetchIndex(refresh: Bool) async -> DubIndex? { try? await store.dubs.index(refresh: refresh) }
+    private func applyDubs() {
+        let known = Dictionary(uniqueKeysWithValues: store.entries.compactMap { $0.media.map { ($0.id, $0) } })
+        dubEvents = dubs.snapshot?.events(knownMedia: known).filter { known[$0.anime.id] != nil } ?? []
+        dubProgress = dubs.loaded ? known.mapValues { LibraryDubProgress(anime: $0, snapshot: dubs.snapshot, index: dubs.index) } : [:]
+    }
 }
 
 struct SettingsView: View {
@@ -249,9 +247,14 @@ struct SettingsView: View {
                     }
                     if let error = store.accountError { Text(error).foregroundStyle(.red) }
                 }
+                Section("Watching") {
+                    NavigationLink { PlaybackSettingsView() } label: { Label("Add-ons & playback", systemImage: "play.rectangle") }
+                        .accessibilityIdentifier("playback-settings")
+                }
                 Section("Data sources") {
                     Link("Anime metadata and lists · AniList", destination: URL(string: "https://anilist.co")!)
-                    Link("Dub dates · AniSchedule by Bas1874", destination: URL(string: "https://github.com/Bas1874/AniSchedule")!)
+                    Link("Dub dates · AniSchedule by RockinChaos", destination: DubProvider.current.repositoryURL)
+                    Link("Dub source fallback · AniSchedule by Bas1874", destination: DubProvider.legacy.repositoryURL)
                     Link("Dub data © MyDubList · CC BY 4.0", destination: URL(string: "https://mydublist.com")!)
                     Link("MyDubList dataset license", destination: URL(string: "https://creativecommons.org/licenses/by/4.0/")!)
                     Text("Data is matched by IDs and formatted for display; no source records are edited.").font(.caption).foregroundStyle(.secondary)
@@ -261,7 +264,7 @@ struct SettingsView: View {
                     Link("News · Anime Corner", destination: URL(string: "https://animecorner.me")!)
                 }
                 Section("About") {
-                    Text("Anime Companion · First build")
+                    Text("Anime Companion · VidHub playback")
                     Text("Broadcast times and dub dates may change. Times use your device timezone. Original Japanese broadcasts do not guarantee local subtitle availability.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -272,3 +275,4 @@ struct SettingsView: View {
         }
     }
 }
+
