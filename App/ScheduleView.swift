@@ -4,6 +4,7 @@ import AnimeCore
 
 private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub", dub = "Dub" }
 private enum ScheduleMode: String, CaseIterable { case airing = "Airing Now", weekly = "Weekly Schedule" }
+private struct ScheduleScrollRequest: Equatable { let day: Date; var token = UUID() }
 
 struct ScheduleView: View {
     @EnvironmentObject private var store: AppStore
@@ -15,6 +16,8 @@ struct ScheduleView: View {
     @State private var anchor = ScheduleClock.now
     @State private var now = ScheduleClock.now
     @State private var automaticDay: Date?
+    @State private var scrollRequest: ScheduleScrollRequest?
+    @ScaledMetric(relativeTo: .subheadline) private var weekdayHeight: CGFloat = 46
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
     @AppStorage("schedule.libraryOnly") private var libraryOnly = false
     @State private var pickingDate = false
@@ -67,9 +70,11 @@ struct ScheduleView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in refreshToday() }
     }
     private var weeklySchedule: some View {
-      ScrollViewReader { scroll in
         VStack(spacing: 0) {
-            weeklyControls(scroll: scroll)
+            weeklyControls
+            // This reader owns only the vertical list. The weekday strip has its
+            // own reader; putting both scroll views in one scope loses the target.
+            ScrollViewReader { scroll in
             List {
             if loading { ProgressView("Loading releases…") }
             if filter != .dub, let error = subError { NoticeView(message: "Original schedule: \(error)") { Task { await load(refresh: true) } } }
@@ -84,22 +89,28 @@ struct ScheduleView: View {
             Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
             }.scrollContentBackground(.hidden).readableContent()
                 .accessibilityIdentifier("schedule-weekly-list")
-                .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in automaticDay = nil })
+                .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in cancelAutomaticPositioning() })
                 .refreshable { await load(refresh: true) }
+                .task(id: scrollRequest) {
+                    guard let request = scrollRequest else { return }
+                    // Wait for the List's rows to register and finish their first layout.
+                    do { try await Task.sleep(for: .milliseconds(150)); try Task.checkCancellation() } catch { return }
+                    guard scrollRequest == request else { return }
+                    scroll.scrollTo("release-day-\(dayID(request.day))", anchor: .top)
+                }
+            }
         }.background(Theme.background)
             // The day rows exist before network results arrive, even on empty days.
             // Re-anchor late-loading rows only until the user starts browsing manually.
             .task(id: "\(window.start)-\(today?.timeIntervalSince1970 ?? -1)") {
                 automaticDay = today
-                await Task.yield()
-                guard !Task.isCancelled, let today, automaticDay == today else { return }
-                scroll.scrollTo(today, anchor: .top)
+                scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
             }
             .onChange(of: visible) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
                     guard let automaticDay, automaticDay == today else { return }
-                    scroll.scrollTo(automaticDay, anchor: .top)
+                    scrollRequest = ScheduleScrollRequest(day: automaticDay)
                 }
             }
             .onAppear { refreshToday() }
@@ -113,9 +124,8 @@ struct ScheduleView: View {
                 }.presentationDetents([.medium, .large])
             }
             .onChange(of: store.isSignedIn) { _, signedIn in if !signedIn { libraryOnly = false } }
-      }
     }
-    private func weeklyControls(scroll: ScrollViewProxy) -> some View {
+    private var weeklyControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Button { shift(-7) } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Previous week")
@@ -131,12 +141,12 @@ struct ScheduleView: View {
             }.buttonStyle(.borderless)
             Button("This week") {
                 refreshToday(); anchor = now; automaticDay = today
-                if let today { scroll.scrollTo(today, anchor: .top) }
+                scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
             }.accessibilityIdentifier("schedule-this-week")
             Picker("Release type", selection: $filterValue) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
                 .pickerStyle(.segmented).accessibilityIdentifier("schedule-release-type")
             if store.isSignedIn { Toggle("My watching list only", isOn: $libraryOnly) }
-            weekdayStrip(scroll: scroll)
+            weekdayStrip
             Text("Times in \(TimeZone.current.identifier). Sub times are original Japanese broadcasts.").font(.caption).foregroundStyle(.secondary)
         }.padding(.horizontal, 16).padding(.bottom, 12).readableContent(width: 1000)
     }
@@ -147,7 +157,7 @@ struct ScheduleView: View {
                 Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.subheadline.bold())
                 Spacer()
                 if date == today { Text("Today").font(.caption.bold()).padding(.horizontal, 9).padding(.vertical, 5).background(Color.white.opacity(0.12), in: Capsule()) }
-            }.id(date).accessibilityElement(children: .combine)
+            }.id("release-day-\(dayID(date))").accessibilityElement(children: .combine)
                 .accessibilityIdentifier("schedule-day-\(dayID(date))")
                 .accessibilityValue(date == today ? "Today" : "")
                 .listRowBackground(date == today ? Theme.surface : Theme.surface.opacity(0.45))
@@ -157,16 +167,19 @@ struct ScheduleView: View {
             }
         }
     }
-    private func weekdayStrip(scroll: ScrollViewProxy) -> some View {
+    private var weekdayStrip: some View {
         ScrollViewReader { dayScroll in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 7) {
                     ForEach(week.days, id: \.self) { date in
-                        Button { automaticDay = nil; scroll.scrollTo(date, anchor: .top) } label: {
+                        Button {
+                            cancelAutomaticPositioning()
+                            scrollRequest = ScheduleScrollRequest(day: date)
+                        } label: {
                             VStack(spacing: 3) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption2.weight(.semibold))
                                 Text(date.formatted(.dateTime.day())).font(.subheadline.bold())
-                            }.frame(minWidth: 47, minHeight: 46)
+                            }.frame(minWidth: 47, minHeight: weekdayHeight)
                                 .foregroundStyle(date == today ? Color.black : Color.white)
                                 .background(date == today ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
                         }.buttonStyle(.plain).id(dayID(date))
@@ -182,7 +195,7 @@ struct ScheduleView: View {
                     guard !Task.isCancelled, let today else { return }
                     dayScroll.scrollTo(dayID(today), anchor: .center)
                 }
-        }
+        }.frame(height: weekdayHeight)
     }
     private func dayID(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
@@ -195,8 +208,11 @@ struct ScheduleView: View {
         now = updated
     }
     private func shift(_ days: Int) {
-        automaticDay = nil
+        cancelAutomaticPositioning()
         anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor
+    }
+    private func cancelAutomaticPositioning() {
+        automaticDay = nil; scrollRequest = nil
     }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let selected = window

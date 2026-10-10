@@ -22,6 +22,34 @@ jobs:
         run: |
           env -u DEVELOPER_DIR swift --version
           env -u DEVELOPER_DIR swift test -j 2
+  weekly-ui:
+    name: Weekly schedule ${{ matrix.device }} regression
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Check today positioning and manual week browsing
+        run: |
+          sudo mdutil -a -i off || true
+          bash scripts/check-simulator.sh ${{ matrix.device }} weekly
+      - name: Upload weekly screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-weekly-${{ matrix.device }}
+          path: |
+            build/weekly-${{ matrix.device }}-screenshots
+            build/Weekly-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   focused-ui:
     name: Focused ${{ matrix.device }} layout and playback
     runs-on: macos-15

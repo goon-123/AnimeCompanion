@@ -202,7 +202,15 @@ final class PolishedDesignUITests: XCTestCase {
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
         let scroll = app.scrollViews["anime-detail-scroll"].exists ? app.scrollViews["anime-detail-scroll"] : app
-        for _ in 0..<16 { if element.isHittable { return }; if upward { scroll.swipeUp() } else { scroll.swipeDown() } }
+        for _ in 0..<24 {
+            let bounds = scroll.frame
+            if element.isHittable, element.frame.midY > max(bounds.minY, app.navigationBars.firstMatch.frame.maxY) + 20,
+               element.frame.midY < bounds.maxY - 65 { return }
+            let backwards = element.exists && element.frame.height > 0 ? element.frame.midY < bounds.midY : !upward
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.35 : 0.75))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.70 : 0.40))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.05)
+        }
         XCTAssertTrue(element.isHittable, "Could not reveal \(element.identifier)")
     }
     @MainActor private func capture(_ name: String) {

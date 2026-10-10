@@ -8,6 +8,8 @@ Version 0.4.1 on `fix/schedule-today-library-genres`, based on merged PR #7.
 - Added seven local-calendar unit cases (including timezone, next-day, week boundary, first-weekday and both daylight-saving changes), two deterministic native weekly cases, and list/grid/featured/all-shelf tap and swipe checks. Existing Library badge checks now assert their absence only in My Library and their continued presence in Schedule. All preview clocks/releases are DEBUG only, with no credentials or account writes.
 - Local whitespace and shell syntax checks pass. This Linux workspace has no Swift/Xcode. Final hosted core tests, universal Release compilation, native iPhone/iPad tests and screenshot review are pending; no validation pass is claimed before those jobs complete.
 
+The first build-17 candidates passed all 117 active core cases, Release compilation and all four providers. Native genre shortcuts passed in list, grid, featured and every shelf on both device families; Schedule retained its airing indicators and My Library omitted them. Weekly checks exposed competing scroll-reader scopes: the day strip highlighted Today but the release list stayed at the beginning. The follow-up isolates the vertical reader, uses distinct row targets and cancellable layout-ready requests, and adds dedicated weekly iPhone/iPad jobs without removing any existing suite. Test scroll helpers also reveal small controls with shorter, direction-aware gestures rather than skipping past them. Final-source validation remains pending.
+
 ## Schedule, genre navigation and cinematic details — build 16
 
 Version 0.4.0 on `design/schedule-genres-details`, based on PR #6's build-15 polish; PR #6 is left untouched.

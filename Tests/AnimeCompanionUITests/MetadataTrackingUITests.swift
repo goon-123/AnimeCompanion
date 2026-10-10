@@ -80,7 +80,16 @@ final class MetadataTrackingUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<12 { if element.isHittable { return }; app.swipeUp() }
+        let scroll = app.scrollViews["anime-detail-scroll"].exists ? app.scrollViews["anime-detail-scroll"] : app
+        for _ in 0..<20 {
+            let bounds = scroll.frame
+            if element.isHittable, element.frame.midY > max(bounds.minY, app.navigationBars.firstMatch.frame.maxY) + 20,
+               element.frame.midY < bounds.maxY - 65 { return }
+            let backwards = element.exists && element.frame.height > 0 && element.frame.midY < bounds.midY
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.35 : 0.75))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.70 : 0.40))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.05)
+        }
         XCTAssertTrue(element.isHittable)
     }
     @MainActor private func reset(_ app: XCUIApplication) {

@@ -102,8 +102,10 @@ final class WeeklyScheduleUITests: XCTestCase {
                 target.frame.minY >= app.scrollViews["schedule-weekdays"].frame.maxY &&
                 target.frame.minY < app.scrollViews["schedule-weekdays"].frame.maxY + 125
         }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [positioned], timeout: 15), .completed,
-                       "Weekly Schedule must position the selected day's releases below the fixed controls")
+        let result = XCTWaiter.wait(for: [positioned], timeout: 15)
+        if result != .completed { capture("Weekly-Position-Failure") }
+        XCTAssertEqual(result, .completed,
+                       "Weekly Schedule must position \(target.identifier) below the fixed controls. Target: \(target.exists ? String(describing: target.frame) : "missing"); strip: \(app.scrollViews["schedule-weekdays"].frame)")
     }
     @MainActor private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
