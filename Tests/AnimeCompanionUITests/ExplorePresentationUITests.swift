@@ -61,8 +61,8 @@ final class ExplorePresentationUITests: XCTestCase {
 
         app.buttons["discovery-entry-1"].tap()
         let detailedDub = app.staticTexts["detail-dub-count"]
-        XCTAssertTrue(detailedDub.waitForExistence(timeout: 35))
         reveal(detailedDub, in: app)
+        XCTAssertTrue(detailedDub.waitForExistence(timeout: 35))
         XCTAssertTrue(detailedDub.label.contains("26/26"), "Details must retain the full dub count")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: 15))
