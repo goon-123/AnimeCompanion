@@ -54,7 +54,7 @@ final class DiscoveryNavigationTests: XCTestCase {
         }
 
         reveal(app.buttons["discovery-genre"], scrolling: scroll, upward: false)
-        app.buttons["discovery-genre"].tap(); app.buttons["Action"].tap()
+        app.buttons["discovery-genre"].tap(); app.buttons["discovery-genre-option-Action"].tap()
         waitForTitles(in: app)
         app.buttons["discovery-sort"].tap(); app.buttons["AniList rating"].tap()
         waitForTitles(in: app)

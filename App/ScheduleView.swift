@@ -1,16 +1,22 @@
 import SwiftUI
+import UIKit
 import AnimeCore
 
 private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub", dub = "Dub" }
 private enum ScheduleMode: String, CaseIterable { case airing = "Airing Now", weekly = "Weekly Schedule" }
+private struct ScheduleScrollRequest: Equatable { let day: Date; var token = UUID() }
 
 struct ScheduleView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var mode = ScheduleMode.airing
     @State private var showSettings = false
-    @State private var anchor = Date()
+    @State private var anchor = ScheduleClock.now
+    @State private var now = ScheduleClock.now
+    @State private var scrollRequest: ScheduleScrollRequest?
+    @ScaledMetric(relativeTo: .subheadline) private var weekdayHeight: CGFloat = 46
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
     @AppStorage("schedule.libraryOnly") private var libraryOnly = false
     @State private var pickingDate = false
@@ -21,10 +27,13 @@ struct ScheduleView: View {
     @State private var loading = false
     @State private var requestID = UUID()
     @State private var dubRequestID = UUID()
+    #if DEBUG
+    @State private var delayedPreviewOnce = false
+    #endif
     private var filter: ScheduleFilter { ScheduleFilter(rawValue: filterValue) ?? .all }
-    private var window: DateInterval {
-        Calendar.current.dateInterval(of: .weekOfYear, for: anchor) ?? DateInterval(start: anchor, duration: 7 * 86400)
-    }
+    private var week: ScheduleWeek { ScheduleWeek(containing: anchor) }
+    private var window: DateInterval { week.window }
+    private var today: Date? { week.today(at: now) }
     private var dubPresentationKey: String { "\(window.start.timeIntervalSince1970)-\(dubs.revision)" }
     private var dubNotice: String? {
         let notices = [dubs.notice, dubError].compactMap { $0 }
@@ -36,9 +45,6 @@ struct ScheduleView: View {
             guard store.isVisible($0.anime), filter == .all || (filter == .sub && $0.kind == .sub) || (filter == .dub && $0.kind == .dub) else { return false }
             return !libraryOnly || !store.isSignedIn || ids.contains($0.anime.id)
         }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
-    }
-    private var days: [Date] {
-        Array(Set(visible.compactMap { $0.date }.map { Calendar.current.startOfDay(for: $0) })).sorted()
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -57,36 +63,22 @@ struct ScheduleView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .onChange(of: navigation.selectedTab) { _, tab in if tab == .schedule { mode = .airing } }
+            .onChange(of: mode) { _, mode in if mode == .weekly { refreshToday() } }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { refreshToday() } }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshToday() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in refreshToday() }
     }
     private var weeklySchedule: some View {
-        List {
-            Section {
-                HStack {
-                    Button { shift(-7) } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Previous week")
-                    Spacer()
-                    Button { pickingDate = true } label: {
-                        Label(window.start.formatted(.dateTime.month(.abbreviated).day()) + " – " + window.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day()), systemImage: "calendar")
-                            .font(.subheadline.bold())
-                    }.accessibilityLabel("Choose schedule date")
-                        .accessibilityIdentifier("schedule-week")
-                        .accessibilityValue(window.start.formatted(.dateTime.year().month().day()))
-                    Spacer()
-                    Button { shift(7) } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Next week")
-                }.buttonStyle(.borderless)
-                Button("This week") { anchor = Date() }
-                Picker("Release type", selection: $filterValue) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
-                    .pickerStyle(.segmented).accessibilityIdentifier("schedule-release-type")
-                if store.isSignedIn { Toggle("My watching list only", isOn: $libraryOnly) }
-                Text("Times in \(TimeZone.current.identifier). Sub times are original Japanese broadcasts.").font(.caption).foregroundStyle(.secondary)
-            }
+        VStack(spacing: 0) {
+            weeklyControls
+            // This reader owns only the vertical list. The weekday strip has its
+            // own reader; putting both scroll views in one scope loses the target.
+            ScrollViewReader { scroll in
+            List {
             if loading { ProgressView("Loading releases…") }
             if filter != .dub, let error = subError { NoticeView(message: "Original schedule: \(error)") { Task { await load(refresh: true) } } }
             if filter != .sub, let error = dubNotice { NoticeView(message: "Dub schedule: \(error)") { Task { await load(refresh: true) } } }
-            ForEach(days, id: \.self) { date in
-                Section(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
-                    ForEach(visible.filter { event in event.date.map { Calendar.current.isDate($0, inSameDayAs: date) } ?? false }) { ReleaseRow(event: $0) }
-                }
-            }
+            ForEach(week.days, id: \.self) { releaseDay($0) }
             if visible.contains(where: { $0.date == nil }) {
                 Section("Delayed · No confirmed date") { ForEach(visible.filter { $0.date == nil }) { ReleaseRow(event: $0) } }
             }
@@ -94,10 +86,35 @@ struct ScheduleView: View {
                 Section { Text("No listed releases for this week.").foregroundStyle(.secondary) }
             }
             Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
-        }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
+            }.scrollContentBackground(.hidden).readableContent()
+                .accessibilityIdentifier("schedule-weekly-list")
+                .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in cancelAutomaticPositioning() })
+                .refreshable { await load(refresh: true) }
+                .task(id: scrollRequest) {
+                    guard let request = scrollRequest else { return }
+                    // Wait for the List's rows to register and finish their first layout.
+                    do { try await Task.sleep(for: .milliseconds(150)); try Task.checkCancellation() } catch { return }
+                    guard scrollRequest == request else { return }
+                    scroll.scrollTo("release-day-\(dayID(request.day))", anchor: .top)
+                }
+            }
+        }.background(Theme.background)
+            // The day rows exist before network results arrive, even on empty days.
+            // Keep an automatically or explicitly selected day in place as releases
+            // arrive. A free scroll clears the request and must never snap back.
+            .task(id: "\(window.start)-\(today?.timeIntervalSince1970 ?? -1)") {
+                scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
+            }
+            .onChange(of: visible) { _, _ in
+                Task { @MainActor in
+                    await Task.yield()
+                    guard let requestedDay = scrollRequest?.day, week.days.contains(requestedDay) else { return }
+                    scrollRequest = ScheduleScrollRequest(day: requestedDay)
+                }
+            }
+            .onAppear { refreshToday() }
             .task(id: "\(window.start)-\(store.includeAdult)") { await load() }
             .task(id: dubPresentationKey) { await presentDubs() }
-            .refreshable { await load(refresh: true) }
             .sheet(isPresented: $pickingDate) {
                 NavigationStack {
                     DatePicker("Schedule date", selection: $anchor, displayedComponents: .date).datePickerStyle(.graphical).padding()
@@ -107,10 +124,113 @@ struct ScheduleView: View {
             }
             .onChange(of: store.isSignedIn) { _, signedIn in if !signedIn { libraryOnly = false } }
     }
-    private func shift(_ days: Int) { anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor }
+    private var weeklyControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Button { shift(-7) } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Previous week")
+                Spacer()
+                Button { pickingDate = true } label: {
+                    Label(window.start.formatted(.dateTime.month(.abbreviated).day()) + " – " + window.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day()), systemImage: "calendar")
+                        .font(.subheadline.bold())
+                }.accessibilityLabel("Choose schedule date")
+                    .accessibilityIdentifier("schedule-week")
+                    .accessibilityValue(window.start.formatted(.dateTime.year().month().day()))
+                Spacer()
+                Button { shift(7) } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Next week")
+            }.buttonStyle(.borderless)
+            Button("This week") {
+                refreshToday(); anchor = now
+                scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
+            }.accessibilityIdentifier("schedule-this-week")
+            Picker("Release type", selection: $filterValue) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
+                .pickerStyle(.segmented).accessibilityIdentifier("schedule-release-type")
+            if store.isSignedIn { Toggle("My watching list only", isOn: $libraryOnly) }
+            weekdayStrip
+            Text("Times in \(TimeZone.current.identifier). Sub times are original Japanese broadcasts.").font(.caption).foregroundStyle(.secondary)
+        }.padding(.horizontal, 16).padding(.bottom, 12).readableContent(width: 1000)
+    }
+    private func releaseDay(_ date: Date) -> some View {
+        let releases = visible.filter { event in event.date.map { Calendar.current.isDate($0, inSameDayAs: date) } ?? false }
+        return Section {
+            HStack {
+                Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.subheadline.bold())
+                Spacer()
+                if date == today { Text("Today").font(.caption.bold()).padding(.horizontal, 9).padding(.vertical, 5).background(Color.white.opacity(0.12), in: Capsule()) }
+            }.id("release-day-\(dayID(date))").accessibilityElement(children: .combine)
+                .accessibilityIdentifier("schedule-day-\(dayID(date))")
+                .accessibilityValue(date == today ? "Today" : "")
+                .listRowBackground(date == today ? Theme.surface : Theme.surface.opacity(0.45))
+            ForEach(releases) { ReleaseRow(event: $0) }
+            if releases.isEmpty {
+                Text(loading ? "Loading releases…" : "No listed releases for this day.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+    private var weekdayStrip: some View {
+        ScrollViewReader { dayScroll in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(week.days, id: \.self) { date in
+                        Button {
+                            cancelAutomaticPositioning()
+                            scrollRequest = ScheduleScrollRequest(day: date)
+                        } label: {
+                            VStack(spacing: 3) {
+                                Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption2.weight(.semibold))
+                                Text(date.formatted(.dateTime.day())).font(.subheadline.bold())
+                            }.frame(minWidth: 47, minHeight: weekdayHeight)
+                                .foregroundStyle(date == today ? Color.black : Color.white)
+                                .background(date == today ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                        }.buttonStyle(.plain).id(dayID(date))
+                            .accessibilityIdentifier("schedule-jump-\(dayID(date))")
+                            .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + (date == today ? ", Today" : ""))
+                            .accessibilityHint("Scroll to this day's releases")
+                            .accessibilityAddTraits(date == today ? .isSelected : [])
+                    }
+                }
+            }.accessibilityIdentifier("schedule-weekdays")
+                .task(id: today) {
+                    await Task.yield()
+                    guard !Task.isCancelled, let today else { return }
+                    dayScroll.scrollTo(dayID(today), anchor: .center)
+                }
+        }.frame(height: weekdayHeight)
+    }
+    private func dayID(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+    private func refreshToday() {
+        let updated = ScheduleClock.now
+        // Follow a new week only if the user was already browsing the current week.
+        if week.today(at: now) != nil, week.today(at: updated) == nil { anchor = updated }
+        now = updated
+    }
+    private func shift(_ days: Int) {
+        cancelAutomaticPositioning()
+        anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor
+    }
+    private func cancelAutomaticPositioning() {
+        scrollRequest = nil
+    }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let selected = window
         loading = true; subError = nil; subEvents = []
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-schedule-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-schedule-delay-preview"), !delayedPreviewOnce {
+                delayedPreviewOnce = true
+                do { try await Task.sleep(for: .seconds(20)); try Task.checkCancellation() } catch { return }
+                guard requestID == attempt, selected == window else { return }
+            }
+            subEvents = week.days.enumerated().map { index, date in
+                let anime = Anime(id: 990200 + index, title: "Schedule preview · \(date.formatted(.dateTime.weekday(.wide)))")
+                return ReleaseEvent(anime: anime, episode: index + 1, kind: .sub,
+                    date: Calendar.current.date(byAdding: .hour, value: 12, to: date), certainty: .broadcast)
+            }
+            loading = false; return
+        }
+        #endif
         async let original: Void = loadSub(selected, attempt: attempt, refresh: refresh)
         async let dubbed: Void = dubs.load(using: store.dubs, refresh: refresh)
         _ = await (original, dubbed)
@@ -123,6 +243,9 @@ struct ScheduleView: View {
         } catch is CancellationError {} catch { if requestID == attempt { subError = error.localizedDescription } }
     }
     private func presentDubs() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-schedule-preview") { dubEvents = []; return }
+        #endif
         let attempt = UUID(); dubRequestID = attempt
         let selected = window; let revision = dubs.revision
         dubError = nil
@@ -156,6 +279,18 @@ struct ScheduleView: View {
                 }
             }
         } catch is CancellationError {} catch { if dubRequestID == attempt { dubError = error.localizedDescription } }
+    }
+}
+
+private enum ScheduleClock {
+    static var now: Date {
+        #if DEBUG
+        if let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-schedule-day=") }) {
+            let parts = value.dropFirst("--ui-schedule-day=".count).split(separator: "-").compactMap { Int($0) }
+            if parts.count == 3, let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)) { return date }
+        }
+        #endif
+        return Date()
     }
 }
 

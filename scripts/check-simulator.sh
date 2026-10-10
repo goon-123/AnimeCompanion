@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused ]]; then
-  echo "Expected full or focused test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly ]]; then
+  echo "Expected full, focused or weekly test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -22,6 +22,10 @@ fi
 if [[ "$test_scope" == focused ]]; then
   result_path="build/Focused-${device_family}.xcresult"
   screenshot_path="build/focused-${device_family}-screenshots"
+fi
+if [[ "$test_scope" == weekly ]]; then
+  result_path="build/Weekly-${device_family}.xcresult"
+  screenshot_path="build/weekly-${device_family}-screenshots"
 fi
 
 # Bound the workaround to this disposable test runner and resume paused services.
@@ -77,11 +81,15 @@ PY
 
 # Permit one retry for a cold hosted simulator's first-launch timeout.
 # Both attempts stay in xcresult; repeated failures still fail the job.
+test_arguments=(-only-testing:AnimeCompanionUITests/WeeklyScheduleUITests)
+if [[ "$test_scope" != weekly ]]; then
 test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
   -only-testing:AnimeCompanionUITests/MetadataTrackingUITests
   -only-testing:AnimeCompanionUITests/AiringProgressUITests
   -only-testing:AnimeCompanionUITests/PolishedDesignUITests
+  -only-testing:AnimeCompanionUITests/WeeklyScheduleUITests
   -only-testing:AnimeCompanionUITests/ExplorePresentationUITests)
+fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
     -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests

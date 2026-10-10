@@ -153,8 +153,10 @@ struct DiscoveryBrowseView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 Menu {
-                    Button("All genres") { filters.genre = nil }
-                    ForEach(genres, id: \.self) { genre in Button(genre) { filters.genre = genre } }
+                    Button("All genres") { filters.genre = nil }.accessibilityIdentifier("discovery-genre-option-all")
+                    ForEach(genres, id: \.self) { genre in
+                        Button(genre) { filters.genre = genre }.accessibilityIdentifier("discovery-genre-option-\(genre)")
+                    }
                 } label: { chip(filters.genre ?? "Genre", selected: filters.genre != nil) }.accessibilityIdentifier("discovery-genre")
                 Menu {
                     Button("All years") { filters.year = nil }
@@ -233,7 +235,7 @@ struct DiscoveryAnimeRow: View {
                     DiscoveryIndicators(anime: anime)
                     Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-            }.foregroundStyle(.primary)
+            }.foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             .padding(.leading, posterWidth + 12)

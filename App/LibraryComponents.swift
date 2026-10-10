@@ -20,10 +20,7 @@ struct LibraryAnimeRow: View {
                         Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
                         LibraryDubLabel(anime: anime, progress: dub)
                         if let score = anime.averageScore { Label("AniList \(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
-                        if airing == nil, let next = anime.nextAiringEpisode, next.date > Date() {
-                            Text("SUB · Episode \(next.episode) airs \(next.date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(Theme.highlight)
-                        }
-                        if let nextDub, let date = nextDub.date {
+                        if airing != nil, let nextDub, let date = nextDub.date {
                             Text("\(nextDub.certainty == .unverified ? "DUB ESTIMATE" : "DUB") · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
                                 .font(.caption).foregroundStyle(nextDub.certainty == .verified ? Color.mint : Color.orange)
                         }
@@ -44,21 +41,12 @@ struct LibraryAnimeTile: View {
     let anime: Anime
     let dub: LibraryDubProgress?
     var posterWidth: CGFloat = 360
-    var airing: LibraryAiringProgress? = nil
-
     var body: some View {
       VStack(alignment: .leading, spacing: 8) {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geometry in
                     AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
-                        .overlay(alignment: .topLeading) {
-                            if let airing, airing.state == .caughtUp || airing.state == .behind {
-                                Image(systemName: airing.state.symbol).font(.title3.bold()).foregroundStyle(airing.state.color)
-                                    .padding(7).background(Theme.background.opacity(0.9), in: Circle()).padding(6)
-                                    .accessibilityHidden(true)
-                            }
-                        }
                 }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.caption.bold()).lineLimit(2, reservesSpace: true)
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
@@ -68,7 +56,6 @@ struct LibraryAnimeTile: View {
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
-        if let airing { LibraryAiringStatus(status: airing, animeID: anime.id, compact: true) }
       }.overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
