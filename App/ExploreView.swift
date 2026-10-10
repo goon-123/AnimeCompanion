@@ -155,7 +155,7 @@ struct ExploreView: View {
                 Text(dubFilters.selection.isActive ? "No matches in this preview. Open See all to browse more titles or adjust your dub filters." : "No titles listed yet.")
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
             }
-        }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("explore-shelf-\(category.rawValue)")
     }
     private var seasonPicker: some View {
         NavigationStack {

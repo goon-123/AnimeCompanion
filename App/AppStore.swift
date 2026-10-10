@@ -50,6 +50,8 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(MetadataSource.aniList.rawValue, forKey: "metadata.source")
             UserDefaults.standard.set(true, forKey: "tracking.automaticallyComplete")
             UserDefaults.standard.set(AiringProgressSource.broadcast.rawValue, forKey: "library.airingProgressSource")
+            UserDefaults.standard.set("All", forKey: "schedule.releaseType")
+            UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
         }
         #endif
     }

@@ -1,3 +1,13 @@
+## Today positioning, focused Library and genre fixes — build 17
+
+Version 0.4.1 on `fix/schedule-today-library-genres`, based on merged PR #7.
+
+- Weekly Schedule keeps all seven local calendar days, highlights Today and initially positions its releases below fixed week/filter/day controls. Day shortcuts and free scrolling remain available. Manual browsing cancels pending automatic positioning, including while releases are loading; previous/upcoming weeks do not jump back to the current week. Day/foreground notifications refresh today and follow a week boundary only when already browsing the current week.
+- My Library list/grid cards no longer repeat catch-up panels, green/yellow poster markers or associated next-airing lines. Watched progress, dub availability/counts, Watch/+1/edit actions, sorting, saved display controls and the independent expandable Coming up for you section are retained. Schedule's full Airing Now comparison and detail progress remain unchanged.
+- Genre destinations now have explicit route identity so replacing an Explore path cannot retain an earlier category's State filters. Repeated taps, including the same genre, open fresh all-catalog results. Normal anime detail/back navigation retains category state. Compact horizontal scroll views keep independent genre buttons outside anime links; list-card blank areas now share the link's hit shape.
+- Added seven local-calendar unit cases (including timezone, next-day, week boundary, first-weekday and both daylight-saving changes), two deterministic native weekly cases, and list/grid/featured/all-shelf tap and swipe checks. Existing Library badge checks now assert their absence only in My Library and their continued presence in Schedule. All preview clocks/releases are DEBUG only, with no credentials or account writes.
+- Local whitespace and shell syntax checks pass. This Linux workspace has no Swift/Xcode. Final hosted core tests, universal Release compilation, native iPhone/iPad tests and screenshot review are pending; no validation pass is claimed before those jobs complete.
+
 ## Schedule, genre navigation and cinematic details — build 16
 
 Version 0.4.0 on `design/schedule-genres-details`, based on PR #6's build-15 polish; PR #6 is left untouched.
@@ -6,7 +16,7 @@ Version 0.4.0 on `design/schedule-genres-details`, based on PR #6's build-15 pol
 - Shared single-row genre buttons work in Explore, list/grid library entries, releases, details, related titles and recommendations. A tap switches to Explore and opens a fresh all-season genre query; genre buttons are outside the anime's navigation link.
 - Details now use a larger fading banner, overlapping poster and clear status/rating/dub summary, a progress-aware resume button, four-part broadcast countdown, and consistent cards. AniList/LiveChart switching, tracking editor, image expansion, full dub evidence/history/dates, supporting metadata, trailers and external links remain.
 - Added two core genre/model regressions and four native design/navigation regressions to the existing iPhone/iPad suites; moved the Airing Now filter assertions to Schedule and retained the library badge checks. UI fixtures are DEBUG only and contain no credentials or account writes.
-- Local whitespace and shell syntax checks pass. This Linux workspace has no Swift/Xcode. Hosted core, universal Release build, provider checks, iPhone/iPad tests, native screenshot review and IPA validation are pending; the PR stays draft until they finish.
+- [Merged-source run 38014110089](https://github.com/goon-123/AnimeCompanion/actions/runs/38014110089) passed all 110 active core tests, universal Release compilation and public-provider checks. Native iPhone/iPad suites failed: genre navigation retained old filter state, and the full discovery-navigation case also reported a detail-opening failure. Build 17 addresses the genre identity bug and list-link hit shape and reruns the existing assertions. This earlier workflow was not a native validation pass.
 
 # Build verification
 

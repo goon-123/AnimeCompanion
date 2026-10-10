@@ -68,7 +68,7 @@ struct GenreTags: View {
                                 .background(Color.white.opacity(0.06), in: Capsule())
                                 .overlay { Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1) }
                                 .frame(minHeight: rowHeight)
-                        }.buttonStyle(.plain).foregroundStyle(.secondary)
+                        }.buttonStyle(.plain).foregroundStyle(.secondary).contentShape(Capsule())
                             .accessibilityIdentifier("genre-\(animeID)-\(genre)")
                             .accessibilityHint("Browse \(genre) anime in Explore")
                     }

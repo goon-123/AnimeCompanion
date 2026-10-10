@@ -233,7 +233,7 @@ struct DiscoveryAnimeRow: View {
                     DiscoveryIndicators(anime: anime)
                     Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-            }.foregroundStyle(.primary)
+            }.foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             .padding(.leading, posterWidth + 12)

@@ -101,7 +101,7 @@ struct LibraryView: View {
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 20) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth, airing: airing(for: entry))
+                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
                                     }
                                 }
                             }.accessibilityIdentifier("library-grid")
@@ -109,7 +109,7 @@ struct LibraryView: View {
                             LazyVStack(spacing: 12) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nextDub(for: anime.id), dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth), airing: airing(for: entry))
+                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nil, dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth))
                                     }
                                 }
                             }.accessibilityIdentifier("library-list")

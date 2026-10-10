@@ -76,8 +76,12 @@ struct AppTabs: View {
 struct AnimeNavigation: ViewModifier {
     func body(content: Content) -> some View {
         content.navigationDestination(for: AnimeRoute.self) { AnimeDetailView(mediaID: $0.id) }
-            .navigationDestination(for: DiscoveryRoute.self) {
-                DiscoveryBrowseView(category: $0.category, selection: $0.selection, titleOverride: $0.titleOverride, initialGenre: $0.genre)
+            .navigationDestination(for: DiscoveryRoute.self) { route in
+                DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
+                    // Replacing a path with the same destination type otherwise reuses its
+                    // @State filters. Each genre tap must initialize a fresh result page;
+                    // normal detail/back navigation keeps the same route and loaded pages.
+                    .id(route)
             }
     }
 }
