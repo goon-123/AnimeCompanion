@@ -23,7 +23,6 @@ struct LibraryView: View {
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
     @State private var now = Date()
-    @State private var behindOnly = false
     @FocusState private var searchFocused: Bool
     private let statuses: [LibraryStatus] = [.watching, .planning, .completed, .dropped, .paused, .rewatching]
     private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
@@ -44,7 +43,6 @@ struct LibraryView: View {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let entries = selectedEntries.filter { entry in
             guard entry.status == selected, let anime = entry.media else { return false }
-            if behindOnly && airing(for: entry)?.state != .behind { return false }
             return text.isEmpty || [anime.displayTitle, anime.title?.romaji ?? "", anime.title?.english ?? ""].contains { $0.localizedCaseInsensitiveContains(text) }
         }
         return entries.sorted { a, b in
@@ -91,7 +89,6 @@ struct LibraryView: View {
                         }
                         comingUpSection(width: contentWidth)
                         statusTabs
-                        airingSummary
                         layoutControls.zIndex(1)
                         sortingBar.zIndex(1)
                         if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
@@ -118,8 +115,8 @@ struct LibraryView: View {
                             }.accessibilityIdentifier("library-list")
                         }
                         if filtered.isEmpty && !store.loadingLibrary && store.libraryError == nil {
-                            ContentUnavailableView(behindOnly ? "No episodes behind" : (query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime"),
-                                                   systemImage: behindOnly ? "checkmark.circle" : "books.vertical", description: Text(behindOnly ? "No currently airing titles with confirmed released counts are behind in this list." : (query.isEmpty ? "Add a title from Explore." : "Try another title or list status.")))
+                            ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
+                                                   systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
                         if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
@@ -140,8 +137,6 @@ struct LibraryView: View {
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .task(id: syncKey) { await loadDubs() }
             .task(id: dubs.revision) { applyDubs() }
-            .onChange(of: selected) { _, _ in behindOnly = false }
-            .onChange(of: store.airingProgressSource) { _, _ in behindOnly = false }
             .task(id: "\(store.isSignedIn)-\(scenePhase)") {
                 guard scenePhase == .active else { return }
                 while !Task.isCancelled {
@@ -156,36 +151,6 @@ struct LibraryView: View {
         guard let anime = entry.media else { return nil }
         return LibraryAiringProgress(anime: anime, watched: entry.progressValue, source: store.airingProgressSource,
                                     dub: dubProgress[anime.id], nextDub: nextDub(for: anime.id), now: now)
-    }
-    @ViewBuilder private var airingSummary: some View {
-        let statuses = selectedEntries.compactMap { airing(for: $0) }
-        if !statuses.isEmpty || store.airingProgressSource == .dub {
-            let behind = statuses.filter { $0.state == .behind }.count
-            let caughtUp = statuses.filter { $0.state == .caughtUp }.count
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Airing now").font(.subheadline.bold())
-                    Spacer()
-                    Menu {
-                        Picker("Compare watched progress with", selection: $store.airingProgressSource) {
-                            ForEach(AiringProgressSource.allCases) { Text($0.label).tag($0) }
-                        }
-                    } label: { Label(store.airingProgressSource.label, systemImage: "antenna.radiowaves.left.and.right").font(.caption) }
-                        .accessibilityIdentifier("library-airing-source")
-                }
-                HStack(spacing: 14) {
-                    Button { behindOnly.toggle() } label: {
-                        Label("\(behind) behind", systemImage: "clock.badge.exclamationmark").font(.caption.bold())
-                            .foregroundStyle(.yellow).padding(.horizontal, 10).padding(.vertical, 8)
-                            .background(Color.yellow.opacity(behindOnly ? 0.2 : 0.07), in: Capsule())
-                    }.buttonStyle(.plain).accessibilityIdentifier("library-behind-filter")
-                        .accessibilityValue(behindOnly ? "Behind only" : "All titles")
-                    Label("\(caughtUp) caught up", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
-                }
-                if behindOnly { Text("Showing behind titles only. Tap the yellow count to show all titles.").font(.caption2).foregroundStyle(.secondary) }
-                if statuses.isEmpty { Text("No ongoing English-dub schedule is listed for this list.").font(.caption2).foregroundStyle(.secondary) }
-            }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
-        }
     }
     private var searchBar: some View {
         HStack(spacing: 10) {

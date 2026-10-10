@@ -101,8 +101,7 @@ private struct FeaturedAnimePanel: View {
                 if let year = anime.seasonYear { Text(String(year)) }
                 Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " "))
             }.font(.caption.weight(.semibold))
-            Text((anime.genres ?? []).joined(separator: " · ")).font(.caption.weight(.medium))
-                .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("featured-genres-\(anime.id)")
+            AnimeGenres(anime: anime).accessibilityIdentifier("featured-genres-\(anime.id)")
             DiscoveryIndicators(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
             NavigationLink(value: AnimeRoute(id: anime.id)) {

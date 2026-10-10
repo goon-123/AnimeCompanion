@@ -1,3 +1,13 @@
+## Schedule, genre navigation and cinematic details — build 16
+
+Version 0.4.0 on `design/schedule-genres-details`, based on PR #6's build-15 polish; PR #6 is left untouched.
+
+- Schedule opens with the user's airing watchlist, behind-first ordering, green/yellow/neutral progress, original/dub comparison, next-airing times, direct playback and tracking actions. The weekly sub/dub calendar, saved filters, date picker and both week directions remain behind Weekly Schedule.
+- Shared single-row genre buttons work in Explore, list/grid library entries, releases, details, related titles and recommendations. A tap switches to Explore and opens a fresh all-season genre query; genre buttons are outside the anime's navigation link.
+- Details now use a larger fading banner, overlapping poster and clear status/rating/dub summary, a progress-aware resume button, four-part broadcast countdown, and consistent cards. AniList/LiveChart switching, tracking editor, image expansion, full dub evidence/history/dates, supporting metadata, trailers and external links remain.
+- Added two core genre/model regressions and four native design/navigation regressions to the existing iPhone/iPad suites; moved the Airing Now filter assertions to Schedule and retained the library badge checks. UI fixtures are DEBUG only and contain no credentials or account writes.
+- Local whitespace and shell syntax checks pass. This Linux workspace has no Swift/Xcode. Hosted core, universal Release build, provider checks, iPhone/iPad tests, native screenshot review and IPA validation are pending; the PR stays draft until they finish.
+
 # Build verification
 
 ## Version 0.3.2 / build 15

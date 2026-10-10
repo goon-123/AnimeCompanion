@@ -64,7 +64,7 @@ final class DiscoveryNavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons["discovery-sort"].label.contains("AniList rating"))
         XCTAssertTrue(app.buttons["discovery-layout"].label.contains("Grid"))
         XCTAssertTrue(app.buttons["discovery-columns"].label.contains("8 per row"))
-        let genre = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-genres-")).firstMatch
+        let genre = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-genres-")).firstMatch
         XCTAssertTrue(genre.exists); XCTAssertTrue(genre.label.contains("Action"))
         capture("Popular-Season-Grid-Genres-And-Saved-Filters")
     }

@@ -6,9 +6,22 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  core:
+    name: Core regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Swift package without waiting for a macOS runner
+        run: |
+          env -u DEVELOPER_DIR swift --version
+          env -u DEVELOPER_DIR swift test -j 2
   focused-ui:
     name: Focused ${{ matrix.device }} layout and playback
     runs-on: macos-15

@@ -3,12 +3,14 @@ import UIKit
 
 final class AiringProgressUITests: XCTestCase {
     @MainActor
-    func testAiringCatchUpBadgesShowProgressNextTimeAndBehindFilterInBothLayouts() throws {
+    func testScheduleDefaultsToAiringProgressAndLibraryKeepsListAndGridBadges() throws {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-airing-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
+        XCTAssertTrue(app.staticTexts["schedule-airing-title"].exists)
         let behind = app.staticTexts["library-airing-status-990101"]
         XCTAssertTrue(behind.waitForExistence(timeout: 45)); reveal(behind, app: app)
         XCTAssertEqual(behind.label, "2 episodes behind")
@@ -19,14 +21,26 @@ final class AiringProgressUITests: XCTestCase {
         reveal(caught, app: app); XCTAssertEqual(caught.label, "Caught up")
         XCTAssertTrue(app.staticTexts["library-airing-next-990102"].label.contains("Next SUB · Ep 7"))
         capture("Airing-Caught-Up-List")
-        let finished = app.buttons["library-entry-990103"]
-        reveal(finished, app: app); XCTAssertTrue(finished.exists)
-        XCTAssertFalse(app.staticTexts["library-airing-status-990103"].exists)
-        let filter = app.buttons["library-behind-filter"]
+        XCTAssertFalse(app.buttons["library-entry-990103"].exists)
+        let filter = app.buttons["schedule-behind-filter"]
         reveal(filter, app: app, upward: false); filter.tap()
         XCTAssertEqual(filter.value as? String, "Behind only")
         XCTAssertTrue(app.buttons["library-entry-990101"].exists)
         XCTAssertFalse(app.buttons["library-entry-990102"].exists)
+        capture("Schedule-Airing-Behind-Only")
+        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
+        XCTAssertTrue(app.buttons["schedule-week"].waitForExistence(timeout: 15))
+        let initial = app.buttons["schedule-week"].value as? String
+        app.buttons["Next week"].tap()
+        XCTAssertNotEqual(app.buttons["schedule-week"].value as? String, initial)
+        app.buttons["Previous week"].tap()
+        XCTAssertEqual(app.buttons["schedule-week"].value as? String, initial)
+        capture("Schedule-Weekly-Releases")
+        app.tabBars.buttons["My Library"].tap()
+        XCTAssertFalse(app.buttons["schedule-behind-filter"].exists)
+        let finished = app.buttons["library-entry-990103"]
+        reveal(finished, app: app); XCTAssertTrue(finished.exists)
+        XCTAssertFalse(app.staticTexts["library-airing-status-990103"].exists)
         let layout = app.segmentedControls["library-layout"]
         reveal(layout, app: app, upward: false); layout.buttons["Grid"].tap()
         XCTAssertTrue(behind.waitForExistence(timeout: 10)); capture("Airing-Behind-Grid-Poster-Marker")
@@ -36,6 +50,8 @@ final class AiringProgressUITests: XCTestCase {
             XCTAssertTrue(behind.exists); capture("Airing-Behind-iPad-Landscape")
             XCUIDevice.shared.orientation = .portrait
         }
+        app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
     }
     @MainActor
     func testLibraryWatchAutosearchesAniListEpisodeInsteadOfStaleResumeAndAllowsOverride() throws {

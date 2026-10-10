@@ -46,6 +46,12 @@ public struct DiscoveryFilters: Hashable, Sendable {
             year = next.year; season = next.season; status = "NOT_YET_RELEASED"
         }
     }
+    /// A genre shortcut searches the whole catalog, without an unrelated season or search term.
+    public init(genre: String) {
+        self.init(category: .trending)
+        self.genre = genre
+        sort = .popularity
+    }
     public func variables(page: Int) -> [String: QueryValue] {
         var result: [String: QueryValue] = ["page": .int(max(1, page)), "sort": .string(sort.rawValue)]
         let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
