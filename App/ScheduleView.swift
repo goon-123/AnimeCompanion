@@ -2,10 +2,14 @@ import SwiftUI
 import AnimeCore
 
 private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub", dub = "Dub" }
+private enum ScheduleMode: String, CaseIterable { case airing = "Airing Now", weekly = "Weekly Schedule" }
 
 struct ScheduleView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @State private var mode = ScheduleMode.airing
+    @State private var showSettings = false
     @State private var anchor = Date()
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
     @AppStorage("schedule.libraryOnly") private var libraryOnly = false
@@ -37,6 +41,24 @@ struct ScheduleView: View {
         Array(Set(visible.compactMap { $0.date }.map { Calendar.current.startOfDay(for: $0) })).sorted()
     }
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Schedule view", selection: $mode) {
+                ForEach(ScheduleMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 12)
+                .readableContent(width: 1000).accessibilityIdentifier("schedule-mode")
+            if mode == .airing { AiringNowView(showSettings: $showSettings) }
+            else { weeklySchedule }
+        }.background(Theme.background).navigationTitle("Schedule").navigationBarTitleDisplayMode(.inline).animeNavigation()
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }
+                        .accessibilityLabel("Account and settings")
+                }
+            }
+            .sheet(isPresented: $showSettings) { SettingsView() }
+            .onChange(of: navigation.selectedTab) { _, tab in if tab == .schedule { mode = .airing } }
+    }
+    private var weeklySchedule: some View {
         List {
             Section {
                 HStack {
@@ -73,7 +95,7 @@ struct ScheduleView: View {
             }
             Section { Text("English dub dates are reported by the maintained AniSchedule feed and may change. Estimates are labeled. An empty schedule does not mean that a dub is unavailable.").font(.caption).foregroundStyle(.secondary) }
         }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
-            .navigationTitle("Schedule").animeNavigation().task(id: "\(window.start)-\(store.includeAdult)") { await load() }
+            .task(id: "\(window.start)-\(store.includeAdult)") { await load() }
             .task(id: dubPresentationKey) { await presentDubs() }
             .refreshable { await load(refresh: true) }
             .sheet(isPresented: $pickingDate) {

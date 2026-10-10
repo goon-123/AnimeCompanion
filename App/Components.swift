@@ -18,6 +18,7 @@ struct AnimeCard: View {
     let anime: Anime
     var posterWidth: CGFloat = 150
     var body: some View {
+      VStack(alignment: .leading, spacing: 4) {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .topTrailing) {
@@ -30,19 +31,50 @@ struct AnimeCard: View {
                     Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
                 }
                 DiscoveryIndicators(anime: anime)
-                AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             }.frame(width: posterWidth).foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
+        AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
+      }.frame(width: posterWidth, alignment: .leading)
     }
 }
 
-/// Wrap every reported genre without truncating metadata in a narrow grid cell.
+/// One compact row of independent buttons; never nest these inside a card's NavigationLink.
 struct AnimeGenres: View {
     let anime: Anime
+    var body: some View { GenreTags(genres: anime.genres ?? [], animeID: anime.id) }
+}
+
+struct GenreTags: View {
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var navigation: AppNavigationStore
+    let genres: [String]
+    let animeID: Int
+    @ScaledMetric(relativeTo: .caption) private var rowHeight = 44
+    private var uniqueGenres: [String] {
+        var seen = Set<String>()
+        return genres.filter { seen.insert($0).inserted }
+    }
     var body: some View {
-        if let genres = anime.genres, !genres.isEmpty {
-            Text(genres.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        if !uniqueGenres.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(uniqueGenres, id: \.self) { genre in
+                        Button {
+                            store.metadataSource = .aniList
+                            navigation.openGenre(genre)
+                        } label: {
+                            Text(genre).font(.caption.weight(.medium)).lineLimit(1).fixedSize()
+                                .padding(.horizontal, 11).padding(.vertical, 7)
+                                .background(Color.white.opacity(0.06), in: Capsule())
+                                .overlay { Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1) }
+                                .frame(minHeight: rowHeight)
+                        }.buttonStyle(.plain).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("genre-\(animeID)-\(genre)")
+                            .accessibilityHint("Browse \(genre) anime in Explore")
+                    }
+                }
+            }.frame(height: rowHeight).frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel("Genres: \(genres.joined(separator: ", "))")
         }
     }
@@ -95,6 +127,7 @@ struct ReleaseRow: View {
     let event: ReleaseEvent
     var posterWidth: CGFloat? = nil
     var body: some View {
+      VStack(alignment: .leading, spacing: 0) {
         NavigationLink(value: AnimeRoute(id: event.anime.id)) {
             HStack(spacing: 12) {
                 AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48))
@@ -110,5 +143,7 @@ struct ReleaseRow: View {
                 Spacer(minLength: 0)
             }.padding(.vertical, 5)
         }.buttonStyle(.plain).accessibilityIdentifier("release-entry-\(event.anime.id)-\(event.kind.rawValue)-\(event.episode)")
+        AnimeGenres(anime: event.anime)
+      }
     }
 }

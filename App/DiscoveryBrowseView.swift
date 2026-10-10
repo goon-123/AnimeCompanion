@@ -27,9 +27,9 @@ struct DiscoveryBrowseView: View {
     @State private var loadedAdult: Bool?
     @FocusState private var searching: Bool
 
-    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil) {
+    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil, initialGenre: String? = nil) {
         self.category = category; self.selection = selection; self.titleOverride = titleOverride
-        _filters = State(initialValue: DiscoveryFilters(category: category, selection: selection))
+        _filters = State(initialValue: initialGenre.map { DiscoveryFilters(genre: $0) } ?? DiscoveryFilters(category: category, selection: selection))
     }
     private var genres: [String] { DiscoveryGenres.all }
     private var formats: [(String, String)] {
@@ -220,6 +220,7 @@ struct DiscoveryAnimeRow: View {
     let anime: Anime
     var posterWidth: CGFloat = 90
     var body: some View {
+      VStack(alignment: .leading, spacing: 0) {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             HStack(alignment: .top, spacing: 12) {
                 AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
@@ -231,10 +232,12 @@ struct DiscoveryAnimeRow: View {
                     Text(metadata).font(.caption).foregroundStyle(.secondary)
                     DiscoveryIndicators(anime: anime)
                     Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
                 }.frame(maxWidth: .infinity, alignment: .leading)
-            }.padding(9).foregroundStyle(.primary).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9))
+            }.foregroundStyle(.primary)
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
+        AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
+            .padding(.leading, posterWidth + 12)
+      }.padding(9).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
     }
     private var metadata: String {
         let format = ["TV": "TV show", "TV_SHORT": "TV short", "MOVIE": "Movie", "OVA": "OVA", "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"]
@@ -249,6 +252,7 @@ struct DiscoveryAnimeTile: View {
     let anime: Anime
     var posterWidth: CGFloat = 360
     var body: some View {
+      VStack(alignment: .leading, spacing: 4) {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 7) {
                 GeometryReader { geometry in
@@ -260,10 +264,11 @@ struct DiscoveryAnimeTile: View {
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
                 DiscoveryIndicators(anime: anime)
-                AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
+      }.frame(maxWidth: posterWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

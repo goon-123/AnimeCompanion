@@ -110,6 +110,7 @@ public struct RelatedAnime: Codable, Hashable, Identifiable, Sendable {
     public let type: String?
     public let coverImage: AnimeImage?
     public let isAdult: Bool?
+    public let genres: [String]?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
     public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
 }

@@ -1,5 +1,13 @@
 # Anime Companion
 
+### Schedule and details refresh (0.4.0)
+
+Schedule opens on **Airing Now** for your watching/rewatching lists. Green means caught up, yellow means behind, and unconfirmed counts stay neutral. Choose Original broadcast or English dub, tap the yellow count to filter behind titles, or open **Weekly Schedule** to browse sub/dub releases in either week direction. My Library keeps its list/grid controls and per-title progress.
+
+Anime genres appear as a single horizontally scrolling row of buttons. Tap one to open Explore with that genre selected across the whole catalog; saved dub preferences still apply. Your library and confirmed AniList progress are preserved when switching tabs.
+
+The details page has a cinematic fading banner, poster and compact status/rating/dub summary, a progress-aware VidHub resume button and an airing countdown. Full dub counts, release history and schedules, tracking and library management, synopsis/metadata, related titles, characters, staff, recommendations, trailers, reviews and external links remain available. Build 16 validation is recorded in `BUILD_STATUS.md`.
+
 A universal iPhone and iPad SwiftUI app for seasonal anime discovery, AniList library tracking, English dub information and anime news. The name is a working title. Requires iOS/iPadOS 17 or newer. iPad supports portrait, upside-down portrait and both landscape orientations.
 
 ## Features

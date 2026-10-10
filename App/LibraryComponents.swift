@@ -32,6 +32,7 @@ struct LibraryAnimeRow: View {
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             LibraryEntryActions(entry: entry, anime: anime)
         }
+        AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
       }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
             .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Color.white.opacity(0.06), lineWidth: 1) }
@@ -63,10 +64,10 @@ struct LibraryAnimeTile: View {
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
                 LibraryDubLabel(anime: anime, progress: dub)
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
-                AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+        AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id, compact: true) }
       }.overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

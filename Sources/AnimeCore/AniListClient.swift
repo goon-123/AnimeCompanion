@@ -97,10 +97,10 @@ public enum AniListQueries {
         rankings { id rank type context year season allTime }
         studios(isMain: true) { nodes { id name } }
         characters(perPage: 12, sort: ROLE) { nodes { id name { full } image { medium } } }
-        relations { edges { relationType node { id type isAdult title { romaji english userPreferred } coverImage { large } } } }
+        relations { edges { relationType node { id type isAdult genres title { romaji english userPreferred } coverImage { large } } } }
         staff(perPage: 12) { edges { id role node { id name { full } image { large medium } } } }
         recommendations(perPage: 12, sort: RATING_DESC) {
-          nodes { id mediaRecommendation { id type isAdult title { romaji english userPreferred } coverImage { large } } }
+          nodes { id mediaRecommendation { id type isAdult genres title { romaji english userPreferred } coverImage { large } } }
         }
         reviews(perPage: 3, sort: RATING_DESC) { nodes { id summary score siteUrl } }
         externalLinks { id site url isDisabled }
