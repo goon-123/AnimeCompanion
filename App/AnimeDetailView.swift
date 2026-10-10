@@ -68,7 +68,8 @@ struct AnimeDetailView: View {
     private func watchButton(_ anime: Anime) -> some View {
         let entry = store.entry(for: anime.id)
         let episode = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: playback.resumeEpisode(animeID: anime.id))
-        let label = anime.format == "MOVIE" ? "Watch movie" : ((entry?.progressValue ?? 0) > 0 ? "Resume episode \(episode)" : "Watch episode \(episode)")
+        let finished = anime.episodes.map { $0 > 0 && (entry?.progressValue ?? 0) >= $0 } ?? false
+        let label = anime.format == "MOVIE" ? "Watch movie" : (finished ? "Replay episode \(episode)" : ((entry?.progressValue ?? 0) > 0 ? "Resume episode \(episode)" : "Watch episode \(episode)"))
         return Button { showPlayback = true } label: {
             HStack(spacing: 14) {
                 Image(systemName: "play.fill").font(.title3)

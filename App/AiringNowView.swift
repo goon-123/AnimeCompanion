@@ -17,7 +17,7 @@ struct AiringNowView: View {
     @State private var now = Date()
 
     private var items: [AiringWatchlistItem] {
-        store.watching.compactMap { entry in
+        store.watching.compactMap { entry -> AiringWatchlistItem? in
             guard let anime = entry.media,
                   let status = LibraryAiringProgress(anime: anime, watched: entry.progressValue,
                       source: store.airingProgressSource, dub: dubs.progress(for: anime), nextDub: dubs.nextDub(for: anime.id), now: now) else { return nil }
@@ -48,7 +48,7 @@ struct AiringNowView: View {
                         }
                     }.accessibilityIdentifier("schedule-airing-list")
                     if visible.isEmpty && !store.loadingLibrary && !(store.airingProgressSource == .dub && dubs.loading) {
-                        ContentUnavailableView(behindOnly ? "You're caught up" : "No airing titles yet",
+                        ContentUnavailableView(behindOnly ? "No confirmed episodes behind" : "No airing titles yet",
                             systemImage: behindOnly ? "checkmark.circle" : "antenna.radiowaves.left.and.right",
                             description: Text(behindOnly ? "None of your airing titles have confirmed episodes left to catch up on." :
                                 (store.airingProgressSource == .dub ? "No ongoing English dub schedule is listed for your watching list. Try Original broadcast or browse the weekly schedule." : "Add a currently airing title to your watching list to see its progress and next release here.")))
