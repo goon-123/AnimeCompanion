@@ -239,7 +239,7 @@ struct DiscoveryAnimeRow: View {
     private var metadata: String {
         let format = ["TV": "TV show", "TV_SHORT": "TV short", "MOVIE": "Movie", "OVA": "OVA", "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"]
         var parts = [anime.format.flatMap { format[$0] } ?? "Anime"]
-        if let episodes = anime.episodes { parts.append("\(episodes) episodes") }
+        if let episodes = anime.episodes { parts.append("\(episodes) \(episodes == 1 ? "episode" : "episodes")") }
         if let score = anime.averageScore { parts.append(String(format: "%.1f ★", Double(score) / 10)) }
         return parts.joined(separator: " · ")
     }
