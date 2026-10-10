@@ -15,7 +15,6 @@ struct ScheduleView: View {
     @State private var showSettings = false
     @State private var anchor = ScheduleClock.now
     @State private var now = ScheduleClock.now
-    @State private var automaticDay: Date?
     @State private var scrollRequest: ScheduleScrollRequest?
     @ScaledMetric(relativeTo: .subheadline) private var weekdayHeight: CGFloat = 46
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
@@ -101,16 +100,16 @@ struct ScheduleView: View {
             }
         }.background(Theme.background)
             // The day rows exist before network results arrive, even on empty days.
-            // Re-anchor late-loading rows only until the user starts browsing manually.
+            // Keep an automatically or explicitly selected day in place as releases
+            // arrive. A free scroll clears the request and must never snap back.
             .task(id: "\(window.start)-\(today?.timeIntervalSince1970 ?? -1)") {
-                automaticDay = today
                 scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
             }
             .onChange(of: visible) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
-                    guard let automaticDay, automaticDay == today else { return }
-                    scrollRequest = ScheduleScrollRequest(day: automaticDay)
+                    guard let requestedDay = scrollRequest?.day, week.days.contains(requestedDay) else { return }
+                    scrollRequest = ScheduleScrollRequest(day: requestedDay)
                 }
             }
             .onAppear { refreshToday() }
@@ -140,7 +139,7 @@ struct ScheduleView: View {
                 Button { shift(7) } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Next week")
             }.buttonStyle(.borderless)
             Button("This week") {
-                refreshToday(); anchor = now; automaticDay = today
+                refreshToday(); anchor = now
                 scrollRequest = today.map { ScheduleScrollRequest(day: $0) }
             }.accessibilityIdentifier("schedule-this-week")
             Picker("Release type", selection: $filterValue) { ForEach(ScheduleFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
@@ -212,7 +211,7 @@ struct ScheduleView: View {
         anchor = Calendar.current.date(byAdding: .day, value: days, to: anchor) ?? anchor
     }
     private func cancelAutomaticPositioning() {
-        automaticDay = nil; scrollRequest = nil
+        scrollRequest = nil
     }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let selected = window
