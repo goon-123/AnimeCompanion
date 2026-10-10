@@ -152,7 +152,7 @@ struct AnimeDubSchedule: View {
             }
             Link("Check AnimeSchedule", destination: snapshot?.schedulePage(for: anime) ?? URL(string: "https://animeschedule.net")!).font(.caption2)
             Link("Dub availability © MyDubList", destination: URL(string: "https://mydublist.com")!).font(.caption2)
-        }.accessibilityIdentifier("anime-dub-schedule")
+        }
     }
     private func release(_ event: ReleaseEvent) -> some View {
         HStack(alignment: .top) {

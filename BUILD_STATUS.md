@@ -1,12 +1,16 @@
 # Build verification
 
-## Version 0.3.2 / build 13
+## Version 0.3.2 / build 14
 
 Simplifies native Explore featured titles, shelves, search and category list/grid cards to a green currently-airing dot, AniList list status and compact English-dub availability. Next-sub/next-dub episode numbers, dates and countdown rows no longer appear in Explore. Original broadcasts marked RELEASING receive the dot; a scheduled premiere alone does not. Reported/listed availability, partial dubs, estimates, announcements, unconfirmed reports and unknown data remain distinct. Full dub counts, catch-up progress and schedules remain in My Library, Schedule and anime details.
 
 Explore shelves now use a neutral dark background; featured artwork retains its cover-derived accent and fades into that background. Poster sizing, grid-density preferences, metadata switching and tracking are retained. List rows wrap all reported genres instead of showing only the first three.
 
-Adds nine core presentation cases and two native iPhone/iPad cases, included in both focused and full regression suites. Existing discovery checks now assert the requested compact badges and absence of schedule rows; library/detail count assertions remain. Build 13 compilation, native regression results, screenshot review and IPA inspection are pending. Build 12 results below do not validate this update.
+Adds nine core presentation cases and two native iPhone/iPad cases, included in both focused and full regression suites. Existing discovery checks now assert the requested compact badges and absence of schedule rows; library/detail count assertions remain.
+
+[Build 13 / run 38010174866](https://github.com/goon-123/AnimeCompanion/actions/runs/38010174866), source `a7bb039fbfc28a09ad8ed5b87782a5edb5940e31`, compiled successfully. All 108 active core tests (113 enumerated, five optional/live skips) and all four separately executed live-provider checks passed. Its inspected universal ARM64 IPA is intact, unsigned and has no Debug fixtures; SHA-256: `ea4fdc4186e7d576cdfd95be18b577a72569dd5e7a71e539fa43f8d75671708a`. The focused iPhone suite passed eight of nine unique cases, but the new detail-dub-count lookup failed twice before the positive airing-dot portion of that case could run. The other new presentation case passed. Other native jobs were still running when this record was written; the workflow did not pass.
+
+Build 14 removes the details panel's inherited container identifier, which overwrote child identifiers, and scrolls the existing count assertion into view before waiting for it. The count and positive airing-dot assertions remain enabled. Build 14 compilation, native regression results, screenshot review and IPA inspection are pending. Earlier results do not validate these final changes.
 
 ## Version 0.3.1 / build 12
 
