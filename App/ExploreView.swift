@@ -78,7 +78,7 @@ struct ExploreView: View {
           }
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(.automatic, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

@@ -1,6 +1,6 @@
 # Build verification
 
-## Version 0.3.2 / build 14
+## Version 0.3.2 / build 15
 
 Simplifies native Explore featured titles, shelves, search and category list/grid cards to a green currently-airing dot, AniList list status and compact English-dub availability. Next-sub/next-dub episode numbers, dates and countdown rows no longer appear in Explore. Original broadcasts marked RELEASING receive the dot; a scheduled premiere alone does not. Reported/listed availability, partial dubs, estimates, announcements, unconfirmed reports and unknown data remain distinct. Full dub counts, catch-up progress and schedules remain in My Library, Schedule and anime details.
 
@@ -10,7 +10,9 @@ Adds nine core presentation cases and two native iPhone/iPad cases, included in 
 
 [Build 13 / run 38010174866](https://github.com/goon-123/AnimeCompanion/actions/runs/38010174866), source `a7bb039fbfc28a09ad8ed5b87782a5edb5940e31`, compiled successfully. All 108 active core tests (113 enumerated, five optional/live skips) and all four separately executed live-provider checks passed. Its inspected universal ARM64 IPA is intact, unsigned and has no Debug fixtures; SHA-256: `ea4fdc4186e7d576cdfd95be18b577a72569dd5e7a71e539fa43f8d75671708a`. The focused iPhone suite passed eight of nine unique cases, but the new detail-dub-count lookup failed twice before the positive airing-dot portion of that case could run. The other new presentation case passed. Other native jobs were still running when this record was written; the workflow did not pass.
 
-Build 14 removes the details panel's inherited container identifier, which overwrote child identifiers, and scrolls the existing count assertion into view before waiting for it. The count and positive airing-dot assertions remain enabled. Build 14 compilation, native regression results, screenshot review and IPA inspection are pending. Earlier results do not validate these final changes.
+Build 14 removes the details panel's inherited container identifier, which overwrote child identifiers, and scrolls the existing count assertion into view before waiting for it. The failed build 13 accessibility hierarchy confirms that the visible label "Dub ~26/26 · estimated" inherited "anime-dub-schedule" instead of its child identifier. The count and positive airing-dot assertions remain enabled. [Build 14 / run 38011518553](https://github.com/goon-123/AnimeCompanion/actions/runs/38011518553), source `6fc066f2c99a1a92c58347129aaa3f9226f74a39`, compiled with all 108 active core tests and all four live-provider checks passing. Native jobs were still running when this record was written.
+
+Reviewed three build 13 iPhone screenshots of the unchanged featured/shelf/list design. They showed the requested compact badges and no episode dates, and also revealed shelf controls showing through the always-transparent navigation bar. Build 15 restores native automatic navigation-background behavior as Explore scrolls and fixes singular episode wording. Final build 15 compilation, native regression results, screenshot review and IPA inspection are pending. Earlier results do not validate these final changes.
 
 ## Version 0.3.1 / build 12
 
