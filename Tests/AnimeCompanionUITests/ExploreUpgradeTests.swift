@@ -71,7 +71,7 @@ final class ExploreUpgradeTests: XCTestCase {
         app.buttons["Done"].tap()
         let dub = app.staticTexts["explore-dub-1"]
         XCTAssertTrue(dub.waitForExistence(timeout: 40))
-        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "26/26"), object: dub)
+        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Dub available"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
         XCTAssertTrue(app.buttons["discovery-entry-1"].exists)
         let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["discovery-entry-5"])

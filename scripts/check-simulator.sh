@@ -79,7 +79,8 @@ PY
 # Both attempts stay in xcresult; repeated failures still fail the job.
 test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
   -only-testing:AnimeCompanionUITests/MetadataTrackingUITests
-  -only-testing:AnimeCompanionUITests/AiringProgressUITests)
+  -only-testing:AnimeCompanionUITests/AiringProgressUITests
+  -only-testing:AnimeCompanionUITests/ExplorePresentationUITests)
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
     -only-testing:AnimeCompanionUITests/DiscoveryNavigationTests

@@ -80,46 +80,38 @@ struct DiscoveryIndicators: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     let anime: Anime
+    var identifierPrefix = "explore"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if store.isSignedIn {
-                HStack(spacing: 4) {
-                    Image(systemName: libraryIcon).accessibilityHidden(true)
-                    Text(libraryLabel).accessibilityIdentifier("explore-library-\(anime.id)")
-                }.foregroundStyle(libraryColor).padding(.horizontal, 6).padding(.vertical, 4)
-                    .background(libraryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-                if let entry = store.entry(for: anime.id), entry.status != .completed,
-                   entry.status == .rewatching || (entry.repeatCount ?? 0) > 0 {
-                    Label("Watched before", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 6) {
+                libraryBadge
+                dubBadge
+            }.fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 5) {
+                libraryBadge
+                dubBadge
             }
-            DubStatusBadge(anime: anime, progress: dubs.progress(for: anime))
-                .accessibilityIdentifier("explore-dub-\(anime.id)")
-            if let next = anime.nextAiringEpisode, next.date > Date() {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Next sub · Ep \(next.episode)").foregroundStyle(Theme.highlight).accessibilityIdentifier("explore-next-sub-\(anime.id)")
-                    Text(next.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-                        .foregroundStyle(.secondary).accessibilityIdentifier("explore-next-sub-time-\(anime.id)")
-                }
-            } else {
-                Text(airingLabel).foregroundStyle(.secondary).accessibilityIdentifier("explore-next-sub-\(anime.id)")
-            }
-            if let next = dubs.nextDub(for: anime.id) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(dubAiringLabel(next)).foregroundStyle(next.certainty == .verified ? Color.mint : Color.orange)
-                    if let date = next.date {
-                        Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).foregroundStyle(.secondary)
-                    } else { Text("Date unconfirmed").foregroundStyle(.secondary) }
-                }.accessibilityIdentifier("explore-next-dub-\(anime.id)")
-            }
-        }.font(.caption2.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+        }.font(.caption2.weight(.medium))
+    }
+    @ViewBuilder private var libraryBadge: some View {
+        if store.isSignedIn {
+            HStack(spacing: 4) {
+                Image(systemName: libraryIcon).accessibilityHidden(true)
+                Text(libraryLabel).accessibilityIdentifier("\(identifierPrefix)-library-\(anime.id)")
+            }.foregroundStyle(libraryColor).padding(.horizontal, 7).padding(.vertical, 4)
+                .background(libraryColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+        }
+    }
+    private var dubBadge: some View {
+        DiscoveryDubBadge(progress: dubs.progress(for: anime))
+            .accessibilityIdentifier("\(identifierPrefix)-dub-\(anime.id)")
     }
     private var libraryLabel: String {
         if let entry = store.entry(for: anime.id) { return entry.status?.label ?? "In library" }
-        if store.loadingLibrary { return "Syncing library…" }
-        if store.libraryError != nil { return "List status unavailable" }
-        return "Not in library"
+        if store.loadingLibrary { return "Syncing list…" }
+        if store.libraryError != nil { return "List unavailable" }
+        return "Not on list"
     }
     private var libraryIcon: String {
         switch store.entry(for: anime.id)?.status {
@@ -135,23 +127,37 @@ struct DiscoveryIndicators: View {
         default: return .secondary
         }
     }
-    private var airingLabel: String {
-        switch anime.status {
-        case "FINISHED": return "Finished airing"
-        case "CANCELLED": return "Broadcast cancelled"
-        case "HIATUS": return "Broadcast on hiatus"
-        case "NOT_YET_RELEASED":
-            if let start = anime.startDate, start.year != nil { return "Premiere · \(start.label)" }
-            return "Next sub · not scheduled"
-        default: return "Next sub · not scheduled"
+}
+
+struct DiscoveryAiringDot: View {
+    let anime: Anime
+    var overArtwork = false
+    var identifierPrefix = "explore"
+
+    var body: some View {
+        if anime.isCurrentlyAiring {
+            Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(.green)
+                .padding(overArtwork ? 5 : 2)
+                .background {
+                    if overArtwork { Circle().fill(.black.opacity(0.65)) }
+                }
+                .accessibilityLabel("Currently airing")
+                .accessibilityIdentifier("\(identifierPrefix)-airing-\(anime.id)")
         }
     }
-    private func dubAiringLabel(_ event: ReleaseEvent) -> String {
-        switch event.certainty {
-        case .delayed: return "Dub delayed · Ep \(event.episode)"
-        case .unverified: return "Dub estimate · Ep \(event.episode)"
-        default: return "Next dub · Ep \(event.episode)"
-        }
+}
+
+struct DiscoveryDubBadge: View {
+    let progress: LibraryDubProgress?
+    private var color: Color { (progress?.discoveryStatus.tone ?? .neutral).color }
+
+    var body: some View {
+        Label(progress?.discoveryStatus.label ?? "Checking dub…", systemImage: "mic.fill")
+            .font(.caption2.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 7).padding(.vertical, 4)
+            .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityHint("English dub availability. Episode counts and schedules are in anime details.")
     }
 }
 
@@ -160,7 +166,7 @@ struct DiscoveryDataNote: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Green: reported dub releases or availability. Amber: estimates. Yellow: announced dubs. Dub counts compare English releases with original episodes already aired. Times use your device timezone.")
+            Text("Green dot: currently airing. Dub badges show English availability; amber means estimated or unconfirmed, yellow means announced. Open details for episode counts and dates.")
             if dubs.unavailable {
                 Text(dubs.notice ?? "Some dub information is temporarily unavailable.")
                 Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)

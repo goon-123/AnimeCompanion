@@ -70,12 +70,13 @@ struct ExploreView: View {
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                 }
                 DiscoveryDataNote().padding(.horizontal)
-                }.padding(.top, featured.isEmpty ? geometry.safeAreaInsets.top + 20 : 14)
+                }.padding(.top, featured.isEmpty ? geometry.safeAreaInsets.top + 20 : 20)
                     .padding(.bottom, 24).readableContent(width: 1280)
+                    .frame(maxWidth: .infinity).background(Theme.background)
             }
           }.ignoresSafeArea(.container, edges: .top).accessibilityIdentifier("explore-scroll")
           }
-        }.background(posterBackground.color.ignoresSafeArea())
+        }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
