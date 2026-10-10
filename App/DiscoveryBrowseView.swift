@@ -224,21 +224,21 @@ struct DiscoveryAnimeRow: View {
             HStack(alignment: .top, spacing: 12) {
                 AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(anime.displayTitle).font(.headline).lineLimit(2)
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(anime.displayTitle).font(.headline).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        DiscoveryAiringDot(anime: anime)
+                    }
                     Text(metadata).font(.caption).foregroundStyle(.secondary)
                     DiscoveryIndicators(anime: anime)
                     Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    HStack(spacing: 5) {
-                        ForEach(Array((anime.genres ?? []).prefix(3)), id: \.self) { genre in
-                            Text(genre).font(.caption2).lineLimit(1).padding(.horizontal, 6).padding(.vertical, 4).background(Theme.background, in: Capsule())
-                        }
-                    }
+                    AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.padding(9).foregroundStyle(.primary).background(Theme.surface, in: RoundedRectangle(cornerRadius: 9))
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
     }
     private var metadata: String {
-        var parts = [anime.format?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Anime"]
+        let format = ["TV": "TV show", "TV_SHORT": "TV short", "MOVIE": "Movie", "OVA": "OVA", "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"]
+        var parts = [anime.format.flatMap { format[$0] } ?? "Anime"]
         if let episodes = anime.episodes { parts.append("\(episodes) episodes") }
         if let score = anime.averageScore { parts.append(String(format: "%.1f ★", Double(score) / 10)) }
         return parts.joined(separator: " · ")
@@ -251,7 +251,12 @@ struct DiscoveryAnimeTile: View {
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 7) {
-                GeometryReader { geometry in AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8) }.aspectRatio(1 / 1.45, contentMode: .fit)
+                GeometryReader { geometry in
+                    ZStack(alignment: .topTrailing) {
+                        AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
+                        DiscoveryAiringDot(anime: anime, overArtwork: true).padding(8)
+                    }
+                }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
                 if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
                 DiscoveryIndicators(anime: anime)

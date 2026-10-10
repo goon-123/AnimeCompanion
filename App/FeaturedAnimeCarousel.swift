@@ -44,8 +44,6 @@ struct FeaturedAnimeCarousel: View {
 }
 
 private struct FeaturedAnimePanel: View {
-    @EnvironmentObject private var store: AppStore
-    @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.dynamicTypeSize) private var textSize
     let anime: Anime
     let topInset: CGFloat
@@ -60,7 +58,7 @@ private struct FeaturedAnimePanel: View {
                 LinearGradient(stops: [.init(color: .black.opacity(0.34), location: 0), .init(color: .clear, location: 0.28),
                     .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 LinearGradient(stops: [.init(color: .clear, location: 0.30), .init(color: background.color.opacity(0.15), location: 0.46),
-                    .init(color: background.color.opacity(0.80), location: 0.73), .init(color: background.color, location: 1)],
+                    .init(color: background.color.opacity(0.80), location: 0.73), .init(color: Theme.background, location: 1)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 information.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
                     .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 6)
@@ -92,13 +90,12 @@ private struct FeaturedAnimePanel: View {
     }
     private var information: some View {
         VStack(alignment: .leading, spacing: 9) {
-            if let entry = store.entry(for: anime.id) {
-                Label(entry.status?.label ?? "In library", systemImage: entry.status == .completed ? "checkmark.circle.fill" : "bookmark.fill")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.white)
+            HStack(alignment: .top, spacing: 10) {
+                Text(anime.displayTitle).font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
+                    .accessibilityIdentifier("featured-title-\(anime.id)")
+                DiscoveryAiringDot(anime: anime, identifierPrefix: "featured").padding(.top, 12)
             }
-            Text(anime.displayTitle).font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
-                .accessibilityIdentifier("featured-title-\(anime.id)")
             HStack(spacing: 12) {
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").foregroundStyle(.yellow) }
                 if let year = anime.seasonYear { Text(String(year)) }
@@ -106,13 +103,7 @@ private struct FeaturedAnimePanel: View {
             }.font(.caption.weight(.semibold))
             Text((anime.genres ?? []).joined(separator: " · ")).font(.caption.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("featured-genres-\(anime.id)")
-            DubStatusBadge(anime: anime, progress: dubs.progress(for: anime)).accessibilityIdentifier("featured-dub-\(anime.id)")
-            if let next = dubs.nextDub(for: anime.id) {
-                Text(next.certainty == .delayed ? "Dub delayed · Episode \(next.episode)" : "\(next.certainty == .unverified ? "Dub estimate" : "Next dub") · Episode \(next.episode)\(next.date.map { " · " + $0.formatted(.dateTime.month(.abbreviated).day()) } ?? "")")
-                    .font(.caption).foregroundStyle(next.certainty == .verified ? Color.mint : Color.orange)
-            } else if let next = anime.nextAiringEpisode, next.date > Date() {
-                Text("Next sub · Episode \(next.episode) · \(next.date.formatted(.dateTime.month(.abbreviated).day()))").font(.caption)
-            }
+            DiscoveryIndicators(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
             NavigationLink(value: AnimeRoute(id: anime.id)) {
                 Label("View details", systemImage: "info.circle").font(.subheadline.weight(.semibold))

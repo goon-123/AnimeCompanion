@@ -1,5 +1,13 @@
 # Build verification
 
+## Version 0.3.2 / build 13
+
+Simplifies native Explore featured titles, shelves, search and category list/grid cards to a green currently-airing dot, AniList list status and compact English-dub availability. Next-sub/next-dub episode numbers, dates and countdown rows no longer appear in Explore. Original broadcasts marked RELEASING receive the dot; a scheduled premiere alone does not. Reported/listed availability, partial dubs, estimates, announcements, unconfirmed reports and unknown data remain distinct. Full dub counts, catch-up progress and schedules remain in My Library, Schedule and anime details.
+
+Explore shelves now use a neutral dark background; featured artwork retains its cover-derived accent and fades into that background. Poster sizing, grid-density preferences, metadata switching and tracking are retained. List rows wrap all reported genres instead of showing only the first three.
+
+Adds nine core presentation cases and two native iPhone/iPad cases, included in both focused and full regression suites. Existing discovery checks now assert the requested compact badges and absence of schedule rows; library/detail count assertions remain. Build 13 compilation, native regression results, screenshot review and IPA inspection are pending. Build 12 results below do not validate this update.
+
 ## Version 0.3.1 / build 12
 
 Adds currently-airing library catch-up cards: green Caught up, yellow episodes behind, watched/aired episode numbers, the next airing time, a behind-only filter and Behind first sorting. Original broadcast and English dub comparisons are separately selectable and labeled. Unknown/stale original schedules and estimated dub counts cannot create a confirmed green/yellow status.

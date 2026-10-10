@@ -109,17 +109,7 @@ final class AppSmokeTests: XCTestCase {
         revealExplore(shelfDub, in: app)
         let shelfStatus = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-library-")).firstMatch
         XCTAssertTrue(shelfStatus.exists)
-        let shelfNext = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-")).firstMatch
-        XCTAssertTrue(shelfNext.exists)
-        let nextTimes = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-sub-time-"))
-        for time in nextTimes.allElementsBoundByIndex {
-            // A card inside the horizontal viewport must expose its complete date.
-            if time.frame.minX >= 0, time.frame.maxX <= app.frame.width,
-               time.frame.minY >= app.navigationBars.firstMatch.frame.maxY,
-               time.frame.maxY <= app.tabBars.firstMatch.frame.minY {
-                XCTAssertTrue(time.isHittable, "A visible card's next-airing date was clipped")
-            }
-        }
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-next-")).firstMatch.exists)
         capture("Explore-Glance-Shelves")
 
         app.buttons["explore-search"].tap()
@@ -133,20 +123,22 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 35))
         let dub = app.staticTexts["explore-dub-1"]
         XCTAssertTrue(dub.exists)
-        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "26/26"), object: dub)
+        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Dub available"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
         XCTAssertEqual(app.staticTexts["explore-library-1"].label, "Watching")
         XCTAssertTrue(app.staticTexts["explore-library-5"].waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
-        XCTAssertEqual(app.staticTexts["explore-next-sub-1"].label, "Finished airing")
+        XCTAssertFalse(app.descendants(matching: .any)["explore-airing-1"].exists)
+        XCTAssertFalse(app.staticTexts["explore-next-sub-1"].exists)
         capture("Explore-Glance-List")
 
         app.buttons["discovery-layout"].tap()
         app.buttons["Grid"].tap()
         XCTAssertTrue(app.staticTexts["explore-dub-1"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["explore-dub-1"].label.contains("26/26"))
+        XCTAssertEqual(app.staticTexts["explore-dub-1"].label, "Dub available")
         XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
-        XCTAssertTrue(app.staticTexts["explore-next-sub-5"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["explore-airing-5"].exists)
+        XCTAssertFalse(app.staticTexts["explore-next-sub-5"].exists)
         XCTAssertTrue(app.staticTexts["explore-genres-1"].exists)
         XCTAssertTrue(app.staticTexts["explore-genres-1"].label.contains("Action"))
         XCTAssertTrue(app.staticTexts["explore-genres-1"].label.contains("Sci-Fi"))

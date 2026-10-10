@@ -20,7 +20,10 @@ struct AnimeCard: View {
     var body: some View {
         NavigationLink(value: AnimeRoute(id: anime.id)) {
             VStack(alignment: .leading, spacing: 8) {
-                AnimeCover(anime: anime, width: posterWidth)
+                ZStack(alignment: .topTrailing) {
+                    AnimeCover(anime: anime, width: posterWidth)
+                    DiscoveryAiringDot(anime: anime, overArtwork: true).padding(8)
+                }
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
                 HStack(spacing: 5) {
                     if let score = anime.averageScore { Label("\(score)%", systemImage: "star.fill").font(.caption) }
