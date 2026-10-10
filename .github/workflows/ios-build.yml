@@ -53,7 +53,8 @@ jobs:
   focused-ui:
     name: Focused ${{ matrix.device }} layout and playback
     runs-on: macos-15
-    timeout-minutes: 20
+    # Seventeen cases plus a cold simulator boot and one retained XCTest retry.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
