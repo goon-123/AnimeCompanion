@@ -57,15 +57,19 @@ final class AppNavigationStore: ObservableObject {
 struct AppTabs: View {
     @Environment(\.horizontalSizeClass) private var contentSizeClass
     @EnvironmentObject private var navigation: AppNavigationStore
+    @State private var schedulePath = NavigationPath()
     var body: some View {
         TabView(selection: $navigation.selectedTab) {
             NavigationStack(path: $navigation.explorePath) { ExploreView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
-            NavigationStack { ScheduleView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
+            NavigationStack(path: $schedulePath) { ScheduleView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
             NavigationStack { LibraryView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
             NavigationStack { NewsView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }
         // Keep the native floating bottom bar on iPad while preserving tablet content layouts.
         .environment(\.horizontalSizeClass, .compact)
+        .onChange(of: navigation.selectedTab) { _, tab in
+            if tab == .schedule { schedulePath = NavigationPath() }
+        }
     }
 }
 

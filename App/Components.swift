@@ -49,7 +49,7 @@ struct GenreTags: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     let genres: [String]
     let animeID: Int
-    @ScaledMetric(relativeTo: .caption) private var rowHeight = 44
+    @ScaledMetric(relativeTo: .caption) private var rowHeight: CGFloat = 44
     private var uniqueGenres: [String] {
         var seen = Set<String>()
         return genres.filter { seen.insert($0).inserted }

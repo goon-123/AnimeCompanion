@@ -6,7 +6,7 @@ final class PolishedDesignUITests: XCTestCase {
     @MainActor
     func testLibraryGenreScrollOpensExploreWithFreshGenreFilterAndRetainsLibrary() throws {
         let app = launchPreview()
-        let tags = app.scrollViews["library-genres-1"]
+        let tags = app.descendants(matching: .any).matching(identifier: "library-genres-1").firstMatch
         reveal(tags, in: app)
         XCTAssertTrue(tags.buttons["genre-1-Action"].exists)
         let sciFi = tags.buttons["genre-1-Sci-Fi"]
@@ -22,7 +22,7 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertTrue(app.buttons["library-entry-1"].exists)
         XCTAssertTrue(app.buttons["library-watch-1"].label.contains("episode 9"))
         app.buttons["library-entry-1"].tap()
-        let detailTags = app.scrollViews["detail-genres-1"]
+        let detailTags = app.descendants(matching: .any).matching(identifier: "detail-genres-1").firstMatch
         XCTAssertTrue(detailTags.waitForExistence(timeout: 45)); reveal(detailTags, in: app)
         detailTags.buttons["genre-1-Action"].tap()
         assertGenre("Action", in: app)
@@ -41,7 +41,7 @@ final class PolishedDesignUITests: XCTestCase {
         }
         search.tap(); search.typeText("Cowboy\n")
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 45))
-        let tags = app.scrollViews["explore-genres-1"]
+        let tags = app.descendants(matching: .any).matching(identifier: "explore-genres-1").firstMatch
         reveal(tags, in: app); tags.buttons["genre-1-Action"].tap()
         assertGenre("Action", in: app)
         let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).firstMatch
@@ -113,6 +113,17 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["library-airing-status-1"].label, "Caught up")
         XCTAssertTrue(app.staticTexts["library-airing-progress-1"].label.contains("Watched Ep 8 · Aired Ep 8"))
         capture("Details-Airing-Countdown-And-Progress")
+        app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable)
+        let entry = app.buttons["library-entry-1"]
+        reveal(entry, in: app); entry.tap()
+        XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 45))
+        let tags = app.descendants(matching: .any).matching(identifier: "detail-genres-1").firstMatch
+        reveal(tags, in: app); tags.buttons["genre-1-Action"].tap()
+        assertGenre("Action", in: app)
+        app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable, "Returning to Schedule must open the glanceable watchlist")
+        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
     }
 
     @MainActor private func launchPreview(extra: [String] = []) -> XCUIApplication {

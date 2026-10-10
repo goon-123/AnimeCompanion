@@ -92,6 +92,10 @@ final class AppStore: ObservableObject {
                 if ProcessInfo.processInfo.arguments.contains("--ui-layout-preview"), anime.id == 1 {
                     object["nextAiringEpisode"] = ["episode": 9, "airingAt": Int(Date().addingTimeInterval(86400).timeIntervalSince1970)]
                 }
+                if ProcessInfo.processInfo.arguments.contains("--ui-detail-airing-preview"), anime.id == 1 {
+                    object["status"] = "RELEASING"
+                    object["nextAiringEpisode"] = ["episode": 9, "airingAt": Int(Date().addingTimeInterval(86400).timeIntervalSince1970)]
+                }
                 return ["id": 900000 + index, "mediaId": anime.id, "status": anime.id == 5 ? "COMPLETED" : "CURRENT",
                         "progress": anime.id == 1 ? 8 : (anime.id == 5 ? 1 : 0), "updatedAt": 1700000000 + index, "media": object]
             }
