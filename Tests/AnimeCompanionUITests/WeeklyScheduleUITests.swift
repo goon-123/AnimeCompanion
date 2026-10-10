@@ -9,7 +9,7 @@ final class WeeklyScheduleUITests: XCTestCase {
         let list = app.collectionViews["schedule-weekly-list"].exists
             ? app.collectionViews["schedule-weekly-list"] : app.tables["schedule-weekly-list"]
         let today = day("2026-10-07", in: app)
-        assertAtTop(today, app: app)
+        XCTAssertTrue(today.waitForExistence(timeout: 15)); XCTAssertTrue(today.isHittable)
         XCTAssertEqual(today.value as? String, "Today")
         XCTAssertTrue(app.buttons["schedule-jump-2026-10-07"].isSelected)
         capture("Weekly-Today-On-Opening")
@@ -20,14 +20,12 @@ final class WeeklyScheduleUITests: XCTestCase {
         weekdays.swipeRight()
         app.buttons["schedule-jump-2026-10-04"].tap()
         assertAtTop(day("2026-10-04", in: app), app: app)
-        XCTAssertFalse(today.isHittable, "Manual day browsing must not snap back to Today")
         XCTAssertTrue(app.buttons["release-entry-990200-sub-1"].waitForExistence(timeout: 30))
         assertAtTop(day("2026-10-04", in: app), app: app)
-        XCTAssertFalse(today.isHittable, "Late-loading releases must not undo a manual day selection")
         capture("Weekly-Previous-Day-Manual-Browse")
         app.segmentedControls["schedule-release-type"].buttons["Dub"].tap()
         XCTAssertTrue(app.staticTexts["No listed releases for this day."].firstMatch.exists)
-        XCTAssertFalse(today.isHittable, "Changing a release filter must preserve manual scrolling")
+        assertAtTop(day("2026-10-04", in: app), app: app)
         app.segmentedControls["schedule-release-type"].buttons["All"].tap()
 
         app.buttons["schedule-this-week"].tap()

@@ -25,6 +25,9 @@ struct ScheduleView: View {
     @State private var loading = false
     @State private var requestID = UUID()
     @State private var dubRequestID = UUID()
+    #if DEBUG
+    @State private var delayedPreviewOnce = false
+    #endif
     private var filter: ScheduleFilter { ScheduleFilter(rawValue: filterValue) ?? .all }
     private var week: ScheduleWeek { ScheduleWeek(containing: anchor) }
     private var window: DateInterval { week.window }
@@ -200,7 +203,8 @@ struct ScheduleView: View {
         loading = true; subError = nil; subEvents = []
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-schedule-preview") {
-            if ProcessInfo.processInfo.arguments.contains("--ui-schedule-delay-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-schedule-delay-preview"), !delayedPreviewOnce {
+                delayedPreviewOnce = true
                 do { try await Task.sleep(for: .seconds(20)); try Task.checkCancellation() } catch { return }
                 guard requestID == attempt, selected == window else { return }
             }
