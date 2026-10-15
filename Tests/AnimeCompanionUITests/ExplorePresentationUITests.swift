@@ -30,7 +30,7 @@ final class ExplorePresentationUITests: XCTestCase {
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             reveal(shelfDub, in: app)
-            XCTAssertTrue(app.tabBars.buttons["Explore"].isHittable)
+            XCTAssertTrue(app.appTab("Explore").isHittable)
             assertNoEpisodeSchedules(in: app)
             capture("Explore-Simple-Shelves-iPad-Landscape")
             XCUIDevice.shared.orientation = .portrait
@@ -64,7 +64,7 @@ final class ExplorePresentationUITests: XCTestCase {
         reveal(detailedDub, in: app)
         XCTAssertTrue(detailedDub.waitForExistence(timeout: 35))
         XCTAssertTrue(detailedDub.label.contains("26/26"), "Details must retain the full dub count")
-        app.navigationBars.buttons.firstMatch.tap()
+        app.returnToBrowsing()
         XCTAssertTrue(search.waitForExistence(timeout: 15))
         app.buttons["Clear category search"].tap()
         app.buttons["discovery-status"].tap()
@@ -98,10 +98,10 @@ final class ExplorePresentationUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20))
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 40))
-        app.tabBars.buttons["Explore"].tap()
+        app.appTab("Explore").tap()
         app.buttons["explore-dub-filter-toolbar"].tap()
         XCTAssertTrue(app.buttons["dub-filter-reset"].waitForExistence(timeout: 10))
         app.buttons["dub-filter-reset"].tap()
@@ -120,7 +120,7 @@ final class ExplorePresentationUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "(?i)(Next sub|Next dub|Dub estimate|Dub delayed) ·.*")).firstMatch.exists)
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
-        let scroll = app.scrollViews["anime-detail-scroll"].exists ? app.scrollViews["anime-detail-scroll"] : app
+        let scroll = app.contentSurface
         for _ in 0..<24 {
             let bounds = scroll.frame
             if element.isHittable, element.frame.midY > max(bounds.minY, app.navigationBars.firstMatch.frame.maxY) + 20,

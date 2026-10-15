@@ -1,5 +1,19 @@
 # Anime Companion
 
+### Phase 2 navigation and watch-first screens (0.7.0 / build 20)
+
+Explore defaults to a balanced, edge-to-edge featured preview (about 60% of its pane), with direct Details and Library actions. Search, season, dub filters and display options share one compact browsing bar. Immersive artwork and custom heights remain available, without overwriting saved poster sizes or independent Library settings.
+
+My Library begins with **Continue Watching** for watching/rewatching titles. AniList chooses the next unwatched episode; only a matching local VidHub record supplies its resume time. Completed, unreleased and confirmed caught-up titles are excluded. List/grid, status, search, sorting, Coming Up and tracking controls remain available below it. A narrow pane explains when it temporarily constrains a saved poster width or grid density.
+
+**Airing Now** groups titles into Ready to watch, Caught up, First episode upcoming and Release count unverified. Each compact card shows one release/progress block, genres and existing play/tracking actions. Unknown or estimated release counts never turn into confirmed catch-up states.
+
+Details uses a shorter artwork header and prioritizes watch, tracking and English-dub information. Dub dates/history/sources, bounded episode lists and secondary information expand on demand. Choosing an episode checks sources for that episode without marking anything watched. Unknown totals do not generate invented episode lists; manual episode entry remains available.
+
+iPad uses native adaptive tab/sidebar navigation with browse and detail panes. Narrow windows collapse the same split navigation into a stack, retaining the browse query, filters and loaded pages; phones keep native bottom tabs and back navigation. Selecting another title resets only the detail history. Genre shortcuts still open a fresh Explore result page.
+
+This implements the remaining Phase 2 screen/navigation scope. The build retains the EN/JA source picker and Library green airing dots from build 19. Local core and syntax results are recorded in `BUILD_STATUS.md`; native compilation, simulator screenshots and physical-device checks are not implied by those results. Phase 3 has not started.
+
 ### Phase 2 begins: audio-first source picker (0.6.0 / build 19)
 
 Each source now prominently shows **EN · English audio**, **JA · Japanese audio**, or **EN + JA** when both are reported. Language detection reads every original source field before display truncation, understands ISO codes, AIOStreams small caps and flags, and separates subtitle reports from audio. Dual/Multi audio without named languages stays unconfirmed. The cleaner removes a broken expression without deleting valid audio/quality text beside it.
@@ -8,7 +22,7 @@ The source picker puts reported English-audio sources first while preserving pro
 
 My Library list and grid cards now carry the same green **currently airing** indicator as Explore. Finished and unreleased titles do not receive it. The dot describes the original airing status; per-stream audio badges describe which stream reports English audio.
 
-This starts Phase 2 with its source-picker redesign and consistent indicators. The larger Explore/Library navigation redesign, grouped Airing Now, progressive detail sections and adaptive iPad navigation remain later Phase 2 work. Native validation for this build is recorded in `BUILD_STATUS.md`.
+This started Phase 2 with its source-picker redesign and consistent indicators; build 20 adds the remaining screen/navigation work above. Native validation for each build is recorded in `BUILD_STATUS.md`.
 
 ### Audit Phase 1: reliability and clarity (0.5.0)
 

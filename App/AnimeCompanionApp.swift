@@ -40,36 +40,134 @@ struct DiscoveryRoute: Hashable {
 
 enum AppTab: Hashable { case explore, schedule, library, news }
 
+@MainActor
+final class TabNavigationState: ObservableObject {
+    @Published var path = NavigationPath()
+    @Published var detailPath = NavigationPath()
+    @Published var animeID: Int?
+    @Published var column: NavigationSplitViewColumn = .sidebar
+
+    func open(_ id: Int) { detailPath = NavigationPath(); animeID = id; column = .detail }
+}
+
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
     @Published var selectedTab: AppTab = .explore
-    @Published var explorePath = NavigationPath()
+    let explore = TabNavigationState()
+    let schedule = TabNavigationState()
+    let library = TabNavigationState()
+    let news = TabNavigationState()
+
+    func state(for tab: AppTab) -> TabNavigationState {
+        switch tab {
+        case .explore: return explore
+        case .schedule: return schedule
+        case .library: return library
+        case .news: return news
+        }
+    }
 
     func openGenre(_ genre: String) {
         var path = NavigationPath()
         path.append(DiscoveryRoute(category: .trending, titleOverride: genre, genre: genre, shortcutID: UUID()))
-        explorePath = path
+        explore.path = path
+        explore.animeID = nil
+        explore.detailPath = NavigationPath()
+        explore.column = .sidebar
         selectedTab = .explore
     }
 }
 
 struct AppTabs: View {
-    @Environment(\.horizontalSizeClass) private var contentSizeClass
     @EnvironmentObject private var navigation: AppNavigationStore
-    @State private var schedulePath = NavigationPath()
     var body: some View {
+        if #available(iOS 18.0, *) {
+            tabs.tabViewStyle(.sidebarAdaptable)
+        } else { tabs }
+    }
+    private var tabs: some View {
         TabView(selection: $navigation.selectedTab) {
-            NavigationStack(path: $navigation.explorePath) { ExploreView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
-            NavigationStack(path: $schedulePath) { ScheduleView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
-            NavigationStack { LibraryView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
-            NavigationStack { NewsView() }.environment(\.horizontalSizeClass, contentSizeClass).tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
+            AnimeTabPane(state: navigation.explore) { ExploreView() }
+                .tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
+            AnimeTabPane(state: navigation.schedule) { ScheduleView() }
+                .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
+            AnimeTabPane(state: navigation.library) { LibraryView() }
+                .tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
+            AnimeTabPane(state: navigation.news) { NewsView() }
+                .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
+        }.onChange(of: navigation.selectedTab) { _, tab in
+            if tab == .schedule {
+                navigation.schedule.path = NavigationPath()
+                navigation.schedule.animeID = nil
+                navigation.schedule.detailPath = NavigationPath()
+                navigation.schedule.column = .sidebar
+            }
         }
-        // Keep the native floating bottom bar on iPad while preserving tablet content layouts.
-        .environment(\.horizontalSizeClass, .compact)
-        .onChange(of: navigation.selectedTab) { _, tab in
-            if tab == .schedule { schedulePath = NavigationPath() }
-        }
+    }
+}
+
+/// One navigation topology at every size: compact devices collapse it into a
+/// stack; iPad keeps browsing and the selected title side by side. Rotation never
+/// recreates the browse view, so its query, loaded pages and scroll state survive.
+private struct AnimeTabPane<Content: View>: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @ObservedObject var state: TabNavigationState
+    let content: Content
+    init(state: TabNavigationState, @ViewBuilder content: () -> Content) {
+        self.state = state; self.content = content()
+    }
+    var body: some View {
+        NavigationSplitView(preferredCompactColumn: $state.column) {
+            NavigationStack(path: $state.path) { content }
+                .navigationSplitViewColumnWidth(min: 320, ideal: 460, max: 600)
+        } detail: {
+            NavigationStack(path: $state.detailPath) {
+                Group {
+                    if let id = state.animeID {
+                        AnimeDetailView(mediaID: id).id(id)
+                            .navigationBarBackButtonHidden(sizeClass == .regular)
+                            .toolbar {
+                                if sizeClass == .regular {
+                                    ToolbarItem(placement: .topBarLeading) {
+                                        Button {
+                                            state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar
+                                        } label: { Label("Browse", systemImage: "chevron.left") }
+                                            .accessibilityLabel("Back to browsing").accessibilityIdentifier("back-to-browsing")
+                                    }
+                                }
+                            }
+                    }
+                    else {
+                        ContentUnavailableView("Choose an anime", systemImage: "play.rectangle",
+                            description: Text("Browse a title to see its episodes, English dub information and tracking here."))
+                            .accessibilityIdentifier("anime-detail-placeholder")
+                    }
+                }.animeNavigation()
+            }.environment(\.animeDetailContext, true)
+        }.navigationSplitViewStyle(.balanced)
+    }
+}
+
+private struct AnimeDetailContextKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var animeDetailContext: Bool {
+        get { self[AnimeDetailContextKey.self] }
+        set { self[AnimeDetailContextKey.self] = newValue }
+    }
+}
+
+/// Browse links select the split detail; related titles retain native detail
+/// stack history. Both paths use the same destination on phone and tablet.
+struct AnimeLink<Content: View>: View {
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.animeDetailContext) private var inDetail
+    let id: Int
+    let content: Content
+    init(id: Int, @ViewBuilder label: () -> Content) { self.id = id; content = label() }
+    var body: some View {
+        if inDetail { NavigationLink(value: AnimeRoute(id: id)) { content } }
+        else { Button { navigation.state(for: navigation.selectedTab).open(id) } label: { content } }
     }
 }
 

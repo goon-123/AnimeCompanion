@@ -27,14 +27,14 @@ final class ExploreUpgradeTests: XCTestCase {
         reveal(app.buttons["featured-details-\(id)"], in: app)
         app.buttons["featured-details-\(id)"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
-        app.navigationBars.buttons.firstMatch.tap()
+        app.returnToBrowsing()
         XCTAssertTrue(app.navigationBars["Explore"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["featured-page-1"].value as? String, "Selected")
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             reveal(app.buttons["featured-details-\(id)"], in: app)
             XCTAssertTrue(app.staticTexts["featured-title-\(id)"].isHittable)
-            XCTAssertTrue(app.tabBars.buttons["My Library"].isHittable)
+            XCTAssertTrue(app.appTab("My Library").isHittable)
             capture("Featured-Poster-iPad-Landscape-Glass-Bar")
             XCUIDevice.shared.orientation = .portrait
         }
@@ -44,10 +44,10 @@ final class ExploreUpgradeTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20))
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 40))
-        app.tabBars.buttons["Explore"].tap()
+        app.appTab("Explore").tap()
         resetFilters(in: app)
         app.buttons["explore-search"].tap()
         XCTAssertTrue(app.textFields["discovery-search"].waitForExistence(timeout: 15))
@@ -82,7 +82,7 @@ final class ExploreUpgradeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "explore-genres-1").firstMatch.exists)
         app.buttons["discovery-entry-1"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
-        app.navigationBars.buttons.firstMatch.tap()
+        app.returnToBrowsing()
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["discovery-entry-5"].exists)
         app.terminate(); app.launch()
@@ -117,7 +117,7 @@ final class ExploreUpgradeTests: XCTestCase {
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
         for _ in 0..<15 {
             if element.isHittable { return }
-            if upward { app.swipeUp() } else { app.swipeDown() }
+            if upward { app.contentSurface.swipeUp() } else { app.contentSurface.swipeDown() }
         }
         XCTAssertTrue(element.isHittable, "Could not reveal \(element.identifier)")
     }

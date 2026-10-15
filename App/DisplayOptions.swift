@@ -16,6 +16,7 @@ struct PosterPreferences: DynamicProperty {
     @AppStorage var columns: Int
     @AppStorage var featuredHeight: Double
     @AppStorage("explore.poster.fillScreen") var fillFeaturedScreen = true
+    @AppStorage("explore.poster.balanced") var balancedFeatured = true
     let scope: DisplayScope
 
     init(_ scope: DisplayScope) {
@@ -44,7 +45,7 @@ struct PosterPreferences: DynamicProperty {
         gridWidth = pad ? 360 : 280; shelfWidth = pad ? 230 : 150
         comingWidth = pad ? 110 : 64; columns = pad ? 4 : 2
         featuredHeight = pad ? 700 : 620
-        if scope == .explore { fillFeaturedScreen = true }
+        if scope == .explore { fillFeaturedScreen = true; balancedFeatured = true }
     }
 }
 
@@ -75,11 +76,14 @@ struct DisplayOptionsView: View {
                 }
                 if preferences.scope == .explore {
                     Section("Featured poster") {
-                        Toggle("Fill most of the screen", isOn: preferences.$fillFeaturedScreen)
+                        Toggle("Size to this window", isOn: preferences.$fillFeaturedScreen)
                             .accessibilityIdentifier("explore-featured-fill-screen")
+                        Toggle("Balanced preview", isOn: preferences.$balancedFeatured)
+                            .disabled(!preferences.fillFeaturedScreen)
+                            .accessibilityIdentifier("explore-featured-balanced")
                         sizeControl("Featured poster height", value: preferences.$featuredHeight, range: 400...950, key: "featured-size")
                             .disabled(preferences.fillFeaturedScreen)
-                        Text("Edge-to-edge artwork blends into its poster color. Turn off Fill most of the screen to use a custom height. Landscape iPad uses wide artwork when available.").font(.caption).foregroundStyle(.secondary)
+                        Text("Balanced preview uses about 60% of this pane so browsing stays close. Turn it off for immersive artwork, or turn off Size to this window for your saved custom height. Existing poster sizes are kept.").font(.caption).foregroundStyle(.secondary)
                     }
                     Section("Explore shelves") {
                         sizeControl("Shelf poster width", value: preferences.$shelfWidth, range: 120...360, key: "shelf-size")

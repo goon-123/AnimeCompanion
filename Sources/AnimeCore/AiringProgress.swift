@@ -59,12 +59,36 @@ public struct LibraryAiringProgress: Sendable, Equatable {
 
 public enum PlaybackEpisodeSelection {
     /// AniList owns the next episode for tracked titles; old local resume records cannot rewind or skip it.
-    public static func initial(anime: Anime, entry: LibraryEntry?, resumeEpisode: Int?) -> Int {
+    public static func initial(anime: Anime, entry: LibraryEntry?, resumeEpisode: Int?, requestedEpisode: Int? = nil) -> Int {
         guard anime.format != "MOVIE" else { return 1 }
         let limit = min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000))
+        // An explicit episode-list choice is intentional; automatic resume still
+        // follows AniList and never an unrelated local playback record.
+        if let requestedEpisode { return min(limit, max(1, requestedEpisode)) }
         if let entry, entry.mediaId == anime.id { return min(limit, min(99_999, max(0, entry.progressValue)) + 1) }
         if let resumeEpisode, (1...limit).contains(resumeEpisode) { return resumeEpisode }
         return 1
+    }
+}
+
+public enum AiringWatchlistGroup: String, CaseIterable, Identifiable, Sendable {
+    case ready, caughtUp, upcoming, unverified
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .ready: return "Ready to watch"
+        case .caughtUp: return "Caught up"
+        case .upcoming: return "First episode upcoming"
+        case .unverified: return "Release count unverified"
+        }
+    }
+    public init(state: AiringCatchUpState) {
+        switch state {
+        case .behind: self = .ready
+        case .caughtUp: self = .caughtUp
+        case .waiting: self = .upcoming
+        case .unknown: self = .unverified
+        }
     }
 }
 
@@ -76,6 +100,8 @@ public struct LibraryWatchProgress: Equatable, Sendable {
         let watched = max(0, entry.progressValue)
         if anime.status == "NOT_YET_RELEASED" {
             nextEpisode = nil; label = "Not yet released"
+        } else if anime.format == "MOVIE", watched >= 1 {
+            nextEpisode = nil; label = "All episodes watched"
         } else if let total = anime.episodes, total > 0, watched >= total {
             nextEpisode = nil; label = "All episodes watched"
         } else if entry.status == .completed {

@@ -19,7 +19,7 @@ struct AnimeCard: View {
     var posterWidth: CGFloat = 150
     var body: some View {
       VStack(alignment: .leading, spacing: 4) {
-        NavigationLink(value: AnimeRoute(id: anime.id)) {
+        AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .topTrailing) {
                     AnimeCover(anime: anime, width: posterWidth)
@@ -128,7 +128,7 @@ struct ReleaseRow: View {
     var posterWidth: CGFloat? = nil
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
-        NavigationLink(value: AnimeRoute(id: event.anime.id)) {
+        AnimeLink(id: event.anime.id) {
             HStack(spacing: 12) {
                 AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48))
                 VStack(alignment: .leading, spacing: 5) {

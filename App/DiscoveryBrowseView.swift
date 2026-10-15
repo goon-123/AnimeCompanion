@@ -110,6 +110,10 @@ struct DiscoveryBrowseView: View {
                     Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if layout == "list", posters.listPosterWidth(in: contentWidth - 18) < posters.listWidth - 1 {
+                    Text("Covers fit this pane at \(Int(posters.listPosterWidth(in: contentWidth - 18))) pt. Your saved width is \(Int(posters.listWidth)) pt.")
+                        .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("explore-list-size-constrained")
+                }
                 if layout == "grid" {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 18) {
                         ForEach(visibleResults) { DiscoveryAnimeTile(anime: $0, posterWidth: posters.gridPosterWidth) }
@@ -269,7 +273,7 @@ struct DiscoveryAnimeRow: View {
     var posterWidth: CGFloat = 90
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
-        NavigationLink(value: AnimeRoute(id: anime.id)) {
+        AnimeLink(id: anime.id) {
             HStack(alignment: .top, spacing: 12) {
                 AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 7) {
@@ -301,7 +305,7 @@ struct DiscoveryAnimeTile: View {
     var posterWidth: CGFloat = 360
     var body: some View {
       VStack(alignment: .leading, spacing: 4) {
-        NavigationLink(value: AnimeRoute(id: anime.id)) {
+        AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 7) {
                 GeometryReader { geometry in
                     ZStack(alignment: .topTrailing) {

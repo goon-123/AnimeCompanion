@@ -40,10 +40,22 @@ struct AiringNowView: View {
                     if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                     if store.airingProgressSource == .dub && dubs.loading { ProgressView("Checking English dub releases…").frame(maxWidth: .infinity) }
                     LazyVStack(spacing: 14) {
-                        ForEach(visible) { item in
-                            if let anime = item.entry.media {
-                                LibraryAnimeRow(entry: item.entry, anime: anime, nextDub: dubs.nextDub(for: anime.id),
-                                    dub: dubs.progress(for: anime), airing: item.status)
+                        ForEach(AiringWatchlistGroup.allCases) { group in
+                            let grouped = visible.filter { AiringWatchlistGroup(state: $0.status.state) == group }
+                            if !grouped.isEmpty {
+                                Section {
+                                    ForEach(grouped) { item in
+                                        if let anime = item.entry.media {
+                                            AiringWatchlistCard(entry: item.entry, anime: anime, status: item.status)
+                                        }
+                                    }
+                                } header: {
+                                    HStack {
+                                        Text(group.title).font(.headline)
+                                        Spacer()
+                                        Text("\(grouped.count)").font(.caption).foregroundStyle(.secondary)
+                                    }.padding(.top, 6).accessibilityIdentifier("schedule-group-\(group.rawValue)")
+                                }
                             }
                         }
                     }.accessibilityIdentifier("schedule-airing-list")
@@ -123,5 +135,35 @@ struct AiringNowView: View {
     }
     private func caughtUpLabel(_ count: Int) -> some View {
         Label("\(count) caught up", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(.green)
+    }
+}
+
+/// One release/progress block per title, rather than repeating the generic
+/// Library row's watched, next, dub, rating and schedule information.
+private struct AiringWatchlistCard: View {
+    let entry: LibraryEntry
+    let anime: Anime
+    let status: LibraryAiringProgress
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                AnimeLink(id: anime.id) {
+                    HStack(alignment: .top, spacing: 12) {
+                        AnimeCover(anime: anime, width: 58, cornerRadius: 7)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(anime.displayTitle).font(.headline).lineLimit(3)
+                                DiscoveryAiringDot(anime: anime, identifierPrefix: "library")
+                            }
+                            Text(status.source.label).font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.foregroundStyle(.primary).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+                LibraryAiringStatus(status: status, animeID: anime.id, compact: true)
+                AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
+            }
+            LibraryEntryActions(entry: entry, anime: anime)
+        }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(status.state.color.opacity(0.25), lineWidth: 1) }
     }
 }

@@ -11,6 +11,9 @@ final class DiscoveryFilterStore: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         selection = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(DiscoveryPreferences.self, from: $0) } ?? DiscoveryPreferences()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { selection = DiscoveryPreferences() }
+        #endif
     }
     func includes(_ anime: Anime, dubs: ExploreDubStore, library: AppStore) -> Bool {
         selection.matches(anime: anime, progress: dubs.progress(for: anime), next: dubs.nextDub(for: anime.id), entry: library.entry(for: anime.id))
@@ -75,13 +78,18 @@ struct DubFiltersView: View {
 
 struct DubFilterButton: View {
     @EnvironmentObject private var filters: DiscoveryFilterStore
+    var compact = false
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Label(filters.selection.isActive ? filters.selection.summary : "Dub filters", systemImage: "line.3.horizontal.decrease")
-                .font(.subheadline.weight(.semibold)).lineLimit(2).padding(.horizontal, 15).padding(.vertical, 11)
+            HStack(spacing: 7) {
+                Image(systemName: filters.selection.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                if !compact { Text(filters.selection.isActive ? filters.selection.summary : "Dub filters").lineLimit(2) }
+            }.font(.subheadline.weight(.semibold)).padding(.horizontal, compact ? 0 : 15)
+                .frame(minWidth: 44, minHeight: 44)
                 .silverGlass(in: Capsule())
-        }.buttonStyle(.plain).accessibilityIdentifier("explore-dub-filters")
+        }.buttonStyle(.plain).accessibilityIdentifier(compact ? "explore-dub-filter-toolbar" : "explore-dub-filters")
+            .accessibilityLabel("Dub filters")
             .accessibilityValue(filters.selection.summary)
     }
 }

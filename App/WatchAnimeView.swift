@@ -6,6 +6,7 @@ struct WatchAnimeView: View {
     @EnvironmentObject private var playback: PlaybackStore
     @Environment(\.dismiss) private var dismiss
     let anime: Anime
+    var requestedEpisode: Int? = nil
     @State private var episode = 1
     @State private var episodeText = "1"
     @State private var streams: [StremioStream] = []
@@ -171,11 +172,11 @@ struct WatchAnimeView: View {
     }
     private func initializeEpisode() {
         guard !episodeChangedByUser else { return }
-        if store.isSignedIn && store.savedAt == nil && store.libraryError == nil {
+        if requestedEpisode == nil && store.isSignedIn && store.savedAt == nil && store.libraryError == nil {
             resetSources(); initialized = false; return
         }
         let next = PlaybackEpisodeSelection.initial(anime: anime, entry: store.entry(for: anime.id),
-                                                   resumeEpisode: playback.resumeEpisode(animeID: anime.id))
+                                                   resumeEpisode: playback.resumeEpisode(animeID: anime.id), requestedEpisode: requestedEpisode)
         if !initialized || next != episode {
             resetSources(); episode = next; episodeText = String(next); restart = false
             playback.playerMessage = nil; initialized = true

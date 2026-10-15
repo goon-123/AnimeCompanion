@@ -43,18 +43,10 @@ struct ExploreView: View {
                     FeaturedAnimeCarousel(anime: featured,
                         height: CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
                             viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
-                            fillScreen: posters.fillFeaturedScreen)) + (textSize.isAccessibilitySize ? 240 : 0),
-                        topInset: geometry.safeAreaInsets.top, background: $posterBackground)
+                            fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured)) + (textSize.isAccessibilitySize ? 240 : 0),
+                        topInset: 0, background: $posterBackground)
                 }
                 LazyVStack(alignment: .leading, spacing: 26) {
-                HStack {
-                    Button { showSeasons = true } label: {
-                        Label(selection.label, systemImage: "chevron.down").font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 11).silverGlass(in: Capsule())
-                    }
-                    Spacer()
-                    DubFilterButton { showDubFilters = true }
-                }.padding(.horizontal)
                 if dubFilters.selection.isActive && !dubs.loaded {
                     ProgressView("Checking English dubs…").frame(maxWidth: .infinity)
                 }
@@ -75,16 +67,19 @@ struct ExploreView: View {
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                 }
                 DiscoveryDataNote().padding(.horizontal)
-                }.padding(.top, featured.isEmpty ? geometry.safeAreaInsets.top + 20 : 20)
+                }.padding(.top, 20)
                     .padding(.bottom, 24).readableContent(width: 1280)
                     .frame(maxWidth: .infinity).background(Theme.background)
             }
-          }.ignoresSafeArea(.container, edges: .top).accessibilityIdentifier("explore-scroll")
+          }.accessibilityIdentifier("explore-scroll")
           }
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbarBackground(.automatic, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if store.metadataSource == .aniList { browsingControls }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
@@ -94,21 +89,7 @@ struct ExploreView: View {
                     } label: { Image(systemName: "globe").frame(width: 44, height: 44) }
                         .accessibilityLabel("Metadata source: \(store.metadataSource.label)").accessibilityIdentifier("explore-metadata-source")
                 }
-                if store.metadataSource == .aniList {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showDubFilters = true } label: { Image(systemName: "line.3.horizontal.decrease") }
-                        .accessibilityLabel("Dub filters").accessibilityIdentifier("explore-dub-filter-toolbar")
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
-                        Image(systemName: "magnifyingglass").frame(minWidth: 44, minHeight: 44)
-                    }.accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
-                        .accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
-                }
-                } else {
+                if store.metadataSource == .liveChart {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { liveChartPage = LiveChartURL.search("") } label: { Image(systemName: "magnifyingglass").frame(width: 44, height: 44) }
                             .accessibilityLabel("Search LiveChart")
@@ -130,6 +111,25 @@ struct ExploreView: View {
                 async let dubInfo: Void = dubs.load(using: store.dubs, refresh: true)
                 _ = await (metadata, dubInfo)
             }
+    }
+    private var browsingControls: some View {
+            HStack(spacing: 8) {
+                NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
+                    Image(systemName: "magnifyingglass").font(.subheadline.weight(.semibold))
+                        .frame(width: 44, height: 44).silverGlass(in: Capsule())
+                }.buttonStyle(.plain).accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
+                ScrollView(.horizontal, showsIndicators: false) {
+                  Button { showSeasons = true } label: {
+                    Label(selection.label, systemImage: "chevron.down").font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12).frame(minHeight: 44).silverGlass(in: Capsule())
+                }.buttonStyle(.plain).accessibilityIdentifier("explore-season")
+                }.frame(maxWidth: .infinity)
+                DubFilterButton(compact: true) { showDubFilters = true }
+                Button { showDisplay = true } label: {
+                    Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle())
+                }.buttonStyle(.plain).accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
+            }.padding(.horizontal, 12).padding(.vertical, 8)
+            .background(.ultraThinMaterial).accessibilityIdentifier("explore-browsing-controls")
     }
     private var featured: [Anime] {
         var ids = Set<Int>()

@@ -71,7 +71,7 @@ final class DiscoveryNavigationTests: XCTestCase {
 
     @MainActor
     private func openVisibleTitleAndReturn(in app: XCUIApplication, swipeBack: Bool = false) throws {
-        let viewport = app.frame
+        let viewport = app.browseSurface.frame
         let entries = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-"))
         let visible = entries.allElementsBoundByIndex.first {
             $0.isHittable && $0.frame.midY > app.navigationBars.firstMatch.frame.maxY &&
@@ -82,7 +82,7 @@ final class DiscoveryNavigationTests: XCTestCase {
         let count = app.staticTexts["discovery-count"].label
         selected.tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
-        if swipeBack {
+        if swipeBack && UIDevice.current.userInterfaceIdiom != .pad {
             // A percentage inset moves the start farther from the screen edge
             // on iPad. Begin at one point on both devices and use a deliberate
             // edge swipe rather than the hosted runner's near-zero fast press.
@@ -90,7 +90,7 @@ final class DiscoveryNavigationTests: XCTestCase {
             let edge = origin.withOffset(CGVector(dx: 1, dy: app.frame.height * 0.5))
             let end = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: app.frame.height * 0.5))
             edge.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
-        } else { app.navigationBars.buttons.firstMatch.tap() }
+        } else { app.returnToBrowsing() }
         XCTAssertTrue(app.navigationBars["Popular this season"].waitForExistence(timeout: 10))
         let retained = app.buttons[identifier]
         let visibleAgain = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: retained)
@@ -136,7 +136,8 @@ final class DiscoveryNavigationTests: XCTestCase {
     private func reveal(_ element: XCUIElement, scrolling surface: XCUIElement, upward: Bool) {
         for _ in 0..<25 {
             if element.isHittable { return }
-            if upward { surface.swipeUp() } else { surface.swipeDown() }
+            let target = (surface as? XCUIApplication)?.contentSurface ?? surface
+            if upward { target.swipeUp() } else { target.swipeDown() }
         }
         XCTAssertTrue(element.isHittable, "Could not reveal \(element.identifier)")
     }

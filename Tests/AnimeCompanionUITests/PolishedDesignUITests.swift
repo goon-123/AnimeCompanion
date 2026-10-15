@@ -18,7 +18,7 @@ final class PolishedDesignUITests: XCTestCase {
         assertGenre("Sci-Fi", in: app)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).firstMatch.waitForExistence(timeout: 45))
         capture("Genre-Filtered-Explore")
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].exists)
         XCTAssertTrue(app.buttons["library-watch-1"].label.contains("episode 9"))
         app.buttons["library-entry-1"].tap()
@@ -33,7 +33,7 @@ final class PolishedDesignUITests: XCTestCase {
     @MainActor
     func testExploreGenreShortcutReplacesStaleSearchAndSurvivesDetailBackNavigation() throws {
         let app = launchPreview()
-        app.tabBars.buttons["Explore"].tap(); app.buttons["explore-search"].tap()
+        app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 15))
         if app.buttons["discovery-layout"].label.contains("Grid") {
@@ -48,7 +48,7 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); reveal(entry, in: app)
         let identifier = entry.identifier
         entry.tap(); XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 45))
-        app.navigationBars.buttons.firstMatch.tap()
+        app.returnToBrowsing()
         XCTAssertTrue(app.navigationBars["Action"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons[identifier].isHittable)
         reveal(search, in: app, upward: false); search.tap(); search.typeText("Cowboy\n")
@@ -61,7 +61,7 @@ final class PolishedDesignUITests: XCTestCase {
     @MainActor
     func testExploreGridGenreSwipeOnlyScrollsAndTapsOpenFreshResults() throws {
         let app = launchPreview()
-        app.tabBars.buttons["Explore"].tap(); app.buttons["explore-search"].tap()
+        app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 15))
         app.buttons["discovery-layout"].tap(); app.buttons["discovery-layout-option-grid"].tap()
@@ -88,13 +88,13 @@ final class PolishedDesignUITests: XCTestCase {
 
     @MainActor
     func testExploreFeaturedAndEveryShelfGenreOpenTheSelectedCatalog() throws {
-        let app = launchPreview(); app.tabBars.buttons["Explore"].tap()
+        let app = launchPreview(); app.appTab("Explore").tap()
         let featured = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "featured-genres-")).firstMatch
         XCTAssertTrue(featured.waitForExistence(timeout: 45)); reveal(featured, in: app)
         let featuredGenre = featured.buttons.firstMatch
         let name = featuredGenre.label
         featuredGenre.tap(); assertGenre(name, in: app)
-        app.navigationBars.buttons.firstMatch.tap()
+        app.returnToBrowsing()
         for category in ["trending", "seasonal", "upcoming"] {
             let shelf = app.descendants(matching: .any).matching(identifier: "explore-shelf-\(category)").firstMatch
             reveal(shelf, in: app)
@@ -103,7 +103,7 @@ final class PolishedDesignUITests: XCTestCase {
             let genre = tags.buttons.firstMatch
             let selected = genre.label
             XCTAssertTrue(genre.isHittable); genre.tap(); assertGenre(selected, in: app)
-            app.navigationBars.buttons.firstMatch.tap()
+            app.returnToBrowsing()
         }
         capture("Explore-All-Section-Genre-Shortcuts")
     }
@@ -163,7 +163,7 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["library-airing-status-1"].label, "Caught up")
         XCTAssertTrue(app.staticTexts["library-airing-progress-1"].label.contains("Watched Ep 8 · Aired Ep 8"))
         capture("Details-Airing-Countdown-And-Progress")
-        app.tabBars.buttons["Schedule"].tap()
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable)
         let entry = app.buttons["library-entry-1"]
         reveal(entry, in: app); entry.tap()
@@ -171,7 +171,7 @@ final class PolishedDesignUITests: XCTestCase {
         let tags = app.descendants(matching: .any).matching(identifier: "detail-genres-1").firstMatch
         reveal(tags, in: app); tags.buttons["genre-1-Action"].tap()
         assertGenre("Action", in: app)
-        app.tabBars.buttons["Schedule"].tap()
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable, "Returning to Schedule must open the glanceable watchlist")
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
     }
@@ -181,18 +181,18 @@ final class PolishedDesignUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences"] + extra
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30))
         app.buttons["explore-dub-filter-toolbar"].tap()
         XCTAssertTrue(app.buttons["dub-filter-reset"].waitForExistence(timeout: 15))
         app.buttons["dub-filter-reset"].tap(); app.buttons["Done"].tap()
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 45))
         app.segmentedControls["library-layout"].buttons["List"].tap()
         return app
     }
     @MainActor private func assertGenre(_ name: String, in app: XCUIApplication) {
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.tabBars.buttons["Explore"].isSelected)
+        XCTAssertTrue(app.appTab("Explore").isSelected)
         let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", name), object: app.buttons["discovery-genre"])
         XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed, "The opened page must apply the tapped genre, not retain old filters")
         XCTAssertEqual(app.buttons["discovery-year"].label, "Year")
@@ -201,7 +201,7 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertEqual(search.value as? String, search.placeholderValue)
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
-        let scroll = app.scrollViews["anime-detail-scroll"].exists ? app.scrollViews["anime-detail-scroll"] : app
+        let scroll = app.contentSurface
         for _ in 0..<24 {
             let bounds = scroll.frame
             if element.isHittable, element.frame.midY > max(bounds.minY, app.navigationBars.firstMatch.frame.maxY) + 20,

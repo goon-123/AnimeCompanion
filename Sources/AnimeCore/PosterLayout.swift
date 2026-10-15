@@ -2,10 +2,10 @@ import Foundation
 
 /// Fit the saved density to the actual window, without overwriting the user's choice.
 public enum PosterLayout {
-    public static func featuredHeight(preferred: Double, viewportHeight: Double, fillScreen: Bool) -> Double {
+    public static func featuredHeight(preferred: Double, viewportHeight: Double, fillScreen: Bool, balanced: Bool = false) -> Double {
         let viewport = viewportHeight.isFinite ? max(320, viewportHeight) : 800
         let saved = preferred.isFinite ? min(1100, max(400, preferred)) : 680
-        return fillScreen ? min(1100, max(400, viewport * 0.88)) : saved
+        return fillScreen ? min(1100, max(400, viewport * (balanced ? 0.60 : 0.88))) : saved
     }
     public static func columns(requested: Int, availableWidth: Double, minimumWidth: Double = 80, spacing: Double = 12) -> Int {
         let preferred = min(8, max(1, requested))

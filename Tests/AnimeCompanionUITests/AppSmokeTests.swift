@@ -59,8 +59,8 @@ final class AppSmokeTests: XCTestCase {
     func testLibraryLayoutsDubCountsAndRating() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20))
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
         XCTAssertFalse(app.staticTexts["Continue watching"].exists)
         let layouts = app.segmentedControls["library-layout"]
@@ -82,7 +82,7 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "library-genres-1").firstMatch.label.contains("Sci-Fi"))
         capture("Library-Grid-Three-Columns")
         app.terminate(); app.launch()
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
         XCTAssertTrue(app.segmentedControls["library-layout"].buttons["Grid"].isSelected)
         XCTAssertTrue(app.buttons["library-columns"].label.contains("3 per row"))
@@ -99,10 +99,10 @@ final class AppSmokeTests: XCTestCase {
     func testExploreAtAGlanceLibraryDubAndAiringIndicators() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview"]; app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20))
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
-        app.tabBars.buttons["Explore"].tap()
+        app.appTab("Explore").tap()
         waitForLoadingToFinish("Finding your season…", in: app)
         let shelfDub = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-dub-")).firstMatch
         XCTAssertTrue(shelfDub.waitForExistence(timeout: 20))
@@ -151,8 +151,8 @@ final class AppSmokeTests: XCTestCase {
     func testScheduleNavigationAndSavedDubFilter() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Schedule"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.appTab("Schedule").waitForExistence(timeout: 20))
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
         app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         let week = app.buttons["schedule-week"]
@@ -172,7 +172,7 @@ final class AppSmokeTests: XCTestCase {
         waitForLoadingToFinish("Loading releases…", in: app)
         capture("Schedule-Dub-Filter")
         app.terminate(); app.launch()
-        app.tabBars.buttons["Schedule"].tap()
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
         app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         XCTAssertTrue(app.segmentedControls["schedule-release-type"].buttons["Dub"].isSelected)
@@ -185,8 +185,8 @@ final class AppSmokeTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20))
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 35))
         XCTAssertTrue(app.textFields["library-search"].exists)
         XCTAssertTrue(app.buttons["library-status-CURRENT"].exists)
@@ -206,9 +206,10 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 15))
         for _ in 0..<6 {
             if app.staticTexts["English dub schedule"].isHittable { break }
-            app.swipeUp()
+            app.contentSurface.swipeUp()
         }
         XCTAssertTrue(app.staticTexts["English dub schedule"].isHittable)
+        app.buttons["detail-dub-disclosure"].tap()
         XCTAssertTrue(app.staticTexts["Upcoming releases"].exists)
         capture("Anime-dub-schedule")
     }
@@ -220,7 +221,7 @@ final class AppSmokeTests: XCTestCase {
         app.launch()
 
         for title in ["Explore", "Schedule", "My Library", "News"] {
-            let tab = app.tabBars.buttons[title]
+            let tab = app.appTab(title)
             XCTAssertTrue(tab.waitForExistence(timeout: 15), "Missing tab: \(title)")
             tab.tap()
             let navigationTitle = title == "News" ? "Anime News" : title
@@ -233,8 +234,8 @@ final class AppSmokeTests: XCTestCase {
             capture(title)
         }
 
-        app.tabBars.buttons["My Library"].tap()
-        app.buttons["Account and settings"].tap()
+        app.appTab("My Library").tap()
+        app.buttons["Account and settings"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["AniList app ID"].exists)
         XCTAssertTrue(app.buttons["Connect AniList"].exists)

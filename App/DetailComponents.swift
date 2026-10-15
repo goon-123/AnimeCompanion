@@ -17,8 +17,8 @@ struct AnimeDetailHero: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let anime: Anime
     let expand: (URL) -> Void
-    private var bannerHeight: CGFloat { sizeClass == .regular ? 400 : 300 }
-    private var posterWidth: CGFloat { sizeClass == .regular ? 150 : 108 }
+    private var bannerHeight: CGFloat { sizeClass == .regular ? 280 : 220 }
+    private var posterWidth: CGFloat { sizeClass == .regular ? 112 : 92 }
     private var artworkURL: URL? { anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL }
     private var accent: Color { (PosterAccent(hex: anime.coverImage?.color)?.backdrop ?? PosterAccent.fallback.backdrop).color }
 
@@ -67,7 +67,7 @@ struct AnimeDetailHero: View {
                 Text(statusLabel).font(.caption.weight(.semibold)).foregroundStyle(anime.isCurrentlyAiring ? Color.green : Color.secondary)
                     .accessibilityIdentifier("detail-release-status")
             }
-            Text(anime.displayTitle).font(sizeClass == .regular ? .largeTitle.bold() : .title2.bold())
+            Text(anime.displayTitle).font(sizeClass == .regular ? .title.bold() : .title2.bold())
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail-title")
             Text([anime.season.map { $0.label + (anime.seasonYear.map { " \($0)" } ?? "") },
                   anime.format?.replacingOccurrences(of: "_", with: " ")].compactMap { $0 }.joined(separator: " · "))
@@ -141,7 +141,7 @@ struct RelatedAnimeCard: View {
       VStack(alignment: .leading, spacing: 3) {
         Group {
             if anime.type == "MANGA" { Link(destination: URL(string: "https://anilist.co/manga/\(anime.id)")!) { card } }
-            else { NavigationLink(value: AnimeRoute(id: anime.id)) { card } }
+            else { AnimeLink(id: anime.id) { card } }
         }.buttonStyle(.plain)
         GenreTags(genres: anime.genres ?? [], animeID: anime.id)
       }.frame(width: sizeClass == .regular ? 145 : 100, alignment: .leading)
@@ -179,24 +179,35 @@ struct AnimeDubSchedule: View {
     let loading: Bool
     let error: String?
     @State private var expandedHistory = false
+    @State private var expandedSchedule = false
     private var upcoming: [ReleaseEvent] { events.filter { $0.date == nil || ($0.date ?? .distantPast) >= Date() } }
     private var recorded: [ReleaseEvent] { events.filter { $0.certainty == .recorded }.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) } }
 
     var body: some View {
         DetailCard(title: "English dub schedule") {
             DubStatusBadge(anime: anime, progress: progress).accessibilityIdentifier("detail-dub-count")
+            if let sources = progress?.agreeingSources {
+                Text("Dub availability supported by \(sources) \(sources == 1 ? "source" : "sources") via MyDubList.")
+                    .font(.caption).foregroundStyle(progress?.tone.color ?? .secondary).accessibilityIdentifier("detail-dub-source-count")
+            }
+            if loading { ProgressView("Checking this anime’s dub releases…") }
+            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+            DisclosureGroup(isExpanded: $expandedSchedule) {
+                scheduleDetails
+            } label: {
+                Text("Release dates, history and sources").font(.subheadline.weight(.medium)).frame(minHeight: 44)
+            }.accessibilityIdentifier("detail-dub-disclosure")
+        }
+    }
+    private var scheduleDetails: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if let progress {
                 if let total = anime.episodes, total > 0 { Text("\(total) episodes planned for this title").font(.caption).foregroundStyle(.secondary) }
                 Text(progress.explanation).font(.caption).foregroundStyle(.secondary)
                 if let date = progress.lastReleaseAt {
                     Text("Latest reported dub release: \(date.formatted(.dateTime.month(.abbreviated).day().year()))").font(.caption).foregroundStyle(.secondary)
                 }
-                if let sources = progress.agreeingSources {
-                    Text("Dub availability supported by \(sources) \(sources == 1 ? "source" : "sources") via MyDubList.")
-                        .font(.caption).foregroundStyle(progress.tone.color).accessibilityIdentifier("detail-dub-source-count")
-                }
             }
-            if loading { ProgressView("Checking this anime’s dub releases…") }
             Text("Upcoming releases").font(.subheadline.bold()).padding(.top, 3)
             if !loading && upcoming.isEmpty {
                 Text(progress?.completeListing == true ? "No further dub episodes are expected from the completed listing." : "No next dub date is supplied by the release sources yet. Pull to refresh to check again.")
@@ -209,7 +220,6 @@ struct AnimeDubSchedule: View {
                 ForEach(expandedHistory ? recorded : Array(recorded.prefix(6))) { event in release(event) }
                 if recorded.count > 6 { Button(expandedHistory ? "Show recent episodes" : "Show all \(recorded.count) recorded episodes") { expandedHistory.toggle() }.font(.caption.bold()) }
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             Text("Green shows reported releases or availability. Amber marks estimates; yellow marks announcements. Release reports can differ from availability in your streaming service or region.").font(.caption2).foregroundStyle(.secondary)
             if let snapshot {
                 Text("Checked \(snapshot.fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))").font(.caption2).foregroundStyle(.secondary)

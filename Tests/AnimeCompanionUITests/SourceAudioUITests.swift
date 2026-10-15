@@ -59,14 +59,14 @@ final class SourceAudioUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences", flag]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
         let watch = app.buttons["library-watch-1"]
         XCTAssertTrue(watch.waitForExistence(timeout: 45)); reveal(watch, in: app); watch.tap()
         XCTAssertTrue(app.staticTexts["playback-english-availability"].waitForExistence(timeout: 15))
         return app
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
-        for _ in 0..<10 where !element.isHittable { if upward { app.swipeUp() } else { app.swipeDown() } }
+        for _ in 0..<10 where !element.isHittable { if upward { app.contentSurface.swipeUp() } else { app.contentSurface.swipeDown() } }
         XCTAssertTrue(element.isHittable)
     }
     @MainActor private func capture(_ name: String) {

@@ -29,7 +29,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
         XCTAssertFalse(app.staticTexts["playback-empty-results"].exists)
         let source = app.buttons["playback-source-0"]
-        for _ in 0..<6 where !source.isHittable { app.swipeUp() }
+        for _ in 0..<6 where !source.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(source.isHittable); source.tap()
         XCTAssertTrue(app.staticTexts["Preview launch · Episode 9"].waitForExistence(timeout: 10))
         capture("Sources-Preserved-After-Failed-Refresh")
@@ -67,7 +67,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         let more = app.buttons["discovery-more"]
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: more)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
-        for _ in 0..<5 where !more.isHittable { app.swipeUp() }
+        for _ in 0..<5 where !more.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(more.isHittable); more.tap()
         XCTAssertTrue(app.staticTexts["No matching titles"].waitForExistence(timeout: 20))
         XCTAssertFalse(more.exists)
@@ -95,10 +95,10 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences"] + extra
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
         let watch = app.buttons["library-watch-1"]
         XCTAssertTrue(watch.waitForExistence(timeout: 45))
-        for _ in 0..<10 where !watch.isHittable { app.swipeUp() }
+        for _ in 0..<10 where !watch.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(watch.isHittable); watch.tap()
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
