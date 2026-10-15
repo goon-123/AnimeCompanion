@@ -4,12 +4,14 @@ import FoundationNetworking
 #endif
 
 public enum PlaybackError: LocalizedError, Equatable {
-    case invalidAddon, invalidManifest, unsupportedAnime, http(Int), unavailable, invalidVideo, needsProxy, invalidCallback
+    case invalidAddon, invalidManifest, unsupportedAnime, unsupportedResource, configurationRequired, http(Int), unavailable, invalidVideo, needsProxy, invalidCallback
     public var errorDescription: String? {
         switch self {
         case .invalidAddon: return "Paste the add-on’s HTTPS install link or manifest URL."
-        case .invalidManifest: return "This link did not return a valid streaming add-on. Check the manifest link in your add-on’s settings."
+        case .invalidManifest: return "This link did not return a valid add-on response. Check the manifest link in your add-on’s settings."
         case .unsupportedAnime: return "This add-on does not advertise support for this anime’s AniList or MyAnimeList ID."
+        case .unsupportedResource: return "No enabled add-on advertises support for this resource and video ID. Try an installed catalog or check the exact ID."
+        case .configurationRequired: return "Configure this add-on first, then use the install link from its configuration page."
         case .http(let status):
             if status == 401 || status == 403 { return "The add-on rejected this connection. Copy a fresh install link from its settings." }
             if status == 429 { return "The add-on is busy. Wait a moment before trying again." }
@@ -40,13 +42,30 @@ public struct AddonEndpoint: Codable, Hashable, Sendable {
         manifestURL = url
     }
     public func streamURL(type: String, id: String) throws -> URL {
-        guard ["series", "movie", "anime"].contains(type),
-              id.range(of: "^(anilist|mal):[0-9]+(:[0-9]+)?$", options: .regularExpression) != nil,
-              var parts = URLComponents(url: manifestURL, resolvingAgainstBaseURL: false) else { throw PlaybackError.unsupportedAnime }
+        try resourceURL("stream", type: type, id: id)
+    }
+    public var configurationURL: URL {
+        var parts = URLComponents(url: manifestURL, resolvingAgainstBaseURL: false)!
+        parts.percentEncodedPath = String(parts.percentEncodedPath.dropLast("manifest.json".count)) + "configure"
+        return parts.url!
+    }
+    public func resourceURL(_ resource: String, type: String, id: String, extra: [String: String] = [:]) throws -> URL {
+        guard ["stream", "meta", "catalog", "subtitles", "addon_catalog"].contains(resource),
+              var parts = URLComponents(url: manifestURL, resolvingAgainstBaseURL: false) else { throw PlaybackError.invalidAddon }
+        let kind = try Self.segment(type), identifier = try Self.segment(id)
+        let extras = try extra.sorted { $0.key < $1.key }.map { try Self.segment($0.key) + "=" + Self.segment($0.value, allowEmpty: true, colon: false) }.joined(separator: "&")
         // Edit only the suffix; opaque, percent-encoded configuration and query data stay intact.
-        parts.percentEncodedPath = String(parts.percentEncodedPath.dropLast("manifest.json".count)) + "stream/\(type)/\(id).json"
+        parts.percentEncodedPath = String(parts.percentEncodedPath.dropLast("manifest.json".count)) + "\(resource)/\(kind)/\(identifier)" + (extras.isEmpty ? "" : "/\(extras)") + ".json"
         guard let url = parts.url else { throw PlaybackError.invalidAddon }
         return url
+    }
+    private static func segment(_ value: String, allowEmpty: Bool = false, colon: Bool = true) throws -> String {
+        guard (allowEmpty || !value.isEmpty), value.utf8.count <= 4096,
+              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+              !value.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0 == "." || $0 == ".." }) else { throw PlaybackError.invalidAddon }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~" + (colon ? ":" : ""))
+        guard let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) else { throw PlaybackError.invalidAddon }
+        return encoded
     }
 }
 
@@ -54,14 +73,26 @@ public struct AddonResource: Codable, Sendable {
     public let name: String
     public let types: [String]?
     public let idPrefixes: [String]?
+    public let usesGlobalScope: Bool
     public init(from decoder: Decoder) throws {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
-            self.name = name; types = nil; idPrefixes = nil
+            self.name = name; types = nil; idPrefixes = nil; usesGlobalScope = true
         } else {
             let values = try decoder.container(keyedBy: CodingKeys.self)
             name = try values.decode(String.self, forKey: .name)
             types = try values.decodeIfPresent([String].self, forKey: .types)
             idPrefixes = try values.decodeIfPresent([String].self, forKey: .idPrefixes)
+            // Older saved string resources were encoded as {name:...}. Object
+            // resources in the protocol declare types and do not inherit prefixes.
+            usesGlobalScope = types == nil && idPrefixes == nil
+        }
+    }
+    public func encode(to encoder: Encoder) throws {
+        if usesGlobalScope { var value = encoder.singleValueContainer(); try value.encode(name) }
+        else {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(name, forKey: .name); try values.encodeIfPresent(types, forKey: .types)
+            try values.encodeIfPresent(idPrefixes, forKey: .idPrefixes)
         }
     }
     private enum CodingKeys: String, CodingKey { case name, types, idPrefixes }
@@ -73,11 +104,26 @@ public struct AddonManifest: Codable, Sendable {
     public let types: [String]
     public let resources: [AddonResource]
     public let idPrefixes: [String]?
+    public let catalogs: [AddonCatalog]?
+    public let behaviorHints: AddonManifestBehavior?
+    public let description: String?
+    public let version: String?
+    public func advertises(_ resource: String) -> Bool { resources.contains { $0.name == resource } }
     public func supports(type: String, id: String) -> Bool {
+        supports(resource: "stream", type: type, id: id)
+    }
+    public func supports(resource name: String, type: String, id: String) -> Bool {
         resources.contains { resource in
-            guard resource.name == "stream", (resource.types ?? types).contains(type) else { return false }
-            return (resource.idPrefixes ?? idPrefixes)?.contains(where: { id.hasPrefix($0) }) ?? true
+            guard resource.name == name, (resource.types ?? types).contains(type) else { return false }
+            if name == "catalog" || name == "addon_catalog" { return true }
+            let prefixes = resource.usesGlobalScope ? idPrefixes : resource.idPrefixes
+            return prefixes?.contains(where: { id.hasPrefix($0) }) ?? true
         }
+    }
+    public var capabilitySummary: String {
+        let labels = ["catalog": "Catalogs", "meta": "Metadata", "stream": "Streams", "subtitles": "Subtitles", "addon_catalog": "Add-on directory"]
+        var seen = Set<String>()
+        return resources.filter { seen.insert($0.name).inserted }.map { labels[$0.name] ?? "Unsupported resource: \($0.name)" }.joined(separator: " · ")
     }
 }
 
@@ -117,6 +163,17 @@ public struct StreamProxyHeaders: Codable, Sendable {
 public struct StreamBehavior: Codable, Sendable {
     public let filename: String?
     public let proxyHeaders: StreamProxyHeaders?
+    public let videoHash: String?
+    public let videoSize: Int64?
+    private enum CodingKeys: String, CodingKey { case filename, proxyHeaders, videoHash, videoSize }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        filename = try values.decodeIfPresent(String.self, forKey: .filename)
+        proxyHeaders = try values.decodeIfPresent(StreamProxyHeaders.self, forKey: .proxyHeaders)
+        videoHash = try? values.decodeIfPresent(String.self, forKey: .videoHash)
+        let bytes = (try? values.decodeIfPresent(Int64.self, forKey: .videoSize)) ?? (try? values.decodeIfPresent(String.self, forKey: .videoSize)).flatMap(Int64.init)
+        videoSize = bytes.flatMap { $0 >= 0 ? $0 : nil }
+    }
 }
 public struct StremioStream: Codable, Sendable {
     public let name: String?
@@ -150,14 +207,6 @@ public struct StreamResults: Sendable {
     public let streams: [StremioStream]
     public let skippedCount: Int
 }
-private struct StreamEnvelope: Decodable {
-    let streams: [LossyStream]
-}
-private struct LossyStream: Decodable {
-    let value: StremioStream?
-    init(from decoder: Decoder) throws { value = try? StremioStream(from: decoder) }
-}
-
 public struct StremioClient: Sendable {
     private let transport: any HTTPTransport
     public init(transport: (any HTTPTransport)? = nil) {
@@ -172,12 +221,15 @@ public struct StremioClient: Sendable {
         let endpoint = try AddonEndpoint(input)
         let data = try await fetch(endpoint.manifestURL, timeout: 25)
         guard let manifest = try? JSONDecoder().decode(AddonManifest.self, from: data),
-              !manifest.id.isEmpty, !manifest.name.isEmpty, manifest.resources.contains(where: { $0.name == "stream" }) else {
+              !manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !manifest.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !manifest.resources.isEmpty, manifest.resources.allSatisfy({ !$0.name.isEmpty }) else {
             throw PlaybackError.invalidManifest
         }
         return InstalledAddon(endpoint: endpoint, manifest: manifest)
     }
     public func streams(addon: InstalledAddon, anime: Anime, episode: Int) async throws -> StreamResults {
+        guard addon.manifest.behaviorHints?.configurationRequired != true else { throw PlaybackError.configurationRequired }
         let candidates = AnimeStreamRequest.candidates(anime: anime, episode: episode, manifest: addon.manifest)
         guard !candidates.isEmpty else { throw PlaybackError.unsupportedAnime }
         var lastError: Error?
@@ -185,11 +237,8 @@ public struct StremioClient: Sendable {
         for candidate in candidates {
             try Task.checkCancellation()
             do {
-                let data = try await fetch(addon.endpoint.streamURL(type: candidate.type, id: candidate.id), timeout: 90)
-                guard let result = try? JSONDecoder().decode(StreamEnvelope.self, from: data) else { throw PlaybackError.invalidManifest }
-                let streams = result.streams.compactMap(\.value)
-                if !streams.isEmpty { return StreamResults(streams: streams, skippedCount: result.streams.count - streams.count) }
-                if !result.streams.isEmpty { throw PlaybackError.invalidManifest }
+                let result = try await streams(addon: addon, request: .init(type: candidate.type, id: candidate.id))
+                if !result.streams.isEmpty { return result }
                 emptyResponse = true
             } catch let error as PlaybackError {
                 if case .http(let status) = error, status == 400 || status == 404 { lastError = error; continue }
@@ -199,7 +248,7 @@ public struct StremioClient: Sendable {
         if emptyResponse { return StreamResults(streams: [], skippedCount: 0) }
         throw lastError ?? PlaybackError.unsupportedAnime
     }
-    private func fetch(_ url: URL, timeout: TimeInterval) async throws -> Data {
+    func fetch(_ url: URL, timeout: TimeInterval) async throws -> Data {
         do {
             var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
             request.setValue("application/json", forHTTPHeaderField: "Accept")

@@ -86,7 +86,8 @@ final class PlaybackStore: ObservableObject {
         } catch { setupError = error.localizedDescription }
     }
     var installations: [AddonInstallation] { collection.installations }
-    var activeAddons: [AddonInstallation] { enabled ? collection.enabled : [] }
+    var enabledAddons: [AddonInstallation] { enabled ? collection.enabled.filter { $0.addon.manifest.behaviorHints?.configurationRequired != true } : [] }
+    var activeAddons: [AddonInstallation] { enabledAddons.filter { $0.addon.manifest.advertises("stream") } }
     var ready: Bool { !activeAddons.isEmpty }
     func install(_ input: String) async -> Bool {
         guard !installing else { return false }
@@ -95,12 +96,18 @@ final class PlaybackStore: ObservableObject {
         do {
             let candidate = try await client.install(input)
             try Task.checkCancellation()
-            guard candidate.supportsAnime else { throw PlaybackError.unsupportedAnime }
-            var updated = collection; updated.install(candidate)
-            try persist(updated); enabled = true
-            return true
+            return saveInstallation(candidate)
         } catch is CancellationError { return false }
         catch { setupError = error.localizedDescription; return false }
+    }
+    @discardableResult
+    func saveInstallation(_ candidate: InstalledAddon) -> Bool {
+        do {
+            guard candidate.manifest.behaviorHints?.configurationRequired != true else { throw PlaybackError.configurationRequired }
+            var updated = collection; updated.install(candidate)
+            try persist(updated); enabled = true; setupError = nil
+            return true
+        } catch { setupError = error.localizedDescription; return false }
     }
     func remove(id: UUID) {
         guard !installing else { return }
@@ -187,6 +194,26 @@ final class PlaybackStore: ObservableObject {
                 playerMessage = code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "VidHub could not play this source. Try another source or check its configuration in AIOStreams."
             }
             clearPending()
+        } catch { playerMessage = error.localizedDescription }
+    }
+    func playUntracked(stream: StremioStream, title: String, subtitle: URL? = nil) async {
+        guard !openingPlayer else { return }
+        openingPlayer = true; playerMessage = nil
+        defer { openingPlayer = false }
+        do {
+            let url = try VidHubPlayback.untrackedLaunchURL(stream: stream, title: title, subtitle: subtitle)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
+                playerMessage = "Preview catalog launch · \(title) · \(stream.displayName)"; return
+            }
+            #endif
+            // Invalidate an older tracked request before an untracked handoff.
+            // Catalog playback cannot write into that old episode on return.
+            clearPending()
+            let opened = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                UIApplication.shared.open(url, options: [:]) { continuation.resume(returning: $0) }
+            }
+            playerMessage = opened ? "Opened in VidHub. Catalog playback does not change AniList or save a resume position here." : "VidHub could not be opened. Install or update VidHub, then try again."
         } catch { playerMessage = error.localizedDescription }
     }
     private func clearPending() { pending = nil; defaults.removeObject(forKey: "playback.pending") }

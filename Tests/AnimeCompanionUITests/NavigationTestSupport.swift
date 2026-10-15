@@ -31,7 +31,7 @@ extension XCUIApplication {
     @MainActor var contentSurface: XCUIElement {
         // A sheet sits over the browse/detail panes; drag its form, not the
         // retained view underneath. The screen center is inside these sheets.
-        if ["Display options", "Dub filters", "Settings", "Watch in VidHub", "Edit AniList tracking"].contains(where: { navigationBars[$0].exists }) {
+        if ["Display options", "Dub filters", "Settings", "Watch in VidHub", "Edit AniList tracking", "Add-ons & playback", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles"].contains(where: { navigationBars[$0].exists }) {
             return self
         }
         let detail = scrollViews["anime-detail-scroll"]

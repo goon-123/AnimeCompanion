@@ -32,6 +32,24 @@ public enum VidHubOutcome: Equatable, Sendable {
 public enum VidHubPlayback {
     public static let maximumPosition: Double = 31_536_000
     public static func launchURL(stream: StremioStream, pending: PendingPlayback, position: Double = 0, subtitle: URL? = nil) throws -> URL {
+        var parts = try launchComponents(stream: stream, title: pending.title, position: position, subtitle: subtitle)
+        parts.queryItems? += [
+            URLQueryItem(name: "request-id", value: pending.requestID.uuidString),
+            URLQueryItem(name: "x-source", value: "Anime Companion"),
+            URLQueryItem(name: "x-success", value: "animecompanion://playback/success"),
+            URLQueryItem(name: "x-error", value: "animecompanion://playback/error"),
+            URLQueryItem(name: "x-cancel", value: "animecompanion://playback/cancel")
+        ]
+        guard let url = parts.url else { throw PlaybackError.invalidVideo }
+        return url
+    }
+    /// Catalog titles have no confirmed AniList mapping. Do not attach progress
+    /// callbacks or fabricate an AniList identity for them.
+    public static func untrackedLaunchURL(stream: StremioStream, title: String, subtitle: URL? = nil) throws -> URL {
+        guard let url = try launchComponents(stream: stream, title: title, position: 0, subtitle: subtitle).url else { throw PlaybackError.invalidVideo }
+        return url
+    }
+    private static func launchComponents(stream: StremioStream, title: String, position: Double, subtitle: URL?) throws -> URLComponents {
         guard stream.behaviorHints?.proxyHeaders?.isRequired != true else { throw PlaybackError.needsProxy }
         guard let video = stream.videoURL else { throw PlaybackError.invalidVideo }
         var parts = URLComponents()
@@ -40,18 +58,12 @@ public enum VidHubPlayback {
         parts.queryItems = [
             URLQueryItem(name: "url", value: video.absoluteString),
             URLQueryItem(name: "position", value: String(Int(start))),
-            URLQueryItem(name: "filename", value: PlaybackSourceText.clean(stream.behaviorHints?.filename, maximumLines: 1, maximumCharacters: 180) ?? pending.title),
-            URLQueryItem(name: "request-id", value: pending.requestID.uuidString),
-            URLQueryItem(name: "x-source", value: "Anime Companion"),
-            URLQueryItem(name: "x-success", value: "animecompanion://playback/success"),
-            URLQueryItem(name: "x-error", value: "animecompanion://playback/error"),
-            URLQueryItem(name: "x-cancel", value: "animecompanion://playback/cancel")
+            URLQueryItem(name: "filename", value: PlaybackSourceText.clean(stream.behaviorHints?.filename, maximumLines: 1, maximumCharacters: 180) ?? title)
         ]
         if let subtitle, StremioStream.networkURL(subtitle.absoluteString) != nil {
             parts.queryItems?.append(URLQueryItem(name: "sub", value: subtitle.absoluteString))
         }
-        guard let url = parts.url else { throw PlaybackError.invalidVideo }
-        return url
+        return parts
     }
     /// Only a callback for the outstanding random request can change local progress.
     /// A success callback means the player exited; status, not callback name, means completion.
