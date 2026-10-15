@@ -62,8 +62,27 @@ public enum PlaybackEpisodeSelection {
     public static func initial(anime: Anime, entry: LibraryEntry?, resumeEpisode: Int?) -> Int {
         guard anime.format != "MOVIE" else { return 1 }
         let limit = min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000))
-        if let entry { return min(limit, min(99_999, max(0, entry.progressValue)) + 1) }
+        if let entry, entry.mediaId == anime.id { return min(limit, min(99_999, max(0, entry.progressValue)) + 1) }
         if let resumeEpisode, (1...limit).contains(resumeEpisode) { return resumeEpisode }
         return 1
+    }
+}
+
+/// The next unwatched episode is separate from a show's next broadcast or dub release.
+public struct LibraryWatchProgress: Equatable, Sendable {
+    public let nextEpisode: Int?
+    public let label: String
+    public init(anime: Anime, entry: LibraryEntry) {
+        let watched = max(0, entry.progressValue)
+        if anime.status == "NOT_YET_RELEASED" {
+            nextEpisode = nil; label = "Not yet released"
+        } else if let total = anime.episodes, total > 0, watched >= total {
+            nextEpisode = nil; label = "All episodes watched"
+        } else if entry.status == .completed {
+            nextEpisode = nil; label = "Completed"
+        } else {
+            let next = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)
+            nextEpisode = next; label = anime.format == "MOVIE" ? "Ready to watch" : "Next: Ep \(next)"
+        }
     }
 }

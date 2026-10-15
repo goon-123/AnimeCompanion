@@ -18,6 +18,7 @@ struct LibraryAnimeRow: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
                         Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
+                        LibraryNextEpisodeLabel(entry: entry, anime: anime)
                         LibraryDubLabel(anime: anime, progress: dub)
                         if let score = anime.averageScore { Label("AniList \(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
                         if airing != nil, let nextDub, let date = nextDub.date {
@@ -50,6 +51,7 @@ struct LibraryAnimeTile: View {
                 }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.caption.bold()).lineLimit(2, reservesSpace: true)
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)
+                LibraryNextEpisodeLabel(entry: entry, anime: anime)
                 LibraryDubLabel(anime: anime, progress: dub)
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").font(.caption2).foregroundStyle(Theme.highlight) }
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
@@ -58,6 +60,16 @@ struct LibraryAnimeTile: View {
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
       }.overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+struct LibraryNextEpisodeLabel: View {
+    let entry: LibraryEntry
+    let anime: Anime
+    var body: some View {
+        Text(LibraryWatchProgress(anime: anime, entry: entry).label)
+            .font(.caption.weight(.semibold)).foregroundStyle(.primary)
+            .accessibilityIdentifier("library-next-episode-\(anime.id)")
     }
 }
 

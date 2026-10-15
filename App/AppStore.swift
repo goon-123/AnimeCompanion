@@ -4,9 +4,9 @@ import AnimeCore
 
 @MainActor
 final class AppStore: ObservableObject {
-    let aniList = AniListClient()
+    let aniList: AniListClient
     let liveChart = LiveChartClient()
-    let exploreCache = ExploreCache()
+    let exploreCache: ExploreCache
     let dubs = DubClient()
     let exploreDubs = ExploreDubStore()
     let news = NewsClient()
@@ -42,6 +42,9 @@ final class AppStore: ObservableObject {
 
     init() {
         #if DEBUG
+        let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
+        aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient()
+        exploreCache = discoveryPreview ? ExploreCache(directory: nil) : ExploreCache()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             includeAdult = false; metadataSource = .aniList; automaticallyComplete = true
             airingProgressSource = .broadcast
@@ -53,6 +56,9 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")
             UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
         }
+        #else
+        aniList = AniListClient()
+        exploreCache = ExploreCache()
         #endif
     }
 

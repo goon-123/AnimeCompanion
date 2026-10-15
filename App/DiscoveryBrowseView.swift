@@ -21,7 +21,10 @@ struct DiscoveryBrowseView: View {
     @State private var hasMore = false
     @State private var loading = false
     @State private var loadingMore = false
+    @State private var scanning = false
+    @State private var scanID = UUID()
     @State private var error: String?
+    @State private var paginationError: String?
     @State private var requestID = UUID()
     @State private var loadedFilters: DiscoveryFilters?
     @State private var loadedAdult: Bool?
@@ -40,6 +43,12 @@ struct DiscoveryBrowseView: View {
         var query = filters; query.minimumScore = dubFilters.selection.minimumScore; return query
     }
     private var visibleResults: [Anime] { results.filter { store.isVisible($0) && dubFilters.includes($0, dubs: dubs, library: store) } }
+    private var locallyFiltered: Bool { dubFilters.selection.dub != .all || dubFilters.selection.hideCompleted }
+    private var coverage: DiscoveryCoverage {
+        DiscoveryCoverage(loaded: loadedFilters == queryFilters && loadedAdult == store.includeAdult,
+                          loading: loading, scanning: scanning || loadingMore, hasMore: hasMore,
+                          requiresDubs: dubFilters.selection.dub != .all, dubsLoaded: dubs.loaded, dubsUnavailable: dubs.unavailable)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -83,9 +92,19 @@ struct DiscoveryBrowseView: View {
                         .accessibilityLabel("Reset category filters")
                 }.zIndex(1)
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
-                if loading { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding() }
-                if dubFilters.selection.dub != .all && !dubs.loaded {
+                if loading { ProgressView(results.isEmpty ? "Loading anime…" : "Refreshing anime…").frame(maxWidth: .infinity).padding() }
+                if coverage == .checkingDubs {
                     ProgressView("Checking English dubs…").frame(maxWidth: .infinity).padding()
+                }
+                if coverage == .unavailableDubs {
+                    NoticeView(message: "Some dub information is unavailable. Matches may be incomplete; previously loaded information is still shown.") {
+                        Task { await dubs.load(using: store.dubs, refresh: true); await fillFilteredPages() }
+                    }.accessibilityIdentifier("discovery-dub-unavailable")
+                    Button("Browse all anime") { dubFilters.selection.dub = .all }.buttonStyle(.bordered)
+                }
+                if locallyFiltered && hasMore {
+                    Text("\(visibleResults.count) matches in \(results.count) checked titles · More titles remain")
+                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("discovery-partial-results")
                 }
                 if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
                     Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
@@ -98,13 +117,16 @@ struct DiscoveryBrowseView: View {
                 } else {
                     LazyVStack(spacing: 12) { ForEach(visibleResults) { DiscoveryAnimeRow(anime: $0, posterWidth: posters.listPosterWidth(in: contentWidth - 18)) } }
                 }
+                if let paginationError { NoticeView(message: paginationError) { Task { await continueBrowsing() } } }
                 if hasMore {
-                    Button { Task { await loadMore() } } label: {
-                        if loadingMore { ProgressView() } else { Text("Load more titles").frame(maxWidth: .infinity) }
-                    }.buttonStyle(.bordered).disabled(loading || loadingMore).accessibilityIdentifier("discovery-more")
+                    Button { Task { await continueBrowsing() } } label: {
+                        if loadingMore || scanning { ProgressView("Checking more titles…") }
+                        else { Text(locallyFiltered ? "Search more titles" : "Load more titles").frame(maxWidth: .infinity) }
+                    }.buttonStyle(.bordered).disabled(loading || loadingMore || scanning).accessibilityIdentifier("discovery-more")
                 }
-                if visibleResults.isEmpty && !loading && !loadingMore && error == nil && (dubFilters.selection.dub == .all || dubs.loaded) {
-                    ContentUnavailableView("No matching titles", systemImage: "mic", description: Text(hasMore ? "No matches in the loaded titles. Load more titles or adjust your dub filters." : "Try changing the search or dub filters."))
+                if visibleResults.isEmpty && error == nil && paginationError == nil, let title = coverage.emptyTitle {
+                    ContentUnavailableView(title, systemImage: "magnifyingglass", description: Text(coverage.emptyMessage ?? ""))
+                        .accessibilityIdentifier("discovery-empty-state")
                     if dubFilters.selection.isActive { Button("Reset dub filters") { dubFilters.selection = DiscoveryPreferences() }.buttonStyle(.bordered) }
                 }
                 DiscoveryDataNote()
@@ -130,10 +152,12 @@ struct DiscoveryBrowseView: View {
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
             .task(id: DiscoveryRequestKey(filters: queryFilters, includeAdult: store.includeAdult)) { await load(); await fillFilteredPages() }
             .task(id: dubFilters.selection) { await dubs.load(using: store.dubs); await fillFilteredPages() }
+            .task(id: dubs.revision) { await fillFilteredPages() }
             .refreshable {
                 async let metadata: Void = load(refresh: true)
                 async let dubInfo: Void = dubs.load(using: store.dubs, refresh: true)
                 _ = await (metadata, dubInfo)
+                await fillFilteredPages()
             }
     }
     private var searchBar: some View {
@@ -186,7 +210,8 @@ struct DiscoveryBrowseView: View {
         if loadedFilters != selected || loadedAdult != requestedAdult {
             results = []; loadedFilters = nil; page = 1; hasMore = false
         }
-        loading = true; loadingMore = false; error = nil
+        scanID = UUID(); scanning = false
+        loading = true; loadingMore = false; error = nil; paginationError = nil
         defer { if requestID == attempt { loading = false } }
         do {
             if !refresh && !selected.search.isEmpty { try await Task.sleep(for: .milliseconds(400)) }
@@ -198,22 +223,43 @@ struct DiscoveryBrowseView: View {
         } catch is CancellationError {} catch { if !Task.isCancelled, requestID == attempt { self.error = error.localizedDescription } }
     }
     private func loadMore() async {
-        guard !loading, !loadingMore, hasMore else { return }
+        guard !Task.isCancelled, !loading, !loadingMore, hasMore, loadedFilters == queryFilters, loadedAdult == store.includeAdult else { return }
         loadingMore = true; let attempt = requestID; let selected = queryFilters; let nextPage = page + 1; let requestedAdult = store.includeAdult
+        paginationError = nil
         defer { if requestID == attempt { loadingMore = false } }
         do {
             let response = try await store.aniList.browse(selected, page: nextPage, includeAdult: requestedAdult)
             try Task.checkCancellation(); guard requestID == attempt, queryFilters == selected, store.includeAdult == requestedAdult else { return }
-            let ids = Set(results.map(\.id)); results += (response.media ?? []).filter { !ids.contains($0.id) }
+            var ids = Set(results.map(\.id)); results += (response.media ?? []).filter { ids.insert($0.id).inserted }
             page = nextPage; hasMore = response.pageInfo?.hasNextPage == true
-        } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
+        } catch is CancellationError {} catch { if !Task.isCancelled, requestID == attempt { paginationError = error.localizedDescription } }
     }
-    private func fillFilteredPages() async {
-        guard dubFilters.selection.isActive, dubs.loaded, loadedFilters == queryFilters, !loading, !loadingMore else { return }
-        let choice = dubFilters.selection
-        for _ in 0..<3 {
-            guard !Task.isCancelled, dubFilters.selection == choice, visibleResults.isEmpty, hasMore, error == nil else { return }
+    private func continueBrowsing() async {
+        if locallyFiltered { await fillFilteredPages(force: true) }
+        else { await loadMore() }
+    }
+    private func fillFilteredPages(force: Bool = false) async {
+        guard locallyFiltered, (dubFilters.selection.dub == .all || dubs.loaded), loadedFilters == queryFilters,
+              loadedAdult == store.includeAdult, !loading, !loadingMore, !scanning else { return }
+        let choice = dubFilters.selection, attempt = requestID, scan = UUID()
+        scanID = scan; scanning = true
+        defer {
+            if scanID == scan {
+                scanning = false
+                // A new local filter can arrive while the previous scan is being cancelled.
+                if choice != dubFilters.selection { Task { await fillFilteredPages() } }
+            }
+        }
+        let target = force ? visibleResults.count + DiscoveryScanPolicy.targetMatches : DiscoveryScanPolicy.targetMatches
+        var scanned = 0
+        if force { paginationError = nil }
+        while DiscoveryScanPolicy.shouldContinue(matches: visibleResults.count, hasMore: hasMore, pagesScanned: scanned, target: target) {
+            guard !Task.isCancelled, requestID == attempt, scanID == scan, dubFilters.selection == choice,
+                  error == nil, paginationError == nil else { return }
+            let previousPage = page
             await loadMore()
+            guard page > previousPage else { return }
+            scanned += 1
         }
     }
 }

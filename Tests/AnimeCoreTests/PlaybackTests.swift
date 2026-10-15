@@ -91,6 +91,27 @@ final class PlaybackTests: XCTestCase {
         do { _ = try await client.streams(addon: addon, anime: try anime(), episode: 1); XCTFail("Expected failure") }
         catch { XCTAssertEqual(error as? PlaybackError, .invalidManifest) }
     }
+    func testSuccessfulEmptyResponsesStayDistinctFromProviderFailure() async throws {
+        let transport = PlaybackTransport(responses: [(200, #"{"streams":[]}"#), (200, #"{"streams":[]}"#)])
+        let addon = InstalledAddon(endpoint: try AddonEndpoint("https://addon.example"), manifest: try decodedManifest())
+        let result = try await StremioClient(transport: transport).streams(addon: addon, anime: try anime(), episode: 9)
+        XCTAssertTrue(result.streams.isEmpty); XCTAssertEqual(result.skippedCount, 0)
+        let requests = await transport.requests
+        XCTAssertEqual(requests.map { $0.url!.lastPathComponent }, ["anilist:1:9.json", "mal:2:9.json"])
+    }
+    func testVidHubStoppedCallbackRoundTripsLaunchAndCannotMatchANewerEpisode() throws {
+        let request = pending()
+        let launch = try VidHubPlayback.launchURL(stream: stream(), pending: request, position: 45)
+        let items = try XCTUnwrap(URLComponents(url: launch, resolvingAgainstBaseURL: false)?.queryItems)
+        let returnURL = try XCTUnwrap(items.first { $0.name == "x-success" }?.value.flatMap(URL.init(string:)))
+        var callback = try XCTUnwrap(URLComponents(url: returnURL, resolvingAgainstBaseURL: false))
+        callback.queryItems = [URLQueryItem(name: "request-id", value: request.requestID.uuidString),
+            URLQueryItem(name: "status", value: "stopped"), URLQueryItem(name: "position", value: "325")]
+        let returned = try XCTUnwrap(callback.url)
+        XCTAssertEqual(try VidHubPlayback.outcome(url: returned, pending: request, now: Date(timeIntervalSince1970: 2000)), .success(position: 325, duration: nil, finished: false))
+        let newer = PendingPlayback(episode: PlaybackEpisode(animeID: 1, episode: 10), title: "Episode 10", createdAt: request.createdAt)
+        XCTAssertNil(try VidHubPlayback.outcome(url: returned, pending: newer, now: Date(timeIntervalSince1970: 2000)))
+    }
     func testVidHubURLRoundTripsNestedURLsAndUsesNewPlayContract() throws {
         let request = pending(); let source = try stream()
         let sub = URL(string: "https://video.example/sub.srt?lang=en&key=abc%2Bdef")!

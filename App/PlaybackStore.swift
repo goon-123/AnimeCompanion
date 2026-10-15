@@ -50,8 +50,10 @@ final class PlaybackStore: ObservableObject {
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
         #if DEBUG
+        let preview = ProcessInfo.processInfo.arguments.contains("--ui-playback-preview")
+        self.defaults = preview ? UserDefaults(suiteName: "com.animecompanion.ui-playback")! : defaults
+        if preview { self.defaults.removePersistentDomain(forName: "com.animecompanion.ui-playback") }
         if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
             client = StremioClient(transport: PlaybackPreviewTransport())
             addon = try? PlaybackPreviewTransport.addon()
@@ -61,6 +63,8 @@ final class PlaybackStore: ObservableObject {
             }
             return
         }
+        #else
+        self.defaults = defaults
         #endif
         client = StremioClient()
         if let data = defaults.data(forKey: "playback.positions"), let saved = try? JSONDecoder().decode([String: PlaybackProgress].self, from: data) { progress = saved }
@@ -108,6 +112,15 @@ final class PlaybackStore: ObservableObject {
                 // Test the production URL builder and tap path without opening a third-party app.
                 // No real add-on, Keychain change, network request or saved playback is involved.
                 let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                if ProcessInfo.processInfo.arguments.contains("--ui-playback-return-preview"),
+                   let raw = parameters.first(where: { $0.name == "x-success" })?.value,
+                   var callback = URLComponents(string: raw) {
+                    pending = record
+                    callback.queryItems = [URLQueryItem(name: "request-id", value: record.requestID.uuidString),
+                        URLQueryItem(name: "status", value: "stopped"), URLQueryItem(name: "position", value: "125")]
+                    if let returned = callback.url { handle(returned) }
+                    return
+                }
                 playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" } ? " · External subtitles" : "")
                 return
             }

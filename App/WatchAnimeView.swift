@@ -20,6 +20,7 @@ struct WatchAnimeView: View {
     @State private var lookupID = UUID()
     @State private var initialized = false
     @State private var episodeChangedByUser = false
+    @State private var sourceInformation: StremioStream?
     @FocusState private var episodeFocused: Bool
     private var limit: Int { anime.format == "MOVIE" ? 1 : min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000)) }
     private var initializationKey: String {
@@ -42,9 +43,6 @@ struct WatchAnimeView: View {
                                     .accessibilityIdentifier("playback-anilist-progress")
                                 if let total = anime.episodes, total > 0, entry.progressValue >= total {
                                     Text("All known episodes are watched. Choose an episode to replay.").font(.caption).foregroundStyle(.secondary)
-                                } else {
-                                    Text("Next unwatched: episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)).")
-                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                         } else { ProgressView("Loading AniList progress…") }
@@ -67,7 +65,12 @@ struct WatchAnimeView: View {
                         NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
                     }
                 }
-                if let error { Section { NoticeView(message: error) { loadSources() } } }
+                if let error {
+                    Section {
+                        NoticeView(message: error) { loadSources() }
+                        if !streams.isEmpty { Text("Showing the previously loaded sources for episode \(episode).").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
                 if let message = playback.playerMessage {
                     Section("Playback") {
                         Text(message).font(.subheadline)
@@ -77,7 +80,7 @@ struct WatchAnimeView: View {
                         }
                     }
                 }
-                if searched && !loading {
+                if searched {
                     Section("Sources · \(streams.count)") {
                         if streams.isEmpty {
                             Text("No sources were returned for this episode. Check your AIOStreams providers or try another episode.")
@@ -87,10 +90,11 @@ struct WatchAnimeView: View {
                             Toggle("Playable sources only", isOn: $playableOnly)
                             if visible.isEmpty { Text("No sources match. Clear the search or show all sources.").foregroundStyle(.secondary) }
                             ForEach(visible, id: \.offset) { index, stream in
+                              HStack(alignment: .top, spacing: 8) {
                                 Button { play(stream) } label: {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Label(stream.displayName, systemImage: stream.unavailableReason == nil ? "play.circle.fill" : "exclamationmark.circle").font(.headline)
-                                        Text(stream.details).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                        Text(stream.details).font(.caption).foregroundStyle(.secondary).lineLimit(3)
                                         if let reason = stream.unavailableReason { Text(reason).font(.caption).foregroundStyle(.orange) }
                                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
                                 }.buttonStyle(.plain).disabled(stream.unavailableReason != nil || playback.openingPlayer)
@@ -103,6 +107,11 @@ struct WatchAnimeView: View {
                                             }
                                         }
                                     }
+                                Button { sourceInformation = stream } label: {
+                                    Image(systemName: "info.circle").frame(width: 44, height: 44)
+                                }.buttonStyle(.borderless).accessibilityLabel("Source information")
+                                    .accessibilityIdentifier("playback-source-info-\(index)")
+                              }
                             }
                         }
                         if skipped > 0 { Text("\(skipped) malformed source entries were skipped.").font(.caption).foregroundStyle(.secondary) }
@@ -125,6 +134,9 @@ struct WatchAnimeView: View {
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
+                .sheet(isPresented: Binding(get: { sourceInformation != nil }, set: { if !$0 { sourceInformation = nil } })) {
+                    if let sourceInformation { SourceInformationView(stream: sourceInformation) }
+                }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addon?.endpoint) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
@@ -135,7 +147,7 @@ struct WatchAnimeView: View {
     }
     private func initializeEpisode() {
         guard !episodeChangedByUser else { return }
-        if store.isSignedIn && (store.loadingLibrary || (store.savedAt == nil && store.libraryError == nil)) {
+        if store.isSignedIn && store.savedAt == nil && store.libraryError == nil {
             resetSources(); initialized = false; return
         }
         let next = PlaybackEpisodeSelection.initial(anime: anime, entry: store.entry(for: anime.id),
@@ -177,7 +189,7 @@ struct WatchAnimeView: View {
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
         let requestedEpisode = episode
-        loading = true; error = nil; streams = []; searched = false
+        loading = true; error = nil
         searchTask = Task {
             defer { if lookupID == attempt { loading = false } }
             do {
@@ -204,6 +216,27 @@ struct WatchAnimeView: View {
     private func timeLabel(_ seconds: Double) -> String {
         let value = Int(min(VidHubPlayback.maximumPosition, max(0, seconds.isFinite ? seconds : 0)))
         return value >= 3600 ? String(format: "%d:%02d:%02d", value / 3600, value / 60 % 60, value % 60) : String(format: "%d:%02d", value / 60, value % 60)
+    }
+}
+
+private struct SourceInformationView: View {
+    let stream: StremioStream
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(stream.displayName) { Text(stream.details).textSelection(.enabled) }
+                if let reason = stream.unavailableReason { Section("Playback") { Text(reason) } }
+                Section {
+                    DisclosureGroup("Original add-on text") {
+                        Text([stream.name, stream.description, stream.title, stream.behaviorHints?.filename]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"))
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                    }.accessibilityIdentifier("playback-original-source-text")
+                } footer: { Text("Source descriptions are supplied by your add-on. You can review its original text here.") }
+            }.navigationTitle("Source information").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
     }
 }
 

@@ -44,12 +44,15 @@ enum KeychainTokenStore {
 final class AuthSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
     func signIn(clientID: String) async throws -> OAuthToken {
+        guard session == nil else { throw ServiceError.message("AniList sign-in is already open.") }
+        let state = UUID().uuidString
         var url = URLComponents(string: "https://anilist.co/api/v2/oauth/authorize")!
-        // AniList's implicit mobile flow expects only the client ID and response type here.
+        // Keep the registered redirect URI; state binds the callback to this sign-in attempt.
         // The registered AniList application decides which redirect URI receives the token.
         url.queryItems = [
             URLQueryItem(name: "client_id", value: clientID),
-            URLQueryItem(name: "response_type", value: "token")
+            URLQueryItem(name: "response_type", value: "token"),
+            URLQueryItem(name: "state", value: state)
         ]
         return try await withCheckedThrowingContinuation { continuation in
             let web = ASWebAuthenticationSession(url: url.url!, callbackURLScheme: AppConfiguration.callback.scheme) { callback, error in
@@ -57,7 +60,7 @@ final class AuthSession: NSObject, ASWebAuthenticationPresentationContextProvidi
                     self.session = nil
                     if let error { continuation.resume(throwing: error); return }
                     guard let callback else { continuation.resume(throwing: ServiceError.invalidResponse); return }
-                    do { continuation.resume(returning: try OAuthCallback.parse(callback, expectedRedirect: AppConfiguration.callback)) }
+                    do { continuation.resume(returning: try OAuthCallback.parse(callback, expectedRedirect: AppConfiguration.callback, expectedState: state)) }
                     catch { continuation.resume(throwing: error) }
                 }
             }

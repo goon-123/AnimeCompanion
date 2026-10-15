@@ -34,6 +34,14 @@ final class ExploreDubStore: ObservableObject {
         }
     }
     private func fetch(using client: DubClient, refresh: Bool) async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview") {
+            snapshot = DubSnapshot(upcoming: [], history: [])
+            index = DubIndex(dubbed: [990206], partial: [])
+            loaded = true; unavailable = false; notice = nil; revision += 1
+            return
+        }
+        #endif
         loading = true
         defer { loading = false }
         async let dates = try? client.snapshot(refresh: refresh)
