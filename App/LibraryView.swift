@@ -173,7 +173,7 @@ struct LibraryView: View {
                 }
                 Text("Next unwatched episode from AniList. Resume times are saved on this device; playing never marks an episode watched.")
                     .font(.caption2).foregroundStyle(.secondary)
-            }.accessibilityIdentifier("library-continue-watching")
+            }
         }
     }
     private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { $0.status == selected } }

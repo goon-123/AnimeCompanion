@@ -38,16 +38,22 @@ final class PhaseOneReliabilityUITests: XCTestCase {
     func testVidHubReturnSavesResumeOnlyForTheLaunchedEpisode() throws {
         let app = openPlayback(extra: ["--ui-playback-return-preview"])
         app.buttons["playback-source-0"].tap()
-        XCTAssertTrue(app.staticTexts["Resume at 2:05"].waitForExistence(timeout: 10))
+        let resume = app.staticTexts["playback-resume-position"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        XCTAssertEqual(resume.label, "Resume at 2:05")
         XCTAssertTrue(app.staticTexts["playback-anilist-progress"].label.contains("8 episodes watched"), "A player return must not change AniList progress")
-        let episode = app.textFields["playback-episode-number"]
-        episode.tap(); episode.typeText(XCUIKeyboardKey.delete.rawValue + "10")
+        app.enterPlaybackEpisode(10)
         app.buttons["playback-episode-go"].tap()
         let source = app.buttons["playback-source-0"]
         let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "anilist:1:10.json"), object: source)
         XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 15), .completed)
-        XCTAssertFalse(app.staticTexts["Resume at 2:05"].exists)
+        let cleared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: resume)
+        XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 10), .completed)
         capture("Callback-Progress-Isolated-By-Episode")
+        app.buttons["Done"].tap()
+        let queueResume = app.staticTexts["continue-resume-1"]
+        app.revealInContent(queueResume, upward: false)
+        XCTAssertEqual(queueResume.label, "Resume at 2:05", "The saved time still belongs to AniList's next episode, not episode 10")
     }
     @MainActor
     func testDubFilterFindsAMatchBeyondTheFirstFourPages() throws {

@@ -71,7 +71,7 @@ final class ImmersivePlaybackTests: XCTestCase {
         XCTAssertFalse(app.navigationBars["Selected source"].exists)
         XCTAssertFalse(app.buttons["launch-vidhub"].exists)
         let field = app.textFields["playback-episode-number"]
-        field.tap(); field.typeText(XCUIKeyboardKey.delete.rawValue + "10")
+        app.enterPlaybackEpisode(10)
         XCTAssertEqual(field.value as? String, "10")
         app.buttons["playback-episode-go"].tap()
         let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "anilist:1:10.json"), object: source)

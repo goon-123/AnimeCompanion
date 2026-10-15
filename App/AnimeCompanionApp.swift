@@ -46,6 +46,7 @@ final class TabNavigationState: ObservableObject {
     @Published var detailPath = NavigationPath()
     @Published var animeID: Int?
     @Published var column: NavigationSplitViewColumn = .sidebar
+    @Published var visibility: NavigationSplitViewVisibility = .all
 
     func open(_ id: Int) { detailPath = NavigationPath(); animeID = id; column = .detail }
 }
@@ -75,6 +76,7 @@ final class AppNavigationStore: ObservableObject {
         explore.animeID = nil
         explore.detailPath = NavigationPath()
         explore.column = .sidebar
+        explore.visibility = .all
         selectedTab = .explore
     }
 }
@@ -102,6 +104,7 @@ struct AppTabs: View {
                 navigation.schedule.animeID = nil
                 navigation.schedule.detailPath = NavigationPath()
                 navigation.schedule.column = .sidebar
+                navigation.schedule.visibility = .all
             }
         }
     }
@@ -118,7 +121,7 @@ private struct AnimeTabPane<Content: View>: View {
         self.state = state; self.content = content()
     }
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $state.column) {
+        NavigationSplitView(columnVisibility: $state.visibility, preferredCompactColumn: $state.column) {
             NavigationStack(path: $state.path) { content }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 460, max: 600)
         } detail: {
@@ -132,6 +135,7 @@ private struct AnimeTabPane<Content: View>: View {
                                     ToolbarItem(placement: .topBarLeading) {
                                         Button {
                                             state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar
+                                            state.visibility = .all
                                         } label: { Label("Browse", systemImage: "chevron.left") }
                                             .accessibilityLabel("Back to browsing").accessibilityIdentifier("back-to-browsing")
                                     }

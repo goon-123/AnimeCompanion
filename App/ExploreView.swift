@@ -129,7 +129,9 @@ struct ExploreView: View {
                     Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
             }.padding(.horizontal, 12).padding(.vertical, 8)
-            .background(.ultraThinMaterial).accessibilityIdentifier("explore-browsing-controls")
+            // A container identifier propagates into these controls on iOS 18
+            // and replaces their individual identifiers. Keep IDs on actions.
+            .background(.ultraThinMaterial)
     }
     private var featured: [Anime] {
         var ids = Set<Int>()

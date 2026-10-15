@@ -20,7 +20,7 @@ final class SourceAudioUITests: XCTestCase {
         XCTAssertFalse(app.buttons["playback-source-2"].exists, "Unspecified multi audio must not be guessed English")
         let field = app.textFields["playback-episode-number"]
         reveal(field, in: app, upward: false)
-        field.tap(); field.typeText(XCUIKeyboardKey.delete.rawValue + "10")
+        app.enterPlaybackEpisode(10)
         app.buttons["playback-episode-go"].tap()
         let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "anilist:1:10.json"), object: english)
         XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 15), .completed)

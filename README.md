@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Phase 2 validation fixes (0.7.1 / build 21)
+
+Build 20's IPA compiled, but its native checks exposed an iPad portrait view that could hide browsing behind an empty detail pane, plus Explore control identifiers overwritten by their container. Build 21 requests visible browse/detail columns and keeps accessibility identifiers on the individual actions. Expandable detail sections also preserve their episode-action identifiers. Resume tests now distinguish the playback sheet from Continue Watching behind it, retaining the episode-correlation assertions.
+
+Phase 2 is merged, with these follow-up fixes pending native validation. Phase 3 has not started. See `BUILD_STATUS.md` for exact results and limitations.
+
 ### Phase 2 navigation and watch-first screens (0.7.0 / build 20)
 
 Explore defaults to a balanced, edge-to-edge featured preview (about 60% of its pane), with direct Details and Library actions. Search, season, dub filters and display options share one compact browsing bar. Immersive artwork and custom heights remain available, without overwriting saved poster sizes or independent Library settings.
