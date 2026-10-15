@@ -196,13 +196,14 @@ struct AnimeLink<Content: View>: View {
 
 struct AnimeNavigation: ViewModifier {
     func body(content: Content) -> some View {
-        content.navigationDestination(for: AnimeRoute.self) { AnimeDetailView(mediaID: $0.id) }
+        content.navigationDestination(for: AnimeRoute.self) { AnimeDetailView(mediaID: $0.id).toolbar(.visible, for: .navigationBar) }
             .navigationDestination(for: DiscoveryRoute.self) { route in
                 DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
                     // Replacing a path with the same destination type otherwise reuses its
                     // @State filters. Each genre tap must initialize a fresh result page;
                     // normal detail/back navigation keeps the same route and loaded pages.
                     .id(route)
+                    .toolbar(.visible, for: .navigationBar)
             }
     }
 }

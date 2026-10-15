@@ -20,33 +20,37 @@ final class PhaseTwoNavigationUITests: XCTestCase {
             let mode = app.segmentedControls["schedule-mode"]
             XCTAssertTrue(mode.waitForExistence(timeout: 10)); XCTAssertTrue(mode.isHittable)
             app.appTab("My Library").tap()
-            XCTAssertTrue(app.buttons["continue-watch-1"].waitForExistence(timeout: 10))
-            XCTAssertTrue(app.buttons["continue-watch-1"].isHittable)
+            XCTAssertTrue(app.textFields["library-search"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.textFields["library-search"].isHittable)
+            XCTAssertFalse(app.buttons["continue-watch-1"].exists)
+            XCTAssertFalse(app.buttons["library-coming-up"].exists)
             app.appTab("Explore").tap()
-            for id in ["explore-search", "explore-dub-filter-toolbar", "explore-display-options"] {
-                XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 10)); XCTAssertTrue(app.buttons[id].isHittable)
-            }
+            XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["explore-search"].isHittable)
+            XCTAssertFalse(app.buttons["explore-display-options"].isHittable)
         }
         capture("Initial-Tab-Browsing-Visibility")
     }
 
     @MainActor
-    func testContinueWatchingUsesAniListEpisodeAndKeepsTrackingUnchanged() throws {
+    func testLibraryOmitsRemovedShelvesAndWatchStillUsesAniListEpisode() throws {
         let app = launch()
         app.appTab("My Library").tap()
-        let watch = app.buttons["continue-watch-1"]
-        XCTAssertTrue(watch.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["continue-details-1"].label.contains("Episode 9"))
-        XCTAssertFalse(app.staticTexts["continue-resume-1"].exists, "Episode 1's stale local record must not label episode 9 as resumed")
-        XCTAssertFalse(app.buttons["continue-watch-5"].exists, "Completed movies stay out of the queue")
-        XCTAssertFalse(app.buttons["continue-watch-990102"].exists, "A caught-up title must not offer its future episode")
-        XCTAssertFalse(app.buttons["continue-watch-990106"].exists)
+        XCTAssertTrue(app.textFields["library-search"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Continue Watching"].exists)
+        XCTAssertFalse(app.buttons["library-coming-up"].exists)
+        let entry = app.buttons["library-entry-1"]
+        reveal(entry, in: app); entry.tap()
+        let watch = app.buttons["watch-in-vidhub"]
+        reveal(watch, in: app)
         watch.tap()
         XCTAssertTrue(app.textFields["playback-episode-number"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
+        XCTAssertFalse(app.staticTexts["playback-resume-position"].exists, "Episode 1's local record must not resume episode 9")
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["playback-source-0"].label.contains("anilist:1:9.json"))
         app.buttons["Done"].tap()
+        app.returnToBrowsing()
         reveal(app.buttons["library-entry-1"], in: app)
         XCTAssertTrue(app.buttons["library-entry-1"].label.contains("Watched 8/26"))
         capture("Watch-First-Library")
@@ -76,7 +80,8 @@ final class PhaseTwoNavigationUITests: XCTestCase {
     func testDetailsDisclosuresPreserveDubCountAndExplicitEpisodeChoice() throws {
         let app = launch()
         app.appTab("My Library").tap()
-        app.buttons["continue-details-1"].tap()
+        let entry = app.buttons["library-entry-1"]
+        reveal(entry, in: app); entry.tap()
         let dub = app.staticTexts["detail-dub-count"]
         reveal(dub, in: app)
         XCTAssertTrue(dub.label.contains("26/26"))
@@ -144,34 +149,34 @@ final class PhaseTwoNavigationUITests: XCTestCase {
     }
 
     @MainActor
-    func testBalancedHeroLibraryActionAndSavedDisplayOptions() throws {
+    func testImmersiveHeroLibraryActionAndSavedDisplayOptions() throws {
         let app = launch()
         let carousel = app.descendants(matching: .any)["explore-featured-carousel"].firstMatch
         XCTAssertTrue(carousel.waitForExistence(timeout: 15))
         let pane = app.scrollViews["explore-scroll"]
         XCTAssertEqual(carousel.frame.width, pane.frame.width, accuracy: 2)
-        XCTAssertGreaterThan(carousel.frame.height, pane.frame.height * 0.5)
-        XCTAssertLessThan(carousel.frame.height, pane.frame.height * 0.9)
+        XCTAssertGreaterThan(carousel.frame.height, pane.frame.height * 0.9)
         XCTAssertTrue(app.buttons["explore-search"].isHittable)
-        XCTAssertTrue(app.buttons["explore-dub-filter-toolbar"].isHittable)
+        XCTAssertFalse(app.buttons["explore-dub-filter-toolbar"].isHittable)
+        XCTAssertFalse(app.navigationBars["Explore"].isHittable)
         let add = app.buttons["featured-add-library-1"]
         reveal(add, in: app); add.tap()
         XCTAssertTrue(app.navigationBars["Edit AniList tracking"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["tracking-episode-input"].value as? String, "8")
         app.buttons["Cancel"].tap()
-        app.buttons["explore-display-options"].tap()
+        app.openExploreControl("explore-display-options")
         let balanced = app.switches["explore-featured-balanced"]
         reveal(balanced, in: app)
-        XCTAssertEqual(balanced.value as? String, "1")
+        XCTAssertEqual(balanced.value as? String, "0")
         balanced.tap(); app.buttons["Done"].tap()
-        let taller = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in carousel.frame.height > pane.frame.height * 0.8 }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [taller], timeout: 10), .completed)
+        let smaller = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in carousel.frame.height < pane.frame.height * 0.8 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [smaller], timeout: 10), .completed)
         app.terminate()
         app.launchArguments += ["--ui-phase2-keep-display"]
         app.launch()
-        app.buttons["explore-display-options"].tap()
+        app.openExploreControl("explore-display-options")
         reveal(balanced, in: app)
-        XCTAssertEqual(balanced.value as? String, "0")
+        XCTAssertEqual(balanced.value as? String, "1")
         balanced.tap(); app.buttons["Done"].tap()
         capture("Balanced-Explore")
     }

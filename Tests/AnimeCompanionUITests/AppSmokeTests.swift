@@ -5,14 +5,14 @@ final class AppSmokeTests: XCTestCase {
     func testDisplayOptionsAndExploreDensityOnPhone() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launch()
-        app.buttons["explore-display-options"].tap()
+        app.openExploreControl("explore-display-options")
         XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.sliders["explore-list-size"].isHittable)
         app.sliders["explore-list-size"].adjust(toNormalizedSliderPosition: 0.6)
         let saved = app.sliders["explore-list-size"].value as? String
         app.buttons["Done"].tap()
         app.terminate(); app.launch()
-        app.buttons["explore-display-options"].tap()
+        app.openExploreControl("explore-display-options")
         XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.sliders["explore-list-size"].value as? String, saved)
         app.buttons["Done"].tap()
@@ -222,7 +222,8 @@ final class AppSmokeTests: XCTestCase {
             XCTAssertTrue(tab.waitForExistence(timeout: 15), "Missing tab: \(title)")
             tab.tap()
             let navigationTitle = title == "News" ? "Anime News" : title
-            XCTAssertTrue(app.navigationBars[navigationTitle].waitForExistence(timeout: 10))
+            if title == "Explore" { XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 10)) }
+            else { XCTAssertTrue(app.navigationBars[navigationTitle].waitForExistence(timeout: 10)) }
             if title == "Explore" { waitForLoadingToFinish("Finding your season…", in: app) }
             if title == "Schedule" { waitForLoadingToFinish("Loading releases…", in: app) }
             if title == "News" { waitForLoadingToFinish("Loading headlines…", in: app) }

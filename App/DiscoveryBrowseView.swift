@@ -2,6 +2,10 @@ import SwiftUI
 import AnimeCore
 
 private struct DiscoveryRequestKey: Hashable { let filters: DiscoveryFilters; let includeAdult: Bool }
+private struct DiscoveryPaginationBounds: PreferenceKey {
+    static var defaultValue: CGRect { .null }
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
 
 struct DiscoveryBrowseView: View {
     @EnvironmentObject private var store: AppStore
@@ -28,6 +32,7 @@ struct DiscoveryBrowseView: View {
     @State private var requestID = UUID()
     @State private var loadedFilters: DiscoveryFilters?
     @State private var loadedAdult: Bool?
+    @State private var paginationVisible = false
     @FocusState private var searching: Bool
 
     init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil, initialGenre: String? = nil) {
@@ -123,10 +128,17 @@ struct DiscoveryBrowseView: View {
                 }
                 if let paginationError { NoticeView(message: paginationError) { Task { await continueBrowsing() } } }
                 if hasMore {
-                    Button { Task { await continueBrowsing() } } label: {
+                    Group {
                         if loadingMore || scanning { ProgressView("Checking more titles…") }
-                        else { Text(locallyFiltered ? "Search more titles" : "Load more titles").frame(maxWidth: .infinity) }
-                    }.buttonStyle(.bordered).disabled(loading || loadingMore || scanning).accessibilityIdentifier("discovery-more")
+                        else if paginationError == nil { Text("Keep scrolling for more anime").font(.caption).foregroundStyle(.secondary) }
+                    }.frame(maxWidth: .infinity, minHeight: 44)
+                        .accessibilityIdentifier("discovery-pagination")
+                        .background {
+                            GeometryReader { marker in
+                                Color.clear.preference(key: DiscoveryPaginationBounds.self,
+                                    value: marker.frame(in: .named("discovery-viewport")))
+                            }
+                        }
                 }
                 if visibleResults.isEmpty && error == nil && paginationError == nil, let title = coverage.emptyTitle {
                     ContentUnavailableView(title, systemImage: "magnifyingglass", description: Text(coverage.emptyMessage ?? ""))
@@ -136,12 +148,26 @@ struct DiscoveryBrowseView: View {
                 DiscoveryDataNote()
             }.padding(12).readableContent(width: layout == "grid" ? 1280 : 1000)
            }.scrollDismissesKeyboard(.interactively)
+               .coordinateSpace(name: "discovery-viewport")
                .accessibilityIdentifier("discovery-scroll")
+               .onPreferenceChange(DiscoveryPaginationBounds.self) { bounds in
+                   let visible = !bounds.isNull && bounds.minY.isFinite && bounds.maxY > 0 && bounds.minY < geometry.size.height + 320
+                   let entered = visible && !paginationVisible
+                   paginationVisible = visible
+                   if entered { automaticallyContinue() }
+               }
+               .onChange(of: loading) { _, busy in if !busy { automaticallyContinue() } }
+               .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+                   // One bounded filtered scan per scroll gesture, even when no
+                   // matches have appeared. An empty batch never loops by itself.
+                   if value.translation.height < -20 { automaticallyContinue() }
+               })
                .onChange(of: filters) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
                .onChange(of: dubFilters.selection) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
           }
         }.background(Theme.background)
             .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showDubFilters = true } label: { Image(systemName: "line.3.horizontal.decrease") }
@@ -241,6 +267,11 @@ struct DiscoveryBrowseView: View {
     private func continueBrowsing() async {
         if locallyFiltered { await fillFilteredPages(force: true) }
         else { await loadMore() }
+    }
+    private func automaticallyContinue() {
+        guard paginationVisible, hasMore, !loading, !loadingMore, !scanning,
+              error == nil, paginationError == nil, loadedFilters == queryFilters, loadedAdult == store.includeAdult else { return }
+        Task { await continueBrowsing() }
     }
     private func fillFilteredPages(force: Bool = false) async {
         guard locallyFiltered, (dubFilters.selection.dub == .all || dubs.loaded), loadedFilters == queryFilters,

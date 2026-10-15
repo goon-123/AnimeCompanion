@@ -9,7 +9,6 @@ private enum LibrarySort: String, CaseIterable {
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
-    @EnvironmentObject private var playback: PlaybackStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.scenePhase) private var scenePhase
@@ -20,7 +19,6 @@ struct LibraryView: View {
     @State private var reversed = false
     @State private var showSettings = false
     @State private var showDisplay = false
-    @State private var comingExpanded = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
     @State private var now = Date()
@@ -29,17 +27,6 @@ struct LibraryView: View {
     private var sort: LibrarySort { LibrarySort(rawValue: sortValue) ?? .airing }
     private var syncKey: String { "\(store.isSignedIn)-\(store.viewer?.id ?? 0)-\(store.entries.map(\.mediaId).sorted())" }
 
-    private var comingUp: [ReleaseEvent] {
-        let originals = store.watching.compactMap { entry -> ReleaseEvent? in
-            guard let anime = entry.media, let next = anime.nextAiringEpisode else { return nil }
-            return ReleaseEvent(anime: anime, episode: next.episode, kind: .sub, date: next.date, certainty: .broadcast)
-        }
-        let ids = Set(store.watching.map(\.mediaId))
-        let end = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date().addingTimeInterval(604800)
-        return (originals + dubEvents.filter { ids.contains($0.anime.id) }).filter {
-            guard let date = $0.date else { return false }; return date >= Date() && date < end
-        }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
-    }
     private var filtered: [LibraryEntry] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let entries = selectedEntries.filter { entry in
@@ -81,9 +68,6 @@ struct LibraryView: View {
                 ScrollView {
                     // Keep controls stable while the results below remain lazy.
                     VStack(alignment: .leading, spacing: 18) {
-                        if query.isEmpty && (selected == .watching || selected == .rewatching) {
-                            continueWatching(width: contentWidth)
-                        }
                         searchBar
                         if let anime = store.lastTrackedAnime, store.isVisible(anime), store.canUndo(anime.id) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -91,7 +75,6 @@ struct LibraryView: View {
                                 TrackingFeedback(anime: anime)
                             }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
-                        comingUpSection(width: contentWidth)
                         statusTabs
                         layoutControls.zIndex(1)
                         sortingBar.zIndex(1)
@@ -154,28 +137,6 @@ struct LibraryView: View {
                 }
             }
     }
-    @ViewBuilder private func continueWatching(width: CGFloat) -> some View {
-        let queue = ContinueWatchingItem.items(entries: store.visibleEntries, playback: playback.progress, now: now)
-        if !queue.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Continue Watching").font(.title2.bold())
-                    Spacer()
-                    Text("\(queue.count)").font(.caption).foregroundStyle(.secondary)
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(queue) { item in
-                            ContinueWatchingCard(item: item)
-                                .frame(width: min(max(240, width), textSize.isAccessibilitySize ? 380 : 320))
-                        }
-                    }.padding(.bottom, 2)
-                }
-                Text("Next unwatched episode from AniList. Resume times are saved on this device; playing never marks an episode watched.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-    }
     private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { $0.status == selected } }
     private func airing(for entry: LibraryEntry) -> LibraryAiringProgress? {
         guard let anime = entry.media else { return nil }
@@ -234,28 +195,6 @@ struct LibraryView: View {
                 .accessibilityIdentifier("library-sort")
             Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }
                 .accessibilityLabel("Reverse library sort")
-        }
-    }
-    private func comingUpSection(width: CGFloat) -> some View {
-        Group {
-            if !store.watching.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button { withAnimation { comingExpanded.toggle() } } label: {
-                        HStack {
-                            Text("Coming up for you").font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Image(systemName: comingExpanded ? "chevron.down" : "chevron.right").font(.subheadline.bold())
-                        }.frame(minHeight: 44).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityIdentifier("library-coming-up")
-                        .accessibilityValue(comingExpanded ? "Expanded" : "Collapsed")
-                    if comingExpanded {
-                        ForEach(Array(comingUp.prefix(8))) {
-                            ReleaseRow(event: $0, posterWidth: CGFloat(PosterLayout.listWidth(preferred: min(200, max(60, posters.comingWidth)), availableWidth: Double(width))))
-                        }
-                        if comingUp.isEmpty { Text("No listed releases for your watching list in the next seven days.").font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-            }
         }
     }
     private func nextDub(for id: Int) -> ReleaseEvent? {

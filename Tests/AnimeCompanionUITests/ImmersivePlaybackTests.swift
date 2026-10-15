@@ -7,8 +7,8 @@ final class ImmersivePlaybackTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launch()
-        XCTAssertTrue(app.buttons["explore-display-options"].waitForExistence(timeout: 20))
-        app.buttons["explore-display-options"].tap()
+        XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 20))
+        app.openExploreControl("explore-display-options")
         let balanced = app.switches["explore-featured-balanced"]
         for _ in 0..<12 where !balanced.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(balanced.isHittable)
@@ -22,7 +22,8 @@ final class ImmersivePlaybackTests: XCTestCase {
         XCTAssertEqual(carousel.frame.minX, pane.frame.minX, accuracy: 2)
         XCTAssertEqual(carousel.frame.width, pane.frame.width, accuracy: 2)
         XCTAssertGreaterThan(carousel.frame.height, pane.frame.height * 0.6)
-        XCTAssertGreaterThanOrEqual(carousel.frame.minY, app.navigationBars["Explore"].frame.maxY)
+        XCTAssertFalse(app.navigationBars["Explore"].isHittable)
+        XCTAssertEqual(carousel.frame.minY, pane.frame.minY, accuracy: 3)
         capture("Full-Bleed-Explore-First")
         let page = app.buttons["featured-page-1"]
         for _ in 0..<4 where !page.isHittable { app.contentSurface.swipeUp() }
@@ -40,7 +41,7 @@ final class ImmersivePlaybackTests: XCTestCase {
             capture("Full-Bleed-Explore-Landscape")
             XCUIDevice.shared.orientation = .portrait
         }
-        app.buttons["explore-display-options"].tap()
+        app.openExploreControl("explore-display-options")
         for _ in 0..<12 where !balanced.isHittable { app.contentSurface.swipeUp() }
         if balanced.value as? String == "0" { balanced.tap() }
         app.buttons["Done"].tap()

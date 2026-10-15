@@ -52,6 +52,7 @@ private struct FeaturedAnimePanel: View {
     @State private var preview: AnimeImagePreview?
     @State private var showTracking = false
     @State private var showSettings = false
+    @State private var showPlayback = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -64,25 +65,13 @@ private struct FeaturedAnimePanel: View {
                     .init(color: background.color.opacity(0.80), location: 0.73), .init(color: Theme.background, location: 1)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 information.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
-                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 6)
-                VStack {
-                    HStack {
-                        Spacer()
-                        if let url = anime.coverURL {
-                            Button { preview = AnimeImagePreview(url: url, title: anime.displayTitle) } label: {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.subheadline.weight(.semibold))
-                                    .frame(width: 44, height: 44).silverGlass(in: Circle())
-                            }.buttonStyle(.plain).accessibilityLabel("Expand featured artwork")
-                                .accessibilityIdentifier("featured-expand-\(anime.id)")
-                        }
-                    }
-                    Spacer()
-                }.padding(.horizontal, 20).padding(.top, max(16, topInset + 12))
+                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         let banner = anime.bannerImage.flatMap(URL.init(string:))
@@ -96,10 +85,16 @@ private struct FeaturedAnimePanel: View {
     private var information: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top, spacing: 10) {
-                Text(anime.displayTitle).font(.system(.largeTitle, design: .rounded, weight: .bold))
+                Text(anime.displayTitle).font(.system(.title, design: .rounded, weight: .bold))
                     .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
                     .accessibilityIdentifier("featured-title-\(anime.id)")
                 DiscoveryAiringDot(anime: anime, identifierPrefix: "featured").padding(.top, 12)
+                if let url = anime.coverURL {
+                    Button { preview = AnimeImagePreview(url: url, title: anime.displayTitle) } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("Expand featured artwork")
+                        .accessibilityIdentifier("featured-expand-\(anime.id)")
+                }
             }
             HStack(spacing: 12) {
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").foregroundStyle(.yellow) }
@@ -110,25 +105,29 @@ private struct FeaturedAnimePanel: View {
             DiscoveryIndicators(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) { detailsAction; libraryAction }
-                VStack(alignment: .leading, spacing: 8) { detailsAction; libraryAction }
+                HStack(spacing: 10) { watchAction; detailsAction; libraryAction }
+                VStack(alignment: .leading, spacing: 8) { watchAction; HStack { detailsAction; libraryAction } }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
+    private var watchAction: some View {
+        Button { showPlayback = true } label: {
+            Label("Watch", systemImage: "play.fill").font(.headline)
+                .padding(.horizontal, 24).frame(minHeight: 48)
+                .background(.white, in: Capsule()).foregroundStyle(.black)
+        }.buttonStyle(.plain).accessibilityIdentifier("featured-watch-\(anime.id)")
+    }
     private var detailsAction: some View {
             AnimeLink(id: anime.id) {
-                Label("View details", systemImage: "info.circle").font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 20).frame(minHeight: 44).silverGlass(in: Capsule())
-            }.buttonStyle(.plain).accessibilityIdentifier("featured-details-\(anime.id)")
+                Image(systemName: "info.circle").font(.headline).frame(width: 48, height: 48).silverGlass(in: Circle())
+            }.buttonStyle(.plain).accessibilityLabel("View details for \(anime.displayTitle)").accessibilityIdentifier("featured-details-\(anime.id)")
     }
     private var libraryAction: some View {
         Button {
             if store.isSignedIn { showTracking = true } else { showSettings = true }
         } label: {
-            Label(store.entry(for: anime.id) == nil ? "Library" : "In Library",
-                  systemImage: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
-                .font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
-                .silverGlass(in: Capsule())
+            Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
+                .font(.headline).frame(width: 48, height: 48).silverGlass(in: Circle())
         }.buttonStyle(.plain).accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to Library" : "Edit Library tracking for \(anime.displayTitle)")
             .disabled(store.isSignedIn && store.loadingLibrary)
             .accessibilityIdentifier("featured-add-library-\(anime.id)")

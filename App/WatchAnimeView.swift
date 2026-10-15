@@ -9,8 +9,7 @@ struct WatchAnimeView: View {
     var requestedEpisode: Int? = nil
     @State private var episode = 1
     @State private var episodeText = "1"
-    @State private var streams: [StremioStream] = []
-    @State private var skipped = 0
+    @State private var sourceResults: AddonStreamSnapshot?
     @State private var loading = false
     @State private var searched = false
     @State private var error: String?
@@ -23,18 +22,29 @@ struct WatchAnimeView: View {
     @State private var lookupID = UUID()
     @State private var initialized = false
     @State private var episodeChangedByUser = false
-    @State private var sourceInformation: StremioStream?
+    @State private var sourceInformation: AddonStreamSource?
     @FocusState private var episodeFocused: Bool
     private var limit: Int { anime.format == "MOVIE" ? 1 : min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000)) }
     private var initializationKey: String {
         "\(anime.id)-\(store.isSignedIn)-\(store.loadingLibrary)-\(store.entry(for: anime.id)?.progressValue ?? -1)-\(store.libraryError ?? "")"
     }
     private var audioFilter: StreamAudioFilter { StreamAudioFilter(rawValue: audioFilterValue) ?? .all }
+    private var streams: [StremioStream] { sourceResults?.sources.map(\.stream) ?? [] }
+    private var skipped: Int { sourceResults?.skippedCount ?? 0 }
+    private struct SourceChoice: Identifiable {
+        let index: Int
+        let source: AddonStreamSource
+        var id: AddonStreamSource.ID { source.id }
+    }
+    private var choices: [SourceChoice] {
+        guard let sources = sourceResults?.sources else { return [] }
+        return visible.map { SourceChoice(index: $0, source: sources[$0]) }
+    }
     private var visible: [Int] {
         StreamSourceSelection.indices(in: streams, audio: audioFilter, playableOnly: playableOnly, search: filter)
     }
     var body: some View {
-        let visibleSources = visible
+        let visibleSources = choices
         NavigationStack {
             List {
                 Section {
@@ -64,9 +74,9 @@ struct WatchAnimeView: View {
                         }
                     }
                     if playback.ready {
-                        if loading { ProgressView("Finding sources…").accessibilityIdentifier("playback-loading") }
+                        if loading { ProgressView("Checking add-ons · \(sourceResults?.pendingCount ?? playback.activeAddons.count) remaining").accessibilityIdentifier("playback-loading") }
                     } else {
-                        Text(playback.addon == nil ? "Connect your streaming add-on to find sources." : "Your streaming add-on is disabled.")
+                        Text(playback.installations.isEmpty ? "Add a streaming manifest to find sources." : "Your streaming add-ons are disabled.")
                         NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
                     }
                 }
@@ -74,6 +84,14 @@ struct WatchAnimeView: View {
                     Section {
                         NoticeView(message: error) { loadSources() }
                         if !streams.isEmpty { Text("Showing the previously loaded sources for episode \(episode).").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                ForEach(sourceResults?.issues ?? []) { issue in
+                    Section {
+                        NoticeView(message: "\(issue.addonName): \(issue.error.localizedDescription)") { loadSources() }
+                        if issue.usingSavedSources {
+                            Text("Showing the previously loaded sources for episode \(episode) from this add-on.").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if let message = playback.playerMessage {
@@ -88,7 +106,7 @@ struct WatchAnimeView: View {
                 if searched {
                     Section("Sources · \(streams.count)") {
                         if streams.isEmpty {
-                            Text("No sources were returned for this episode. Check your AIOStreams providers or try another episode.")
+                            Text(sourceResults?.issues.isEmpty == false ? "Some add-ons could not be checked. Retry above or manage your add-ons in Settings." : "No sources were returned for this episode. Check your add-on providers or try another episode.")
                                 .foregroundStyle(.secondary).accessibilityIdentifier("playback-empty-results")
                         } else {
                             audioControls
@@ -103,13 +121,14 @@ struct WatchAnimeView: View {
                                 Button("Show all sources") { audioFilterValue = StreamAudioFilter.all.rawValue; filter = ""; playableOnly = false }
                                     .accessibilityIdentifier("playback-reset-source-filters")
                             }
-                            ForEach(visibleSources, id: \.self) { index in
-                                let stream = streams[index]
+                            ForEach(visibleSources) { choice in
+                                let stream = choice.source.stream
                                 let sourceEpisode = episode
-                                PlaybackSourceRow(stream: stream, index: index,
-                                    preferred: index == visibleSources.first && stream.unavailableReason == nil,
+                                PlaybackSourceRow(stream: stream, index: choice.index,
+                                    preferred: choice.id == visibleSources.first?.id && stream.unavailableReason == nil,
                                     openingPlayer: playback.openingPlayer,
-                                    play: { play(stream, expectedEpisode: sourceEpisode) }, information: { sourceInformation = stream })
+                                    addonName: playback.installations.count > 1 ? choice.source.addonName : nil,
+                                    play: { play(stream, expectedEpisode: sourceEpisode) }, information: { sourceInformation = choice.source })
                                     .contextMenu {
                                         if stream.unavailableReason == nil {
                                             Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, expectedEpisode: sourceEpisode, fromBeginning: true) }
@@ -142,11 +161,11 @@ struct WatchAnimeView: View {
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
-                .sheet(isPresented: Binding(get: { sourceInformation != nil }, set: { if !$0 { sourceInformation = nil } })) {
-                    if let sourceInformation { SourceInformationView(stream: sourceInformation) }
+                .sheet(item: $sourceInformation) { source in
+                    SourceInformationView(stream: source.stream, addonName: source.addonName)
                 }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
-                .onChange(of: playback.addon?.endpoint) { _, _ in resetSources(); loadSources() }
+                .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
                     searchTask?.cancel()
                     if loading { lookupID = UUID(); loading = false }
@@ -182,7 +201,7 @@ struct WatchAnimeView: View {
             resetSources(); episode = next; episodeText = String(next); restart = false
             playback.playerMessage = nil; initialized = true
         }
-        if !searched && !loading { loadSources() }
+        if !loading && (!searched || (sourceResults?.pendingCount ?? 0) > 0) { loadSources() }
     }
     private var episodeControls: some View {
         HStack {
@@ -208,20 +227,26 @@ struct WatchAnimeView: View {
     }
     private func commitEpisode() { episodeFocused = false; selectEpisode(Int(episodeText) ?? episode) }
     private func resetSources() {
-        searchTask?.cancel(); lookupID = UUID(); streams = []; skipped = 0; searched = false; loading = false; error = nil; filter = ""
+        searchTask?.cancel(); lookupID = UUID(); sourceResults = nil; searched = false; loading = false; error = nil; filter = ""
     }
     private func loadSources() {
-        guard initialized, let addon = playback.addon, playback.enabled else { return }
+        guard initialized, playback.ready else { return }
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
         let requestedEpisode = episode
+        let installations = playback.activeAddons
+        let previous = sourceResults?.sources ?? []
         loading = true; error = nil
         searchTask = Task {
             defer { if lookupID == attempt { loading = false } }
             do {
-                let result = try await playback.client.streams(addon: addon, anime: anime, episode: requestedEpisode)
-                try Task.checkCancellation(); guard lookupID == attempt else { return }
-                streams = result.streams; skipped = result.skippedCount; searched = true
+                _ = try await playback.client.streams(installations: installations, anime: anime, episode: requestedEpisode, previous: previous) { snapshot in
+                    await MainActor.run {
+                        guard lookupID == attempt, episode == requestedEpisode else { return }
+                        sourceResults = snapshot
+                        searched = !snapshot.sources.isEmpty || snapshot.pendingCount == 0
+                    }
+                }
             } catch is CancellationError {} catch { if lookupID == attempt { self.error = error.localizedDescription } }
         }
     }
@@ -248,11 +273,13 @@ struct WatchAnimeView: View {
 
 private struct SourceInformationView: View {
     let stream: StremioStream
+    let addonName: String
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             Form {
                 Section(stream.displayName) {
+                    Text("Add-on · \(addonName)").font(.caption).foregroundStyle(.secondary)
                     PlaybackAudioBadge(audio: StreamSourceMetadata(stream: stream).audio)
                     Text(stream.details).textSelection(.enabled)
                 }

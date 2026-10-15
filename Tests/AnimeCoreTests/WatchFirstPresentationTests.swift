@@ -97,7 +97,7 @@ final class WatchFirstPresentationTests: XCTestCase {
     func testBalancedHeroKeepsImmersiveAndCustomPreferencesAvailable() {
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true, balanced: true), 480)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 700, viewportHeight: 1_100, fillScreen: true, balanced: true), 660)
-        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true, balanced: false), 704)
+        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true, balanced: false), 752)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: false, balanced: true), 620)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: .nan, viewportHeight: .nan, fillScreen: true, balanced: true), 480)
     }

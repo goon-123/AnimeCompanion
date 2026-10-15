@@ -8,7 +8,7 @@ public enum PlaybackError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .invalidAddon: return "Paste the add-on’s HTTPS install link or manifest URL."
-        case .invalidManifest: return "This link did not return a valid streaming add-on. Check the install link in AIOStreams."
+        case .invalidManifest: return "This link did not return a valid streaming add-on. Check the manifest link in your add-on’s settings."
         case .unsupportedAnime: return "This add-on does not advertise support for this anime’s AniList or MyAnimeList ID."
         case .http(let status):
             if status == 401 || status == 403 { return "The add-on rejected this connection. Copy a fresh install link from its settings." }
