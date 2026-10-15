@@ -1,5 +1,19 @@
 # Anime Companion
 
+### Add-on directory and standard resources (0.10.0 / build 24)
+
+Settings → Add-ons & playback → **Browse stremio-addons.net** opens the real directory inside the app, starting in its Anime category. Use the site's own search, filters and provider configuration pages. HTTPS `manifest.json` and `stremio://` install links (including new-window links) open a native manifest/capability review; nothing installs until you confirm. Cancel leaves the installed collection unchanged. Configuration-required manifests direct you to the provider's setup page instead of saving an unusable connection. The site's own content preferences apply to its web pages. If web verification blocks a page, open it in Safari and paste the resulting manifest link.
+
+Manifest entry is plain, readable text, not a password field. Installed entries show capabilities, individual enable/remove controls, configuration links where advertised, and an expandable readable manifest URL. Treat configured links as private: they can contain account tokens. Persistent installed links remain in this device's Keychain; the isolated browser is not given the app's installed collection, and the app does not register itself as a global Stremio handler.
+
+Valid catalog-only, metadata-only, subtitle-only and non-AniList stream manifests are no longer rejected. **Browse installed catalogs** supports provider catalog filters/required extras, search where advertised, automatic `skip` pagination, title metadata and exact video/season/episode IDs. Compatible enabled metadata/stream add-ons can supply details/sources for another provider's catalog IDs. IMDb, Kitsu, live-TV and custom provider IDs are supported without inventing an AniList mapping. Stream-only add-ons also have an **Open an exact video ID** entry. English-audio labels, English-first ordering, provider identities, original source text and partial-provider errors are retained.
+
+Touch and hold a catalog source → **Choose subtitles** to combine its supplied subtitle tracks with compatible enabled subtitle add-ons. File hash/size/name hints are sent when present. Catalog/exact-ID playback opens direct video in VidHub without AniList callbacks or invented tracking identities: it does not change AniList or save a local resume position here. Native anime Watch retains AniList-first episode selection and its existing local-resume callbacks; use its catalog/other-ID link for providers that do not accept AniList/MAL IDs.
+
+This is standard HTTPS Stremio resource support, **not a guarantee that every add-on can play**. VidHub needs a direct HTTP(S) video URL. Torrent-only sources, DRM, YouTube IDs and sources requiring special playback headers need a compatible streaming service/proxy. Legacy/IPFS transports, JavaScript plugins and nested `addon_catalog` resources are not rendered natively; unimplemented resource capabilities are labeled. Known adult add-ons are hidden from native catalogs when the adult setting is off, but third-party providers do not always supply content ratings. No directory API is mirrored or republished.
+
+Local core/syntax checks and pending native/IPA validation are recorded in `BUILD_STATUS.md`. Protocol reference: [official Stremio add-on SDK](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs). Directory: [stremio-addons.net](https://stremio-addons.net).
+
 ### Immersive Explore and multiple manifests (0.9.0 / build 23)
 
 My Library opens directly on search, status tabs and your anime. Continue Watching and Coming up for you, including the separate Coming-up poster-size setting, are removed. Existing per-title Watch, resume, progress, dub information and airing dots remain available.

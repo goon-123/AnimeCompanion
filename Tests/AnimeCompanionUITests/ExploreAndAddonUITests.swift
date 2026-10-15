@@ -82,14 +82,15 @@ final class ExploreAndAddonUITests: XCTestCase {
         let setup = app.buttons["playback-settings"]
         app.revealInContent(setup); setup.tap()
         XCTAssertTrue(app.navigationBars["Add-ons & playback"].waitForExistence(timeout: 10))
-        app.revealInContent(app.secureTextFields["addon-install-url"])
+        app.revealInContent(app.textFields["addon-install-url"])
     }
     @MainActor private func install(_ path: String, name: String, in app: XCUIApplication) {
-        let field = app.secureTextFields["addon-install-url"]
+        let field = app.textFields["addon-install-url"]
         app.revealInContent(field); field.tap(); field.typeText("https://addon.example/\(path)/manifest.json\n")
         let add = app.buttons["connect-streaming-addon"]
         app.revealInContent(add); add.tap()
         let saved = app.staticTexts[name]
+        app.revealInContent(saved, upward: false)
         XCTAssertTrue(saved.waitForExistence(timeout: 10))
     }
     @MainActor private func capture(_ name: String) {

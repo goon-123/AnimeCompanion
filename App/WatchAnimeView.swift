@@ -76,8 +76,15 @@ struct WatchAnimeView: View {
                     if playback.ready {
                         if loading { ProgressView("Checking add-ons · \(sourceResults?.pendingCount ?? playback.activeAddons.count) remaining").accessibilityIdentifier("playback-loading") }
                     } else {
-                        Text(playback.installations.isEmpty ? "Add a streaming manifest to find sources." : "Your streaming add-ons are disabled.")
+                        Text(playback.installations.isEmpty ? "Add a streaming manifest to find sources." : "No stream add-ons are enabled. Catalog or subtitle add-ons do not supply video streams.")
                         NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
+                    }
+                }
+                if !playback.installations.isEmpty {
+                    Section {
+                        NavigationLink("Browse add-on catalogs / other video IDs") { AddonCatalogHome() }
+                        Text("IMDb/Kitsu-only add-ons need their exact provider video IDs. Catalog playback stays separate from AniList; seasons are never guessed.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 if let error {

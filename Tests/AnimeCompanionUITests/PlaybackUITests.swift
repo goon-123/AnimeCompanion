@@ -10,7 +10,8 @@ final class PlaybackUITests: XCTestCase {
         let playback = app.buttons["playback-settings"]
         for _ in 0..<6 where !playback.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(playback.waitForExistence(timeout: 10)); playback.tap()
-        let field = app.secureTextFields["addon-install-url"]
+        let field = app.textFields["addon-install-url"]
+        app.revealInContent(field)
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap(); field.typeText("https://")
         app.buttons["connect-streaming-addon"].tap()

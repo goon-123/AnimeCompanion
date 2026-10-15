@@ -15,13 +15,31 @@ struct PlaybackSettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Link("VidHub integration help", destination: URL(string: "https://vidhub.okaapps.com/3rd-party-app-integration/")!)
             }
+            Section("Discover add-ons") {
+                NavigationLink { AddonDirectoryBrowser() } label: { Label("Browse stremio-addons.net", systemImage: "globe") }
+                    .accessibilityIdentifier("browse-addon-directory")
+                NavigationLink { AddonCatalogHome() } label: { Label("Browse installed catalogs", systemImage: "rectangle.stack") }
+                    .accessibilityIdentifier("browse-installed-catalogs")
+                Text("Browse the real website, configure a provider, then use its Install button. You review each manifest here before it is saved.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if !playback.installations.isEmpty {
                 Section("Installed add-ons · \(playback.installations.count)") {
-                    Toggle("Enable streaming add-ons", isOn: $playback.enabled).accessibilityIdentifier("addon-enabled")
+                    Toggle("Enable add-ons", isOn: $playback.enabled).accessibilityIdentifier("addon-enabled")
                     ForEach(playback.installations) { installation in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(installation.addon.manifest.name).font(.headline).accessibilityIdentifier("installed-addon-name")
                             Text(installation.addon.endpoint.displayHost).font(.caption).foregroundStyle(.secondary)
+                            Text(installation.addon.manifest.capabilitySummary).font(.caption).foregroundStyle(.secondary)
+                            DisclosureGroup("Support & manifest URL") {
+                                AddonCompatibilityText(addon: installation.addon)
+                                Text(installation.addon.endpoint.manifestURL.absoluteString).font(.caption).textSelection(.enabled)
+                            }
+                            if installation.addon.manifest.behaviorHints?.configurable == true || installation.addon.manifest.behaviorHints?.configurationRequired == true {
+                                NavigationLink("Configure \(installation.addon.manifest.name)") {
+                                    AddonDirectoryBrowser(startURL: installation.addon.endpoint.configurationURL)
+                                }
+                            }
                             Toggle("Enable \(installation.addon.manifest.name)", isOn: Binding(
                                 get: { playback.installations.first { $0.id == installation.id }?.enabled ?? false },
                                 set: { playback.setEnabled($0, id: installation.id) }))
@@ -32,8 +50,8 @@ struct PlaybackSettingsView: View {
                     }
                 }
             }
-            Section("Add a streaming add-on") {
-                SecureField("Paste add-on install URL", text: $installURL)
+            Section("Add a manifest") {
+                TextField("Paste add-on install URL", text: $installURL)
                     .textContentType(.none).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .focused($enteringManifest).submitLabel(.done).onSubmit { enteringManifest = false }
                     .keyboardType(.URL).accessibilityIdentifier("addon-install-url")
@@ -44,15 +62,19 @@ struct PlaybackSettingsView: View {
                     .disabled(installURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || playback.installing)
                     .accessibilityIdentifier("connect-streaming-addon")
                 if playback.installing { ProgressView() }
-                if saved { Label("Add-on saved. Open an anime and tap Watch in VidHub.", systemImage: "checkmark.circle").foregroundStyle(.mint) }
+                if saved { Label("Add-on saved. Open native Watch or browse installed catalogs.", systemImage: "checkmark.circle").foregroundStyle(.mint) }
                 if let error = playback.setupError { Text(error).font(.caption).foregroundStyle(.orange) }
+                if let endpoint = try? AddonEndpoint(installURL), !installURL.isEmpty {
+                    NavigationLink("Open this add-on’s configuration page") { AddonDirectoryBrowser(startURL: endpoint.configurationURL) }
+                }
                 Text("Add as many compatible manifest.json links as you need. Each add-on stays installed until you remove it. Reconnecting the same link updates that installation. Private links stay in this device’s Keychain.")
                     .font(.caption).foregroundStyle(.secondary)
+                Text("The URL is visible as requested. It may contain private tokens—avoid including it in screenshots or sharing it.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Playback support") {
-                Text("Supports Stremio manifest links that accept AniList or MyAnimeList IDs and return direct video links. Sources from enabled add-ons appear together, with each add-on named. English-audio choices stay first.")
-                Text("Torrent-only sources and sources requiring playback headers need a streaming service or proxy configured in the add-on. Nuvio JavaScript plugins are not supported.")
-                Text("Resume positions are saved on this device. Update AniList using the watched-progress controls.")
+                Text("Supports standard HTTPS Stremio manifests with catalogs, metadata, streams and subtitles. Native anime Watch uses AniList/MAL IDs; installed catalogs and exact-ID lookup also support IMDb, Kitsu and provider IDs. Enabled compatible stream sources appear together, with English-audio choices first.")
+                Text("Not every add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories, JavaScript plugins and legacy/IPFS transports are not supported natively.")
+                Text("Native anime Watch saves resume on this device. Catalog/exact-ID playback does not save resume here. Update AniList using the watched-progress controls.")
             }.font(.caption).foregroundStyle(.secondary)
         }.navigationTitle("Add-ons & playback").navigationBarTitleDisplayMode(.inline)
             .onDisappear { installationTask?.cancel(); installURL = "" }

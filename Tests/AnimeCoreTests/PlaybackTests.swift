@@ -49,7 +49,7 @@ final class PlaybackTests: XCTestCase {
         XCTAssertEqual(request.map(\.type), ["anime"]); XCTAssertEqual(request.map(\.id), ["mal:2:1"])
         XCTAssertFalse(scoped.supports(type: "series", id: "mal:2:1"))
     }
-    func testInstallMakesManifestRequestAndRejectsCatalogOnlyAddons() async throws {
+    func testInstallMakesManifestRequestAndAcceptsCatalogOnlyAddons() async throws {
         let transport = PlaybackTransport(responses: [(200, manifest)])
         let addon = try await StremioClient(transport: transport).install("https://addon.example/private")
         XCTAssertEqual(addon.manifest.name, "Test addon")
@@ -57,8 +57,9 @@ final class PlaybackTests: XCTestCase {
         XCTAssertEqual(requests.first?.url?.path, "/private/manifest.json")
         XCTAssertEqual(requests.first?.value(forHTTPHeaderField: "Accept"), "application/json")
         let catalog = PlaybackTransport(responses: [(200, #"{"id":"x","name":"Catalog","types":["series"],"resources":["catalog"]}"#)])
-        do { _ = try await StremioClient(transport: catalog).install("https://addon.example"); XCTFail("Expected invalid manifest") }
-        catch { XCTAssertEqual(error as? PlaybackError, .invalidManifest) }
+        let installedCatalog = try await StremioClient(transport: catalog).install("https://addon.example")
+        XCTAssertTrue(installedCatalog.manifest.advertises("catalog"))
+        XCTAssertFalse(installedCatalog.manifest.advertises("stream"))
     }
     func testFallsBackToMALOnlyAfterEmptyResultAndPreservesServerSourceOrder() async throws {
         let transport = PlaybackTransport(responses: [(200, #"{"streams":[]}"#), (200, #"{"streams":[{"name":"Second lookup first result","url":"https://video.example/1"},{"name":"Second lookup second result","url":"https://video.example/2"}]}"#)])

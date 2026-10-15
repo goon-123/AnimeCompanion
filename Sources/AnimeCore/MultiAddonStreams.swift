@@ -31,6 +31,16 @@ public struct AddonStreamSnapshot: Sendable {
         let enabled = Set(order)
         entries = Dictionary(grouping: previous.filter { enabled.contains($0.id.addonID) }, by: { $0.id.addonID })
     }
+    public static func embedded(_ streams: [StremioStream], addonID: UUID, addonName: String) -> Self {
+        Self(embedded: streams, id: addonID, name: addonName)
+    }
+    private init(embedded streams: [StremioStream], id: UUID, name: String) {
+        order = [id]
+        entries = [id: streams.enumerated().map {
+            AddonStreamSource(id: .init(addonID: id, index: $0.offset), addonName: name, stream: $0.element)
+        }]
+        completed = [id]
+    }
     mutating func accept(_ result: StreamResults, from installation: AddonInstallation) {
         entries[installation.id] = result.streams.enumerated().map {
             AddonStreamSource(id: .init(addonID: installation.id, index: $0.offset), addonName: installation.addon.manifest.name, stream: $0.element)
@@ -54,7 +64,21 @@ extension StremioClient {
     public func streams(installations: [AddonInstallation], anime: Anime, episode: Int,
                         previous: [AddonStreamSource] = [],
                         onUpdate: @escaping @Sendable (AddonStreamSnapshot) async -> Void = { _ in }) async throws -> AddonStreamSnapshot {
-        let active = installations.filter(\.enabled)
+        try await collectStreams(installations: installations.filter { $0.addon.manifest.advertises("stream") }, previous: previous, onUpdate: onUpdate) { addon in
+            try await streams(addon: addon, anime: anime, episode: episode)
+        }
+    }
+    public func streams(installations: [AddonInstallation], request: StremioVideoRequest,
+                        previous: [AddonStreamSource] = [],
+                        onUpdate: @escaping @Sendable (AddonStreamSnapshot) async -> Void = { _ in }) async throws -> AddonStreamSnapshot {
+        try await collectStreams(installations: installations.filter { $0.addon.manifest.supports(type: request.type, id: request.id) }, previous: previous, onUpdate: onUpdate) { addon in
+            try await streams(addon: addon, request: request)
+        }
+    }
+    private func collectStreams(installations: [AddonInstallation], previous: [AddonStreamSource],
+                                onUpdate: @escaping @Sendable (AddonStreamSnapshot) async -> Void,
+                                lookup: @escaping @Sendable (InstalledAddon) async throws -> StreamResults) async throws -> AddonStreamSnapshot {
+        let active = installations.filter { $0.enabled && $0.addon.manifest.behaviorHints?.configurationRequired != true }
         var snapshot = AddonStreamSnapshot(installations: active, previous: previous)
         try Task.checkCancellation()
         await onUpdate(snapshot)
@@ -63,7 +87,7 @@ extension StremioClient {
             func enqueue(_ installation: AddonInstallation) {
                 group.addTask {
                     do {
-                        let result = try await streams(addon: installation.addon, anime: anime, episode: episode)
+                        let result = try await lookup(installation.addon)
                         return AddonOutcome(installation: installation, result: .success(result))
                     } catch is CancellationError { throw CancellationError() }
                     catch let error as PlaybackError { return AddonOutcome(installation: installation, result: .failure(error)) }
