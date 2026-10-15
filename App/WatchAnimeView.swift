@@ -15,6 +15,8 @@ struct WatchAnimeView: View {
     @State private var error: String?
     @State private var filter = ""
     @State private var playableOnly = true
+    @AppStorage("playback.audioFilter") private var audioFilterValue = StreamAudioFilter.all.rawValue
+    @State private var sourceOptionsExpanded = false
     @State private var restart = false
     @State private var searchTask: Task<Void, Never>?
     @State private var lookupID = UUID()
@@ -26,11 +28,12 @@ struct WatchAnimeView: View {
     private var initializationKey: String {
         "\(anime.id)-\(store.isSignedIn)-\(store.loadingLibrary)-\(store.entry(for: anime.id)?.progressValue ?? -1)-\(store.libraryError ?? "")"
     }
-    private var visible: [(offset: Int, element: StremioStream)] {
-        streams.enumerated().filter { (!playableOnly || $0.element.unavailableReason == nil) &&
-            (filter.isEmpty || ($0.element.displayName + " " + $0.element.details).localizedCaseInsensitiveContains(filter)) }
+    private var audioFilter: StreamAudioFilter { StreamAudioFilter(rawValue: audioFilterValue) ?? .all }
+    private var visible: [Int] {
+        StreamSourceSelection.indices(in: streams, audio: audioFilter, playableOnly: playableOnly, search: filter)
     }
     var body: some View {
+        let visibleSources = visible
         NavigationStack {
             List {
                 Section {
@@ -86,40 +89,43 @@ struct WatchAnimeView: View {
                             Text("No sources were returned for this episode. Check your AIOStreams providers or try another episode.")
                                 .foregroundStyle(.secondary).accessibilityIdentifier("playback-empty-results")
                         } else {
-                            TextField("Search source details", text: $filter).autocorrectionDisabled()
-                            Toggle("Playable sources only", isOn: $playableOnly)
-                            if visible.isEmpty { Text("No sources match. Clear the search or show all sources.").foregroundStyle(.secondary) }
-                            ForEach(visible, id: \.offset) { index, stream in
-                              HStack(alignment: .top, spacing: 8) {
-                                Button { play(stream) } label: {
-                                    VStack(alignment: .leading, spacing: 7) {
-                                        Label(stream.displayName, systemImage: stream.unavailableReason == nil ? "play.circle.fill" : "exclamationmark.circle").font(.headline)
-                                        Text(stream.details).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                                        if let reason = stream.unavailableReason { Text(reason).font(.caption).foregroundStyle(.orange) }
-                                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
-                                }.buttonStyle(.plain).disabled(stream.unavailableReason != nil || playback.openingPlayer)
-                                    .accessibilityIdentifier("playback-source-\(index)")
+                            audioControls
+                            DisclosureGroup("Source options", isExpanded: $sourceOptionsExpanded) {
+                                TextField("Search source details", text: $filter).autocorrectionDisabled()
+                                    .accessibilityIdentifier("playback-source-search")
+                                Toggle("Playable sources only", isOn: $playableOnly)
+                            }
+                            if visibleSources.isEmpty {
+                                Text(audioFilter == .english ? "No sources match English audio. Sources with unlisted languages may still include it." : "No sources match these audio or search filters.")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                Button("Show all sources") { audioFilterValue = StreamAudioFilter.all.rawValue; filter = ""; playableOnly = false }
+                                    .accessibilityIdentifier("playback-reset-source-filters")
+                            }
+                            ForEach(visibleSources, id: \.self) { index in
+                                let stream = streams[index]
+                                let sourceEpisode = episode
+                                PlaybackSourceRow(stream: stream, index: index,
+                                    preferred: index == visibleSources.first && stream.unavailableReason == nil,
+                                    openingPlayer: playback.openingPlayer,
+                                    play: { play(stream, expectedEpisode: sourceEpisode) }, information: { sourceInformation = stream })
                                     .contextMenu {
                                         if stream.unavailableReason == nil {
-                                            Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, fromBeginning: true) }
+                                            Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, expectedEpisode: sourceEpisode, fromBeginning: true) }
                                             ForEach(Array((stream.subtitles ?? []).filter { $0.videoURL != nil }.enumerated()), id: \.offset) { index, subtitle in
-                                                Button("Play with \(subtitle.lang ?? "track \(index + 1)") subtitles") { play(stream, subtitle: subtitle.videoURL) }
+                                                Button("Play with \(subtitle.lang ?? "track \(index + 1)") subtitles") { play(stream, expectedEpisode: sourceEpisode, subtitle: subtitle.videoURL) }
                                             }
                                         }
                                     }
-                                Button { sourceInformation = stream } label: {
-                                    Image(systemName: "info.circle").frame(width: 44, height: 44)
-                                }.buttonStyle(.borderless).accessibilityLabel("Source information")
-                                    .accessibilityIdentifier("playback-source-info-\(index)")
-                              }
                             }
                         }
                         if skipped > 0 { Text("\(skipped) malformed source entries were skipped.").font(.caption).foregroundStyle(.secondary) }
                     }
                     Section {
-                        Text("Tap a source to open VidHub. Touch and hold for subtitles or to play from the beginning.")
-                        Text("Source names, quality and language information come from your add-on. Dub availability on the anime page does not guarantee that each source includes English audio.")
-                        Text("VidHub resume is saved on this device. AniList progress changes only when you use the watched-progress controls.")
+                        DisclosureGroup("Playback information") {
+                            Text("Tap a source to open VidHub. Touch and hold for subtitles or to play from the beginning.")
+                            Text("Audio labels come from each source's reported languages, names and filename. English subtitles alone do not indicate English audio. Multi audio without named languages stays unconfirmed.")
+                            Text("VidHub resume is saved on this device. AniList progress changes only when you use the watched-progress controls.")
+                        }
                     }.font(.caption).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Watch in VidHub").navigationBarTitleDisplayMode(.inline)
@@ -144,6 +150,24 @@ struct WatchAnimeView: View {
                     if loading { lookupID = UUID(); loading = false }
                 }
         }.disabled(playback.openingPlayer)
+    }
+    private var audioControls: some View {
+        let playable = streams.filter { $0.unavailableReason == nil }
+        let audio = playable.map { StreamSourceMetadata(stream: $0).audio }
+        let englishCount = audio.filter(\.english).count
+        let unlisted = audio.filter { !$0.english && !$0.japanese }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(englishCount > 0 ? "English audio · \(englishCount) playable \(englishCount == 1 ? "source" : "sources")" : "No playable English source listed")
+                .font(.headline).foregroundStyle(englishCount > 0 ? Color.green : Color.secondary)
+                .accessibilityIdentifier("playback-english-availability")
+            if unlisted > 0 {
+                Text("\(unlisted) \(unlisted == 1 ? "source does" : "sources do") not confirm an audio language. Open source information to review the original text.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Picker("Audio language", selection: $audioFilterValue) {
+                ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("playback-audio-filter")
+        }.padding(.vertical, 4)
     }
     private func initializeEpisode() {
         guard !episodeChangedByUser else { return }
@@ -199,7 +223,8 @@ struct WatchAnimeView: View {
             } catch is CancellationError {} catch { if lookupID == attempt { self.error = error.localizedDescription } }
         }
     }
-    private func play(_ stream: StremioStream, subtitle: URL? = nil, fromBeginning: Bool? = nil) {
+    private func play(_ stream: StremioStream, expectedEpisode: Int, subtitle: URL? = nil, fromBeginning: Bool? = nil) {
+        guard expectedEpisode == episode else { return }
         let requestedEpisode = episode, requestedRestart = fromBeginning ?? restart
         Task { await playback.play(stream: stream, anime: anime, episode: requestedEpisode, subtitle: subtitle, restart: requestedRestart) }
     }
@@ -225,7 +250,10 @@ private struct SourceInformationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(stream.displayName) { Text(stream.details).textSelection(.enabled) }
+                Section(stream.displayName) {
+                    PlaybackAudioBadge(audio: StreamSourceMetadata(stream: stream).audio)
+                    Text(stream.details).textSelection(.enabled)
+                }
                 if let reason = stream.unavailableReason { Section("Playback") { Text(reason) } }
                 Section {
                     DisclosureGroup("Original add-on text") {
@@ -235,7 +263,7 @@ private struct SourceInformationView: View {
                     }.accessibilityIdentifier("playback-original-source-text")
                 } footer: { Text("Source descriptions are supplied by your add-on. You can review its original text here.") }
             }.navigationTitle("Source information").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("close-source-information") } }
         }
     }
 }

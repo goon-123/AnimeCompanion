@@ -42,6 +42,7 @@ final class AiringProgressUITests: XCTestCase {
         reveal(libraryBehind, app: app)
         XCTAssertTrue(libraryBehind.label.contains("Watched 4/12"))
         XCTAssertTrue(libraryBehind.label.contains("Next: Ep 5"))
+        XCTAssertTrue(app.images["library-airing-990101"].exists)
         XCTAssertFalse(behind.exists)
         XCTAssertFalse(caught.exists)
         XCTAssertFalse(app.staticTexts["library-airing-progress-990101"].exists)
@@ -50,12 +51,14 @@ final class AiringProgressUITests: XCTestCase {
         capture("Library-Tracking-Without-Airing-List")
         let finished = app.buttons["library-entry-990103"]
         reveal(finished, app: app); XCTAssertTrue(finished.exists)
+        XCTAssertFalse(app.images["library-airing-990103"].exists)
         XCTAssertFalse(app.staticTexts["library-airing-status-990103"].exists)
         let layout = app.segmentedControls["library-layout"]
         reveal(layout, app: app, upward: false); layout.buttons["Grid"].tap()
         reveal(libraryBehind, app: app)
         XCTAssertTrue(libraryBehind.label.contains("Watched 4/12"))
         XCTAssertTrue(libraryBehind.label.contains("Next: Ep 5"))
+        XCTAssertTrue(app.images["library-airing-990101"].exists)
         XCTAssertTrue(app.buttons["library-watch-990101"].exists)
         XCTAssertFalse(behind.exists); XCTAssertFalse(caught.exists)
         XCTAssertFalse(app.staticTexts["library-airing-next-990101"].exists)
@@ -66,6 +69,8 @@ final class AiringProgressUITests: XCTestCase {
             capture("Library-Tracking-Without-Airing-iPad-Landscape")
             XCUIDevice.shared.orientation = .portrait
         }
+        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: app.tabBars.buttons["Schedule"])
+        XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 15), .completed)
         app.tabBars.buttons["Schedule"].tap()
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
         reveal(behind, app: app); XCTAssertEqual(behind.label, "2 episodes behind")

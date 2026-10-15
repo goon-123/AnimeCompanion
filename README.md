@@ -1,5 +1,15 @@
 # Anime Companion
 
+### Phase 2 begins: audio-first source picker (0.6.0 / build 19)
+
+Each source now prominently shows **EN · English audio**, **JA · Japanese audio**, or **EN + JA** when both are reported. Language detection reads every original source field before display truncation, understands ISO codes, AIOStreams small caps and flags, and separates subtitle reports from audio. Dual/Multi audio without named languages stays unconfirmed. The cleaner removes a broken expression without deleting valid audio/quality text beside it.
+
+The source picker puts reported English-audio sources first while preserving provider order within each group. A saved **All audio / English / Japanese** control filters actual source audio, and a summary counts playable English sources for the selected episode. Provider, resolution, codec and file size are separated into compact fields, with a direct **Play in VidHub** action on the first playable choice. Search/playability controls and explanatory text use expandable sections. Original source text, external subtitles, episode overrides, refresh and local resume remain available.
+
+My Library list and grid cards now carry the same green **currently airing** indicator as Explore. Finished and unreleased titles do not receive it. The dot describes the original airing status; per-stream audio badges describe which stream reports English audio.
+
+This starts Phase 2 with its source-picker redesign and consistent indicators. The larger Explore/Library navigation redesign, grouped Airing Now, progressive detail sections and adaptive iPad navigation remain later Phase 2 work. Native validation for this build is recorded in `BUILD_STATUS.md`.
+
 ### Audit Phase 1: reliability and clarity (0.5.0)
 
 Playback source rows normalize add-on text, hide broken template expressions and keep the original text behind the source's information button. Refreshing keeps existing sources for the same episode visible; failed refreshes explain the error without turning it into an empty result. A manual episode change clears the old episode's sources. AniList progress still chooses the next unwatched episode and player returns save local resume only.

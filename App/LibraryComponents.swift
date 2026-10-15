@@ -16,7 +16,10 @@ struct LibraryAnimeRow: View {
                 HStack(alignment: .top, spacing: 11) {
                     AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(anime.displayTitle).font(.headline).lineLimit(3).foregroundStyle(.primary)
+                            DiscoveryAiringDot(anime: anime, identifierPrefix: "library")
+                        }
                         Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.subheadline).foregroundStyle(.secondary)
                         LibraryNextEpisodeLabel(entry: entry, anime: anime)
                         LibraryDubLabel(anime: anime, progress: dub)
@@ -48,6 +51,9 @@ struct LibraryAnimeTile: View {
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geometry in
                     AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
+                        .overlay(alignment: .topLeading) {
+                            DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(7)
+                        }
                 }.aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.caption.bold()).lineLimit(2, reservesSpace: true)
                 Text("Watched \(entry.progressValue)/\(anime.episodes.map(String.init) ?? "?")").font(.caption2).foregroundStyle(.secondary)

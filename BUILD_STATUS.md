@@ -1,3 +1,21 @@
+## Phase 2 start: source audio clarity and Library airing dots — build 19
+
+Version 0.6.0 on `feature/phase-2-audio-sources`, based on merged PR #9.
+
+- Correct the over-aggressive Phase 1 cleanup: remove balanced broken-expression text while retaining usable text on the same line. Parse source audio from the original name, description, title and filename before clipping display text. Recognize en/eng/English, ja/jpn/Japanese, regional tags, AIOStreams small-cap codes and flags. Subtitle lists, template literals, explicit negative reports and unspecified dual/multi audio do not prove English audio. Playback URLs are never rewritten.
+- Begin Phase 2's compact source picker: prominent audio badges, playable-English count, saved audio filter, English-first ordering with stable original source identities, separate provider/quality/codec/size fields, a direct first-choice Play action, and expandable secondary controls/help. Sources with unspecified languages remain accessible, and an empty audio filter can reset independently of provider results.
+- Library list and grid cards reuse Explore's currently-airing green dot. Completed/unreleased titles stay unmarked; duplicate Schedule catch-up panels remain absent from My Library.
+- Give the source-information sheet's Done action its own accessibility identifier. The prior run's focused suites failed on an ambiguous test query matching two Done buttons. The iPad schedule-return regression now waits for the actual portrait tab to become hittable after rotation, retaining all navigation assertions.
+
+### Validation
+
+- Swift 6.2 compiled and ran **144 active core tests** (149 enumerated, five optional/live skips), with zero failures. Thirteen new cases cover original-field language recovery, English subtitles versus audio, mixed/unknown audio, small-cap and flag formats, broken-expression masking, technical fields, stable audio filtering/order and unchanged video URLs.
+- All App/UI-test Swift syntax checks, shell syntax and whitespace checks pass.
+- Two new native source-audio cases cover long/broken metadata, English filtering, correct episode handoff, unspecified-language safety, Japanese audio with English subtitles, reset recovery and iPad rotation. Existing Library checks now assert the dot in list/grid and its absence on finished titles. Native Release and full/focused iPhone/iPad execution will be triggered by this PR and is pending; no native pass, screenshots or IPA validation is claimed yet.
+- Preview metadata and callback fixtures remain DEBUG-only with synthetic URLs and no AniList account writes. Physical sign-in, installed VidHub handoff and the actual audio tracks offered by a provider remain device/provider checks.
+
+Phase 2 is started, not complete: the Explore/Library navigation overhaul, grouped Schedule cards, progressive detail sections and adaptive iPad navigation are subsequent work.
+
 ## Audit Phase 1: playback and discovery reliability — build 18
 
 Version 0.5.0 on `improvement/phase-1-reliability`, based on merged build 17.
