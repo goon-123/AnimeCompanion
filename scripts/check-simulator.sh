@@ -92,6 +92,7 @@ test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
 test_arguments+=(-only-testing:AnimeCompanionUITests/PhaseOneReliabilityUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/SourceAudioUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/PhaseTwoNavigationUITests)
+test_arguments+=(-only-testing:AnimeCompanionUITests/PhaseThreePerformanceUITests)
 fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"

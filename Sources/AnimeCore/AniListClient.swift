@@ -35,18 +35,18 @@ public struct ExploreResponse: Codable, Sendable {
 private struct GraphQLError: Decodable { let message: String; let status: Int? }
 private struct GraphQLResponse<T: Decodable>: Decodable { let data: T?; let errors: [GraphQLError]? }
 private struct RequestBody: Encodable { let query: String; let variables: [String: QueryValue] }
-private struct PageResponse: Decodable { let Page: MediaPage }
-private struct DetailResponse: Decodable { let Media: Anime? }
-private struct ViewerResponse: Decodable { let Viewer: Viewer }
-private struct MutationResponse: Decodable { let SaveMediaListEntry: LibraryEntry }
-private struct DeleteResponse: Decodable { let DeleteMediaListEntry: DeletedEntry }
-private struct DeletedEntry: Decodable { let deleted: Bool? }
-private struct CollectionResponse: Decodable { let MediaListCollection: ListCollection? }
-private struct ListCollection: Decodable { let lists: [ListGroup]? }
-private struct ListGroup: Decodable { let entries: [LibraryEntry]? }
-private struct AiringPage: Decodable { let pageInfo: PageInfo?; let airingSchedules: [ScheduledAiring]? }
-private struct AiringResponse: Decodable { let Page: AiringPage }
-private struct ScheduledAiring: Decodable { let airingAt: Int; let episode: Int; let media: Anime? }
+private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
+private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
+private struct ViewerResponse: Decodable, Sendable { let Viewer: Viewer }
+private struct MutationResponse: Decodable, Sendable { let SaveMediaListEntry: LibraryEntry }
+private struct DeleteResponse: Decodable, Sendable { let DeleteMediaListEntry: DeletedEntry }
+private struct DeletedEntry: Decodable, Sendable { let deleted: Bool? }
+private struct CollectionResponse: Decodable, Sendable { let MediaListCollection: ListCollection? }
+private struct ListCollection: Decodable, Sendable { let lists: [ListGroup]? }
+private struct ListGroup: Decodable, Sendable { let entries: [LibraryEntry]? }
+private struct AiringPage: Decodable, Sendable { let pageInfo: PageInfo?; let airingSchedules: [ScheduledAiring]? }
+private struct AiringResponse: Decodable, Sendable { let Page: AiringPage }
+private struct ScheduledAiring: Decodable, Sendable { let airingAt: Int; let episode: Int; let media: Anime? }
 
 public enum AniListQueries {
     public static let card = """
@@ -158,20 +158,55 @@ public actor AniListClient {
     private let transport: any HTTPTransport
     private let interval: TimeInterval
     private var nextSlot = Date.distantPast
-    private var cache: [String: (Date, Data)] = [:]
-    public init(transport: any HTTPTransport = URLSessionTransport(), minimumRequestInterval: TimeInterval = 2.1) {
-        self.transport = transport; interval = minimumRequestInterval
+    private struct PublicResponse: Sendable {
+        let value: any Sendable
+        var fromCache = false
     }
-    private func request<T: Decodable>(_ query: String, variables: [String: QueryValue] = [:], token: String? = nil,
+    // Cost tracks encoded response bytes; count also bounds the decoded object graph.
+    private var cache = BoundedCache<String, PublicResponse>(maximumCount: 80, maximumCost: 8_000_000)
+    private let requests = RequestCoalescer<String, PublicResponse>()
+    public init(transport: any HTTPTransport = URLSessionTransport(), minimumRequestInterval: TimeInterval = 2.1) {
+        self.transport = transport
+        interval = minimumRequestInterval.isFinite ? max(0, min(60, minimumRequestInterval)) : 2.1
+    }
+    private func request<T: Decodable & Sendable>(_ query: String, variables: [String: QueryValue] = [:], token: String? = nil,
                                        bypassCache: Bool = false) async throws -> T {
         let body = try JSONEncoder().encode(RequestBody(query: query, variables: variables))
         // Sort the JSON to make public-response cache keys independent of dictionary ordering.
         let object = try JSONSerialization.jsonObject(with: body)
         let canonical = try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
         let key = canonical.base64EncodedString()
-        if token == nil, !bypassCache, let (stored, data) = cache[key], Date().timeIntervalSince(stored) < 300 {
-            return try decode(data)
+        // Account reads and mutations must never enter the public cache or shared flight.
+        if let token {
+            return try decode(await send(body, token: token))
         }
+        try Task.checkCancellation()
+        if !bypassCache, let cached = cache.value(for: key)?.value as? T { return cached }
+        // An explicit refresh skips saved responses but can join a live network request.
+        var response = try await requests.value(for: key) {
+            try await self.fetchPublic(body, key: key, as: T.self, allowCached: !bypassCache)
+        }
+        // A normal caller may have crossed actors just as the preceding flight
+        // populated the cache. Refresh callers joining that flight still need the network.
+        if bypassCache && response.fromCache {
+            response = try await requests.value(for: key) {
+                try await self.fetchPublic(body, key: key, as: T.self, allowCached: false)
+            }
+        }
+        try Task.checkCancellation()
+        guard let value = response.value as? T else { throw ServiceError.invalidResponse }
+        return value
+    }
+    private func fetchPublic<T: Decodable & Sendable>(_ body: Data, key: String, as type: T.Type, allowCached: Bool) async throws -> PublicResponse {
+        if allowCached, var cached = cache.value(for: key) { cached.fromCache = true; return cached }
+        let data = try await send(body, token: nil)
+        let result: T = try decode(data)
+        try Task.checkCancellation()
+        let response = PublicResponse(value: result)
+        cache.insert(response, for: key, cost: data.count, expiresAt: Date().addingTimeInterval(300))
+        return response
+    }
+    private func send(_ body: Data, token: String?) async throws -> Data {
         // Recheck after every suspension: a 429 must also delay callers already waiting.
         while true {
             try Task.checkCancellation()
@@ -187,16 +222,13 @@ public actor AniListClient {
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response) = try await transport.data(for: request)
         if response.statusCode == 429 {
-            let retry = Double(response.value(forHTTPHeaderField: "Retry-After") ?? "60") ?? 60
+            let supplied = Double(response.value(forHTTPHeaderField: "Retry-After") ?? "60") ?? 60
+            let retry = supplied.isFinite ? max(1, min(3600, supplied)) : 60
             nextSlot = max(nextSlot, Date().addingTimeInterval(retry))
         }
         try HTTPValidation.check(response)
-        let result: T = try decode(data)
-        if token == nil {
-            cache[key] = (Date(), data)
-            if cache.count > 80 { cache = cache.filter { Date().timeIntervalSince($0.value.0) < 300 } }
-        }
-        return result
+        try Task.checkCancellation()
+        return data
     }
     private func decode<T: Decodable>(_ data: Data) throws -> T {
         let response = try JSONDecoder().decode(GraphQLResponse<T>.self, from: data)

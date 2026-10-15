@@ -6,7 +6,7 @@ struct AnimeCover: View {
     var width: CGFloat = 130
     var cornerRadius: CGFloat = 14
     var body: some View {
-        AsyncImage(url: anime.coverURL) { image in image.resizable().scaledToFill() }
+        ArtworkImage(url: anime.coverURL, pointSize: width * 1.45) { image in image.resizable().scaledToFill() }
         placeholder: { ZStack { Theme.surface; Image(systemName: "sparkles.tv").foregroundStyle(.secondary) } }
             .frame(width: width, height: width * 1.45).clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .contentShape(Rectangle())

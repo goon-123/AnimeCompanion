@@ -87,7 +87,7 @@ private struct FeaturedAnimePanel: View {
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         let banner = anime.bannerImage.flatMap(URL.init(string:))
         let url = wide ? (banner ?? anime.coverURL) : anime.coverURL
-        return AsyncImage(url: url) { image in image.resizable().scaledToFill() }
+        return ArtworkImage(url: url, pointSize: max(width, height)) { image in image.resizable().scaledToFill() }
             placeholder: { background.color }
             .frame(width: width, height: height, alignment: wide ? .center : .top).clipped().contentShape(Rectangle())
             .onTapGesture { if let url = anime.coverURL { preview = AnimeImagePreview(url: url, title: anime.displayTitle) } }

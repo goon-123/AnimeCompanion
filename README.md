@@ -1,10 +1,18 @@
 # Anime Companion
 
+### Phase 3 begins: artwork and request performance (0.8.0 / build 22)
+
+Explore, Library, details, news and the image viewer now share an artwork pipeline. It reuses public image downloads, decodes orientation-correct thumbnails off the main actor, and bounds decoded/encoded memory caches. Poster colors use the same downloaded artwork rather than a separate full-image request. The enlarged viewer has a direct Retry action; memory warnings release the pipeline's in-memory entries.
+
+AniList public requests share concurrent work and reuse decoded responses in a bounded five-minute cache. Each caller can cancel independently; the last cancellation stops the underlying operation. Explicit refresh skips saved responses, and account reads/mutations retain their own requests. Explore loading state now lives outside the view, with regression coverage for rapid season/content-policy changes, cancellation, saved catalogs and retries.
+
+This is an initial Phase 3 performance/architecture pass based on merged PR #12. The original audit's Phase 3 checklist was unavailable, so this does not claim to finish that unseen checklist. Local verification and pending native checks are recorded in `BUILD_STATUS.md`.
+
 ### Phase 2 validation fixes (0.7.1 / build 21)
 
 Build 20's IPA compiled, but its native checks exposed an iPad portrait view that could hide browsing behind an empty detail pane, plus Explore control identifiers overwritten by their container. Build 21 requests visible browse/detail columns and keeps accessibility identifiers on the individual actions. Expandable detail sections also preserve their episode-action identifiers. Resume tests now distinguish the playback sheet from Continue Watching behind it, retaining the episode-correlation assertions.
 
-Phase 2 is merged, with these follow-up fixes pending native validation. Phase 3 has not started. See `BUILD_STATUS.md` for exact results and limitations.
+These Phase 2 follow-up fixes are merged in PR #12. Native validation results have not been reviewed for this Phase 3 pass. See `BUILD_STATUS.md` for recorded results and limitations.
 
 ### Phase 2 navigation and watch-first screens (0.7.0 / build 20)
 
@@ -18,7 +26,7 @@ Details uses a shorter artwork header and prioritizes watch, tracking and Englis
 
 iPad uses native adaptive tab/sidebar navigation with browse and detail panes. Narrow windows collapse the same split navigation into a stack, retaining the browse query, filters and loaded pages; phones keep native bottom tabs and back navigation. Selecting another title resets only the detail history. Genre shortcuts still open a fresh Explore result page.
 
-This implements the remaining Phase 2 screen/navigation scope. The build retains the EN/JA source picker and Library green airing dots from build 19. Local core and syntax results are recorded in `BUILD_STATUS.md`; native compilation, simulator screenshots and physical-device checks are not implied by those results. Phase 3 has not started.
+This implemented the remaining Phase 2 screen/navigation scope. The EN/JA source picker and Library green airing dots from build 19 remain available. Local core and syntax results are recorded in `BUILD_STATUS.md`; native compilation, simulator screenshots and physical-device checks are not implied by those results.
 
 ### Phase 2 begins: audio-first source picker (0.6.0 / build 19)
 
@@ -139,6 +147,8 @@ For opt-in checks of the live public clients, run `ANIMECOMPANION_LIVE_SERVICES=
 The library UI tests use the Debug-only `--ui-library-preview` launch argument: real public metadata with synthetic local progress. Only the Coming-up artwork-sizing test also uses `--ui-layout-preview` to add a deterministic synthetic future release. That date is a test fixture, not a provider claim. Neither fixture authenticates or writes to AniList, and both are excluded from Release builds.
 
 Focused iPhone/iPad checks verify featured artwork, source switching, content preferences, airing catch-up in both layouts, behind filtering, progress-aware source loading and one-tap player handoff. Run `bash scripts/check-simulator.sh iphone focused` (or `ipad focused`). Playback uses an opt-in Debug-only `--ui-playback-preview` transport and launch recorder; it exercises the real URL builder without installing a personal add-on, saving progress or opening VidHub. `--ui-airing-preview` supplies labeled synthetic airing records and `--ui-playback-stale-resume` supplies an old episode-one resume. These arguments and fixtures are excluded from Release. Full regression suites remain enabled separately.
+
+Phase 3 adds `PhaseThreePerformanceUITests` to focused/full iPhone and iPad suites. Its Debug-only `--ui-phase3-artwork-preview` scene supplies synthetic PNG/JPEG bytes to the production artwork pipeline and phase view. It checks shared downloads/color sampling, bounded thumbnail dimensions, decoded bitmap reuse, memory clearing, explicit cache bypass, EXIF orientation and malformed-image Retry without network access or account credentials. The fixture and diagnostics are excluded from Release; simulator results remain pending until CI is reviewed.
 
 ## Data sources and attribution
 

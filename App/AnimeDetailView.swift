@@ -234,7 +234,7 @@ struct AnimeDetailView: View {
             sectionTitle("Trailer")
             Link(destination: url) {
                 ZStack {
-                    AsyncImage(url: URL(string: trailer.thumbnail ?? "")) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
+                    ArtworkImage(url: URL(string: trailer.thumbnail ?? "")) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
                         .frame(height: sizeClass == .regular ? 280 : 190).clipped()
                     Image(systemName: "play.circle.fill").font(.system(size: 54)).foregroundStyle(.white).shadow(radius: 10)
                 }.clipShape(RoundedRectangle(cornerRadius: 13))

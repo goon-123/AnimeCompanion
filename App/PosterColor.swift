@@ -1,29 +1,18 @@
 import SwiftUI
-import UIKit
+import CoreGraphics
 import AnimeCore
 
 extension PosterAccent {
     var color: Color { Color(red: red, green: green, blue: blue) }
 }
 
-@MainActor
 enum PosterColor {
-    private static var cache: [URL: PosterAccent] = [:]
     static func accent(for anime: Anime) async -> PosterAccent {
         if let accent = PosterAccent(hex: anime.coverImage?.color) { return accent }
-        guard let url = anime.coverURL, ["https", "http"].contains(url.scheme ?? "") else { return .fallback }
-        if let cached = cache[url] { return cached }
-        do {
-            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 15))
-            try Task.checkCancellation()
-            guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 12_000_000,
-                  let image = UIImage(data: data)?.cgImage, let accent = sample(image) else { return .fallback }
-            if cache.count >= 30 { cache.removeAll() }
-            cache[url] = accent
-            return accent
-        } catch { return .fallback }
+        guard let url = anime.coverURL else { return .fallback }
+        return await ArtworkPipeline.shared.accent(at: url)
     }
-    private static func sample(_ image: CGImage) -> PosterAccent? {
+    static func sample(_ image: CGImage) -> PosterAccent? {
         let size = 24
         var bytes = [UInt8](repeating: 0, count: size * size * 4)
         let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
