@@ -13,12 +13,13 @@ struct AnimeImageViewer: View {
     @State private var startScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var startOffset: CGSize = .zero
+    @State private var retryToken = 0
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             GeometryReader { geometry in
-                AsyncImage(url: preview.url) { phase in
+                ArtworkPhaseView(url: preview.url, pointSize: 3200, retryToken: retryToken) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFit().frame(width: geometry.size.width, height: geometry.size.height)
@@ -31,8 +32,11 @@ struct AnimeImageViewer: View {
                             .onTapGesture(count: 2) { withAnimation { scale = scale > 1 ? 1 : 2.5; startScale = scale; offset = .zero; startOffset = .zero } }
                             .accessibilityLabel(preview.title)
                     case .failure:
-                        ContentUnavailableView("Image unavailable", systemImage: "photo", description: Text("Please close this image and try again."))
-                            .frame(width: geometry.size.width, height: geometry.size.height)
+                        VStack(spacing: 16) {
+                            ContentUnavailableView("Image unavailable", systemImage: "photo", description: Text("Please try loading this image again."))
+                            Button("Retry") { retryToken += 1 }.buttonStyle(.bordered)
+                                .accessibilityIdentifier("artwork-retry")
+                        }.frame(width: geometry.size.width, height: geometry.size.height)
                     default:
                         ProgressView("Loading image…").frame(width: geometry.size.width, height: geometry.size.height)
                     }

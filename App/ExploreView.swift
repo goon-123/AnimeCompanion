@@ -8,21 +8,20 @@ struct ExploreView: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
-    @State private var seasonal: [Anime] = []
-    @State private var trending: [Anime] = []
-    @State private var upcoming: [Anime] = []
-    @State private var loading = false
-    @State private var error: String?
-    @State private var requestID = UUID()
-    @State private var loadedKey: String?
-    @State private var savedCatalogDate: Date?
-    @State private var needsCatalogRefresh = true
+    @StateObject private var catalog = ExploreCatalogModel()
     @State private var showSeasons = false
     @State private var showSettings = false
     @State private var showDisplay = false
     @State private var showDubFilters = false
     @State private var liveChartPage: URL?
     private var posters = PosterPreferences(.explore)
+    private var seasonal: [Anime] { catalog.state.response?.seasonal.media ?? [] }
+    private var trending: [Anime] { catalog.state.response?.trending.media ?? [] }
+    private var upcoming: [Anime] { catalog.state.response?.upcoming.media ?? [] }
+    private var loading: Bool { catalog.state.loading }
+    private var error: String? { catalog.state.error }
+    private var loadedKey: ExploreCatalogState.Key? { catalog.state.loadedKey }
+    private var savedCatalogDate: Date? { catalog.state.savedAt }
 
     var body: some View {
         GeometryReader { geometry in
@@ -174,29 +173,7 @@ struct ExploreView: View {
         }.presentationDetents([.medium])
     }
     private func load(refresh: Bool = false) async {
-        let requestedAdult = store.includeAdult
-        let desiredKey = "\(selection.label)-\(requestedAdult)"
-        guard !Task.isCancelled, refresh || loadedKey != desiredKey || needsCatalogRefresh else { return }
-        let attempt = UUID(); requestID = attempt; let requestedSelection = selection; let key = desiredKey
-        let needsRestore = loadedKey != key
-        if needsRestore { seasonal = []; trending = []; upcoming = []; loadedKey = nil; savedCatalogDate = nil }
-        loading = true; error = nil; needsCatalogRefresh = true
-        defer { if requestID == attempt { loading = false } }
-        do {
-            if needsRestore, let saved = await store.exploreCache.load(requestedSelection, includeAdult: requestedAdult) {
-                try Task.checkCancellation(); guard requestID == attempt, selection == requestedSelection, store.includeAdult == requestedAdult else { return }
-                show(saved.response, key: key)
-                savedCatalogDate = saved.savedAt
-                if !refresh && !saved.needsRefresh() { needsCatalogRefresh = false; return }
-            }
-            let result = try await store.aniList.explore(requestedSelection, refresh: refresh, includeAdult: requestedAdult)
-            try Task.checkCancellation(); guard requestID == attempt, selection == requestedSelection, store.includeAdult == requestedAdult else { return }
-            show(result, key: key); savedCatalogDate = nil; needsCatalogRefresh = false
-            await store.exploreCache.save(ExploreSnapshot(response: result, selection: requestedSelection, includeAdult: requestedAdult))
-        } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
-    }
-    private func show(_ result: ExploreResponse, key: String) {
-        seasonal = result.seasonal.media ?? []; trending = result.trending.media ?? []; upcoming = result.upcoming.media ?? []
-        loadedKey = key
+        await catalog.load(selection: selection, includeAdult: store.includeAdult,
+                           api: store.aniList, cache: store.exploreCache, refresh: refresh)
     }
 }

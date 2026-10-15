@@ -62,7 +62,7 @@ struct AnimeDetailHero: View {
                     ZStack(alignment: .top) {
                         Theme.background
                         Button { if let artworkURL { expand(artworkURL) } } label: {
-                            AsyncImage(url: artworkURL) { image in image.resizable().scaledToFill() } placeholder: { accent }
+                            ArtworkImage(url: artworkURL, pointSize: max(geometry.size.width, bannerHeight)) { image in image.resizable().scaledToFill() } placeholder: { accent }
                                 .frame(width: geometry.size.width, height: bannerHeight).clipped()
                         }.buttonStyle(.plain).disabled(artworkURL == nil)
                             .accessibilityLabel("Expand anime banner").accessibilityIdentifier("expand-anime-banner")
@@ -174,7 +174,7 @@ struct RelatedAnimeCard: View {
     }
     private var card: some View {
         VStack(alignment: .leading, spacing: 7) {
-            AsyncImage(url: anime.coverURL) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
+            ArtworkImage(url: anime.coverURL, pointSize: sizeClass == .regular ? 210 : 145) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
                 .frame(width: sizeClass == .regular ? 145 : 100, height: sizeClass == .regular ? 210 : 145).clipShape(RoundedRectangle(cornerRadius: 7))
             if let caption { Text(caption.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption2).foregroundStyle(Theme.highlight).lineLimit(1) }
             Text(anime.displayTitle).font(.caption.weight(.semibold)).lineLimit(2, reservesSpace: true).foregroundStyle(.primary)
@@ -189,7 +189,7 @@ struct DetailPersonCard: View {
     var role: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            AsyncImage(url: imageURL) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
+            ArtworkImage(url: imageURL, pointSize: sizeClass == .regular ? 142 : 106) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
                 .frame(width: sizeClass == .regular ? 120 : 90, height: sizeClass == .regular ? 142 : 106).clipShape(RoundedRectangle(cornerRadius: 7))
             Text(name).font(.caption.weight(.semibold)).lineLimit(2, reservesSpace: true).foregroundStyle(.primary)
             if let role { Text(role).font(.caption2).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true) }

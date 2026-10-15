@@ -90,7 +90,7 @@ struct NewsArticleRow: View {
         }.buttonStyle(.plain).task(id: article.id) { imageURL = await store.news.thumbnail(for: article) }
     }
     private var thumbnail: some View {
-        AsyncImage(url: imageURL ?? article.imageURL) { phase in
+        ArtworkPhaseView(url: imageURL ?? article.imageURL, pointSize: sizeClass == .regular ? 132 : 96) { phase in
             if let image = phase.image { image.resizable().scaledToFill() }
             else {
                 ZStack { Theme.surface; Image(systemName: "newspaper").font(.title2).foregroundStyle(.secondary) }

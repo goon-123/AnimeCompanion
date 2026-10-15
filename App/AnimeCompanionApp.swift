@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import AnimeCore
 
 @main
@@ -10,15 +11,33 @@ struct AnimeCompanionApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
-            AppTabs().environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+            root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .environmentObject(navigation)
-                .preferredColorScheme(.dark).fontDesign(.rounded).task { await store.restore() }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+                    Task { await ArtworkPipeline.shared.clearMemory() }
+                }
+                .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
                 .task(id: scenePhase) {
-                    guard scenePhase == .active else { return }
+                    guard scenePhase == .active, !artworkPreview else { return }
                     await store.exploreDubs.keepUpdated(using: store.dubs)
                 }
         }
+    }
+    private var artworkPreview: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--ui-phase3-artwork-preview")
+        #else
+        false
+        #endif
+    }
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if artworkPreview { ArtworkPerformancePreview() }
+        else { AppTabs() }
+        #else
+        AppTabs()
+        #endif
     }
 }
 

@@ -1,6 +1,21 @@
+## Phase 3 performance and architecture start — build 22
+
+Version 0.8.0 on `feature/phase-3-performance`, based on merged PR #12 (`cb3cdad89b4ddfda84d5e5a15ce5322abe737746`). Phase 3 starts at the user's explicit request; the prior Phase 2 validation run is not monitored or claimed green. The original audit's Phase 3 checklist could not be recovered. This is a concrete initial performance/architecture slice, not a claim to complete that unseen roadmap.
+
+- Replace separate SwiftUI artwork loaders with one shared pipeline for covers, featured/detail artwork, related people/titles, trailers, news and enlarged images. Decode orientation-aware ImageIO thumbnails off the main actor, bucket display pixel sizes and cap the longest decoded edge at 3200 pixels. Existing frames, clipping, gestures and accessibility labels remain in their screen components.
+- Bound decoded variants to 64 entries / 64 MB of bitmap cost and encoded memory to 64 entries / 24 MB. The dedicated public-image URLSession has an 8 MB memory / 128 MB disk URLCache using HTTP cache policy, without cookie or credential storage. Memory entries respect no-store/no-cache, max-age, Age/Date and Expires, with a five-minute ceiling. The 12 MB response check limits retained bytes after download; it is not a streaming download cap or a total app-memory guarantee.
+- Share in-flight bytes across sizes and image/color consumers. Poster-color sampling uses a small decoded variant from that pipeline. A direct viewer Retry bypasses saved image responses; old normal responses cannot overwrite a refreshed encoded entry. Memory warnings clear pipeline memory and prevent existing flights from repopulating it.
+- Replace AniList's nominal 80-item cache (which previously retained all fresh entries past the limit) with a hard 80-entry / 8 MB encoded-response-cost LRU and five-minute expiry. Store decoded public results, coalesce matching concurrent queries and keep throttling/429 behavior. Refresh skips saved results; authenticated reads and mutations do not share flights or public caching.
+- Shared flights release cancelled callers immediately and cancel underlying work only when the last caller leaves. Late completions cannot remove replacement flights. Explore has a retained observable model and a core loading lifecycle that rejects superseded season/content-policy results/errors, retains usable saved catalogs on failures and supports cancellation/retry.
+- Add 27 core regressions and two offline native artwork cases. Native cases exercise production ImageIO decoding, bitmap reuse, color/download reuse, memory clear, cache-bypassing Retry and EXIF orientation, using Release-excluded synthetic fixtures. All prior focused/full suites remain enabled, including playback audio, Library indicators and Phase 2 navigation.
+
+Local validation: **183 active core tests pass**, zero failures (188 enumerated, five optional/live skips), using Swift 6.2. App/UI-test sources pass Debug and Release syntax parsing; core type checking, shell syntax, project/workflow YAML parsing and whitespace checks pass. No performance benchmark or native success is inferred from these checks. This Linux workspace cannot compile SwiftUI/ImageIO/UIKit or run iOS simulators. Native Release compilation, iPhone/iPad tests/screenshots and unsigned IPA packaging are pending the PR workflow. Physical-device memory/scroll profiling, real AniList login and installed-player handoff remain device checks.
+
+Publishing the PR queues validation. Per request, completion is not polled or monitored.
+
 ## Phase 2 native-readiness fixes — build 21
 
-Version 0.7.1 on `fix/phase-2-validation`, based on merged PR #11 (`4f718dad27a2f48e2eeb8323d4d646b69bb612ff`). Phase 3 has not started: Phase 2 is merged and compiles, but native validation is not yet green.
+Version 0.7.1 on `fix/phase-2-validation`, based on merged PR #11 (`4f718dad27a2f48e2eeb8323d4d646b69bb612ff`). At this checkpoint Phase 3 had not started: Phase 2 was merged and compiled, but native validation was not yet green.
 
 Reviewed [build 20 validation](https://github.com/goon-123/AnimeCompanion/actions/runs/38731157756), including the retained iPhone/iPad accessibility hierarchies and test logs. The Release build and core job passed. Weekly iPhone passed; focused/full iPhone and weekly iPad had failures; the other iPad jobs were cancelled. A successful IPA build does not establish UI correctness.
 
@@ -11,7 +26,7 @@ Reviewed [build 20 validation](https://github.com/goon-123/AnimeCompanion/action
 - Preserve positive UI assertions while waiting for typed episode values and using bounded, directional gestures to avoid overshooting the shorter detail header. Add an offline initial-tab browsing check across portrait/landscape/portrait. All six Phase 2 native cases remain in focused/full iPhone and iPad suites.
 - Give the expanded focused/full suites 45/60-minute job limits; build 20's iPad jobs were cancelled at the former 30/35-minute limits. Per-test retries remain bounded, and no assertions or suites are disabled.
 
-Local validation: all **156 active core tests pass**, zero failures (161 enumerated, five optional/live skips), by directly executing the freshly rebuilt Swift 6.2 XCTest bundle after the container's SwiftPM test runner hit its `/proc/stat` runtime crash. No tests were disabled. App/UI-test syntax parsing, core type checking, shell syntax, YAML parsing and whitespace checks pass. Native build/UI checks for build 21 remain pending; their completion will not be monitored automatically. Phase 3 remains deferred until Phase 2 validation is reviewed.
+Local validation: all **156 active core tests pass**, zero failures (161 enumerated, five optional/live skips), by directly executing the freshly rebuilt Swift 6.2 XCTest bundle after the container's SwiftPM test runner hit its `/proc/stat` runtime crash. No tests were disabled. App/UI-test syntax parsing, core type checking, shell syntax, YAML parsing and whitespace checks pass. Native build/UI checks for build 21 remained pending at this checkpoint; their completion was not monitored automatically. The Phase 3 deferral at this checkpoint is superseded by the user's explicit build 22 instruction above.
 
 ## Remaining Phase 2: watch-first screens and adaptive navigation — build 20
 
