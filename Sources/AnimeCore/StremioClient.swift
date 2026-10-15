@@ -127,8 +127,10 @@ public struct StremioStream: Codable, Sendable {
     public let infoHash: String?
     public let behaviorHints: StreamBehavior?
     public let subtitles: [StreamSubtitle]?
-    public var displayName: String { name?.isEmpty == false ? name! : "Video source" }
-    public var details: String { description ?? title ?? behaviorHints?.filename ?? "No source details provided" }
+    public var displayName: String { PlaybackSourceText.clean(name, maximumLines: 1, maximumCharacters: 80) ?? "Video source" }
+    public var details: String {
+        [description, title, behaviorHints?.filename].compactMap { PlaybackSourceText.clean($0) }.first ?? "Source details unavailable"
+    }
     public var videoURL: URL? { Self.networkURL(url) }
     public var unavailableReason: String? {
         if behaviorHints?.proxyHeaders?.isRequired == true { return "Requires a playback proxy" }

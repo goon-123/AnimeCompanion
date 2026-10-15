@@ -40,7 +40,7 @@ public enum VidHubPlayback {
         parts.queryItems = [
             URLQueryItem(name: "url", value: video.absoluteString),
             URLQueryItem(name: "position", value: String(Int(start))),
-            URLQueryItem(name: "filename", value: stream.behaviorHints?.filename ?? pending.title),
+            URLQueryItem(name: "filename", value: PlaybackSourceText.clean(stream.behaviorHints?.filename, maximumLines: 1, maximumCharacters: 180) ?? pending.title),
             URLQueryItem(name: "request-id", value: pending.requestID.uuidString),
             URLQueryItem(name: "x-source", value: "Anime Companion"),
             URLQueryItem(name: "x-success", value: "animecompanion://playback/success"),

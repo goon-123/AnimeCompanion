@@ -89,6 +89,7 @@ test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
   -only-testing:AnimeCompanionUITests/PolishedDesignUITests
   -only-testing:AnimeCompanionUITests/WeeklyScheduleUITests
   -only-testing:AnimeCompanionUITests/ExplorePresentationUITests)
+test_arguments+=(-only-testing:AnimeCompanionUITests/PhaseOneReliabilityUITests)
 fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"

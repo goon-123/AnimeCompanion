@@ -59,6 +59,11 @@ struct ExploreView: View {
                     ProgressView("Checking English dubs…").frame(maxWidth: .infinity)
                 }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
+                if dubFilters.selection.dub != .all && dubs.loaded && dubs.unavailable {
+                    NoticeView(message: "Dub information is temporarily incomplete. Existing matches are shown; adjust your dub filters to browse all anime.") {
+                        Task { await dubs.load(using: store.dubs, refresh: true) }
+                    }.padding(.horizontal)
+                }
                 shelf(.trending, anime: trending, availableWidth: geometry.size.width)
                 shelf(.seasonal, anime: seasonal, availableWidth: geometry.size.width)
                 shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
@@ -151,7 +156,7 @@ struct ExploreView: View {
                         }
                     }.padding(.horizontal)
                 }
-            } else if !loading {
+            } else if !loading && loadedKey != nil && error == nil && (dubFilters.selection.dub == .all || dubs.loaded) {
                 Text(dubFilters.selection.isActive ? "No matches in this preview. Open See all to browse more titles or adjust your dub filters." : "No titles listed yet.")
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
             }

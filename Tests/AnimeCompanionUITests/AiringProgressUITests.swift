@@ -41,6 +41,7 @@ final class AiringProgressUITests: XCTestCase {
         let libraryBehind = app.buttons["library-entry-990101"]
         reveal(libraryBehind, app: app)
         XCTAssertTrue(libraryBehind.label.contains("Watched 4/12"))
+        XCTAssertTrue(libraryBehind.label.contains("Next: Ep 5"))
         XCTAssertFalse(behind.exists)
         XCTAssertFalse(caught.exists)
         XCTAssertFalse(app.staticTexts["library-airing-progress-990101"].exists)
@@ -54,6 +55,7 @@ final class AiringProgressUITests: XCTestCase {
         reveal(layout, app: app, upward: false); layout.buttons["Grid"].tap()
         reveal(libraryBehind, app: app)
         XCTAssertTrue(libraryBehind.label.contains("Watched 4/12"))
+        XCTAssertTrue(libraryBehind.label.contains("Next: Ep 5"))
         XCTAssertTrue(app.buttons["library-watch-990101"].exists)
         XCTAssertFalse(behind.exists); XCTAssertFalse(caught.exists)
         XCTAssertFalse(app.staticTexts["library-airing-next-990101"].exists)

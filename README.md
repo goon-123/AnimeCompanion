@@ -1,5 +1,15 @@
 # Anime Companion
 
+### Audit Phase 1: reliability and clarity (0.5.0)
+
+Playback source rows normalize add-on text, hide broken template expressions and keep the original text behind the source's information button. Refreshing keeps existing sources for the same episode visible; failed refreshes explain the error without turning it into an empty result. A manual episode change clears the old episode's sources. AniList progress still chooses the next unwatched episode and player returns save local resume only.
+
+Filtered category browsing checks up to five additional pages per batch and aims to fill twelve matches. Sparse matches no longer stop the scan immediately. A partial scan says **No matches yet**, shows how many titles were checked and offers **Search more titles**. A completed empty scan says **No matching titles**. Missing dub data is explained separately, with retry and a way to browse all anime. Pagination retries keep loaded pages instead of resetting to page one.
+
+Library list and grid cards add a clear **Next: Ep …** label alongside watched totals. Completed and unreleased titles get appropriate labels; broadcast/dub catch-up panels stay in Schedule. Sign-in callbacks validate a fresh OAuth state value and reject duplicate or malformed parameters. Existing AniList client IDs and the registered redirect URL remain valid.
+
+Targeted core and native regressions cover malformed source text, empty responses, filtered scan coverage, source refresh failures, next-episode selection and player return handling. Actual AniList login and an installed VidHub handoff remain physical-device checks. See `BUILD_STATUS.md` for the exact validation status.
+
 ### Schedule and details refresh (0.4.1)
 
 Schedule opens on **Airing Now** for your watching/rewatching lists. Green means caught up, yellow means behind, and unconfirmed counts stay neutral. Choose Original broadcast or English dub, tap the yellow count to filter behind titles, or open **Weekly Schedule** to browse sub/dub releases in either week direction. My Library keeps its list/grid controls and per-title progress.
@@ -62,7 +72,7 @@ References: [VidHub integration](https://vidhub.okaapps.com/3rd-party-app-integr
 2. Name it **Anime Companion** and set its redirect URL to **animecompanion://oauth/anilist**.
 3. In the app, open Settings, enter the numeric **client ID**, and tap Connect AniList. Existing users can keep their configured client ID; no new AniList developer registration is needed for this update.
 
-Only the client ID is needed. Do not paste a client secret or access token into the source. OAuth opens AniList's sign-in screen; the returned bearer token is stored in this device's Keychain. Expired credentials require signing in again. The sign-in request follows AniList's implicit mobile flow by sending only the client ID and response type; AniList uses the redirect URI saved in the developer application. The callback URI is validated before a token is accepted.
+Only the client ID is needed. Do not paste a client secret or access token into the source. OAuth opens AniList's sign-in screen; the returned bearer token is stored in this device's Keychain. Expired credentials require signing in again. The sign-in request follows AniList's implicit mobile flow with the client ID, response type and a fresh random state value; AniList uses the redirect URI saved in the developer application. Both the callback URI and state are validated before a token is accepted.
 
 ## Build a universal iPhone/iPad IPA with GitHub
 

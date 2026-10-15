@@ -1,3 +1,23 @@
+## Audit Phase 1: playback and discovery reliability — build 18
+
+Version 0.5.0 on `improvement/phase-1-reliability`, based on merged build 17.
+
+- Clean source names/descriptions without rewriting video URLs, remove broken template diagnostics from rows, bound row text and offer original add-on text in a separate information sheet.
+- Preserve the selected episode and loaded sources on same-episode refresh failure. Changing episode or add-on still clears stale results. Existing AniList-first selection, manual overrides and local-only VidHub progress are retained.
+- Continue filtered browsing in batches of up to five additional pages, aiming for twelve matches. Show checked-title coverage and distinguish a partial empty scan, completed empty scan, provider failure and missing dub information. Pagination retry preserves loaded pages.
+- Add next-unwatched labels to Library list/grid cards without restoring duplicate Schedule catch-up panels. Completed/unreleased titles avoid misleading next-episode labels.
+- Add random state correlation to the existing AniList implicit sign-in flow; reject duplicate/valueless callback parameters, credentialed redirects, malformed expiry and blank tokens. Registered redirect/client-ID setup is unchanged. OAuth state handling follows RFC 6749 section 4.2; sign-in with the user's actual account has not been performed.
+- Add core cases for cleaned display text, exact playback URLs, successful empty stream responses, episode/return correlation, Library next labels, scan bounds/coverage and OAuth state validation. Five native Phase 1 cases cover cleaned source text/original inspection, failed refresh retention, callback episode isolation, a dubbed match on page six and continuing a partial empty scan to its end. Fixtures are DEBUG-only, and preview callback progress uses isolated defaults.
+
+### Local validation, October 15, 2026 UTC
+
+- Swift 6.2 compiled the complete core package and test bundle. The directly executed XCTest bundle passed **all 131 active core tests** (136 enumerated, five optional/live skips), with zero failures. This includes all fourteen new cases: twelve Phase 1 regressions and two playback regressions. The normal SwiftPM runner crashed in this container after compilation; invoking the same built XCTest bundle directly completed every suite successfully. No tests were removed or disabled.
+- Core frontend type checking, syntax parsing of all App and UI-test Swift sources, shell syntax and whitespace checks pass.
+- Five new native Phase 1 UI cases are included in the existing focused/full iPhone and iPad suites; their execution remains pending. Native compilation, screenshots and an IPA are not claimed as validated.
+- The user explicitly approved publishing the Phase 1 branch on October 15, 2026 UTC. The destination is the existing public `goon-123/AnimeCompanion` repository. Hosted native checks will run on the implementation PR; their results are pending.
+
+Physical AniList sign-in, signed installation and an actual installed VidHub handoff remain device validation. Previewed player returns exercise the production URL builder, callback parser and local progress store with isolated test defaults; they do not open an installed VidHub app or write to AniList.
+
 ## Today positioning, focused Library and genre fixes — build 17
 
 Version 0.4.1 on `fix/schedule-today-library-genres`, based on merged PR #7.
