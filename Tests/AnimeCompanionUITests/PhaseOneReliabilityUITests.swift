@@ -15,7 +15,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         XCTAssertTrue(original.waitForExistence(timeout: 10)); original.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "invalid expression")).firstMatch.waitForExistence(timeout: 10))
         capture("Source-Information")
-        app.buttons["Done"].tap()
+        app.buttons["close-source-information"].tap()
         XCTAssertTrue(source.waitForExistence(timeout: 10)); source.tap()
         XCTAssertTrue(app.staticTexts["Preview launch · Episode 9"].waitForExistence(timeout: 10))
     }
