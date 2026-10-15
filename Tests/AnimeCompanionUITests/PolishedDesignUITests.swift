@@ -182,7 +182,7 @@ final class PolishedDesignUITests: XCTestCase {
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences"] + extra
         app.launch()
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30))
-        app.buttons["explore-dub-filter-toolbar"].tap()
+        app.openExploreControl("explore-dub-filter-toolbar")
         XCTAssertTrue(app.buttons["dub-filter-reset"].waitForExistence(timeout: 15))
         app.buttons["dub-filter-reset"].tap(); app.buttons["Done"].tap()
         app.appTab("My Library").tap()

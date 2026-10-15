@@ -102,7 +102,7 @@ final class ExplorePresentationUITests: XCTestCase {
         app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 40))
         app.appTab("Explore").tap()
-        app.buttons["explore-dub-filter-toolbar"].tap()
+        app.openExploreControl("explore-dub-filter-toolbar")
         XCTAssertTrue(app.buttons["dub-filter-reset"].waitForExistence(timeout: 10))
         app.buttons["dub-filter-reset"].tap()
         let reset = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: app.buttons["dub-filter-all"])

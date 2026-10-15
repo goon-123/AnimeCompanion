@@ -6,19 +6,19 @@ import AnimeCore
 private enum AddonKeychain {
     private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: "com.animecompanion.playback", kSecAttrAccount as String: "streaming-addon"]
-    static func load() throws -> InstalledAddon? {
+    static func load() throws -> (collection: AddonCollection, legacy: Bool)? {
         var request = query; request[kSecReturnData as String] = true; request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let status = SecItemCopyMatching(request as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data,
-              let addon = try? JSONDecoder().decode(InstalledAddon.self, from: data) else {
+              let collection = try? JSONDecoder().decode(AddonCollection.self, from: data) else {
             throw ServiceError.message("The saved add-on could not be read. Unlock your device and reopen the app.")
         }
-        return addon
+        return (collection, (try? JSONDecoder().decode(InstalledAddon.self, from: data)) != nil)
     }
-    static func save(_ addon: InstalledAddon) throws {
-        let data = try JSONEncoder().encode(addon)
+    static func save(_ collection: AddonCollection) throws {
+        let data = try JSONEncoder().encode(collection)
         let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var request = query; request[kSecValueData as String] = data
@@ -37,9 +37,10 @@ private enum AddonKeychain {
 @MainActor
 final class PlaybackStore: ObservableObject {
     let client: StremioClient
-    @Published private(set) var addon: InstalledAddon?
+    @Published private var collection = AddonCollection()
+    @Published private(set) var addonRevision = UUID()
     @Published var enabled = UserDefaults.standard.object(forKey: "playback.enabled") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(enabled, forKey: "playback.enabled") }
+        didSet { defaults.set(enabled, forKey: "playback.enabled") }
     }
     @Published private(set) var progress: [String: PlaybackProgress] = [:]
     @Published private(set) var installing = false
@@ -51,13 +52,20 @@ final class PlaybackStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         #if DEBUG
-        let preview = ProcessInfo.processInfo.arguments.contains("--ui-playback-preview")
-        self.defaults = preview ? UserDefaults(suiteName: "com.animecompanion.ui-playback")! : defaults
-        if preview { self.defaults.removePersistentDomain(forName: "com.animecompanion.ui-playback") }
-        if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
-            client = StremioClient(transport: PlaybackPreviewTransport())
-            addon = try? PlaybackPreviewTransport.addon()
-            enabled = true
+        let multiple = ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview")
+        let preview = multiple || ProcessInfo.processInfo.arguments.contains("--ui-playback-preview")
+        let suite = multiple ? "com.animecompanion.ui-multiple-addons" : "com.animecompanion.ui-playback"
+        self.defaults = preview ? UserDefaults(suiteName: suite)! : defaults
+        if preview && !(multiple && ProcessInfo.processInfo.arguments.contains("--ui-keep-addon-preview")) {
+            self.defaults.removePersistentDomain(forName: suite)
+        }
+        if preview {
+            if multiple { client = StremioClient(transport: MultipleAddonPreviewTransport()) }
+            else { client = StremioClient(transport: PlaybackPreviewTransport()) }
+            if multiple, let data = self.defaults.data(forKey: "preview.addons"), let saved = try? JSONDecoder().decode(AddonCollection.self, from: data) {
+                collection = saved
+            } else if let addon = try? PlaybackPreviewTransport.addon() { collection.install(addon) }
+            enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
             if ProcessInfo.processInfo.arguments.contains("--ui-playback-stale-resume") {
                 progress["1:1"] = PlaybackProgress(position: 120, duration: 1440, finished: false)
             }
@@ -67,11 +75,19 @@ final class PlaybackStore: ObservableObject {
         self.defaults = defaults
         #endif
         client = StremioClient()
+        enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
         if let data = defaults.data(forKey: "playback.positions"), let saved = try? JSONDecoder().decode([String: PlaybackProgress].self, from: data) { progress = saved }
         if let data = defaults.data(forKey: "playback.pending"), let saved = try? JSONDecoder().decode(PendingPlayback.self, from: data), Date().timeIntervalSince(saved.createdAt) < 86400 { pending = saved }
-        do { addon = try AddonKeychain.load() } catch { setupError = error.localizedDescription }
+        do {
+            if let saved = try AddonKeychain.load() {
+                collection = saved.collection
+                if saved.legacy { try AddonKeychain.save(collection) }
+            }
+        } catch { setupError = error.localizedDescription }
     }
-    var ready: Bool { addon != nil && enabled }
+    var installations: [AddonInstallation] { collection.installations }
+    var activeAddons: [AddonInstallation] { enabled ? collection.enabled : [] }
+    var ready: Bool { !activeAddons.isEmpty }
     func install(_ input: String) async -> Bool {
         guard !installing else { return false }
         installing = true; setupError = nil
@@ -79,19 +95,39 @@ final class PlaybackStore: ObservableObject {
         do {
             let candidate = try await client.install(input)
             try Task.checkCancellation()
-            guard candidate.manifest.supports(type: "series", id: "anilist:1:1") || candidate.manifest.supports(type: "series", id: "mal:1:1") ||
-                    candidate.manifest.supports(type: "anime", id: "anilist:1:1") || candidate.manifest.supports(type: "anime", id: "mal:1:1") ||
-                    candidate.manifest.supports(type: "movie", id: "anilist:1") || candidate.manifest.supports(type: "movie", id: "mal:1") else { throw PlaybackError.unsupportedAnime }
-            try AddonKeychain.save(candidate)
-            addon = candidate; enabled = true
+            guard candidate.supportsAnime else { throw PlaybackError.unsupportedAnime }
+            var updated = collection; updated.install(candidate)
+            try persist(updated); enabled = true
             return true
         } catch is CancellationError { return false }
         catch { setupError = error.localizedDescription; return false }
     }
-    func remove() {
+    func remove(id: UUID) {
         guard !installing else { return }
-        do { try AddonKeychain.remove(); addon = nil; setupError = nil }
+        var updated = collection; updated.remove(id: id)
+        do { try persist(updated); setupError = nil }
         catch { setupError = error.localizedDescription }
+    }
+    func setEnabled(_ enabled: Bool, id: UUID) {
+        guard !installing else { return }
+        var updated = collection; updated.setEnabled(enabled, id: id)
+        do { try persist(updated); setupError = nil }
+        catch { setupError = error.localizedDescription }
+    }
+    private func persist(_ updated: AddonCollection) throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
+            // Only synthetic fixture URLs use this isolated test defaults suite.
+            defaults.set(try JSONEncoder().encode(updated), forKey: "preview.addons")
+            collection = updated; addonRevision = UUID(); return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
+            collection = updated; addonRevision = UUID(); return
+        }
+        #endif
+        if updated.installations.isEmpty { try AddonKeychain.remove() }
+        else { try AddonKeychain.save(updated) }
+        collection = updated; addonRevision = UUID()
     }
     func saved(animeID: Int, episode: Int) -> PlaybackProgress? { progress[PlaybackEpisode(animeID: animeID, episode: episode).key] }
     func resumeEpisode(animeID: Int) -> Int? {
@@ -108,7 +144,7 @@ final class PlaybackStore: ObservableObject {
             let start = restart ? 0 : saved(animeID: anime.id, episode: episode)?.position ?? 0
             let url = try VidHubPlayback.launchURL(stream: stream, pending: record, position: start, subtitle: subtitle)
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") || ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
                 // Test the production URL builder and tap path without opening a third-party app.
                 // No real add-on, Keychain change, network request or saved playback is involved.
                 let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -122,6 +158,7 @@ final class PlaybackStore: ObservableObject {
                     return
                 }
                 playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" } ? " · External subtitles" : "")
+                if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") { playerMessage? += " · \(stream.displayName)" }
                 return
             }
             #endif

@@ -8,15 +8,8 @@ final class DiscoveryNavigationTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launch()
-        let display = app.buttons["explore-display-options"]
-        XCTAssertTrue(display.waitForExistence(timeout: 15))
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: display)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
-        display.tap()
+        app.openExploreControl("explore-display-options")
         let options = app.navigationBars["Display options"]
-        // A cold simulator may publish a toolbar before accepting its first tap.
-        // Retry the same visible control once, retaining every navigation check.
-        if !options.waitForExistence(timeout: 10), display.isHittable { display.tap() }
         XCTAssertTrue(options.waitForExistence(timeout: 10))
         reveal(app.buttons["explore-display-reset"], scrolling: app, upward: true)
         app.buttons["explore-display-reset"].tap(); app.buttons["Done"].tap()
@@ -41,17 +34,18 @@ final class DiscoveryNavigationTests: XCTestCase {
         // A return must retain appended pages, not replace them with page one.
         reveal(app.buttons["discovery-layout"], scrolling: scroll, upward: false)
         chooseColumns(8, in: app)
-        let more = app.buttons["discovery-more"]
-        if more.exists {
-            reveal(more, scrolling: scroll, upward: true)
+        let marker = app.descendants(matching: .any)["discovery-pagination"].firstMatch
+        if marker.exists {
             let previous = app.staticTexts["discovery-count"].label
-            more.tap()
+            reveal(marker, scrolling: scroll, upward: true)
+            scroll.swipeUp()
             let appended = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", previous),
                                                      object: app.staticTexts["discovery-count"])
             XCTAssertEqual(XCTWaiter.wait(for: [appended], timeout: 35), .completed)
             try openVisibleTitleAndReturn(in: app)
             capture("Popular-Season-Paginated-Return")
         }
+        XCTAssertFalse(app.buttons["discovery-more"].exists)
 
         reveal(app.buttons["discovery-genre"], scrolling: scroll, upward: false)
         app.buttons["discovery-genre"].tap(); app.buttons["discovery-genre-option-Action"].tap()

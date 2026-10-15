@@ -3,8 +3,8 @@ import XCTest
 
 final class PosterLayoutTests: XCTestCase {
     func testFeaturedArtworkFillsViewportAndRefitsAfterRotation() {
-        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true), 704)
-        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 1100, fillScreen: true), 968)
+        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true), 752)
+        XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 1100, fillScreen: true), 1034)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: false), 620)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: .nan, viewportHeight: .nan, fillScreen: false), 680)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 100000, viewportHeight: 100000, fillScreen: true), 1100)

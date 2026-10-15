@@ -6,8 +6,7 @@ final class PlaybackUITests: XCTestCase {
     func testPlaybackSetupRejectsInvalidURLAndKeepsAccountSettingsAccessible() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-reset-content-preferences"]; app.launch()
-        let settings = app.buttons["Account and settings"].firstMatch
-        XCTAssertTrue(settings.waitForExistence(timeout: 20)); settings.tap()
+        app.openExploreControl("explore-settings")
         let playback = app.buttons["playback-settings"]
         for _ in 0..<6 where !playback.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(playback.waitForExistence(timeout: 10)); playback.tap()

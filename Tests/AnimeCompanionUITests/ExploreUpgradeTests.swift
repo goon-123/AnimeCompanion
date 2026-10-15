@@ -28,7 +28,7 @@ final class ExploreUpgradeTests: XCTestCase {
         app.buttons["featured-details-\(id)"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
         app.returnToBrowsing()
-        XCTAssertTrue(app.navigationBars["Explore"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["featured-page-1"].value as? String, "Selected")
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
@@ -98,8 +98,7 @@ final class ExploreUpgradeTests: XCTestCase {
     }
     @MainActor
     private func openFilters(in app: XCUIApplication) {
-        let button = app.buttons["explore-dub-filter-toolbar"]
-        XCTAssertTrue(button.waitForExistence(timeout: 15)); button.tap()
+        app.openExploreControl("explore-dub-filter-toolbar")
         XCTAssertTrue(app.navigationBars["Dub filters"].waitForExistence(timeout: 10))
     }
     @MainActor

@@ -23,7 +23,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
     func testFailedSourceRefreshKeepsTheSelectedEpisodeAndPreviouslyLoadedSources() throws {
         let app = openPlayback(extra: ["--ui-playback-refresh-failure"])
         app.buttons["reload-playback-sources"].tap()
-        let notice = app.staticTexts["The add-on could not be reached or timed out. Check your connection and try again."]
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "The add-on could not be reached or timed out.")).firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["playback-source-0"].exists)
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
@@ -51,9 +51,11 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 10), .completed)
         capture("Callback-Progress-Isolated-By-Episode")
         app.buttons["Done"].tap()
-        let queueResume = app.staticTexts["continue-resume-1"]
-        app.revealInContent(queueResume, upward: false)
-        XCTAssertEqual(queueResume.label, "Resume at 2:05", "The saved time still belongs to AniList's next episode, not episode 10")
+        let watch = app.buttons["watch-in-vidhub"]
+        app.revealInContent(watch, upward: false); watch.tap()
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
+        XCTAssertEqual(resume.label, "Resume at 2:05", "The saved time still belongs to AniList's next episode, not episode 10")
     }
     @MainActor
     func testDubFilterFindsAMatchBeyondTheFirstFourPages() throws {
@@ -70,13 +72,9 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No matches yet"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.staticTexts["discovery-partial-results"].exists)
         XCTAssertFalse(app.staticTexts["No matching titles"].exists)
-        let more = app.buttons["discovery-more"]
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: more)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
-        for _ in 0..<5 where !more.isHittable { app.contentSurface.swipeUp() }
-        XCTAssertTrue(more.isHittable); more.tap()
+        XCTAssertFalse(app.buttons["discovery-more"].exists)
+        for _ in 0..<8 where !app.staticTexts["No matching titles"].exists { app.browseSurface.swipeUp() }
         XCTAssertTrue(app.staticTexts["No matching titles"].waitForExistence(timeout: 20))
-        XCTAssertFalse(more.exists)
         capture("Filtered-Catalog-Fully-Checked")
     }
     @MainActor
@@ -85,8 +83,8 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-discovery-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.buttons["explore-dub-filter-toolbar"].waitForExistence(timeout: 20))
-        app.buttons["explore-dub-filter-toolbar"].tap()
+        XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 20))
+        app.openExploreControl("explore-dub-filter-toolbar")
         XCTAssertTrue(app.buttons["dub-filter-reset"].waitForExistence(timeout: 10)); app.buttons["dub-filter-reset"].tap()
         app.buttons["dub-filter-available"].tap(); app.buttons["Done"].tap()
         app.buttons["explore-search"].tap()

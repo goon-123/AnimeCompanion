@@ -1,6 +1,17 @@
 import XCTest
 
 extension XCUIApplication {
+    /// Explore keeps only a floating search control; advanced options live in
+    /// its native context menu. Browse pages retain their normal toolbar actions.
+    @MainActor func openExploreControl(_ id: String) {
+        if buttons[id].exists && buttons[id].isHittable { buttons[id].tap(); return }
+        let search = buttons["explore-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 15)); XCTAssertTrue(search.isHittable)
+        search.press(forDuration: 1.1)
+        let labels = ["explore-display-options": "Display options", "explore-dub-filter-toolbar": "Dub filters", "explore-settings": "Account and settings", "explore-season": "Browse seasons"]
+        let action = buttons[id].exists ? buttons[id].firstMatch : buttons[labels[id] ?? id].firstMatch
+        XCTAssertTrue(action.waitForExistence(timeout: 10)); action.tap()
+    }
     /// iPad's adaptive tabs may be represented as a top bar or sidebar rather
     /// than the phone's bottom tab bar. Keep feature assertions in both modes.
     @MainActor func appTab(_ title: String) -> XCUIElement {

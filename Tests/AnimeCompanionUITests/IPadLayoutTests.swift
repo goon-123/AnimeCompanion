@@ -3,7 +3,7 @@ import UIKit
 
 final class IPadLayoutTests: XCTestCase {
     @MainActor
-    func testLibraryPosterGrowthComingUpGridDensityAndPersistence() throws {
+    func testLibraryPosterGrowthGridDensityAndPersistenceWithoutRemovedShelves() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-layout-preview"]
@@ -21,9 +21,7 @@ final class IPadLayoutTests: XCTestCase {
         XCTAssertTrue(listSize.isHittable)
         setSlider(listSize, position: 1, bounds: 60...240, accepting: 210...240)
         let savedList = listSize.value as? String
-        let comingSize = app.sliders["library-coming-size"]
-        reveal(comingSize, in: app); setSlider(comingSize, position: 1, bounds: 60...200, accepting: 180...200)
-        let savedComing = comingSize.value as? String
+        XCTAssertFalse(app.sliders["library-coming-size"].exists)
         capture("Library-Display-Options")
         app.buttons["Done"].tap()
         if app.scrollViews["library-scroll"].frame.width >= 660 {
@@ -35,12 +33,8 @@ final class IPadLayoutTests: XCTestCase {
             XCTAssertLessThanOrEqual(app.buttons["library-entry-1"].frame.maxX, app.scrollViews["library-scroll"].frame.maxX)
         }
         capture("Library-Large-List-Portrait")
-        app.buttons["library-coming-up"].tap()
-        let release = app.buttons["release-entry-1-sub-9"]
-        XCTAssertTrue(release.waitForExistence(timeout: 10))
-        XCTAssertGreaterThan(release.frame.height, 240, "Coming-up artwork must use its own larger saved size")
-        capture("Library-Large-Coming-Up-Portrait")
-        app.buttons["library-coming-up"].tap()
+        XCTAssertFalse(app.buttons["library-coming-up"].exists)
+        XCTAssertFalse(app.staticTexts["Continue Watching"].exists)
 
         app.segmentedControls["library-layout"].buttons["Grid"].tap()
         chooseRows(3, button: "library-columns", in: app)
@@ -66,8 +60,7 @@ final class IPadLayoutTests: XCTestCase {
         XCTAssertTrue(app.buttons["library-columns"].label.contains("3 per row"))
         openDisplay("library", in: app)
         XCTAssertEqual(app.sliders["library-list-size"].value as? String, savedList)
-        reveal(app.sliders["library-coming-size"], in: app)
-        XCTAssertEqual(app.sliders["library-coming-size"].value as? String, savedComing)
+        XCTAssertFalse(app.sliders["library-coming-size"].exists)
         app.buttons["Done"].tap()
         app.segmentedControls["library-layout"].buttons["List"].tap()
         XCUIDevice.shared.orientation = .portrait
@@ -188,7 +181,8 @@ final class IPadLayoutTests: XCTestCase {
         rotate(.landscapeLeft, in: app)
         for title in ["Explore", "Schedule", "News", "My Library"] {
             selectTab(title, in: app)
-            XCTAssertTrue(app.navigationBars[title == "News" ? "Anime News" : title].waitForExistence(timeout: 15))
+            if title == "Explore" { XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15)) }
+            else { XCTAssertTrue(app.navigationBars[title == "News" ? "Anime News" : title].waitForExistence(timeout: 15)) }
             if title == "Explore" { waitForLoading("Finding your season…", in: app) }
             if title == "Schedule" { waitForLoading("Loading releases…", in: app) }
             if title == "News" { waitForLoading("Loading headlines…", in: app) }
@@ -225,8 +219,11 @@ final class IPadLayoutTests: XCTestCase {
     }
     @MainActor
     private func openDisplay(_ scope: String, in app: XCUIApplication) {
-        let button = app.buttons["\(scope)-display-options"].firstMatch
-        XCTAssertTrue(button.waitForExistence(timeout: 15)); button.tap()
+        if scope == "explore" { app.openExploreControl("explore-display-options") }
+        else {
+            let button = app.buttons["\(scope)-display-options"].firstMatch
+            XCTAssertTrue(button.waitForExistence(timeout: 15)); button.tap()
+        }
         XCTAssertTrue(app.navigationBars["Display options"].waitForExistence(timeout: 10))
     }
     @MainActor

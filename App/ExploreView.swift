@@ -26,15 +26,8 @@ struct ExploreView: View {
     var body: some View {
         GeometryReader { geometry in
           if store.metadataSource == .liveChart {
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showSeasons = true } label: { Label(selection.label, systemImage: "calendar") }
-                    Spacer()
-                    Text("LiveChart listings").font(.caption).foregroundStyle(.secondary)
-                }.padding(12)
-                LiveChartBrowserView(startURL: liveChartPage ?? LiveChartURL.season(selection))
-                    .id(liveChartPage ?? LiveChartURL.season(selection))
-            }
+            LiveChartBrowserView(startURL: liveChartPage ?? LiveChartURL.season(selection))
+                .id(liveChartPage ?? LiveChartURL.season(selection))
           } else {
           ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -43,7 +36,7 @@ struct ExploreView: View {
                         height: CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
                             viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
                             fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured)) + (textSize.isAccessibilitySize ? 240 : 0),
-                        topInset: 0, background: $posterBackground)
+                        topInset: geometry.safeAreaInsets.top, background: $posterBackground)
                 }
                 LazyVStack(alignment: .leading, spacing: 26) {
                 if dubFilters.selection.isActive && !dubs.loaded {
@@ -71,31 +64,12 @@ struct ExploreView: View {
                     .frame(maxWidth: .infinity).background(Theme.background)
             }
           }.accessibilityIdentifier("explore-scroll")
+              .ignoresSafeArea(.container, edges: .top)
           }
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
-            .toolbarBackground(.automatic, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if store.metadataSource == .aniList { browsingControls }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker("Metadata source", selection: $store.metadataSource) {
-                            ForEach(MetadataSource.allCases) { Text($0.label).tag($0) }
-                        }
-                    } label: { Image(systemName: "globe").frame(width: 44, height: 44) }
-                        .accessibilityLabel("Metadata source: \(store.metadataSource.label)").accessibilityIdentifier("explore-metadata-source")
-                }
-                if store.metadataSource == .liveChart {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { liveChartPage = LiveChartURL.search("") } label: { Image(systemName: "magnifyingglass").frame(width: 44, height: 44) }
-                            .accessibilityLabel("Search LiveChart")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings") }
-            }
+            .toolbar(.hidden, for: .navigationBar)
+            .overlay(alignment: .bottomTrailing) { floatingSearch.padding(.trailing, 20).padding(.bottom, 16) }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
@@ -111,26 +85,32 @@ struct ExploreView: View {
                 _ = await (metadata, dubInfo)
             }
     }
-    private var browsingControls: some View {
-            HStack(spacing: 8) {
+    private var floatingSearch: some View {
+        Group {
+            if store.metadataSource == .aniList {
                 NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
-                    Image(systemName: "magnifyingglass").font(.subheadline.weight(.semibold))
-                        .frame(width: 44, height: 44).silverGlass(in: Capsule())
-                }.buttonStyle(.plain).accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
-                ScrollView(.horizontal, showsIndicators: false) {
-                  Button { showSeasons = true } label: {
-                    Label(selection.label, systemImage: "chevron.down").font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12).frame(minHeight: 44).silverGlass(in: Capsule())
-                }.buttonStyle(.plain).accessibilityIdentifier("explore-season")
-                }.frame(maxWidth: .infinity)
-                DubFilterButton(compact: true) { showDubFilters = true }
-                Button { showDisplay = true } label: {
-                    Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle())
-                }.buttonStyle(.plain).accessibilityLabel("Explore display options").accessibilityIdentifier("explore-display-options")
-            }.padding(.horizontal, 12).padding(.vertical, 8)
-            // A container identifier propagates into these controls on iOS 18
-            // and replaces their individual identifiers. Keep IDs on actions.
-            .background(.ultraThinMaterial)
+                    searchIcon
+                }
+            } else {
+                Button { liveChartPage = LiveChartURL.search("") } label: { searchIcon }
+            }
+        }.buttonStyle(.plain).accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
+            .accessibilityHint("Touch and hold for seasons, filters, display options and settings.")
+            .contextMenu {
+                Button { showSeasons = true } label: { Label("Browse seasons", systemImage: "calendar") }
+                    .accessibilityIdentifier("explore-season")
+                Button { showDubFilters = true } label: { Label("Dub filters", systemImage: "line.3.horizontal.decrease") }
+                    .accessibilityIdentifier("explore-dub-filter-toolbar")
+                Button { showDisplay = true } label: { Label("Display options", systemImage: "slider.horizontal.3") }
+                    .accessibilityIdentifier("explore-display-options")
+                Button { showSettings = true } label: { Label("Account and settings", systemImage: "gearshape") }
+                    .accessibilityIdentifier("explore-settings")
+            }
+    }
+    private var searchIcon: some View {
+        Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))
+            .frame(width: 56, height: 56).silverGlass(in: Circle())
+            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
     }
     private var featured: [Anime] {
         var ids = Set<Int>()

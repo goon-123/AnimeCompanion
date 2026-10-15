@@ -12,11 +12,10 @@ struct PosterPreferences: DynamicProperty {
     @AppStorage var listWidth: Double
     @AppStorage var gridWidth: Double
     @AppStorage var shelfWidth: Double
-    @AppStorage var comingWidth: Double
     @AppStorage var columns: Int
     @AppStorage var featuredHeight: Double
     @AppStorage("explore.poster.fillScreen") var fillFeaturedScreen = true
-    @AppStorage("explore.poster.balanced") var balancedFeatured = true
+    @AppStorage("explore.poster.balanced") var balancedFeatured = false
     let scope: DisplayScope
 
     init(_ scope: DisplayScope) {
@@ -25,7 +24,6 @@ struct PosterPreferences: DynamicProperty {
         _listWidth = AppStorage(wrappedValue: pad ? 140 : (scope == .library ? 76 : 90), "\(scope.rawValue).poster.list")
         _gridWidth = AppStorage(wrappedValue: pad ? 360 : 280, "\(scope.rawValue).poster.grid")
         _shelfWidth = AppStorage(wrappedValue: pad ? 230 : 150, "\(scope.rawValue).poster.shelf")
-        _comingWidth = AppStorage(wrappedValue: pad ? 110 : 64, "\(scope.rawValue).poster.coming")
         _featuredHeight = AppStorage(wrappedValue: pad ? 700 : 620, "\(scope.rawValue).poster.featured")
         // Preserve the previously saved library density.
         _columns = AppStorage(wrappedValue: pad ? 4 : 2, scope == .library ? "library.columns" : "discovery.columns")
@@ -43,9 +41,9 @@ struct PosterPreferences: DynamicProperty {
         let pad = UIDevice.current.userInterfaceIdiom == .pad
         listWidth = pad ? 140 : (scope == .library ? 76 : 90)
         gridWidth = pad ? 360 : 280; shelfWidth = pad ? 230 : 150
-        comingWidth = pad ? 110 : 64; columns = pad ? 4 : 2
+        columns = pad ? 4 : 2
         featuredHeight = pad ? 700 : 620
-        if scope == .explore { fillFeaturedScreen = true; balancedFeatured = true }
+        if scope == .explore { fillFeaturedScreen = true; balancedFeatured = false }
     }
 }
 
@@ -88,10 +86,6 @@ struct DisplayOptionsView: View {
                     Section("Explore shelves") {
                         sizeControl("Shelf poster width", value: preferences.$shelfWidth, range: 120...360, key: "shelf-size")
                         Text("Applies to Trending, Popular this season and Upcoming.").font(.caption).foregroundStyle(.secondary)
-                    }
-                } else {
-                    Section("Coming up for you") {
-                        sizeControl("Coming-up poster width", value: preferences.$comingWidth, range: 60...200, key: "coming-size")
                     }
                 }
                 Section {

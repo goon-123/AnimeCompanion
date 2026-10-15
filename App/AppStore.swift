@@ -41,6 +41,12 @@ final class AppStore: ObservableObject {
     @Published var lastTrackedAnime: Anime?
 
     init() {
+        // Apply the requested immersive default once; subsequent display choices stay saved.
+        if !UserDefaults.standard.bool(forKey: "explore.poster.immersive-v2") {
+            UserDefaults.standard.set(true, forKey: "explore.poster.fillScreen")
+            UserDefaults.standard.set(false, forKey: "explore.poster.balanced")
+            UserDefaults.standard.set(true, forKey: "explore.poster.immersive-v2")
+        }
         #if DEBUG
         let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
         let phaseTwoPreview = ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")

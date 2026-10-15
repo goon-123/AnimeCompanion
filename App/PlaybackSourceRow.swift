@@ -19,6 +19,7 @@ struct PlaybackSourceRow: View {
     let index: Int
     let preferred: Bool
     let openingPlayer: Bool
+    var addonName: String? = nil
     var play: () -> Void
     var information: () -> Void
     var body: some View {
@@ -31,6 +32,7 @@ struct PlaybackSourceRow: View {
                             .font(.caption2.weight(.bold)).tracking(0.7).foregroundStyle(.secondary)
                     }
                     PlaybackAudioBadge(audio: metadata.audio)
+                    if let addonName { Text("From \(addonName)").font(.caption).foregroundStyle(.secondary) }
                     Text(stream.displayName).font(.headline).foregroundStyle(.primary).lineLimit(2)
                     if !metadata.technicalSummary.isEmpty {
                         Text(metadata.technicalSummary).font(.caption.weight(.semibold)).foregroundStyle(.primary)
