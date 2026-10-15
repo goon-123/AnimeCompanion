@@ -33,7 +33,7 @@ final class WeeklyScheduleUITests: XCTestCase {
         XCTAssertTrue(app.buttons["release-entry-990203-sub-4"].isHittable)
         // The list remains freely scrollable below and above the automatic target.
         if list.exists { list.swipeUp(); list.swipeDown() }
-        else { app.swipeUp(); app.swipeDown() }
+        else { app.contentSurface.swipeUp(); app.contentSurface.swipeDown() }
         XCTAssertTrue(app.navigationBars["Schedule"].exists)
 
         app.segmentedControls["schedule-mode"].buttons["Airing Now"].tap()
@@ -88,8 +88,8 @@ final class WeeklyScheduleUITests: XCTestCase {
         openWeekly(in: app); return app
     }
     @MainActor private func openWeekly(in app: XCUIApplication) {
-        XCTAssertTrue(app.tabBars.buttons["Schedule"].waitForExistence(timeout: 20))
-        app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.appTab("Schedule").waitForExistence(timeout: 20))
+        app.appTab("Schedule").tap()
         app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         XCTAssertTrue(app.buttons["schedule-week"].waitForExistence(timeout: 15))
     }

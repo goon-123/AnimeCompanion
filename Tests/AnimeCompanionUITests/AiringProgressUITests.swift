@@ -8,7 +8,7 @@ final class AiringProgressUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-airing-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["Schedule"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("Schedule").tap()
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].exists)
         let behind = app.staticTexts["library-airing-status-990101"]
@@ -36,7 +36,7 @@ final class AiringProgressUITests: XCTestCase {
         app.buttons["Previous week"].tap()
         XCTAssertEqual(app.buttons["schedule-week"].value as? String, initial)
         capture("Schedule-Weekly-Releases")
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertFalse(app.buttons["schedule-behind-filter"].exists)
         let libraryBehind = app.buttons["library-entry-990101"]
         reveal(libraryBehind, app: app)
@@ -69,9 +69,9 @@ final class AiringProgressUITests: XCTestCase {
             capture("Library-Tracking-Without-Airing-iPad-Landscape")
             XCUIDevice.shared.orientation = .portrait
         }
-        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: app.tabBars.buttons["Schedule"])
+        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: app.appTab("Schedule"))
         XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 15), .completed)
-        app.tabBars.buttons["Schedule"].tap()
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
         reveal(behind, app: app); XCTAssertEqual(behind.label, "2 episodes behind")
     }
@@ -81,7 +81,7 @@ final class AiringProgressUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-playback-stale-resume", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30)); app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
         let watch = app.buttons["library-watch-1"]
         XCTAssertTrue(watch.waitForExistence(timeout: 45)); reveal(watch, app: app); watch.tap()
         let field = app.textFields["playback-episode-number"]
@@ -99,7 +99,7 @@ final class AiringProgressUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication, upward: Bool = true) {
-        for _ in 0..<16 { if element.isHittable { return }; if upward { app.swipeUp() } else { app.swipeDown() } }
+        for _ in 0..<16 { if element.isHittable { return }; if upward { app.contentSurface.swipeUp() } else { app.contentSurface.swipeDown() } }
         XCTAssertTrue(element.isHittable)
     }
     @MainActor private func capture(_ name: String) {

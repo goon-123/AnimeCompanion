@@ -1,3 +1,23 @@
+## Remaining Phase 2: watch-first screens and adaptive navigation — build 20
+
+Version 0.7.0 on `feature/phase-2-navigation`, based on merged PRs #9 and #10 (`788d96c3babb0f2068bab3060704f72fa3d09a63`). Phase 3 has not started.
+
+- Balanced Explore hero, direct Library editor action and one compact browsing-controls bar. Existing immersive/custom-height and independent poster-size preferences remain available.
+- Continue Watching projects watching/rewatching entries from AniList, resumes only the matching episode, excludes completed/unreleased/confirmed caught-up titles, and never writes tracking merely by opening playback.
+- Airing Now groups Ready, Caught up, Upcoming and Unverified titles and uses one compact release/progress block per card. English-dub catch-up still requires reported counts, not estimates.
+- Shorter detail header, watch/tracking/dub first, collapsible dub history/sources, bounded episode choices and More information. An explicit episode choice overrides automatic selection only for that playback sheet; ordinary resume still follows AniList.
+- Native adaptive iPad tabs/sidebar and browse/detail panes share the same split-navigation state as the compact stack. Detail selection/history is separate from browse paths. Genre shortcuts retain fresh-route initialization; Schedule still returns to Airing Now when selected.
+- Existing source EN/JA labels, filters, original text, English-first source identity, Library airing dots, OAuth hardening, source-refresh retention and filtered-pagination behavior are retained.
+
+Local validation:
+
+- Swift 6.2 core regressions: **156 active tests pass**, zero failures (161 enumerated, five optional/live checks skipped). Includes 12 new watch-first/episode/group/layout cases.
+- One repeat invocation hit an environment-specific SwiftPM `/proc/stat` runner crash before building. Retrying the unchanged command rebuilt the final core changes and passed the full suite; no tests were disabled.
+- All App and UI-test sources pass Swift frontend syntax parsing. Shell syntax and patch whitespace checks pass.
+- Five offline native Phase 2 cases are added to both focused/full iPhone and iPad suites, covering the watch queue, grouped Schedule, detail disclosures/explicit episode selection, browse/detail rotation and saved hero mode. Existing native tests target the actual pane and adaptive tabs rather than assuming a full-width iPad screen or a bottom-only bar.
+- This Linux workspace cannot compile SwiftUI or run iOS simulators. Native Release compilation, UI tests/screenshots and unsigned IPA validation remain **pending GitHub Actions**; syntax/core checks do not establish native success. Actual AniList sign-in, installed VidHub handoff and iPad multitasking/interactive-back behavior remain device checks.
+- Validation will be triggered by the PR. Per request, no completion polling or ongoing monitoring is performed.
+
 ## Phase 2 start: source audio clarity and Library airing dots — build 19
 
 Version 0.6.0 on `feature/phase-2-audio-sources`, based on merged PR #9.

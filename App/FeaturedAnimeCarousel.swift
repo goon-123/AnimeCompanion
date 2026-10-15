@@ -44,11 +44,14 @@ struct FeaturedAnimeCarousel: View {
 }
 
 private struct FeaturedAnimePanel: View {
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dynamicTypeSize) private var textSize
     let anime: Anime
     let topInset: CGFloat
     let background: PosterAccent
     @State private var preview: AnimeImagePreview?
+    @State private var showTracking = false
+    @State private var showSettings = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -74,10 +77,12 @@ private struct FeaturedAnimePanel: View {
                         }
                     }
                     Spacer()
-                }.padding(.horizontal, 20).padding(.top, max(90, topInset + 12))
+                }.padding(.horizontal, 20).padding(.top, max(16, topInset + 12))
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
+            .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
+            .sheet(isPresented: $showSettings) { SettingsView() }
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         let banner = anime.bannerImage.flatMap(URL.init(string:))
@@ -104,11 +109,29 @@ private struct FeaturedAnimePanel: View {
             AnimeGenres(anime: anime).accessibilityIdentifier("featured-genres-\(anime.id)")
             DiscoveryIndicators(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
-            NavigationLink(value: AnimeRoute(id: anime.id)) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { detailsAction; libraryAction }
+                VStack(alignment: .leading, spacing: 8) { detailsAction; libraryAction }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private var detailsAction: some View {
+            AnimeLink(id: anime.id) {
                 Label("View details", systemImage: "info.circle").font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 20).frame(minHeight: 44).silverGlass(in: Capsule())
             }.buttonStyle(.plain).accessibilityIdentifier("featured-details-\(anime.id)")
-        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private var libraryAction: some View {
+        Button {
+            if store.isSignedIn { showTracking = true } else { showSettings = true }
+        } label: {
+            Label(store.entry(for: anime.id) == nil ? "Library" : "In Library",
+                  systemImage: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
+                .font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
+                .silverGlass(in: Capsule())
+        }.buttonStyle(.plain).accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to Library" : "Edit Library tracking for \(anime.displayTitle)")
+            .disabled(store.isSignedIn && store.loadingLibrary)
+            .accessibilityIdentifier("featured-add-library-\(anime.id)")
     }
 }
 

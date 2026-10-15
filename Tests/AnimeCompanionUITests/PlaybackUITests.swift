@@ -6,10 +6,10 @@ final class PlaybackUITests: XCTestCase {
     func testPlaybackSetupRejectsInvalidURLAndKeepsAccountSettingsAccessible() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-reset-content-preferences"]; app.launch()
-        let settings = app.buttons["Account and settings"]
+        let settings = app.buttons["Account and settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 20)); settings.tap()
         let playback = app.buttons["playback-settings"]
-        for _ in 0..<6 where !playback.isHittable { app.swipeUp() }
+        for _ in 0..<6 where !playback.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(playback.waitForExistence(timeout: 10)); playback.tap()
         let field = app.secureTextFields["addon-install-url"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -20,19 +20,19 @@ final class PlaybackUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.tabBars.buttons["Explore"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.appTab("Explore").waitForExistence(timeout: 10))
     }
 
     @MainActor
     func testWatchEpisodeDefaultsToNextAniListEpisodeAndAllowsSetup() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-library-preview", "--ui-reset-content-preferences"]; app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 20)); app.tabBars.buttons["My Library"].tap()
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20)); app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); entry.tap()
         let watch = app.buttons["watch-in-vidhub"]
         XCTAssertTrue(watch.waitForExistence(timeout: 35))
-        for _ in 0..<8 where !watch.isHittable { app.swipeUp() }
+        for _ in 0..<8 where !watch.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(watch.isHittable); watch.tap()
         let episode = app.textFields["playback-episode-number"]
         XCTAssertTrue(episode.waitForExistence(timeout: 10)); XCTAssertEqual(episode.value as? String, "9")

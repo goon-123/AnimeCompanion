@@ -43,8 +43,10 @@ final class AppStore: ObservableObject {
     init() {
         #if DEBUG
         let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
-        aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient()
-        exploreCache = discoveryPreview ? ExploreCache(directory: nil) : ExploreCache()
+        let phaseTwoPreview = ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")
+        if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
+        else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }
+        exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             includeAdult = false; metadataSource = .aniList; automaticallyComplete = true
             airingProgressSource = .broadcast
@@ -56,6 +58,11 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")
             UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
             UserDefaults.standard.set(StreamAudioFilter.all.rawValue, forKey: "playback.audioFilter")
+        }
+        if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") {
+            for key in ["library.layout", "library.sort", "discovery.layout", "explore.poster.fillScreen", "explore.poster.balanced"] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
         }
         #else
         aniList = AniListClient()
@@ -71,6 +78,12 @@ final class AppStore: ObservableObject {
     func restore() async {
         guard !restored else { return }; restored = true
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
+            isSignedIn = true
+            do { entries = try PhaseTwoPreviewTransport.library(); savedAt = Date() }
+            catch { libraryError = error.localizedDescription }
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") {
             if ProcessInfo.processInfo.arguments.contains("--ui-airing-preview") {
                 UserDefaults.standard.set("list", forKey: "library.layout")
@@ -190,7 +203,7 @@ final class AppStore: ObservableObject {
     }
     func refreshLibraryIfNeeded(now: Date = Date()) async {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") { return }
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") || ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { return }
         #endif
         guard isSignedIn, let savedAt, now.timeIntervalSince(savedAt) >= 300 else { return }
         await reloadLibrary(preserveUndo: true)

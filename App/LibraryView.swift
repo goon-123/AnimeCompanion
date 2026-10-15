@@ -9,6 +9,7 @@ private enum LibrarySort: String, CaseIterable {
 struct LibraryView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
+    @EnvironmentObject private var playback: PlaybackStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.scenePhase) private var scenePhase
@@ -80,6 +81,9 @@ struct LibraryView: View {
                 ScrollView {
                     // Keep controls stable while the results below remain lazy.
                     VStack(alignment: .leading, spacing: 18) {
+                        if query.isEmpty && (selected == .watching || selected == .rewatching) {
+                            continueWatching(width: contentWidth)
+                        }
                         searchBar
                         if let anime = store.lastTrackedAnime, store.isVisible(anime), store.canUndo(anime.id) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -91,6 +95,10 @@ struct LibraryView: View {
                         statusTabs
                         layoutControls.zIndex(1)
                         sortingBar.zIndex(1)
+                        if layout == "list", posters.listPosterWidth(in: contentWidth) < posters.listWidth - 1 {
+                            Text("Covers fit this pane at \(Int(posters.listPosterWidth(in: contentWidth))) pt. Your saved width is \(Int(posters.listWidth)) pt.")
+                                .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("library-list-size-constrained")
+                        }
                         if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
                             Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -122,7 +130,7 @@ struct LibraryView: View {
                         Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
-                }.scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
+                }.accessibilityIdentifier("library-scroll").scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
               }
             } else { LibraryGuestView(showSettings: $showSettings) }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
@@ -145,6 +153,28 @@ struct LibraryView: View {
                     do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 }
             }
+    }
+    @ViewBuilder private func continueWatching(width: CGFloat) -> some View {
+        let queue = ContinueWatchingItem.items(entries: store.visibleEntries, playback: playback.progress, now: now)
+        if !queue.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Continue Watching").font(.title2.bold())
+                    Spacer()
+                    Text("\(queue.count)").font(.caption).foregroundStyle(.secondary)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(queue) { item in
+                            ContinueWatchingCard(item: item)
+                                .frame(width: min(max(240, width), textSize.isAccessibilitySize ? 380 : 320))
+                        }
+                    }.padding(.bottom, 2)
+                }
+                Text("Next unwatched episode from AniList. Resume times are saved on this device; playing never marks an episode watched.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }.accessibilityIdentifier("library-continue-watching")
+        }
     }
     private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { $0.status == selected } }
     private func airing(for entry: LibraryEntry) -> LibraryAiringProgress? {

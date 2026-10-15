@@ -1,6 +1,11 @@
 import SwiftUI
 import AnimeCore
 
+private struct DetailPlaybackRequest: Identifiable {
+    let id = UUID()
+    let episode: Int?
+}
+
 struct AnimeDetailView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
@@ -12,7 +17,10 @@ struct AnimeDetailView: View {
     @State private var error: String?
     @State private var synopsisExpanded = false
     @State private var showSettings = false
-    @State private var showPlayback = false
+    @State private var playbackRequest: DetailPlaybackRequest?
+    @State private var episodesExpanded = false
+    @State private var moreExpanded = false
+    @State private var episodeLimit = 24
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
     @State private var liveChartMediaID: Int?
@@ -36,18 +44,24 @@ struct AnimeDetailView: View {
                         watchButton(anime)
                         if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         progress(anime)
-                        synopsis(anime)
-                        metadata(anime)
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                                          events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
+                        synopsis(anime)
+                        episodes(anime)
                         related(anime)
-                        characters(anime)
-                        staff(anime)
                         recommendations(anime)
-                        trailer(anime)
-                        reviews(anime)
-                        externalLinks(anime)
-                        Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption).padding(.bottom)
+                        DisclosureGroup(isExpanded: $moreExpanded) {
+                            VStack(alignment: .leading, spacing: 20) {
+                                metadata(anime)
+                                characters(anime)
+                                staff(anime)
+                                trailer(anime)
+                                reviews(anime)
+                                externalLinks(anime)
+                                Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
+                            }.padding(.top, 14)
+                        } label: { Text("More information").font(.headline).frame(minHeight: 44) }
+                            .accessibilityIdentifier("detail-more-information")
                     }.padding(.horizontal, 16).padding(.bottom, 24).readableContent(width: 940)
                 }
             }
@@ -62,7 +76,9 @@ struct AnimeDetailView: View {
             }
             .task(id: "\(mediaID)-\(store.includeAdult)-\(store.metadataSource.rawValue)") { await load() }.refreshable { await load(refresh: true) }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showPlayback) { if let anime { WatchAnimeView(anime: anime) } }
+            .sheet(item: $playbackRequest) { request in
+                if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
+            }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
     }
     private func watchButton(_ anime: Anime) -> some View {
@@ -70,7 +86,7 @@ struct AnimeDetailView: View {
         let episode = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: playback.resumeEpisode(animeID: anime.id))
         let finished = anime.episodes.map { $0 > 0 && (entry?.progressValue ?? 0) >= $0 } ?? false
         let label = anime.format == "MOVIE" ? "Watch movie" : (finished ? "Replay episode \(episode)" : ((entry?.progressValue ?? 0) > 0 ? "Resume episode \(episode)" : "Watch episode \(episode)"))
-        return Button { showPlayback = true } label: {
+        return Button { playbackRequest = DetailPlaybackRequest(episode: nil) } label: {
             HStack(spacing: 14) {
                 Image(systemName: "play.fill").font(.title3)
                 VStack(alignment: .leading, spacing: 3) {
@@ -80,8 +96,50 @@ struct AnimeDetailView: View {
                 Spacer()
                 Image(systemName: "arrow.up.right").font(.subheadline.bold())
             }.padding(16).foregroundStyle(.black).background(.white, in: RoundedRectangle(cornerRadius: 16))
-        }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED")
+        }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED" || (store.isSignedIn && store.loadingLibrary))
             .accessibilityIdentifier("watch-in-vidhub")
+    }
+    private func episodes(_ anime: Anime) -> some View {
+        let entry = store.entry(for: anime.id)
+        let next = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)
+        let listed = AnimeEpisodeCatalog.episodes(anime: anime, visibleLimit: episodeLimit)
+        let released = LibraryAiringProgress(anime: anime, watched: entry?.progressValue ?? 0)?.released
+        return DetailCard(title: "Episodes") {
+            Text(anime.format == "MOVIE" ? "Movie" : (anime.episodes.flatMap { $0 > 0 ? $0 : nil }.map { "\($0) episodes planned" } ?? "Episode total not announced"))
+                .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup(isExpanded: $episodesExpanded) {
+                if listed.isEmpty {
+                    Text("No episode list is supplied by the metadata source. Choose an episode number in Watch in VidHub.")
+                        .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                } else {
+                    LazyVStack(spacing: 0) {
+                        ForEach(listed, id: \.self) { episode in
+                            let watched = episode <= (entry?.progressValue ?? 0)
+                            let upcoming = anime.status == "NOT_YET_RELEASED" || (released.map { episode > $0 } ?? false)
+                            Button { playbackRequest = DetailPlaybackRequest(episode: episode) } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: watched ? "checkmark.circle.fill" : (upcoming ? "clock" : "play.circle"))
+                                        .foregroundStyle(watched ? Color.green : Color.secondary)
+                                    Text(anime.format == "MOVIE" ? "Watch movie" : "Episode \(episode)").font(.subheadline.weight(.medium))
+                                    Spacer()
+                                    Text(watched ? "Watched" : (upcoming ? "Upcoming" : (episode == next ? "Next unwatched" : "Find sources")))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }.frame(minHeight: 48).contentShape(Rectangle())
+                            }.buttonStyle(.plain).disabled(upcoming).accessibilityIdentifier("detail-episode-\(episode)")
+                            Divider()
+                        }
+                    }
+                    if let total = anime.episodes, listed.count < min(100_000, total) {
+                        Button("Show next \(min(24, total - listed.count)) episodes") { episodeLimit = min(100_000, episodeLimit + 24) }
+                            .font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("detail-more-episodes")
+                    }
+                }
+                Text("Episode listings do not confirm stream or English audio availability. Choose an episode to check sources; tracking changes only with your watched-progress controls.")
+                    .font(.caption2).foregroundStyle(.secondary).padding(.top, 8)
+            } label: {
+                Text("Choose an episode").font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+            }.accessibilityIdentifier("detail-episodes-disclosure")
+        }
     }
     private func synopsis(_ anime: Anime) -> some View {
         DetailCard(title: "Synopsis") {

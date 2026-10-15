@@ -26,8 +26,14 @@ final class IPadLayoutTests: XCTestCase {
         let savedComing = comingSize.value as? String
         capture("Library-Display-Options")
         app.buttons["Done"].tap()
-        XCTAssertGreaterThan(app.buttons["library-entry-1"].frame.height, initialHeight + 50,
-                             "Increasing list poster width must visibly grow the actual row")
+        if app.scrollViews["library-scroll"].frame.width >= 660 {
+            XCTAssertGreaterThan(app.buttons["library-entry-1"].frame.height, initialHeight + 50,
+                                 "Increasing list poster width must visibly grow an unconstrained row")
+        } else {
+            XCTAssertTrue(app.staticTexts["library-list-size-constrained"].exists)
+            XCTAssertGreaterThanOrEqual(app.buttons["library-entry-1"].frame.height, initialHeight)
+            XCTAssertLessThanOrEqual(app.buttons["library-entry-1"].frame.maxX, app.scrollViews["library-scroll"].frame.maxX)
+        }
         capture("Library-Large-List-Portrait")
         app.buttons["library-coming-up"].tap()
         let release = app.buttons["release-entry-1-sub-9"]
@@ -90,11 +96,13 @@ final class IPadLayoutTests: XCTestCase {
         reveal(shelfSize, in: app)
         setSlider(shelfSize, position: 1, bounds: 120...360, accepting: 320...360)
         let savedShelf = shelfSize.value as? String
+        let selectedShelfWidth = CGFloat(sliderPoints(shelfSize))
         capture("Explore-Shelf-Size-Control")
         app.buttons["Done"].tap()
         reveal(shelf, in: app)
+        let expectedShelfWidth = min(selectedShelfWidth, app.scrollViews["explore-scroll"].frame.width * 0.85)
         let enlargedShelf = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            shelf.frame.width > originalShelfWidth + 70
+            abs(shelf.frame.width - expectedShelfWidth) <= 3 && shelf.frame.width >= originalShelfWidth
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [enlargedShelf], timeout: 10), .completed,
                        "The visible shelf must grow after the display sheet finishes dismissing")
@@ -113,7 +121,12 @@ final class IPadLayoutTests: XCTestCase {
         setSlider(app.sliders["explore-list-size"], position: 1, bounds: 60...240, accepting: 220...240)
         capture("Explore-List-Size-Control")
         app.buttons["Done"].tap()
-        XCTAssertGreaterThan(entry.frame.height, initialListHeight + 60)
+        if app.scrollViews["discovery-scroll"].frame.width >= 680 {
+            XCTAssertGreaterThan(entry.frame.height, initialListHeight + 60)
+        } else {
+            XCTAssertTrue(app.staticTexts["explore-list-size-constrained"].exists)
+            XCTAssertGreaterThanOrEqual(entry.frame.height, initialListHeight)
+        }
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-dub-")).firstMatch.exists)
         capture("Explore-Large-List-Portrait")
 
@@ -122,15 +135,16 @@ final class IPadLayoutTests: XCTestCase {
         let initialGridWidth = entry.frame.width
         openDisplay("explore", in: app)
         setSlider(app.sliders["explore-grid-size"], position: 0, bounds: 120...480, accepting: 120...200)
+        let savedGridMaximum = CGFloat(sliderPoints(app.sliders["explore-grid-size"]))
         app.buttons["Done"].tap()
-        XCTAssertLessThan(entry.frame.width, initialGridWidth - 70,
-                          "Maximum grid poster size must change the artwork even with the same row count")
+        XCTAssertEqual(entry.frame.width, min(initialGridWidth, savedGridMaximum), accuracy: 3,
+                       "Grid artwork must fit both the saved maximum and its split-view cell")
         openDisplay("explore", in: app)
         setSlider(app.sliders["explore-grid-size"], position: 1, bounds: 120...480, accepting: 420...480)
         app.buttons["Done"].tap()
         let twoColumnWidth = entry.frame.width
         chooseRows(3, button: "discovery-columns", in: app)
-        XCTAssertGreaterThan(twoColumnWidth, entry.frame.width + 70)
+        XCTAssertGreaterThan(twoColumnWidth, entry.frame.width + 15)
         capture("Explore-Three-Columns-Portrait")
         rotate(.landscapeLeft, in: app)
         capture("Explore-Three-Columns-Landscape")
@@ -139,12 +153,15 @@ final class IPadLayoutTests: XCTestCase {
         let genres = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-genres-")).firstMatch
         XCTAssertTrue(genres.exists)
         XCTAssertTrue(genres.label.hasPrefix("Genres: "))
-        let firstRow = Array(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).allElementsBoundByIndex.prefix(8))
-        XCTAssertEqual(firstRow.count, 8)
+        let pane = app.scrollViews["discovery-scroll"].frame
+        let fitting = min(8, max(1, Int(floor((min(pane.width, 1280) - 24 + 12) / 92))))
+        XCTAssertTrue(app.buttons["discovery-columns"].label.contains("8 per row"), "Resizing must retain the saved density")
+        let firstRow = Array(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "discovery-entry-")).allElementsBoundByIndex.prefix(fitting))
+        XCTAssertEqual(firstRow.count, fitting)
         for tile in firstRow {
             XCTAssertEqual(tile.frame.minY, firstRow[0].frame.minY, accuracy: 3)
-            XCTAssertGreaterThanOrEqual(tile.frame.minX, 0)
-            XCTAssertLessThanOrEqual(tile.frame.maxX, app.frame.width)
+            XCTAssertGreaterThanOrEqual(tile.frame.minX, pane.minX)
+            XCTAssertLessThanOrEqual(tile.frame.maxX, pane.maxX)
         }
         chooseRows(3, button: "discovery-columns", in: app)
         app.terminate(); app.launch()
@@ -193,7 +210,7 @@ final class IPadLayoutTests: XCTestCase {
         capture("Detail-Portrait")
         for _ in 0..<6 {
             if app.staticTexts["English dub schedule"].isHittable { break }
-            app.swipeUp()
+            app.contentSurface.swipeUp()
         }
         XCTAssertTrue(app.staticTexts["English dub schedule"].isHittable)
         capture("Detail-Dub-Schedule-Portrait")
@@ -202,7 +219,7 @@ final class IPadLayoutTests: XCTestCase {
     @MainActor
     private func selectTab(_ title: String, in app: XCUIApplication) {
         // iPadOS can put the native tab bar at the top instead of the bottom.
-        let tab = app.tabBars.buttons[title].firstMatch
+        let tab = app.appTab(title).firstMatch
         if tab.waitForExistence(timeout: 10) { tab.tap() }
         else {
             let button = app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
@@ -229,7 +246,7 @@ final class IPadLayoutTests: XCTestCase {
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<6 {
             if element.isHittable { return }
-            app.swipeUp()
+            app.contentSurface.swipeUp()
         }
         XCTAssertTrue(element.isHittable)
     }

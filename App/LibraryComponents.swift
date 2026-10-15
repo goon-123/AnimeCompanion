@@ -12,7 +12,7 @@ struct LibraryAnimeRow: View {
     var body: some View {
       VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .top, spacing: 12) {
-            NavigationLink(value: AnimeRoute(id: anime.id)) {
+            AnimeLink(id: anime.id) {
                 HStack(alignment: .top, spacing: 11) {
                     AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                     VStack(alignment: .leading, spacing: 8) {
@@ -47,7 +47,7 @@ struct LibraryAnimeTile: View {
     var posterWidth: CGFloat = 360
     var body: some View {
       VStack(alignment: .leading, spacing: 8) {
-        NavigationLink(value: AnimeRoute(id: anime.id)) {
+        AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geometry in
                     AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)

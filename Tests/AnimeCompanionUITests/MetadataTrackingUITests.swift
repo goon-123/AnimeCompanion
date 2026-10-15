@@ -6,13 +6,13 @@ final class MetadataTrackingUITests: XCTestCase {
     func testAdultSettingPersistsAndHidesExistingLibraryEntries() throws {
         let app = launchPreview()
         defer { reset(app) }
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].waitForExistence(timeout: 45))
         XCTAssertFalse(app.buttons["library-entry-990001"].exists)
         setAdult(true, app: app)
         XCTAssertTrue(app.buttons["library-entry-990001"].waitForExistence(timeout: 15))
         app.terminate(); app.launchArguments.removeAll { $0 == "--ui-reset-content-preferences" }; app.launch()
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-990001"].waitForExistence(timeout: 45))
         setAdult(false, app: app)
         XCTAssertFalse(app.buttons["library-entry-990001"].exists)
@@ -60,17 +60,17 @@ final class MetadataTrackingUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-content-preview", "--ui-livechart-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["My Library"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30))
         return app
     }
     @MainActor private func openCowboy(_ app: XCUIApplication) {
-        app.tabBars.buttons["My Library"].tap()
+        app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); reveal(entry, app: app); entry.tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 45))
     }
     @MainActor private func setAdult(_ enabled: Bool, app: XCUIApplication) {
-        app.buttons["Account and settings"].tap()
+        app.buttons["Account and settings"].firstMatch.tap()
         let toggle = app.switches["settings-adult-content"]
         reveal(toggle, app: app)
         if (toggle.value as? String == "1") != enabled {
@@ -80,7 +80,7 @@ final class MetadataTrackingUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        let scroll = app.scrollViews["anime-detail-scroll"].exists ? app.scrollViews["anime-detail-scroll"] : app
+        let scroll = app.contentSurface
         for _ in 0..<20 {
             let bounds = scroll.frame
             if element.isHittable, element.frame.midY > max(bounds.minY, app.navigationBars.firstMatch.frame.maxY) + 20,
