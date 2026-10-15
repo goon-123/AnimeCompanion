@@ -7,3 +7,5 @@ xcuserdata/
 .DS_Store
 AnimeCompanion.xcodeproj/
 App/Info.plist
+Tools/SeanimeRuntime/node_modules/
+App/SeanimeRuntimeResources/

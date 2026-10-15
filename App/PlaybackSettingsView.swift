@@ -16,6 +16,8 @@ struct PlaybackSettingsView: View {
                 Link("VidHub integration help", destination: URL(string: "https://vidhub.okaapps.com/3rd-party-app-integration/")!)
             }
             Section("Discover add-ons") {
+                NavigationLink("Seanime extensions & TorBox") { SeanimeSettingsView() }
+                    .accessibilityIdentifier("seanime-settings")
                 NavigationLink { AddonDirectoryBrowser() } label: { Label("Browse stremio-addons.net", systemImage: "globe") }
                     .accessibilityIdentifier("browse-addon-directory")
                 NavigationLink { AddonCatalogHome() } label: { Label("Browse installed catalogs", systemImage: "rectangle.stack") }
@@ -73,7 +75,7 @@ struct PlaybackSettingsView: View {
             }
             Section("Playback support") {
                 Text("Supports standard HTTPS Stremio manifests with catalogs, metadata, streams and subtitles. Native anime Watch uses AniList/MAL IDs; installed catalogs and exact-ID lookup also support IMDb, Kitsu and provider IDs. Enabled compatible stream sources appear together, with English-audio choices first.")
-                Text("Not every add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories, JavaScript plugins and legacy/IPFS transports are not supported natively.")
+                Text("Not every Stremio add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories and legacy/IPFS transports are not supported natively. Supported Seanime torrent-provider scripts run separately in Seanime extensions & TorBox; other plugin types remain unsupported.")
                 Text("Native anime Watch saves resume on this device. Catalog/exact-ID playback does not save resume here. Update AniList using the watched-progress controls.")
             }.font(.caption).foregroundStyle(.secondary)
         }.navigationTitle("Add-ons & playback").navigationBarTitleDisplayMode(.inline)

@@ -204,7 +204,9 @@ final class PlaybackStore: ObservableObject {
             let url = try VidHubPlayback.untrackedLaunchURL(stream: stream, title: title, subtitle: subtitle)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
-                playerMessage = "Preview catalog launch · \(title) · \(stream.displayName)"; return
+                playerMessage = "Preview catalog launch · \(title) · \(stream.displayName)"
+                if ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview") { playerMessage? += " · \(stream.videoURL?.lastPathComponent ?? "missing URL")" }
+                return
             }
             #endif
             // Invalidate an older tracked request before an untracked handoff.

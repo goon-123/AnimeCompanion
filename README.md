@@ -1,5 +1,19 @@
 # Anime Companion
 
+### Standalone Seanime torrent providers + TorBox (0.11.0 / build 25)
+
+Settings → Add-ons & playback → **Seanime extensions & TorBox** adds an independent on-device runtime for Seanime `anime-torrent-provider` JavaScript/TypeScript. **No Seanime server or separate server app is required. Only TorBox is integrated; Real-Debrid is not.** Enter your TorBox key inside the app; it remains in the device-only Keychain and is never passed to extension code.
+
+Browse the real [Seanime Community Marketplace](https://bas1874.github.io/Seanime-Marketplace/), copy/select an extension JSON link, then review its source preview, capabilities and proposed network hosts before explicitly trusting/installing it. Manage multiple independent snapshots with enable/remove controls, provider preferences and approved public HTTPS hosts. Updating code requires another review; changing a preference does not automatically authorize a new hostname. Marketplace data is not mirrored or redistributed. Known adult providers, including Sukebei, follow the app's adult-content setting; the website controls its own web filters and providers can return unrated content.
+
+**Search Seanime torrent providers** is available from native Watch with its selected AniList episode context, or search independently from settings. This initial runtime uses **regular title search**, not Seanime Smart Search or automatic season matching. It compiles real TypeScript on-device in a disposable Web Worker with a native approved-host GET bridge. It includes a limited inert DOM adapter and conservative filename hints, not every Seanime runtime helper. Filename-based EN/JA audio badges and English-first ordering remain visible; they do not verify embedded audio tracks. Unsupported APIs and failed network requests are not presented as successful empty searches.
+
+Tap a torrent to review the TorBox action. **Cached only** starts on. Explicitly confirm adding the torrent, then choose the exact video file—especially for batches. Only the selected file's CDN link goes to VidHub, not an API-key permalink. Readiness uses a manual refresh rather than polling/resubmission. Successful cloud job references are remembered locally for that TorBox key; forgetting a reference or removing an extension does not delete the cloud torrent. Changing/removing the key clears local job references. An interrupted submission may have reached TorBox: check your dashboard before adding again.
+
+Watch-context playback uses the existing local-resume callback for the episode you explicitly selected; independent searches remain untracked. Neither route automatically writes AniList watched progress. Providers and their results are never allowed to choose a different episode or file automatically. ChromeDP, CryptoJS, `$scannerUtils`/Smart Search, custom-header/POST fetches, torrent-file parsing, UI plugins, manga and online-streaming providers are not supported by this initial runtime. There is no local P2P engine. Runtime limits, build steps, third-party notices and validation boundaries are detailed in [Tools/SeanimeRuntime](Tools/SeanimeRuntime/README.md).
+
+Local core/runtime checks pass; actual SwiftUI/WebKit compilation, native screenshots, live provider/TorBox behavior and IPA packaging are not implied. See `BUILD_STATUS.md`. The three supplied manifests were inspected and their TypeScript transpiled; they have not been end-to-end tested with a live TorBox account.
+
 ### Add-on directory and standard resources (0.10.0 / build 24)
 
 Settings → Add-ons & playback → **Browse stremio-addons.net** opens the real directory inside the app, starting in its Anime category. Use the site's own search, filters and provider configuration pages. HTTPS `manifest.json` and `stremio://` install links (including new-window links) open a native manifest/capability review; nothing installs until you confirm. Cancel leaves the installed collection unchanged. Configuration-required manifests direct you to the provider's setup page instead of saving an unusable connection. The site's own content preferences apply to its web pages. If web verification blocks a page, open it in Safari and paste the resulting manifest link.
@@ -124,7 +138,7 @@ Full add-on URLs are stored only in this device's Keychain, never bundled in the
 
 The client honors the manifest's stream resource types and ID prefixes. It requests the anime's AniList ID and entry-relative episode number, then tries its MyAnimeList ID if the first response is empty or the identifier is rejected. Movies use movie IDs without a fabricated season or episode suffix. AIOStreams remains responsible for matching those IDs to provider content, source ordering, and reported quality/language details. The app does not infer that every stream is dubbed from the title's general dub availability.
 
-Direct HTTP(S) video links are supported. Torrent-only results, webpage links and streams requiring custom playback headers are labeled unavailable; enable a streaming service or playback proxy in your add-on for these. Multiple enabled Stremio manifests accepting AniList/MAL IDs can run together, with at most four provider lookups at once. It does not run Nuvio JavaScript plugins or import add-on catalogs.
+Direct HTTP(S) video links are supported. Stremio torrent-only results, webpage links and streams requiring custom playback headers are labeled unavailable; enable a streaming service or playback proxy in your Stremio add-on for those. Standard Stremio catalogs and exact-ID playback are described above. Separately, Seanime torrent-provider search can send a user-selected torrent/file through TorBox. It does not run Nuvio plugins or arbitrary Seanime UI plugins.
 
 VidHub's `/play` interface supports external subtitles and resume. A random per-play request ID associates its callback with the selected episode. Stopped playback saves a local position; finished playback clears that episode's resume point and marks it finished locally. Errors and cancellation preserve existing progress. Missing callbacks (for example, after force-quitting VidHub) cannot update the saved position. Callbacks never change AniList automatically; use the watched-progress controls or **Mark episode watched on AniList** after a finished playback.
 
@@ -150,13 +164,13 @@ After packaging, the workflow also checks the public AniList, dub, news and Live
 
 ## Build on a Mac
 
-Install Xcode 26 or newer and XcodeGen (`brew install xcodegen`), then run:
+Install Xcode 26 or newer, Node.js 22+ and XcodeGen (`brew install xcodegen`), then run:
 
 ```sh
 bash scripts/build-ios.sh
 ```
 
-For simulator testing, run `xcodegen generate`, open `AnimeCompanion.xcodeproj`, select an iPhone or iPad simulator and run the AnimeCompanion scheme. For a development-signed device build, configure your Apple development team in Xcode.
+For simulator testing, run `npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund`, then `npm --prefix Tools/SeanimeRuntime run build` before `xcodegen generate`. Open `AnimeCompanion.xcodeproj`, select an iPhone or iPad simulator and run the AnimeCompanion scheme. For a development-signed device build, configure your Apple development team in Xcode.
 
 ## Check the data layer
 
@@ -191,7 +205,7 @@ Recorded episodes take priority over estimates. If history is missing, a next du
 
 Dub data refreshes on every return to the foreground and every ten minutes while the app is active, without blocking Explore. Failed requests retry after one minute. Discovery, details, library counts and the visible dub schedule observe the same updates; switching tabs does not stop the timer. Requests bypass the device HTTP cache, while concurrent views share requests and reuse the ten-minute release cache between automatic checks. Backgrounding cancels the timer; returning starts a fresh check. The app cannot make an upstream provider publish faster: feeds older than three days, missing update timestamps and unsuccessful checks remain visible instead of looking current.
 
-Seanime plugins were inspected to locate upstream sources and understand their schemas. This app does not run Seanime plugins or redistribute their marketplace database.
+Seanime sources were inspected to understand their public provider/API contracts. Build 25 adds the independent, limited torrent-provider runtime described above; it does not embed the Seanime Go server, run arbitrary UI plugins or redistribute the marketplace database. Bundled compiler/DOM dependency notices are generated into the app and available in Seanime settings → Runtime licenses.
 
 ## Current verification
 
