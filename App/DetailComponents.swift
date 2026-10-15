@@ -12,6 +12,32 @@ struct DetailCard<Content: View>: View {
     }
 }
 
+/// The accessibility identifier belongs only to the toggle button. Assigning
+/// it to a containing group can overwrite identifiers of episode actions.
+struct DetailDisclosure<Content: View>: View {
+    let title: String
+    let identifier: String
+    @Binding var isExpanded: Bool
+    let content: Content
+    init(_ title: String, identifier: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content) {
+        self.title = title; self.identifier = identifier; _isExpanded = isExpanded; self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button { isExpanded.toggle() } label: {
+                HStack(spacing: 12) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down").font(.caption.bold())
+                        .accessibilityHidden(true)
+                }.frame(minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier(identifier)
+                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            if isExpanded { content }
+        }
+    }
+}
+
 struct AnimeDetailHero: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -192,11 +218,9 @@ struct AnimeDubSchedule: View {
             }
             if loading { ProgressView("Checking this anime’s dub releases…") }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            DisclosureGroup(isExpanded: $expandedSchedule) {
+            DetailDisclosure("Release dates, history and sources", identifier: "detail-dub-disclosure", isExpanded: $expandedSchedule) {
                 scheduleDetails
-            } label: {
-                Text("Release dates, history and sources").font(.subheadline.weight(.medium)).frame(minHeight: 44)
-            }.accessibilityIdentifier("detail-dub-disclosure")
+            }
         }
     }
     private var scheduleDetails: some View {

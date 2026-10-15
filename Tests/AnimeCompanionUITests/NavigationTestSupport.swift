@@ -31,4 +31,35 @@ extension XCUIApplication {
         let back = buttons["back-to-browsing"]
         if back.exists { back.tap() } else { navigationBars.buttons.firstMatch.tap() }
     }
+
+    @MainActor func enterPlaybackEpisode(_ number: Int) {
+        let field = textFields["playback-episode-number"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        let expected = String(number)
+        for _ in 0..<2 {
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            // Cold simulator keyboards can drop the last key if clearing and
+            // typing share one event. Keep both operations observable.
+            let count = (field.value as? String)?.count ?? 0
+            if count > 0 { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count)) }
+            field.typeText(expected)
+            let typed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: field)
+            if XCTWaiter.wait(for: [typed], timeout: 5) == .completed { break }
+        }
+        XCTAssertEqual(field.value as? String, expected)
+    }
+
+    @MainActor func revealInContent(_ element: XCUIElement, upward: Bool = true) {
+        for _ in 0..<24 {
+            let surface = contentSurface
+            let bounds = surface.frame
+            if element.isHittable, element.frame.midY > bounds.minY + 12,
+               element.frame.midY < bounds.maxY - 35 { return }
+            let backwards = element.exists && element.frame.height > 0 ? element.frame.midY < bounds.midY : !upward
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.35 : 0.75))
+            let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.70 : 0.40))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.05)
+        }
+        XCTAssertTrue(element.isHittable, "Could not reveal \(element.identifier)")
+    }
 }

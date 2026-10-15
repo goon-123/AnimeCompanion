@@ -208,10 +208,7 @@ final class IPadLayoutTests: XCTestCase {
         app.buttons["Close enlarged image"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].isHittable)
         capture("Detail-Portrait")
-        for _ in 0..<6 {
-            if app.staticTexts["English dub schedule"].isHittable { break }
-            app.contentSurface.swipeUp()
-        }
+        app.revealInContent(app.staticTexts["English dub schedule"])
         XCTAssertTrue(app.staticTexts["English dub schedule"].isHittable)
         capture("Detail-Dub-Schedule-Portrait")
     }

@@ -53,8 +53,9 @@ jobs:
   focused-ui:
     name: Focused ${{ matrix.device }} layout and playback
     runs-on: macos-15
-    # Seventeen cases plus a cold simulator boot and one retained XCTest retry.
-    timeout-minutes: 30
+    # The expanded Phase 1/2 suites include native navigation and a cold boot.
+    # Build 20's iPad runs exhausted the former 30/35-minute job limits.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +119,7 @@ jobs:
   simulator:
     name: ${{ matrix.label }}
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

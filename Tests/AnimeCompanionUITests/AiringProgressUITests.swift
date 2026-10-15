@@ -91,7 +91,7 @@ final class AiringProgressUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["playback-anilist-progress"].label.contains("8 episodes watched"))
         capture("AniList-Default-VidHub-Episode")
         source.tap(); XCTAssertTrue(app.staticTexts["Preview launch · Episode 9"].waitForExistence(timeout: 10))
-        field.tap(); field.typeText(XCUIKeyboardKey.delete.rawValue + "10")
+        app.enterPlaybackEpisode(10)
         app.buttons["playback-episode-go"].tap()
         let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "anilist:1:10.json"), object: source)
         XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 15), .completed)

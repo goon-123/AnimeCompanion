@@ -50,7 +50,7 @@ struct AnimeDetailView: View {
                         episodes(anime)
                         related(anime)
                         recommendations(anime)
-                        DisclosureGroup(isExpanded: $moreExpanded) {
+                        DetailDisclosure("More information", identifier: "detail-more-information", isExpanded: $moreExpanded) {
                             VStack(alignment: .leading, spacing: 20) {
                                 metadata(anime)
                                 characters(anime)
@@ -60,8 +60,7 @@ struct AnimeDetailView: View {
                                 externalLinks(anime)
                                 Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
                             }.padding(.top, 14)
-                        } label: { Text("More information").font(.headline).frame(minHeight: 44) }
-                            .accessibilityIdentifier("detail-more-information")
+                        }
                     }.padding(.horizontal, 16).padding(.bottom, 24).readableContent(width: 940)
                 }
             }
@@ -107,7 +106,7 @@ struct AnimeDetailView: View {
         return DetailCard(title: "Episodes") {
             Text(anime.format == "MOVIE" ? "Movie" : (anime.episodes.flatMap { $0 > 0 ? $0 : nil }.map { "\($0) episodes planned" } ?? "Episode total not announced"))
                 .font(.caption).foregroundStyle(.secondary)
-            DisclosureGroup(isExpanded: $episodesExpanded) {
+            DetailDisclosure("Choose an episode", identifier: "detail-episodes-disclosure", isExpanded: $episodesExpanded) {
                 if listed.isEmpty {
                     Text("No episode list is supplied by the metadata source. Choose an episode number in Watch in VidHub.")
                         .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
@@ -136,9 +135,7 @@ struct AnimeDetailView: View {
                 }
                 Text("Episode listings do not confirm stream or English audio availability. Choose an episode to check sources; tracking changes only with your watched-progress controls.")
                     .font(.caption2).foregroundStyle(.secondary).padding(.top, 8)
-            } label: {
-                Text("Choose an episode").font(.subheadline.weight(.semibold)).frame(minHeight: 44)
-            }.accessibilityIdentifier("detail-episodes-disclosure")
+            }
         }
     }
     private func synopsis(_ anime: Anime) -> some View {

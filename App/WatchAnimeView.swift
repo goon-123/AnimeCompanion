@@ -59,6 +59,7 @@ struct WatchAnimeView: View {
                         if saved.finished { Label("Finished in VidHub on this device", systemImage: "checkmark.circle").foregroundStyle(.mint) }
                         else if saved.position > 0 {
                             Text("Resume at \(timeLabel(saved.position))").font(.subheadline)
+                                .accessibilityIdentifier("playback-resume-position")
                             Toggle("Start from beginning", isOn: $restart)
                         }
                     }

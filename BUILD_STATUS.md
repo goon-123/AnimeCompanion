@@ -1,3 +1,18 @@
+## Phase 2 native-readiness fixes — build 21
+
+Version 0.7.1 on `fix/phase-2-validation`, based on merged PR #11 (`4f718dad27a2f48e2eeb8323d4d646b69bb612ff`). Phase 3 has not started: Phase 2 is merged and compiles, but native validation is not yet green.
+
+Reviewed [build 20 validation](https://github.com/goon-123/AnimeCompanion/actions/runs/38731157756), including the retained iPhone/iPad accessibility hierarchies and test logs. The Release build and core job passed. Weekly iPhone passed; focused/full iPhone and weekly iPad had failures; the other iPad jobs were cancelled. A successful IPA build does not establish UI correctness.
+
+- Confirmed iPhone hierarchies assign `explore-browsing-controls` to Search, dub filters and display buttons, overwriting their identifiers. Remove that container identifier and the equivalent Continue Watching container identifier. Keep identifiers on the individual controls.
+- Confirmed iPad portrait shows the empty detail placeholder with the browse sidebar hidden. Bind split-view visibility explicitly to `.all`, and restore browsing visibility on genre navigation, Schedule selection and the Browse action. Keep native compact-column behavior and browse/detail history.
+- Put detail expansion identifiers on explicit toggle buttons, so episode actions retain their own identifiers when expanded. The same dub history, episode choices and secondary information remain available.
+- Distinguish the playback sheet's resume label from the identical Continue Watching text behind it. Retain the exact episode-10 source assertion, assert that the sheet's resume disappears, then confirm the queue still resumes AniList's episode 9 at 2:05. No progress-storage or callback logic changes.
+- Preserve positive UI assertions while waiting for typed episode values and using bounded, directional gestures to avoid overshooting the shorter detail header. Add an offline initial-tab browsing check across portrait/landscape/portrait. All six Phase 2 native cases remain in focused/full iPhone and iPad suites.
+- Give the expanded focused/full suites 45/60-minute job limits; build 20's iPad jobs were cancelled at the former 30/35-minute limits. Per-test retries remain bounded, and no assertions or suites are disabled.
+
+Local validation: all **156 active core tests pass**, zero failures (161 enumerated, five optional/live skips), by directly executing the freshly rebuilt Swift 6.2 XCTest bundle after the container's SwiftPM test runner hit its `/proc/stat` runtime crash. No tests were disabled. App/UI-test syntax parsing, core type checking, shell syntax, YAML parsing and whitespace checks pass. Native build/UI checks for build 21 remain pending; their completion will not be monitored automatically. Phase 3 remains deferred until Phase 2 validation is reviewed.
+
 ## Remaining Phase 2: watch-first screens and adaptive navigation — build 20
 
 Version 0.7.0 on `feature/phase-2-navigation`, based on merged PRs #9 and #10 (`788d96c3babb0f2068bab3060704f72fa3d09a63`). Phase 3 has not started.

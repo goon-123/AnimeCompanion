@@ -5,12 +5,38 @@ import UIKit
 /// transport; opening details/episodes must not mutate AniList progress.
 final class PhaseTwoNavigationUITests: XCTestCase {
     @MainActor
+    func testTabsExposeBrowsingBeforeAnyDetailSelectionInBothOrientations() throws {
+        let app = launch()
+        let orientations: [UIDeviceOrientation] = UIDevice.current.userInterfaceIdiom == .pad ? [.portrait, .landscapeLeft, .portrait] : [.portrait]
+        for orientation in orientations {
+            XCUIDevice.shared.orientation = orientation
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    orientation.isLandscape ? app.frame.width > app.frame.height : app.frame.height > app.frame.width
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 10), .completed)
+            }
+            app.appTab("Schedule").tap()
+            let mode = app.segmentedControls["schedule-mode"]
+            XCTAssertTrue(mode.waitForExistence(timeout: 10)); XCTAssertTrue(mode.isHittable)
+            app.appTab("My Library").tap()
+            XCTAssertTrue(app.buttons["continue-watch-1"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["continue-watch-1"].isHittable)
+            app.appTab("Explore").tap()
+            for id in ["explore-search", "explore-dub-filter-toolbar", "explore-display-options"] {
+                XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 10)); XCTAssertTrue(app.buttons[id].isHittable)
+            }
+        }
+        capture("Initial-Tab-Browsing-Visibility")
+    }
+
+    @MainActor
     func testContinueWatchingUsesAniListEpisodeAndKeepsTrackingUnchanged() throws {
         let app = launch()
         app.appTab("My Library").tap()
         let watch = app.buttons["continue-watch-1"]
         XCTAssertTrue(watch.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["continue-episode-1"].label.contains("9"))
+        XCTAssertTrue(app.buttons["continue-details-1"].label.contains("Episode 9"))
         XCTAssertFalse(app.staticTexts["continue-resume-1"].exists, "Episode 1's stale local record must not label episode 9 as resumed")
         XCTAssertFalse(app.buttons["continue-watch-5"].exists, "Completed movies stay out of the queue")
         XCTAssertFalse(app.buttons["continue-watch-990102"].exists, "A caught-up title must not offer its future episode")
@@ -94,10 +120,10 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10))
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCTAssertTrue(search.exists)
-            XCTAssertLessThanOrEqual(search.frame.maxX, app.scrollViews["anime-detail-scroll"].frame.minX + 2)
             XCUIDevice.shared.orientation = .landscapeLeft
             let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
             XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 10), .completed)
+            XCTAssertLessThanOrEqual(search.frame.maxX, app.scrollViews["anime-detail-scroll"].frame.minX + 2)
             XCTAssertEqual(search.value as? String, "Phase")
             XCTAssertEqual(app.staticTexts["discovery-count"].label, count)
             XCTAssertTrue(app.staticTexts["detail-title"].exists)
@@ -159,11 +185,7 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         return app
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
-        for _ in 0..<24 {
-            if element.isHittable { return }
-            if upward { app.contentSurface.swipeUp() } else { app.contentSurface.swipeDown() }
-        }
-        XCTAssertTrue(element.isHittable, "Could not reveal \(element.identifier)")
+        app.revealInContent(element, upward: upward)
     }
     @MainActor private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
