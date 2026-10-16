@@ -146,7 +146,7 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
   playback-fixes:
-    name: Pagination and TorBox ${{ matrix.device }} regressions
+    name: Combined stream selection ${{ matrix.device }} regression
     runs-on: macos-15
     timeout-minutes: 30
     strategy:
@@ -164,8 +164,8 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Verify reported scrolling and TorBox regressions
-        run: bash scripts/check-simulator.sh ${{ matrix.device }} fixes
+      - name: Verify all-provider search and inline TorBox handoff
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} streams
       - name: Upload targeted screenshots and results
         if: always()
         uses: actions/upload-artifact@v4

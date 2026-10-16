@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes ]]; then
-  echo "Expected full, focused, weekly or fixes test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams ]]; then
+  echo "Expected full, focused, weekly, fixes or streams test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -27,7 +27,7 @@ if [[ "$test_scope" == weekly ]]; then
   result_path="build/Weekly-${device_family}.xcresult"
   screenshot_path="build/weekly-${device_family}-screenshots"
 fi
-if [[ "$test_scope" == fixes ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams ]]; then
   result_path="build/Fixes-${device_family}.xcresult"
   screenshot_path="build/fixes-${device_family}-screenshots"
 fi
@@ -144,6 +144,12 @@ if [[ "$test_scope" == fixes ]]; then
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd
   )
 fi
+if [[ "$test_scope" == streams ]]; then
+  # The eight other build-28 cases already passed on both device families.
+  # This test-only follow-up verifies the remaining combined-screen flow;
+  # fixes/focused/full continue to include the complete regression coverage.
+  test_arguments=(-only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff)
+fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
@@ -152,7 +158,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

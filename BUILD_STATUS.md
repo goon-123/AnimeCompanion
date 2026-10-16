@@ -9,6 +9,8 @@ Version 0.12.0. The user tested build 27 and confirmed Explore scrolling is fixe
 
 The first build-28 run compiled and packaged the universal Release app; all 252 active core cases and 14 runtime cases passed (257 core cases enumerated, five optional/live skips). Native verification continues with two-provider coverage, an observed thumb tap for the cached-only switch, and exact tracked/untracked handoff assertions. Audio metadata is computed once per torrent result, rather than on every sort comparison. Live playback with the user's TorBox account is not claimed from fixture tests.
 
+Run #79 verified the version 0.12.0/build 28 IPA's artifact digest, both ZIP CRCs, ARM64 executable, iPhone/iPad device families and bundled runtime/notices. All eight other targeted cases passed separately on both iPhone and iPad: three pagination checks and five TorBox response/recovery/handoff checks. The combined-screen test waited for two offscreen lazy-list buttons without scrolling. Its recording confirms it remained at the top of Find streams; this was a test visibility error. The follow-up scrolls to the torrent controls, checks the displayed two-result count, reveals each named provider, then verifies inline exact-file handoff and unchanged AniList progress. App sources are unchanged. The targeted CI gate reruns this remaining flow on both device families; the complete fixes/focused/full suites remain available and all prior cases stay enabled.
+
 ## Explore pagination and TorBox error recovery — build 27
 
 Version 0.11.2, based on build 26 on main. Addresses the reported stalled Explore footer and misleading TorBox connection error.

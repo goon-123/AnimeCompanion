@@ -101,11 +101,14 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Find streams"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.segmentedControls["playback-source-kind"].exists)
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 15))
-        let result = app.buttons["seanime-torrent-result"].firstMatch
-        let combined = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 2"), object: app.buttons.matching(identifier: "seanime-torrent-result"))
-        XCTAssertEqual(XCTWaiter.wait(for: [combined], timeout: 25), .completed)
-        XCTAssertTrue(app.buttons.matching(identifier: "seanime-torrent-result").matching(NSPredicate(format: "label CONTAINS %@", "Another provider")).firstMatch.exists)
-        app.revealInContent(result); result.tap()
+        let query = app.textFields["seanime-query"]
+        app.revealInContent(query)
+        let count = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "2 releases")).firstMatch
+        app.revealInContent(count); XCTAssertTrue(count.exists)
+        let first = app.buttons.matching(identifier: "seanime-torrent-result").matching(NSPredicate(format: "label CONTAINS %@", "On-device fixture")).firstMatch
+        app.revealInContent(first); XCTAssertTrue(first.label.contains("English"))
+        let result = app.buttons.matching(identifier: "seanime-torrent-result").matching(NSPredicate(format: "label CONTAINS %@", "Another provider")).firstMatch
+        app.revealInContent(result); XCTAssertTrue(result.label.contains("English")); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
         app.buttons["Confirm add to TorBox"].tap()
@@ -114,10 +117,12 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Find streams"].exists, "File selection must stay in the Watch screen")
         XCTAssertFalse(app.navigationBars["TorBox playback"].exists)
         let message = app.staticTexts["torbox-player-message"]
+        app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("Episode 9"))
         XCTAssertTrue(message.label.contains("Anime - 10 JA.mkv")); XCTAssertFalse(message.label.contains("Anime - 09 EN.mkv"))
-        XCTAssertTrue(app.staticTexts["playback-anilist-progress"].label.contains("8 episodes watched"))
         capture("Unified-Watch-Streaming-Torrents-Inline-Files")
+        let progress = app.staticTexts["playback-anilist-progress"]
+        app.revealInContent(progress, upward: false); XCTAssertTrue(progress.label.contains("8 episodes watched"))
     }
     @MainActor
     func testQueuedReceiptCanRefreshToFilesWithoutAnotherAdd() {
