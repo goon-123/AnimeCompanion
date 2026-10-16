@@ -192,6 +192,8 @@ actor SeanimePreviewTransport: HTTPTransport {
                 "payload": payload]
             let data = try JSONSerialization.data(withJSONObject: object)
             return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        } else if ProcessInfo.processInfo.arguments.contains("--ui-torrent-sort-preview") {
+            text = #"[{"name":"Alpha release · Audio: en","infoHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","seeders":5},{"name":"Japanese release · Audio: ja","infoHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","seeders":5000},{"name":"Zulu release · Audio: en / ja","infoHash":"cccccccccccccccccccccccccccccccccccccccc","seeders":100}]"#
         } else { text = #"[{"name":"Fixture Anime · Audio: en / ja","infoHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","seeders":42,"formattedSize":"1 GB","episodeNumber":9}]"# }
         return (Data(text.utf8), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }

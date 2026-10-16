@@ -1,3 +1,11 @@
+## Saved torrent sorting — build 33
+
+Version 0.15.1. Add a compact Sort menu to the shared Seanime results section, available in both tracked Find streams and independent provider searches. Save Highest seeders, Release name or Provider order on this device. Default to English audio first, then descending seeders within each audio group. Missing/negative counts follow a known zero; equal ranks keep provider order. Subtitle-only English hints retain their existing non-dub classification.
+
+Sort changes only reorder the current results. Existing filters, exact provider/torrent identities, selected releases and explicit account actions are retained. Add seven core ordering/identity regressions and a native change-sort/relaunch/persisted-default scenario using opt-in owned multi-release fixtures. CI validation is pending.
+
+Build-32 results: core (269 passed, five optional skips), runtime (14 passed), Release IPA and targeted iPad picker checks passed. The iPhone filter/options case passed; the uncached case failed to locate its lazily rendered exact-file row. This existing native failure is separate from torrent ordering and remains visible in the retained regression suite. Live account playback is not established by fixtures.
+
 ## Cleaner Find streams — build 32
 
 Version 0.15.0. Rebuild the tracked and independent source pickers around a compact header, shared language/release filters and consistent cards. Move setup, catalogs, advanced settings and lengthy help out of the results area. Keep exact episode selection, resume, raw source information, subtitles, source identity, local-only tracking and explicit cloud submission semantics.

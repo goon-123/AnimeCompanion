@@ -46,6 +46,36 @@ final class StreamPickerUITests: XCTestCase {
         }
     }
     @MainActor
+    func testTorrentSortingKeepsEnglishFirstAndPersistsTheDefault() {
+        var app = openPicker(["--ui-torrent-sort-preview"])
+        app.segmentedControls["playback-source-kind"].buttons["Torrents"].tap()
+        let first = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 65))
+        XCTAssertTrue(first.label.contains("Zulu release"), "The English release with 100 seeders must precede Japanese with 5,000")
+        let sort = app.buttons["seanime-torrent-sort"]
+        app.revealInContent(sort, upward: false)
+        XCTAssertTrue((sort.value as? String)?.contains("Highest seeders") == true)
+        capture("Default-English-Then-Highest-Seeders")
+        sort.tap(); app.buttons["Release name"].tap()
+        let alphabetical = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Alpha release"), object: first)
+        XCTAssertEqual(XCTWaiter.wait(for: [alphabetical], timeout: 10), .completed)
+        XCTAssertTrue((sort.value as? String)?.contains("Release name") == true)
+        capture("Saved-Torrent-Sort")
+        app.terminate()
+        app = openPicker(["--ui-torrent-sort-preview"], resetPreferences: false)
+        app.segmentedControls["playback-source-kind"].buttons["Torrents"].tap()
+        let restoredSort = app.buttons["seanime-torrent-sort"]
+        app.revealInContent(restoredSort)
+        XCTAssertTrue((restoredSort.value as? String)?.contains("Release name") == true)
+        let restoredFirst = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(restoredFirst.waitForExistence(timeout: 65)); XCTAssertTrue(restoredFirst.label.contains("Alpha release"))
+        // Restore the requested default for subsequent scenarios on this simulator.
+        app.revealInContent(restoredSort, upward: false); restoredSort.tap(); app.buttons["Highest seeders"].tap()
+        let seeders = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Zulu release"), object: restoredFirst)
+        XCTAssertEqual(XCTWaiter.wait(for: [seeders], timeout: 10), .completed)
+        capture("Restored-Highest-Seeders")
+    }
+    @MainActor
     func testUncachedReleaseShowsStableInlineStatusAndPlaysExactFileWithoutExtraDialogs() {
         let app = openPicker(["--ui-torbox-cache-miss", "--ui-torbox-downloading"])
         app.segmentedControls["playback-source-kind"].buttons["Torrents"].tap()
@@ -78,10 +108,11 @@ final class StreamPickerUITests: XCTestCase {
         app.revealInContent(progress, upward: false); XCTAssertTrue(progress.label.contains("8 episodes watched"))
         capture("Exact-File-Handoff-Progress-Unchanged")
     }
-    @MainActor private func openPicker(_ extra: [String] = []) -> XCUIApplication {
+    @MainActor private func openPicker(_ extra: [String] = [], resetPreferences: Bool = true) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-playback-languages", "--ui-seanime-preview", "--ui-stream-picker-preview", "--ui-reset-content-preferences"] + extra
+        app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-playback-languages", "--ui-seanime-preview", "--ui-stream-picker-preview"]
+            + (resetPreferences ? ["--ui-reset-content-preferences"] : []) + extra
         app.launch()
         let library = app.appTab("My Library"); XCTAssertTrue(library.waitForExistence(timeout: 20)); library.tap()
         let watch = app.buttons["library-watch-1"]

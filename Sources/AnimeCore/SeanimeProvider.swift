@@ -79,6 +79,10 @@ public struct SeanimeTorrent: Codable, Identifiable, Sendable {
     public let seeders: Int?
     public let episodeNumber: Double?
     public let isBatch: Bool?
+    public var seederSummary: String {
+        guard let seeders, seeders >= 0 else { return "Seeders unlisted" }
+        return "\(seeders) seeders"
+    }
     public var id: String {
         // Stable presentation/job key, not a security hash. Keep configured URLs
         // and magnet query data out of view identities and diagnostics.

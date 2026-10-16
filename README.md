@@ -1,5 +1,9 @@
 # Anime Companion
 
+### Saved torrent sorting (0.15.1 / build 33)
+
+Find streams has a **Sort** menu beside TorBox releases: **Highest seeders**, **Release name**, or **Provider order**. English/dub audio stays first in every mode. Highest seeders is the initial default and sorts each audio group from most to fewest; missing or invalid counts appear last. Your selection is automatically saved for future searches in both the title picker and independent Seanime search. Changing sort reorders existing results without another search or cloud submission.
+
 ### Cleaner Find streams (0.15.0 / build 32)
 
 Find streams uses a compact poster/episode header, one shared audio filter, a cross-source release filter and consistent, shorter cards. EN/JA audio remains prominent; English hard/soft subtitles alone are not treated as an English dub. Full descriptions remain under each information button. TorBox status, download progress and exact video files expand on the same screen. Source management, catalogs and longer playback help live in the options menu instead of above the releases. Standalone Seanime search uses the same cards. Episode defaults, resume, subtitle actions and manual AniList progress controls are retained.

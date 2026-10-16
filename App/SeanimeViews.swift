@@ -170,25 +170,27 @@ struct SeanimeSourcesSections: View {
     var resultFilter = ""
     var showsAudioControls = true
     @AppStorage("playback.audioFilter") private var audioValue = StreamAudioFilter.all.rawValue
+    @AppStorage("playback.torrentSort") private var sortValue = TorrentSort.seeders.rawValue
     @State private var editingSearch = false
     @State private var releaseInfo: SeanimeSearchModel.Choice?
     @FocusState private var editing: Bool
+    private var sort: TorrentSort { TorrentSort(rawValue: sortValue) ?? .seeders }
     private var visible: [SeanimeSearchModel.Choice] {
         let audio = StreamAudioFilter(rawValue: audioValue) ?? .all
         let filter = resultFilter.trimmingCharacters(in: .whitespacesAndNewlines)
-        return search.results.enumerated().filter {
-            let value = $0.element
+        let filtered = search.results.filter { value in
             return audio.includes(value.audio) && (filter.isEmpty ||
                 (value.torrent.name + " " + value.provider.manifest.name + " " + value.audio.searchableText +
                  " " + (value.torrent.formattedSize ?? "")).localizedCaseInsensitiveContains(filter))
-        }.sorted { lhs, rhs in
-            let l = lhs.element.audio.english, r = rhs.element.audio.english
-            return l != r ? l : lhs.offset < rhs.offset
-        }.map(\.element)
+        }
+        return sort.sorted(filtered, torrent: { $0.torrent }, audio: { $0.audio })
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            StreamPickerHeading(title: "TorBox releases", count: visible.count, loading: search.loading, countID: "seanime-result-count")
+            HStack(spacing: 8) {
+                StreamPickerHeading(title: "TorBox releases", count: visible.count, loading: search.loading, countID: "seanime-result-count")
+                if !search.providers.isEmpty { sortMenu }
+            }
             if search.providers.isEmpty {
                 StreamPickerCard {
                     Text("No torrent providers enabled").font(.subheadline.weight(.semibold))
@@ -236,13 +238,29 @@ struct SeanimeSourcesSections: View {
                     Section(choice.provider.manifest.name) {
                         PlaybackAudioBadge(audio: choice.audio)
                         Text(choice.torrent.name).textSelection(.enabled)
-                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders").font(.caption).foregroundStyle(.secondary)
+                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seederSummary)").font(.caption).foregroundStyle(.secondary)
                     }
                     Section { Text("Release titles and audio hints are supplied by this provider. Verify the episode and file before playing.").font(.caption).foregroundStyle(.secondary) }
                 }.navigationTitle("Release information").navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { releaseInfo = nil } } }
             }
         }
+    }
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort torrents", selection: Binding(get: { sort.rawValue }, set: { sortValue = $0 })) {
+                ForEach(TorrentSort.allCases) { Text($0.label).tag($0.rawValue) }
+            }
+            Section {
+                Text("English audio first")
+                Text("Your sort is saved as the default")
+            }
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down").font(.subheadline).frame(minHeight: 44)
+        }
+        .accessibilityLabel("Sort torrents")
+        .accessibilityValue("\(sort.label). English audio first. Saved default.")
+        .accessibilityIdentifier("seanime-torrent-sort")
     }
     private var searchPanel: some View {
         StreamPickerCard {
@@ -275,10 +293,10 @@ struct SeanimeSourcesSections: View {
                         }
                         Text(choice.torrent.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(selected ? 3 : 2)
                         PlaybackAudioBadge(audio: choice.audio, compact: true)
-                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders").font(.caption).foregroundStyle(.secondary)
+                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seederSummary)").font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("seanime-torrent-result")
-                    .accessibilityLabel("\(choice.provider.manifest.name) · \(choice.audio.label) · \(choice.torrent.name) · \(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders · \(selected ? "Hide files" : "Show TorBox files")")
+                    .accessibilityLabel("\(choice.provider.manifest.name) · \(choice.audio.label) · \(choice.torrent.name) · \(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seederSummary) · \(selected ? "Hide files" : "Show TorBox files")")
                 Button { releaseInfo = choice } label: { Image(systemName: "info.circle").frame(width: 44, height: 44) }
                     .buttonStyle(.borderless).accessibilityLabel("Release information")
                     .accessibilityIdentifier("seanime-release-info")
