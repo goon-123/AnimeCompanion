@@ -12,6 +12,18 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  seanime-runtime:
+    name: On-device extension runtime regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled compiler and test isolated provider contracts
+        working-directory: Tools/SeanimeRuntime
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run build && npm test
   core:
     name: Core regressions
     runs-on: ubuntu-24.04
@@ -32,6 +44,11 @@ jobs:
         device: [iphone, ipad]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -62,6 +79,11 @@ jobs:
         device: [iphone, ipad]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -91,6 +113,11 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
       - name: Core unit tests
         run: swift test -j 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -142,6 +169,11 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
       - name: Generate Xcode project
         run: |
           brew install xcodegen

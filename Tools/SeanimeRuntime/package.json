@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "name": "animecompanion-seanime-runtime",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "test": "node --test runtime.test.mjs" },
+  "dependencies": { "typescript": "5.9.3", "linkedom": "0.18.13" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

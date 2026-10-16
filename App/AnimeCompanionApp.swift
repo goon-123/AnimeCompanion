@@ -7,12 +7,14 @@ struct AnimeCompanionApp: App {
     @StateObject private var store = AppStore()
     @StateObject private var discoveryFilters = DiscoveryFilterStore()
     @StateObject private var playback = PlaybackStore()
+    @StateObject private var seanime = SeanimeStore()
     @StateObject private var navigation = AppNavigationStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
             root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
+                .environmentObject(seanime)
                 .environmentObject(navigation)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }

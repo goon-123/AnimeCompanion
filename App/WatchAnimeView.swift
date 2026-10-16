@@ -87,6 +87,10 @@ struct WatchAnimeView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Section {
+                    NavigationLink("Search Seanime torrent providers") { SeanimeSearchView(anime: anime, episode: episode) }
+                        .accessibilityIdentifier("seanime-watch-search")
+                }
                 if let error {
                     Section {
                         NoticeView(message: error) { loadSources() }

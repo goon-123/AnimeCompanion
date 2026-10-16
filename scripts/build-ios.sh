@@ -3,6 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v xcodebuild >/dev/null || { echo 'This build requires macOS with Xcode.'; exit 1; }
 command -v xcodegen >/dev/null || { echo 'Install XcodeGen first: brew install xcodegen'; exit 1; }
+command -v npm >/dev/null || { echo 'Install Node.js 22 or newer to build the bundled provider runtime.'; exit 1; }
+npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund
+npm --prefix Tools/SeanimeRuntime run build
+npm --prefix Tools/SeanimeRuntime test
 swift test -j 2
 xcodegen generate
 xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion -configuration Release \
