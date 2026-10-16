@@ -56,7 +56,7 @@ public struct TorBoxWebDAVClient: Sendable {
         parser.shouldProcessNamespaces = true
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
-        guard parser.parse(), delegate.validRoot, !delegate.invalid else { throw TorBoxWebDAVError.invalidResponse }
+        guard parser.parse(), parser.parserError == nil, delegate.validRoot, delegate.closedRoot, !delegate.invalid else { throw TorBoxWebDAVError.invalidResponse }
         let parent = try Self.segments(url)
         var seen: Set<URL> = []
         return delegate.items.compactMap { item -> TorBoxWebDAVEntry? in
@@ -153,6 +153,7 @@ private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
     private var responseCount = 0
     private(set) var items: [Item] = []
     private(set) var validRoot = false
+    private(set) var closedRoot = false
     private(set) var invalid = false
     private var path: String? {
         guard stack.allSatisfy({ $0.namespace == "DAV:" }) else { return nil }
@@ -186,6 +187,7 @@ private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         let text = stack.last?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch path {
+        case "multistatus": closedRoot = true
         case "multistatus/response/href": item.href = text
         case "multistatus/response/status": responseStatus = Self.status(text)
         case "multistatus/response/propstat/status": propertyStatus = Self.status(text)
@@ -205,6 +207,7 @@ private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
         }
         if !stack.isEmpty { stack.removeLast() }
     }
+    func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) { invalid = true }
     private static func status(_ text: String) -> Int? {
         let parts = text.split(separator: " ")
         return parts.count > 1 && parts[0].hasPrefix("HTTP/") ? Int(parts[1]) : nil

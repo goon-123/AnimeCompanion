@@ -97,7 +97,7 @@ final class TorBoxWebDAVTests: XCTestCase {
             (207,"<!DOCTYPE d:multistatus [<!ENTITY secret SYSTEM \"https://other.example/private\">]>" + xml("&secret;"),.invalidResponse),
             (207,"<multistatus xmlns=\"other\"/>",.invalidResponse)
         ] {
-            do { _ = try await TorBoxWebDAVClient(key:key,transport:WebDAVTestTransport([(status,body)])).list(); XCTFail("Expected failure") }
+            do { _ = try await TorBoxWebDAVClient(key:key,transport:WebDAVTestTransport([(status,body)])).list(); XCTFail("Expected \(expected) for HTTP \(status)") }
             catch { XCTAssertEqual(error as? TorBoxWebDAVError,expected); XCTAssertFalse(error.localizedDescription.contains(key)); XCTAssertFalse(error.localizedDescription.contains("https://")) }
         }
     }
