@@ -282,7 +282,8 @@ struct WatchAnimeView: View {
     }
 }
 
-private struct SourceInformationView: View {
+/// Shared by tracked anime playback and exact-ID add-on catalog playback.
+struct SourceInformationView: View {
     let stream: StremioStream
     let addonName: String
     @Environment(\.dismiss) private var dismiss

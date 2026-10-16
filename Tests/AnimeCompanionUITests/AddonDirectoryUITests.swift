@@ -86,6 +86,12 @@ final class AddonDirectoryUITests: XCTestCase {
         let source = app.buttons["playback-source-0"]
         XCTAssertTrue(source.waitForExistence(timeout: 10))
         XCTAssertTrue(source.label.contains("IMDb sources")); XCTAssertTrue(source.label.contains("English"))
+        let information = app.buttons["playback-source-info-0"]
+        app.revealInContent(information); information.tap()
+        XCTAssertTrue(app.navigationBars["Source information"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "playback-original-source-text").firstMatch.exists)
+        app.buttons["close-source-information"].tap()
+        XCTAssertTrue(source.waitForExistence(timeout: 10))
         app.revealInContent(source); source.press(forDuration: 1.1)
         app.buttons["Choose subtitles"].tap()
         let subtitles = app.buttons["Play with en subtitles"]
