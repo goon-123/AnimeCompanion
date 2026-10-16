@@ -142,7 +142,80 @@ final class SeanimeTorBoxTests: XCTestCase {
         let requests = await transport.requests, parts = URLComponents(url:requests[0].url!,resolvingAgainstBaseURL:false)!
         XCTAssertEqual(parts.queryItems?.first { $0.name=="file_id" }?.value,"10")
         XCTAssertEqual(parts.queryItems?.first { $0.name=="token" }?.value,key)
-        XCTAssertEqual(parts.queryItems?.first { $0.name=="redirect" }?.value,"false")
+        XCTAssertEqual(parts.queryItems?.first { $0.name=="redirect" }?.value,"true")
+        XCTAssertNil(parts.queryItems?.first { $0.name=="zip_link" }, "A selected video must not request the whole torrent as an archive")
+    }
+    func testSingleFileAndBatchRedirectsPreserveExactSelectionThroughVidHub() async throws {
+        let single = #"{"id":120117427,"download_present":true,"download_finished":true,"files":[{"id":0,"name":"Episode 01.mkv"}]}"#
+        let batch = #"{"id":120115853,"download_present":true,"download_finished":true,"files":[{"id":0,"name":"Episode 01.mkv"},{"id":1,"name":"Episode 02.mkv"},{"id":5,"name":"Episode 03.mkv"},{"id":8,"name":"Episode 04.mkv"}]}"#
+        for (json, fileID, status) in [(single, 0, 307), (batch, 5, 302), (batch, 8, 303), (single, 0, 308)] {
+            let cloud = try torrent(json)
+            let link = "https://nexus-090.cnam.tb-cdn.io:8443/download/selected-file-\(fileID).mkv?token=cdn%2Bsignature%2Fvalue%3D&filename=Episode%20%26%20Friends.mkv"
+            let transport = TorBoxLinkTransport(status: status, headers: ["Location":link], body: "")
+            let video = try await TorBoxClient(key:key, transport:transport).download(torrent:cloud, fileID:fileID)
+            XCTAssertEqual(video.absoluteString, link)
+            let source = try JSONDecoder().decode(StremioStream.self, from: JSONSerialization.data(withJSONObject: ["url":video.absoluteString]))
+            let tracked = try VidHubPlayback.launchURL(stream:source, pending:PendingPlayback(episode:PlaybackEpisode(animeID:1,episode:3), title:"Episode 3"))
+            let untracked = try VidHubPlayback.untrackedLaunchURL(stream:source,title:"Selected file")
+            for launch in [tracked, untracked] {
+                let parts = try XCTUnwrap(URLComponents(url:launch,resolvingAgainstBaseURL:false))
+                XCTAssertEqual(parts.queryItems?.first { $0.name == "url" }?.value, link, "Do not decode or rebuild a signed CDN URL")
+                XCTAssertFalse(launch.absoluteString.contains(key))
+            }
+            let requests = await transport.requests
+            XCTAssertEqual(requests.count,1, "Capture the CDN location without following it or adding the torrent again")
+            XCTAssertEqual(requests[0].httpMethod,"GET")
+            XCTAssertEqual(requests[0].url?.host,"api.torbox.app")
+            let query = try XCTUnwrap(URLComponents(url:requests[0].url!,resolvingAgainstBaseURL:false)?.queryItems)
+            XCTAssertEqual(query.first { $0.name == "torrent_id" }?.value,String(cloud.id))
+            XCTAssertEqual(query.first { $0.name == "file_id" }?.value,String(fileID), "Use TorBox's file ID, not the array index")
+            XCTAssertEqual(query.first { $0.name == "redirect" }?.value,"true")
+            XCTAssertNil(query.first { $0.name == "zip_link" })
+        }
+    }
+    func testJSONPlaybackLinkFallbackAllowsHTTPSCDNPortsWithoutWeakeningProviderPolicy() async throws {
+        let link = "https://video.example:8443/episode.mkv?signature=cdn%2Btoken%2Fvalue%3D"
+        let data = String(data:try JSONSerialization.data(withJSONObject:["success":true,"data":link]),encoding:.utf8)!
+        let transport = TorBoxLinkTransport(status:200,headers:[:],body:data)
+        let video = try await TorBoxClient(key:key,transport:transport).download(torrent:torrent(),fileID:10)
+        XCTAssertEqual(video.absoluteString,link)
+        XCTAssertThrowsError(try SeanimeNetworkPolicy.httpsURL(link), "Extension network restrictions must remain intact")
+    }
+    func testPlaybackLinkFailuresExplainTheStageWithoutLeakingResponseData() async throws {
+        for (status, headers, body, expected) in [
+            (307, [String:String](), "private \(key)", TorBoxError.missingPlaybackLink),
+            (200, [:], result("null"), .missingPlaybackLink),
+            (200, [:], result("\"   \""), .missingPlaybackLink),
+            (200, [:], result("{\"private\":\"\(key)\"}"), .playbackResponse),
+            (200, [:], "private \(key)", .playbackResponse),
+            (307, ["Location":"https://video.example:0/file"], "", .invalidPlaybackLink),
+            (307, ["Location":"https://video.example:65536/file"], "", .invalidPlaybackLink),
+            (307, ["Location":"https://127.0.0.1/file"], "", .invalidPlaybackLink),
+            (307, ["Location":"https://user:\(key)@video.example/file"], "", .privatePlaybackLink),
+            (307, ["Location":"https://api.torbox.app/v1/api/torrents/requestdl?token=\(key)"], "", .privatePlaybackLink),
+            (307, ["Location":"https://video.example/file?token=\(key)"], "", .privatePlaybackLink)
+        ] {
+            let transport = TorBoxLinkTransport(status:status,headers:headers,body:body)
+            do { _ = try await TorBoxClient(key:key,transport:transport).download(torrent:torrent(),fileID:9); XCTFail("Expected link failure") }
+            catch {
+                XCTAssertEqual(error as? TorBoxError,expected)
+                XCTAssertFalse(error.localizedDescription.contains(key)); XCTAssertFalse(error.localizedDescription.contains("private "))
+                XCTAssertFalse(error.localizedDescription.contains("https://"))
+            }
+            let requests = await transport.requests; XCTAssertEqual(requests.count,1)
+        }
+    }
+    func testPlaybackLinkRequestsKeepTorBoxAuthenticationAndServiceErrors() async throws {
+        for (status,body,expected) in [
+            (403,#"{"success":false,"error":"BAD_TOKEN","data":null}"#,TorBoxError.unauthorized),
+            (429,"private \(key)",.rateLimited),
+            (500,#"{"success":false,"error":"UNKNOWN_ERROR","data":null}"#,.rejected(status:500,code:"UNKNOWN_ERROR"))
+        ] {
+            let transport = TorBoxLinkTransport(status:status,headers:["Location":"https://video.example/file"],body:body)
+            do { _ = try await TorBoxClient(key:key,transport:transport).download(torrent:torrent(),fileID:9); XCTFail("Expected API failure") }
+            catch { XCTAssertEqual(error as? TorBoxError,expected) }
+            let requests = await transport.requests; XCTAssertEqual(requests.count,1)
+        }
     }
     func testNotReadyOrNonVideoCannotGenerateDownloadRequest() async throws {
         let transport = SeanimeTestTransport([]), client = try TorBoxClient(key:key,transport:transport)
@@ -154,9 +227,9 @@ final class SeanimeTorBoxTests: XCTestCase {
     func testUnsafeFilesAndAPIKeyPermalinkAreNotPlayable() async throws {
         let value = try torrent(#"{"id":7,"files":[{"id":1,"name":"infected.mkv","infected":true},{"id":2,"name":"archive.mkv","zipped":true},{"id":3,"name":"sample.zip"},{"id":4,"name":"valid.mkv"}]}"#)
         XCTAssertEqual(value.videoFiles.map(\.id),[4])
-        for url in ["http://cdn.torbox.app/file", "https://api.torbox.app/v1/api/torrents/requestdl?token=\(key)", "https://cdn.torbox.app/file?token=\(key)", "file:///private/video.mkv"] {
+        for (url,expected) in [("http://cdn.torbox.app/file",TorBoxError.invalidPlaybackLink), ("https://api.torbox.app/v1/api/torrents/requestdl?token=\(key)",.privatePlaybackLink), ("https://cdn.torbox.app/file?token=\(key)",.privatePlaybackLink), ("file:///private/video.mkv",.invalidPlaybackLink)] {
             do { _ = try await TorBoxClient(key:key,transport:SeanimeTestTransport([(200,result("\"\(url)\""))])).download(torrent:torrent(),fileID:9); XCTFail("Expected rejection") }
-            catch { XCTAssertEqual(error as? TorBoxError,.invalidResponse) }
+            catch { XCTAssertEqual(error as? TorBoxError,expected) }
         }
     }
     func testTorBoxErrorsAreSanitizedAndDoNotLeakPrivateBodiesOrToken() async throws {
@@ -307,6 +380,18 @@ final class SeanimeTorBoxTests: XCTestCase {
 private struct TorBoxFailingTransport: HTTPTransport {
     let code: URLError.Code
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) { throw URLError(code) }
+}
+
+private actor TorBoxLinkTransport: HTTPTransport {
+    let status: Int
+    let headers: [String:String]
+    let body: String
+    private(set) var requests: [URLRequest] = []
+    init(status: Int, headers: [String:String], body: String) { self.status = status; self.headers = headers; self.body = body }
+    func data(for request: URLRequest) async throws -> (Data,HTTPURLResponse) {
+        requests.append(request)
+        return (Data(body.utf8),HTTPURLResponse(url:request.url!,statusCode:status,httpVersion:nil,headerFields:headers)!)
+    }
 }
 
 private actor SeanimeTestTransport: HTTPTransport {

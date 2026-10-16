@@ -145,10 +145,12 @@ if [[ "$test_scope" == fixes ]]; then
   )
 fi
 if [[ "$test_scope" == streams ]]; then
-  # The eight other build-28 cases already passed on both device families.
-  # This test-only follow-up verifies the remaining combined-screen flow;
-  # fixes/focused/full continue to include the complete regression coverage.
-  test_arguments=(-only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff)
+  # Exercise the native single-file and four-episode redirect handoffs. The
+  # broader fixes/focused/full scopes retain all previous regression cases.
+  test_arguments=(
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff
+  )
 fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \

@@ -139,12 +139,16 @@ actor SeanimePreviewTransport: HTTPTransport {
                 } else if !delayedList && ProcessInfo.processInfo.arguments.contains("--ui-torbox-queued") {
                     delayedList = true; text = #"{"success":true,"error":null,"data":[]}"#
                 } else {
-                    text = #"{"success":true,"error":null,"data":[{"id":"7","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","name":"Fixture batch","download_present":true,"download_finished":true,"files":[{"id":"9","name":"Anime - 09 EN.mkv","short_name":null,"mimetype":null,"size":1000},{"id":"10","name":"Anime - 10 JA.mkv","size":1000}]}]}"#
+                    let files = ProcessInfo.processInfo.arguments.contains("--ui-torbox-single-file")
+                        ? #"[{"id":"0","name":"Anime - 01 EN.mkv","size":1000}]"#
+                        : #"[{"id":"9","name":"Anime - 09 EN.mkv","short_name":null,"mimetype":null,"size":1000},{"id":"10","name":"Anime - 10 JA.mkv","size":1000},{"id":"14","name":"Anime - 11 JA.mkv","size":1000},{"id":"18","name":"Anime - 12 JA.mkv","size":1000}]"#
+                    text = "{\"success\":true,\"error\":null,\"data\":[{\"id\":\"7\",\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"name\":\"Fixture batch\",\"download_present\":true,\"download_finished\":true,\"files\":\(files)}]}"
                 }
             }
             else if url.path.hasSuffix("requestdl") {
                 let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "file_id" }?.value ?? "0"
-                text = "{\"success\":true,\"error\":null,\"data\":\"https://video.example/selected-file-\(id).mkv\"}"
+                let link = "https://video.example:8443/selected-file-\(id).mkv?token=cdn%2Bsignature%2Fvalue%3D&filename=Anime%20%26%20Friends.mkv"
+                return (Data(), HTTPURLResponse(url: url, statusCode: 307, httpVersion: nil, headerFields: ["Location":link])!)
             } else { text = #"{"success":true,"error":null,"data":{"id":1}}"# }
         } else if url.path.hasSuffix(".json") {
             let payload: String

@@ -6,6 +6,7 @@ import FoundationNetworking
 public enum TorBoxError: LocalizedError, Equatable {
     case missingKey, unauthorized, rateLimited, notCached, quota, unavailable, invalidResponse, invalidTorrent, notReady, invalidFile
     case planRestricted, missingTorrent, offline, timedOut
+    case playbackResponse, missingPlaybackLink, invalidPlaybackLink, privatePlaybackLink
     case rejected(status: Int, code: String?)
     public var errorDescription: String? {
         switch self {
@@ -23,6 +24,10 @@ public enum TorBoxError: LocalizedError, Equatable {
             let reason = code.map { " · \($0)" } ?? ""
             return "TorBox returned HTTP \(status)\(reason). Check your TorBox dashboard or try another release."
         case .invalidResponse: return "TorBox returned an unexpected response."
+        case .playbackResponse: return "TorBox's playback-link response could not be read. Refresh the files and try again."
+        case .missingPlaybackLink: return "TorBox returned no playback link for this file. Refresh the files and try again."
+        case .invalidPlaybackLink: return "TorBox returned an unsupported playback address. Try another file or check your TorBox CDN setting."
+        case .privatePlaybackLink: return "TorBox returned an account link instead of a temporary video link. It could not be sent to VidHub."
         case .invalidTorrent: return "This result has no valid BitTorrent v1 magnet or info hash."
         case .notReady: return "TorBox is still preparing this torrent. Check readiness again later; it has not been added a second time."
         case .invalidFile: return "Choose an available video file from this torrent. Archives, infected files and other file types are not playable here."
@@ -174,7 +179,7 @@ public struct TorBoxClient: Sendable {
         let boundary = "AnimeCompanion-" + UUID().uuidString
         let values = [("magnet", magnet), ("allow_zip", "false"), ("add_only_if_cached", cachedOnly ? "true" : "false")]
         let body = values.map { "--\(boundary)\r\nContent-Disposition: form-data; name=\"\($0.0)\"\r\n\r\n\($0.1)\r\n" }.joined() + "--\(boundary)--\r\n"
-        let data = try await response("torrents/createtorrent", method: "POST", body: Data(body.utf8), contentType: "multipart/form-data; boundary=\(boundary)", cachedOnly: cachedOnly)
+        let (data, _) = try await response("torrents/createtorrent", method: "POST", body: Data(body.utf8), contentType: "multipart/form-data; boundary=\(boundary)", cachedOnly: cachedOnly)
         // Success means the account accepted the request, including queued jobs.
         // If its receipt omits IDs, recover by the exact hash instead of POSTing again.
         let result = try? JSONDecoder().decode(TorBoxEnvelope<TorBoxCreated>.self, from: data).data
@@ -219,21 +224,49 @@ public struct TorBoxClient: Sendable {
     public func download(torrent: TorBoxTorrent, fileID: Int) async throws -> URL {
         guard torrent.ready else { throw TorBoxError.notReady }
         guard torrent.videoFiles.contains(where: { $0.id == fileID }) else { throw TorBoxError.invalidFile }
-        // TorBox's documented requestdl API requires the token query argument.
-        // Resolve the JSON CDN URL here; never hand the API-key permalink to VidHub.
-        let value: String = try await request("torrents/requestdl", query: [
-            .init(name: "token", value: key), .init(name: "torrent_id", value: String(torrent.id)),
-            .init(name: "file_id", value: String(fileID)), .init(name: "zip_link", value: "false"), .init(name: "redirect", value: "false")])
-        guard let url = try? SeanimeNetworkPolicy.httpsURL(value), url.host?.lowercased() != "api.torbox.app",
-              !value.contains(key), value.removingPercentEncoding?.contains(key) != true else { throw TorBoxError.invalidResponse }
+        // Request the documented redirect, but never follow it with account
+        // authentication. ProviderHTTPTransport leaves Location untouched.
+        // Only the resolved CDN URL is handed to the external player.
+        let data: Data, http: HTTPURLResponse
+        do {
+            (data, http) = try await response("torrents/requestdl", query: [
+                .init(name: "token", value: key), .init(name: "torrent_id", value: String(torrent.id)),
+                .init(name: "file_id", value: String(fileID)), .init(name: "redirect", value: "true")], downloadRedirect: true)
+        } catch TorBoxError.invalidResponse { throw TorBoxError.playbackResponse }
+        let value: String
+        if Self.downloadRedirects.contains(http.statusCode) {
+            guard let location = http.value(forHTTPHeaderField: "Location"), !location.isEmpty else { throw TorBoxError.missingPlaybackLink }
+            value = location
+        } else {
+            // Some API deployments return the JSON result even with redirect
+            // requested. Keep support for the documented data:string envelope.
+            guard let envelope = try? JSONDecoder().decode(TorBoxEnvelope<String?>.self, from: data) else { throw TorBoxError.playbackResponse }
+            guard let link = envelope.data, !link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw TorBoxError.missingPlaybackLink }
+            value = link
+        }
+        return try playbackURL(value)
+    }
+    private static let downloadRedirects: Set<Int> = [302, 303, 307, 308]
+    private func playbackURL(_ value: String) throws -> URL {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.utf8.count <= 32_000,
+              !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+              let parts = URLComponents(string: text), parts.scheme?.lowercased() == "https",
+              let host = parts.host, SeanimeNetworkPolicy.publicHost(host) != nil,
+              parts.fragment == nil, parts.port.map({ (1...65535).contains($0) }) ?? true,
+              let url = parts.url else { throw TorBoxError.invalidPlaybackLink }
+        // CDN playback is not an extension network request: valid HTTPS ports
+        // must survive along with signed path/query bytes. Keep credentials out.
+        guard parts.user == nil, parts.password == nil, host.lowercased() != "api.torbox.app",
+              !text.contains(key), text.removingPercentEncoding?.contains(key) != true else { throw TorBoxError.privatePlaybackLink }
         return url
     }
     private func request<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        let data = try await response(path, query: query)
+        let (data, _) = try await response(path, query: query)
         guard let envelope = try? JSONDecoder().decode(TorBoxEnvelope<T>.self, from: data) else { throw TorBoxError.invalidResponse }
         return envelope.data
     }
-    private func response(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, contentType: String? = nil, cachedOnly: Bool = false) async throws -> Data {
+    private func response(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, contentType: String? = nil, cachedOnly: Bool = false, downloadRedirect: Bool = false) async throws -> (Data, HTTPURLResponse) {
         do {
             var parts = URLComponents(string: "https://api.torbox.app/v1/api/\(path)")!
             if !query.isEmpty { parts.queryItems = query }
@@ -246,6 +279,9 @@ public struct TorBoxClient: Sendable {
             try Task.checkCancellation()
             if response.statusCode == 429 { throw TorBoxError.rateLimited }
             guard data.count <= 4_000_000 else { throw TorBoxError.invalidResponse }
+            // A redirect is a result only for the file-link request. All other
+            // account/provider calls continue to reject redirects.
+            if downloadRedirect, Self.downloadRedirects.contains(response.statusCode) { return (data, response) }
             let httpSuccess = (200..<300).contains(response.statusCode)
             // TorBox uses HTTP 400 for cache misses/account limits and HTTP 5xx
             // for service errors. Decode its error envelope before status gating.
@@ -256,7 +292,7 @@ public struct TorBoxClient: Sendable {
             if response.statusCode == 401 { throw TorBoxError.unauthorized }
             guard httpSuccess else { throw TorBoxError.rejected(status: response.statusCode, code: nil) }
             guard status != nil else { throw TorBoxError.invalidResponse }
-            return data
+            return (data, response)
         } catch is CancellationError { throw CancellationError() }
         catch let error as TorBoxError { throw error }
         catch let error as URLError {

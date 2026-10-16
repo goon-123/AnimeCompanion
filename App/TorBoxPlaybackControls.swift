@@ -170,7 +170,7 @@ struct TorBoxPlaybackControls: View {
                 if let anime { await playback.play(stream: stream, anime: anime, episode: episode, subtitle: nil, restart: restart) }
                 else { await playback.playUntracked(stream: stream, title: file.name) }
             } catch is CancellationError {} catch {
-                if generation == attempt { self.error = "Could not open this TorBox file in VidHub. \(error.localizedDescription)" }
+                if generation == attempt { self.error = "Could not get this file's playback link. \(error.localizedDescription)" }
             }
         }
     }

@@ -23,6 +23,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         app.revealInContent(message)
         XCTAssertTrue(message.label.contains("selected-file-10.mkv"))
+        XCTAssertTrue(message.label.contains("CDN video.example:8443"))
         XCTAssertFalse(message.label.contains("selected-file-9.mkv"))
         XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
         capture("On-Device-TS-TorBox-Exact-File")
@@ -34,7 +35,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let result = app.buttons["seanime-torrent-result"].firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
-        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.revealInContent(add); XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
         app.buttons["Confirm add to TorBox"].tap()
         let error = app.staticTexts["torbox-playback-error"]
         XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
@@ -110,7 +111,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let result = app.buttons.matching(identifier: "seanime-torrent-result").matching(NSPredicate(format: "label CONTAINS %@", "Another provider")).firstMatch
         app.revealInContent(result); XCTAssertTrue(result.label.contains("English")); result.tap()
         let add = app.buttons["torbox-add-torrent"]
-        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.revealInContent(add); XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
         app.buttons["Confirm add to TorBox"].tap()
         let file = app.buttons["torbox-file-10"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
@@ -120,6 +121,8 @@ final class SeanimeTorBoxUITests: XCTestCase {
         app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("Episode 9"))
         XCTAssertTrue(message.label.contains("Anime - 10 JA.mkv")); XCTAssertFalse(message.label.contains("Anime - 09 EN.mkv"))
+        XCTAssertTrue(message.label.contains("CDN video.example:8443"))
+        XCTAssertTrue(message.label.contains("selected-file-10.mkv")); XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
         capture("Unified-Watch-Streaming-Torrents-Inline-Files")
         let progress = app.staticTexts["playback-anilist-progress"]
         app.revealInContent(progress, upward: false); XCTAssertTrue(progress.label.contains("8 episodes watched"))
@@ -163,16 +166,20 @@ final class SeanimeTorBoxUITests: XCTestCase {
     }
     @MainActor
     func testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd() {
-        let app = launch(["--ui-torbox-already-added"])
+        let app = launch(["--ui-torbox-already-added", "--ui-torbox-single-file"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
-        let file = app.buttons["torbox-file-10"]
+        let file = app.buttons["torbox-file-0"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file)
         XCTAssertFalse(app.buttons["torbox-add-torrent"].exists)
         XCTAssertTrue(app.navigationBars["Find streams"].exists)
-        file.tap(); XCTAssertTrue(app.staticTexts["torbox-player-message"].waitForExistence(timeout: 10))
-        capture("Previously-Added-Release-Recovered-By-Hash")
+        file.tap()
+        let message = app.staticTexts["torbox-player-message"]; app.revealInContent(message)
+        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        XCTAssertTrue(message.label.contains("CDN video.example:8443")); XCTAssertTrue(message.label.contains("selected-file-0.mkv"))
+        XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
+        capture("Single-File-CDN-Redirect-Recovered-By-Hash")
     }
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait

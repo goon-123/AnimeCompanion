@@ -166,6 +166,7 @@ final class PlaybackStore: ObservableObject {
                 }
                 playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" } ? " · External subtitles" : "")
                 if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") { playerMessage? += " · \(stream.displayName)" }
+                if ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview") { playerMessage? += previewDestination(url) }
                 return
             }
             #endif
@@ -205,7 +206,7 @@ final class PlaybackStore: ObservableObject {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
                 playerMessage = "Preview catalog launch · \(title) · \(stream.displayName)"
-                if ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview") { playerMessage? += " · \(stream.videoURL?.lastPathComponent ?? "missing URL")" }
+                if ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview") { playerMessage? += previewDestination(url) }
                 return
             }
             #endif
@@ -218,5 +219,15 @@ final class PlaybackStore: ObservableObject {
             playerMessage = opened ? "Opened in VidHub. Catalog playback does not change AniList or save a resume position here." : "VidHub could not be opened. Install or update VidHub, then try again."
         } catch { playerMessage = error.localizedDescription }
     }
+    #if DEBUG
+    /// Inspect the destination encoded by the real VidHub builder, without
+    /// launching a player or exposing a signed URL in test screenshots.
+    private func previewDestination(_ launch: URL) -> String {
+        let raw = URLComponents(url: launch, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "url" }?.value
+        guard let raw, let video = URL(string: raw) else { return " · Missing CDN destination" }
+        let address = (video.host ?? "missing host") + (video.port.map { ":\($0)" } ?? "")
+        return " · CDN \(address) · \(video.lastPathComponent)"
+    }
+    #endif
     private func clearPending() { pending = nil; defaults.removeObject(forKey: "playback.pending") }
 }

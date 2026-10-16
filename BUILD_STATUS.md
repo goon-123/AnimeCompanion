@@ -1,3 +1,14 @@
+## TorBox playback-link handoff — build 29
+
+Version 0.12.1. The user confirmed build 28 lists ready TorBox files, but both single-file and multi-episode releases fail while resolving the link before VidHub opens. File count and torrent creation are not the failing stage shown in those screenshots.
+
+- Request TorBox's documented `redirect=true` download result and capture its `Location` without following the redirect with account authentication. Keep the JSON `data:string` result compatible. Only the selected file ID is requested; no zip link, second torrent submission, or automatic episode choice is involved.
+- Validate resolved HTTPS playback links separately from the extension network bridge, preserving valid CDN ports and signed path/query bytes. Keep API-key permalinks, URL credentials and private/unsupported addresses out of the player. Leave extension networking restrictions unchanged.
+- Distinguish an unreadable playback response, a missing link, an unsupported address and an account link. Preserve TorBox authentication/rate-limit/service errors. Never show response bodies, credentials or signed URLs in errors.
+- Add core coverage for documented redirect statuses, single file ID zero, sparse batch file IDs, JSON compatibility, signed URL round trips through both VidHub builders, and sanitized link failures. Native fixtures now return HTTP 307 with a signed CDN destination rather than a simplified JSON URL; targeted iPhone/iPad scenarios cover one video and a four-episode folder.
+
+Reference: https://api-docs.torbox.app/ and its Request Download Link redirect example. Validation is pending on CI. These controlled regressions cannot establish live playback with the user's TorBox account; the screenshots do not expose the server's original response or rejected URL.
+
 ## Unified stream search and TorBox accepted-job recovery — build 28
 
 Version 0.12.0. The user tested build 27 and confirmed Explore scrolling is fixed. Their TorBox account also received the selected torrent, but the app could not read its response or open its video.
