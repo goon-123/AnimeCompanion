@@ -145,10 +145,10 @@ if [[ "$test_scope" == fixes ]]; then
   )
 fi
 if [[ "$test_scope" == streams ]]; then
-  # Exercise the native single-file and four-episode redirect handoffs. The
+  # Exercise WebDAV browsing and the private torrent-file handoff. The
   # broader fixes/focused/full scopes retain all previous regression cases.
   test_arguments=(
-    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWebDAVBrowserNavigatesSearchesRefreshesAndOpensExactFile
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff
   )
 fi

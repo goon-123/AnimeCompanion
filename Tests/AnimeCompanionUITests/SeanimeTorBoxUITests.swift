@@ -22,9 +22,8 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let message = app.staticTexts["torbox-player-message"]
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         app.revealInContent(message)
-        XCTAssertTrue(message.label.contains("selected-file-10.mkv"))
-        XCTAssertTrue(message.label.contains("CDN video.example:8443"))
-        XCTAssertFalse(message.label.contains("selected-file-9.mkv"))
+        XCTAssertTrue(message.label.contains("TorBox file 10"))
+        XCTAssertFalse(message.label.contains("TorBox file 9"))
         XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
         capture("On-Device-TS-TorBox-Exact-File")
     }
@@ -56,7 +55,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
         let message = app.staticTexts["torbox-player-message"]
         XCTAssertTrue(message.waitForExistence(timeout: 10))
-        XCTAssertTrue(message.label.contains("selected-file-10.mkv"))
+        XCTAssertTrue(message.label.contains("TorBox file 10"))
         capture("Explicit-Uncached-Retry-Exact-File")
     }
     @MainActor
@@ -121,8 +120,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("Episode 9"))
         XCTAssertTrue(message.label.contains("Anime - 10 JA.mkv")); XCTAssertFalse(message.label.contains("Anime - 09 EN.mkv"))
-        XCTAssertTrue(message.label.contains("CDN video.example:8443"))
-        XCTAssertTrue(message.label.contains("selected-file-10.mkv")); XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
+        XCTAssertTrue(message.label.contains("TorBox file 10")); XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
         capture("Unified-Watch-Streaming-Torrents-Inline-Files")
         let progress = app.staticTexts["playback-anilist-progress"]
         app.revealInContent(progress, upward: false); XCTAssertTrue(progress.label.contains("8 episodes watched"))
@@ -177,9 +175,48 @@ final class SeanimeTorBoxUITests: XCTestCase {
         file.tap()
         let message = app.staticTexts["torbox-player-message"]; app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10))
-        XCTAssertTrue(message.label.contains("CDN video.example:8443")); XCTAssertTrue(message.label.contains("selected-file-0.mkv"))
+        XCTAssertTrue(message.label.contains("TorBox file 0"))
         XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
-        capture("Single-File-CDN-Redirect-Recovered-By-Hash")
+        capture("Single-File-Private-Permalink-Recovered-By-Hash")
+    }
+    @MainActor
+    func testWebDAVBrowserNavigatesSearchesRefreshesAndOpensExactFile() {
+        let app = launch()
+        let tab = app.appTab("My Library"); XCTAssertTrue(tab.waitForExistence(timeout:10)); tab.tap()
+        let browse = app.buttons["library-torbox-files"]
+        XCTAssertTrue(browse.waitForExistence(timeout:10)); browse.tap()
+        XCTAssertTrue(app.navigationBars["TorBox files"].waitForExistence(timeout:10))
+        let key = app.secureTextFields["webdav-torbox-key"]
+        XCTAssertTrue(key.waitForExistence(timeout:10)); key.tap(); key.typeText("synthetic-torbox-key")
+        let connect = app.buttons["webdav-connect-torbox"]; app.revealInContent(connect); connect.tap()
+        let loose = app.buttons["torbox-webdav-video-Loose Episode.mkv"]
+        XCTAssertTrue(loose.waitForExistence(timeout:15)); app.revealInContent(loose); loose.tap()
+        let message = app.staticTexts["torbox-webdav-player-message"]
+        app.revealInContent(message)
+        XCTAssertTrue(message.label.contains("WebDAV · Loose Episode.mkv")); XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
+        capture("WebDAV-Root-Video-Private-Handoff")
+        let batch = app.buttons["torbox-webdav-folder-Fixture batch"]
+        app.revealInContent(batch,upward:false); batch.tap()
+        let extras = app.buttons["torbox-webdav-folder-Extras"]
+        XCTAssertTrue(extras.waitForExistence(timeout:10)); extras.tap()
+        XCTAssertTrue(app.buttons["torbox-webdav-video-Sample.mkv"].waitForExistence(timeout:10))
+        app.navigationBars.buttons.firstMatch.tap()
+        let search = app.searchFields.firstMatch
+        app.revealInContent(search,upward:false); search.tap(); search.typeText("02\n")
+        let episode = app.buttons["torbox-webdav-video-Episode 02 JA & Friends.mkv"]
+        XCTAssertTrue(episode.waitForExistence(timeout:10)); app.revealInContent(episode)
+        XCTAssertFalse(app.buttons["torbox-webdav-video-Episode 01 EN.mkv"].exists)
+        episode.tap(); app.revealInContent(message)
+        XCTAssertTrue(message.label.contains("WebDAV · Episode 02 JA & Friends.mkv"))
+        XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
+        capture("WebDAV-Search-Exact-Batch-File")
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["TorBox files"].waitForExistence(timeout:10))
+        let refresh = app.buttons["torbox-webdav-refresh"]; refresh.tap()
+        let fresh = app.buttons["torbox-webdav-video-Fresh Episode.mkv"]
+        app.revealInContent(fresh); XCTAssertTrue(fresh.waitForExistence(timeout:15))
+        capture("WebDAV-Manual-Index-Refresh")
     }
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait

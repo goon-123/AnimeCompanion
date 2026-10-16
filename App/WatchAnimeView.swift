@@ -27,6 +27,7 @@ struct WatchAnimeView: View {
     @State private var episodeChangedByUser = false
     @State private var sourceInformation: AddonStreamSource?
     @State private var sourceKind = "all"
+    @State private var torBoxFiles = false
     @FocusState private var episodeFocused: Bool
     private var limit: Int { anime.format == "MOVIE" ? 1 : min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000)) }
     private var initializationKey: String {
@@ -82,6 +83,9 @@ struct WatchAnimeView: View {
                         Text("Streaming").tag("streaming")
                         Text("Torrents").tag("torrents")
                     }.pickerStyle(.segmented).accessibilityIdentifier("playback-source-kind")
+                    Button { commitEpisode(); torBoxFiles = true } label: { Label("Browse TorBox files", systemImage: "folder") }
+                        .disabled(!initialized)
+                        .accessibilityIdentifier("watch-torbox-files")
                     if playback.ready {
                         if loading { ProgressView("Checking add-ons · \(sourceResults?.pendingCount ?? playback.activeAddons.count) remaining").accessibilityIdentifier("playback-loading") }
                     } else {
@@ -188,6 +192,7 @@ struct WatchAnimeView: View {
                 .sheet(item: $sourceInformation) { source in
                     SourceInformationView(stream: source.stream, addonName: source.addonName)
                 }
+                .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {

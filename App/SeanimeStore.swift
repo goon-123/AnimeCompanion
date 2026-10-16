@@ -63,6 +63,12 @@ final class SeanimeStore: ObservableObject {
         #endif
         return try TorBoxClient(key: saved.torBoxKey)
     }
+    func webDAV() throws -> TorBoxWebDAVClient {
+        #if DEBUG
+        if preview { return try TorBoxWebDAVClient(key: saved.torBoxKey, transport: previewTransport) }
+        #endif
+        return try TorBoxWebDAVClient(key: saved.torBoxKey)
+    }
     func saveKey(_ key: String) -> Bool {
         let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if !value.isEmpty, (try? TorBoxClient(key: value)) == nil { error = TorBoxError.missingKey.localizedDescription; return false }
@@ -116,8 +122,10 @@ final class SeanimeStore: ObservableObject {
 actor SeanimePreviewTransport: HTTPTransport {
     private var added = false
     private var delayedList = false
+    private var refreshedDAV = false
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        guard let url = request.url, ["provider.example", "api.torbox.app"].contains(url.host ?? "") else { throw SeanimeError.invalidNetwork }
+        guard let url = request.url, ["provider.example", "api.torbox.app", "webdav.torbox.app"].contains(url.host ?? "") else { throw SeanimeError.invalidNetwork }
+        if url.host == "webdav.torbox.app" { return webDAV(request, url: url) }
         let text: String
         if url.host == "api.torbox.app" {
             if url.path.hasSuffix("createtorrent") {
@@ -146,9 +154,10 @@ actor SeanimePreviewTransport: HTTPTransport {
                 }
             }
             else if url.path.hasSuffix("requestdl") {
-                let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "file_id" }?.value ?? "0"
-                let link = "https://video.example:8443/selected-file-\(id).mkv?token=cdn%2Bsignature%2Fvalue%3D&filename=Anime%20%26%20Friends.mkv"
-                return (Data(), HTTPURLResponse(url: url, statusCode: 307, httpVersion: nil, headerFields: ["Location":link])!)
+                // Reproduce the reported authenticated/account-link response.
+                // The app should construct its own player permalink instead of
+                // trying to classify this response as a public CDN URL.
+                return (Data(), HTTPURLResponse(url: url, statusCode: 307, httpVersion: nil, headerFields: ["Location":url.absoluteString])!)
             } else { text = #"{"success":true,"error":null,"data":{"id":1}}"# }
         } else if url.path.hasSuffix(".json") {
             let payload: String
@@ -166,6 +175,36 @@ actor SeanimePreviewTransport: HTTPTransport {
             return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
         } else { text = #"[{"name":"Fixture Anime · Audio: en / ja","infoHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","seeders":42,"formattedSize":"1 GB","episodeNumber":9}]"# }
         return (Data(text.utf8), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+    private func webDAV(_ request: URLRequest, url: URL) -> (Data, HTTPURLResponse) {
+        func response(_ status: Int, _ text: String) -> (Data,HTTPURLResponse) {
+            (Data(text.utf8),HTTPURLResponse(url:url,statusCode:status,httpVersion:nil,headerFields:["Content-Type":"application/xml"])!)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-webdav-unauthorized") { return response(401,"private synthetic-torbox-key") }
+        let auth = "Basic " + Data("torbox:synthetic-torbox-key".utf8).base64EncodedString()
+        guard request.value(forHTTPHeaderField:"Authorization") == auth else { return response(401,"") }
+        let path = (URLComponents(url:url,resolvingAgainstBaseURL:false)?.path ?? "").trimmingCharacters(in:CharacterSet(charactersIn:"/"))
+        if path == "refresh", request.httpMethod == "GET" { refreshedDAV = true; return response(200,"refreshed") }
+        guard request.httpMethod == "PROPFIND", request.value(forHTTPHeaderField:"Depth") == "1" else { return response(405,"") }
+        func escaped(_ text: String) -> String { text.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;") }
+        func entry(_ href: String, _ name: String, folder: Bool = false) -> String {
+            "<d:response><d:href>\(escaped(href))</d:href><d:propstat><d:prop><d:displayname>\(escaped(name))</d:displayname><d:resourcetype>\(folder ? "<d:collection/>" : "")</d:resourcetype><d:getcontentlength>1234567</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+        }
+        let entries: String
+        switch path {
+        case "":
+            entries = entry("/","TorBox",folder:true) + entry("/Fixture%20batch/","Fixture batch",folder:true)
+                + entry("/Loose%20Episode.mkv","Loose Episode.mkv") + entry("/Readme.txt","Readme.txt")
+                + (refreshedDAV ? entry("/Fresh%20Episode.mkv","Fresh Episode.mkv") : "")
+        case "Fixture batch":
+            entries = entry("/Fixture%20batch/","Fixture batch",folder:true) + entry("/Fixture%20batch/Extras/","Extras",folder:true)
+                + entry("/Fixture%20batch/Episode%2001%20EN.mkv","Episode 01 EN.mkv")
+                + entry("/Fixture%20batch/Episode%2002%20JA%20%26%20Friends.mkv","Episode 02 JA & Friends.mkv")
+        case "Fixture batch/Extras":
+            entries = entry("/Fixture%20batch/Extras/","Extras",folder:true) + entry("/Fixture%20batch/Extras/Sample.mkv","Sample.mkv")
+        default: return response(404,"")
+        }
+        return response(207,"<?xml version=\"1.0\" encoding=\"utf-8\"?><d:multistatus xmlns:d=\"DAV:\">\(entries)</d:multistatus>")
     }
 }
 #endif

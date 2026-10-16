@@ -69,6 +69,7 @@ struct TorBoxPlaybackControls: View {
                 }
                 if !cloud.videoFiles.isEmpty {
                     Text(cloud.videoFiles.count == 1 ? "Video file" : "Choose your episode’s file").font(.headline)
+                    Text("Play sends a private TorBox playback link to VidHub.").font(.caption).foregroundStyle(.secondary)
                     ForEach(cloud.videoFiles) { file in
                         Button { play(file, cloud: cloud) } label: {
                             VStack(alignment: .leading, spacing: 5) {
@@ -163,7 +164,7 @@ struct TorBoxPlaybackControls: View {
         work = Task {
             defer { if generation == attempt { busy = false } }
             do {
-                let url = try await seanime.torBox().download(torrent: cloud, fileID: file.id)
+                let url = try seanime.torBox().playbackURL(torrent: cloud, fileID: file.id)
                 try Task.checkCancellation(); guard generation == attempt, provider != nil, seanime.hasTorBoxKey else { return }
                 let data = try JSONSerialization.data(withJSONObject: ["name": file.name, "url": url.absoluteString, "behaviorHints": ["filename": file.name]])
                 let stream = try JSONDecoder().decode(StremioStream.self, from: data)

@@ -29,6 +29,7 @@ extension XCUIApplication {
     }
 
     @MainActor var contentSurface: XCUIElement {
+        if descendants(matching: .any).matching(identifier: "torbox-webdav-list").firstMatch.exists { return self }
         // A sheet sits over the browse/detail panes; drag its form, not the
         // retained view underneath. The screen center is inside these sheets.
         if ["Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Edit AniList tracking", "Add-ons & playback", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime & TorBox", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {

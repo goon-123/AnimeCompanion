@@ -1,3 +1,15 @@
+## TorBox WebDAV file browser and private player handoff — build 30
+
+Version 0.13.0. The user's build-29 screenshot identifies the remaining failure as the app's rejection of an authenticated/account playback URL, before VidHub opens. Their existing TorBox WebDAV connection in VidHub lists the same folders and videos.
+
+- Add a native TorBox WebDAV browser from My Library's folder button, Find streams, and Seanime & TorBox settings. Use the saved API key with TorBox's documented `torbox` username, so no second email/password setup or installed provider is required. Browse folders, search the current directory, see video sizes, play a chosen file, and explicitly refresh the TorBox index.
+- List through authenticated HTTPS PROPFIND requests to the fixed WebDAV origin, depth one. Parse DAV multistatus/propstat responses, retain folders before naturally sorted files, handle root-level/flattened files and encoded Unicode/percent filenames, skip foreign/parent/deep/credential-bearing links, and reject malformed/DTD XML. Browser requests never delete or create cloud torrents. Server errors do not expose private bodies or keys.
+- Construct the authenticated WebDAV file URL only on a Play tap. Pass it to the existing VidHub builder. Standalone browsing is untracked; browsing from a title preserves the explicitly selected episode and existing local resume callbacks. Explain in the UI that private playback URLs are shared with VidHub. Listing URLs, identifiers, progress storage and preview screenshots remain credential-free.
+- For torrent-result playback, construct TorBox's documented private `requestdl` permalink with the exact ready torrent/file IDs. Let VidHub follow it, removing the failing attempt to classify returned account links as public CDN URLs. Do not use arbitrary returned URLs, resubmit a torrent, or guess an episode. The optional temporary-CDN resolver remains separate from external-player handoff.
+- Add eight core regressions for WebDAV parsing/scope, authenticated requests and player URL round trips, malformed/error responses, refresh and exact sparse/zero file IDs. Add a native My Library → WebDAV scenario covering connection, a root video, nested folders, search, exact batch selection and refresh. The targeted iPhone/iPad gate also exercises unified torrent playback against the formerly rejected account-link fixture.
+
+References: https://support.torbox.app/en/articles/14662867-torbox-webdav, https://api-docs.torbox.app/, and https://vidhub.okaapps.com/3rd-party-app-integration/. CI validation is pending. Controlled fixtures verify parsing, navigation and URL handoff, not live playback using the user's private account or a real VidHub installation.
+
 ## TorBox playback-link handoff — build 29
 
 Version 0.12.1. The user confirmed build 28 lists ready TorBox files, but both single-file and multi-episode releases fail while resolving the link before VidHub opens. File count and torrent creation are not the failing stage shown in those screenshots.

@@ -10,6 +10,7 @@ struct SeanimeSettingsView: View {
     @State private var busy = false
     @State private var notice: String?
     @State private var marketplace = false
+    @State private var files = false
     @State private var work: Task<Void, Never>?
     private enum Editing { case key, manifest }
     @FocusState private var editing: Editing?
@@ -30,6 +31,9 @@ struct SeanimeSettingsView: View {
                 Button("Remove saved TorBox key", role: .destructive) { if seanime.saveKey("") { notice = "TorBox key removed from this device." } }
                     .disabled(!seanime.hasTorBoxKey || busy)
                 Link("Open TorBox account", destination: URL(string: "https://torbox.app/settings")!)
+                Button { editing = nil; files = true } label: { Label("Browse TorBox files (WebDAV)", systemImage: "folder") }
+                    .accessibilityIdentifier("torbox-webdav-browse")
+                Link("TorBox WebDAV help", destination: URL(string: "https://support.torbox.app/en/articles/14662867-torbox-webdav")!)
             }
             Section("Seanime torrent providers") {
                 Button("Browse Seanime Marketplace") { editing = nil; marketplace = true }.accessibilityIdentifier("seanime-marketplace")
@@ -76,6 +80,7 @@ struct SeanimeSettingsView: View {
             .sheet(isPresented: $marketplace) {
                 NavigationStack { SeanimeMarketplaceView { value in manifestURL = value; marketplace = false } }
             }
+            .sheet(isPresented: $files) { TorBoxFilesView() }
             .onDisappear { work?.cancel(); key = "" }
     }
 }

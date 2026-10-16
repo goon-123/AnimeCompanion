@@ -221,6 +221,21 @@ public struct TorBoxClient: Sendable {
         }
         throw TorBoxError.invalidResponse
     }
+    /// Construct the documented private permalink for an explicit external-player
+    /// handoff. VidHub follows TorBox's redirects itself. The API key is shared
+    /// with the selected player; never expose this URL in UI, logs or providers.
+    public func playbackURL(torrent: TorBoxTorrent, fileID: Int) throws -> URL {
+        guard torrent.ready else { throw TorBoxError.notReady }
+        guard torrent.videoFiles.contains(where: { $0.id == fileID }) else { throw TorBoxError.invalidFile }
+        var parts = URLComponents(string: "https://api.torbox.app/v1/api/torrents/requestdl")!
+        parts.queryItems = [.init(name: "token", value: key), .init(name: "torrent_id", value: String(torrent.id)),
+                            .init(name: "file_id", value: String(fileID)), .init(name: "redirect", value: "true")]
+        parts.percentEncodedQuery = parts.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        guard let url = parts.url else { throw TorBoxError.invalidPlaybackLink }
+        return url
+    }
+    /// Resolve a temporary CDN URL for native callers that require one.
+    /// External-player playback uses playbackURL(torrent:fileID:) instead.
     public func download(torrent: TorBoxTorrent, fileID: Int) async throws -> URL {
         guard torrent.ready else { throw TorBoxError.notReady }
         guard torrent.videoFiles.contains(where: { $0.id == fileID }) else { throw TorBoxError.invalidFile }

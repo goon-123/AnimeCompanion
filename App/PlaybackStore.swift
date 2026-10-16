@@ -192,7 +192,7 @@ final class PlaybackStore: ObservableObject {
                 playerMessage = finished ? "Finished \(pending.title). Playback saved on this device." : "Resume position saved for \(pending.title)."
             case .cancelled: playerMessage = "Playback cancelled. Your saved position has not changed."
             case .failed(let code):
-                playerMessage = code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "VidHub could not play this source. Try another source or check its configuration in AIOStreams."
+                playerMessage = code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "VidHub could not play this video. Check the source connection or try another file."
             }
             clearPending()
         } catch { playerMessage = error.localizedDescription }
@@ -225,6 +225,11 @@ final class PlaybackStore: ObservableObject {
     private func previewDestination(_ launch: URL) -> String {
         let raw = URLComponents(url: launch, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "url" }?.value
         guard let raw, let video = URL(string: raw) else { return " · Missing CDN destination" }
+        if video.host == "api.torbox.app" {
+            let id = URLComponents(url: video, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "file_id" }?.value ?? "missing"
+            return " · TorBox file \(id)"
+        }
+        if video.host == "webdav.torbox.app" { return " · WebDAV · \(video.lastPathComponent)" }
         let address = (video.host ?? "missing host") + (video.port.map { ":\($0)" } ?? "")
         return " · CDN \(address) · \(video.lastPathComponent)"
     }

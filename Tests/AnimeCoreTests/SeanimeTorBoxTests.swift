@@ -134,7 +134,7 @@ final class SeanimeTorBoxTests: XCTestCase {
         XCTAssertFalse(value.ready)
         XCTAssertTrue(try torrent().ready)
     }
-    func testOnlySelectedExactVideoFileIsResolvedAndKeyNeverHandedToPlayer() async throws {
+    func testSelectedFileCDNResolutionKeepsTheAPIKeyOutOfTheTemporaryURL() async throws {
         let url = "https://cdn.torbox.app/video/episode10.mkv?token=cdn-only"
         let transport = SeanimeTestTransport([(200,result("\"\(url)\""))])
         let value = try await TorBoxClient(key:key,transport:transport).download(torrent:torrent(),fileID:10)
@@ -224,7 +224,7 @@ final class SeanimeTorBoxTests: XCTestCase {
         do { _ = try await client.download(torrent:waiting,fileID:9); XCTFail("Expected wait") } catch { XCTAssertEqual(error as? TorBoxError,.notReady) }
         let requests = await transport.requests; XCTAssertTrue(requests.isEmpty)
     }
-    func testUnsafeFilesAndAPIKeyPermalinkAreNotPlayable() async throws {
+    func testCDNResolutionRejectsUnsafeFilesAndAccountPermalinks() async throws {
         let value = try torrent(#"{"id":7,"files":[{"id":1,"name":"infected.mkv","infected":true},{"id":2,"name":"archive.mkv","zipped":true},{"id":3,"name":"sample.zip"},{"id":4,"name":"valid.mkv"}]}"#)
         XCTAssertEqual(value.videoFiles.map(\.id),[4])
         for (url,expected) in [("http://cdn.torbox.app/file",TorBoxError.invalidPlaybackLink), ("https://api.torbox.app/v1/api/torrents/requestdl?token=\(key)",.privatePlaybackLink), ("https://cdn.torbox.app/file?token=\(key)",.privatePlaybackLink), ("file:///private/video.mkv",.invalidPlaybackLink)] {

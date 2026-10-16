@@ -19,6 +19,7 @@ struct LibraryView: View {
     @State private var reversed = false
     @State private var showSettings = false
     @State private var showDisplay = false
+    @State private var showTorBoxFiles = false
     @State private var dubEvents: [ReleaseEvent] = []
     @State private var dubProgress: [Int: LibraryDubProgress] = [:]
     @State private var now = Date()
@@ -119,6 +120,10 @@ struct LibraryView: View {
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button { showTorBoxFiles = true } label: { Image(systemName: "folder") }
+                        .accessibilityLabel("TorBox files").accessibilityIdentifier("library-torbox-files")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
                         .accessibilityLabel("Library display options").accessibilityIdentifier("library-display-options")
                 }
@@ -126,6 +131,7 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
+            .sheet(isPresented: $showTorBoxFiles) { TorBoxFilesView() }
             .task(id: syncKey) { await loadDubs() }
             .task(id: dubs.revision) { applyDubs() }
             .task(id: "\(store.isSignedIn)-\(scenePhase)") {

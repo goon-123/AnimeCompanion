@@ -146,7 +146,7 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
   playback-fixes:
-    name: TorBox CDN playback ${{ matrix.device }} regression
+    name: TorBox WebDAV and playback ${{ matrix.device }} regression
     runs-on: macos-15
     timeout-minutes: 30
     strategy:
@@ -164,7 +164,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Verify single-file and batch CDN redirects to VidHub
+      - name: Verify WebDAV browsing and private TorBox playback URLs
         run: bash scripts/check-simulator.sh ${{ matrix.device }} streams
       - name: Upload targeted screenshots and results
         if: always()
