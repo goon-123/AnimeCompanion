@@ -32,6 +32,12 @@ final class StreamSourceMetadataTests: XCTestCase {
         let stream = try JSONDecoder().decode(StremioStream.self, from: Data(json.utf8))
         XCTAssertFalse(StreamSourceMetadata(stream: stream).audio.english)
     }
+    func testSoftAndHardEnglishSubtitlesDoNotPromiseDubAudioInReleaseCards() {
+        for value in ["English Hardsub 1080p WEB", "English SoftSubs", "Japanese audio · English soft subs", "Show.Japanese.English.HardSub.mkv", "English hard-subbed"] {
+            XCTAssertFalse(StreamAudioInfo(texts: [value]).english, value)
+        }
+        XCTAssertTrue(StreamAudioInfo(texts:["English audio · Japanese audio · English SoftSubs"]).english)
+    }
     func testAudioListedAfterSubtitlesIsStillDetected() {
         let info = StreamAudioInfo(texts: ["Subtitles: en | Audio: ja, en"])
         XCTAssertTrue(info.english); XCTAssertTrue(info.japanese)

@@ -1,5 +1,9 @@
 # Anime Companion
 
+### Cleaner Find streams (0.15.0 / build 32)
+
+Find streams uses a compact poster/episode header, one shared audio filter, a cross-source release filter and consistent, shorter cards. EN/JA audio remains prominent; English hard/soft subtitles alone are not treated as an English dub. Full descriptions remain under each information button. TorBox status, download progress and exact video files expand on the same screen. Source management, catalogs and longer playback help live in the options menu instead of above the releases. Standalone Seanime search uses the same cards. Episode defaults, resume, subtitle actions and manual AniList progress controls are retained.
+
 ### Cleaner settings and TorBox downloads (0.14.0 / build 31)
 
 Settings now has dedicated TorBox, Stremio add-on, Seanime extension, video player, browsing/content and watch-tracking pages. Credentials and longer compatibility/privacy details no longer crowd the main page. Manifest URLs remain readable; API keys remain masked and device-only.

@@ -1,3 +1,13 @@
+## Cleaner Find streams — build 32
+
+Version 0.15.0. Rebuild the tracked and independent source pickers around a compact header, shared language/release filters and consistent cards. Move setup, catalogs, advanced settings and lengthy help out of the results area. Keep exact episode selection, resume, raw source information, subtitles, source identity, local-only tracking and explicit cloud submission semantics.
+
+- Direct streams and Seanime releases share one audio selection. The tracked picker’s text filter applies to both. Torrent title/provider search remains inline but collapsed until requested.
+- Use compact, explicit EN/JA/unlisted badges, restrained metadata and one-tap play. Long release descriptions remain available through information buttons; no audio evidence is discarded to shorten a card. English hard/soft subtitle labels no longer incorrectly imply an English audio track.
+- Use a compact inline TorBox status/progress header, one download action, and readable exact-file rows instead of repeated episode titles, paragraphs, confirmations and option panels. Status IDs are attached directly to text rather than a composite label. Failed cloud states stop automatic checks. Account/uncertain-submission safeguards are preserved.
+- Build-31 native results: Settings and WebDAV scenarios passed on both device families. The uncached scenario failed: a 25-second search wait expired despite a result appearing in the failure hierarchy, and a retry could not hit the composite status element. New focused scenarios use the actual 60-second worker bound, a directly identified scroll surface/status text, and opt-in owned provider setup without repeating account/install navigation. They still execute real WebKit/TypeScript and production player builders.
+- CI validation is pending. Fixtures cannot establish live account playback or actual third-party-provider availability.
+
 ## Settings and TorBox UX — build 31
 
 Version 0.14.0. Address the reported WebDAV HTTP 404 after refresh, alphabetical cloud listings, crowded settings and repetitive uncached-download confirmations.

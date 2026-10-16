@@ -45,78 +45,97 @@ struct TorBoxPlaybackControls: View {
         }
         return job?.queuedID != nil ? "Queued in TorBox" : "Checking submitted request"
     }
+    private var needsAttention: Bool {
+        let state = cloud?.download_state?.lowercased() ?? ""
+        return state.contains("fail") || state.contains("error")
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let anime { Text("Episode \(episode) · \(anime.displayTitle)").font(.caption).foregroundStyle(.secondary) }
+        VStack(alignment: .leading, spacing: 12) {
             if !seanime.hasTorBoxKey {
-                Text("Save your TorBox key in Settings to play torrents.").foregroundStyle(.orange)
+                Text("Connect TorBox to open torrent releases.").font(.subheadline).foregroundStyle(.secondary)
+                NavigationLink("Connect TorBox") { TorBoxSettingsView() }
             } else if job == nil {
-                if checked {
+                if busy {
+                    ProgressView(activity).font(.caption).accessibilityIdentifier("torbox-loading")
+                } else if checked {
                     if needsDownload {
-                        Label("Not cached on TorBox", systemImage: "arrow.down.circle").font(.subheadline)
-                            .accessibilityIdentifier("torbox-cache-miss")
-                        Text("TorBox can download this release to your account. This uses your account’s storage and download limits; playback becomes available when it’s ready.")
+                        Text("Download required").font(.subheadline.weight(.semibold)).accessibilityIdentifier("torbox-cache-miss")
+                            .accessibilityLabel("Not cached on TorBox · Download required")
+                        Text("Not cached on TorBox. Download it to your account, then choose a video file.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Button { add(cachedOnly: false) } label: { Label("Download with TorBox", systemImage: "arrow.down.to.line") }
-                            .buttonStyle(.borderedProminent).disabled(busy || provider == nil).accessibilityIdentifier("torbox-download-torrent")
+                        Button { add(cachedOnly: false) } label: {
+                            Label("Download with TorBox", systemImage: "arrow.down.to.line").frame(maxWidth: .infinity)
+                        }.buttonStyle(.borderedProminent).controlSize(.large).tint(.mint).foregroundStyle(.black)
+                            .disabled(provider == nil).accessibilityIdentifier("torbox-download-torrent")
+                        Text("Uses your TorBox storage and download limits.").font(.caption2).foregroundStyle(.secondary)
                     } else {
-                        Text("Add a cached copy to your TorBox account. If it isn’t cached, you can choose to download it next.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Button { add(cachedOnly: true) } label: { Label("Add cached copy", systemImage: "cloud") }
-                            .buttonStyle(.borderedProminent).disabled(busy || provider == nil).accessibilityIdentifier("torbox-add-torrent")
+                        Button { add(cachedOnly: true) } label: {
+                            Label("Add cached copy", systemImage: "cloud").frame(maxWidth: .infinity)
+                        }.buttonStyle(.borderedProminent).controlSize(.large).tint(.mint).foregroundStyle(.black)
+                            .disabled(provider == nil).accessibilityIdentifier("torbox-add-torrent")
+                        Text("Cached only · Won’t start an uncached download").font(.caption2).foregroundStyle(.secondary)
                     }
                 } else {
-                    Button("Check existing TorBox files") { load() }.disabled(busy)
-                        .accessibilityIdentifier("torbox-check-existing")
+                    Button("Check existing TorBox files") { load() }.accessibilityIdentifier("torbox-check-existing")
                 }
             } else {
-                Label(status, systemImage: cloud?.ready == true ? "checkmark.circle.fill" : "arrow.down.circle")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(cloud?.ready == true ? Color.mint : .primary)
-                    .accessibilityIdentifier("torbox-job-status")
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(cloud?.ready == true && cloud?.videoFiles.isEmpty == true ? "No playable video files" : status)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(cloud?.ready == true ? Color.mint : .primary)
+                            .accessibilityIdentifier("torbox-job-status")
+                        if cloud?.ready != true && error == nil && !needsAttention {
+                            Text("Updates automatically · Safe to leave and return").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    Button { load() } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }
+                        .buttonStyle(.borderless).disabled(busy || provider == nil).accessibilityLabel("Refresh TorBox files")
+                        .accessibilityIdentifier("torbox-refresh-files")
+                    Menu {
+                        if let id = job?.torrentID { Text("TorBox #\(String(id))") }
+                        Button("Forget local reference", role: .destructive) { forgetConfirmed = true }
+                    } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                        .disabled(busy).accessibilityLabel("TorBox options").accessibilityIdentifier("torbox-options")
+                }
                 if cloud?.ready != true, let progress {
-                    ProgressView(value: progress).accessibilityLabel("Download progress").accessibilityValue("\(Int((progress * 100).rounded())) percent")
-                        .accessibilityIdentifier("torbox-download-progress")
+                    ProgressView(value: progress).tint(.mint).accessibilityLabel("Download progress")
+                        .accessibilityValue("\(Int((progress * 100).rounded())) percent").accessibilityIdentifier("torbox-download-progress")
                 }
-                if cloud == nil {
-                    Text("TorBox may still be processing the request. Status checks look for existing files and never add it again.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if cloud?.ready != true && error == nil {
-                    Text("Status updates automatically while this release is open. You can leave and return later; the download stays in TorBox.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Button(cloud?.ready == true ? "Refresh TorBox files" : "Check status now") { load() }.disabled(busy || provider == nil)
-                    .accessibilityIdentifier("torbox-refresh-files")
-                DisclosureGroup("TorBox options") {
-                    Button("Forget local reference", role: .destructive) { forgetConfirmed = true }.disabled(busy)
-                    Text("This does not delete the torrent in TorBox.").font(.caption).foregroundStyle(.secondary)
-                }
+                if busy { ProgressView(activity).font(.caption).accessibilityIdentifier("torbox-loading") }
+                if needsAttention { Link("Open TorBox dashboard", destination: URL(string: "https://torbox.app")!).font(.subheadline) }
             }
-            if busy { ProgressView(activity).accessibilityIdentifier("torbox-loading") }
-            if let cloud {
-                if !cloud.ready {
-                    Text("Files will appear here when TorBox finishes preparing the release.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else if cloud.videoFiles.isEmpty {
-                    Text("TorBox has not supplied a playable video file. Refresh files or choose another release.").font(.caption).foregroundStyle(.secondary)
-                }
-                if cloud.ready && !cloud.videoFiles.isEmpty {
-                    Text(cloud.videoFiles.count == 1 ? "Video file" : "Choose your episode’s file").font(.headline)
-                    Text("Play sends a private TorBox playback link to VidHub.").font(.caption).foregroundStyle(.secondary)
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("torbox-playback-error")
+            }
+            if let cloud, cloud.ready {
+                if cloud.videoFiles.isEmpty {
+                    Text("Try another release or refresh its files.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    HStack {
+                        Text(cloud.videoFiles.count == 1 ? "Video file" : "Choose a file").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        if cloud.videoFiles.count > 1 { Text("\(cloud.videoFiles.count) videos").font(.caption).foregroundStyle(.secondary) }
+                    }
                     ForEach(cloud.videoFiles) { file in
                         Button { play(file, cloud: cloud) } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                PlaybackAudioBadge(audio: StreamAudioInfo(texts: [file.name]))
-                                Text(file.short_name?.isEmpty == false ? file.short_name! : file.name).foregroundStyle(.primary)
-                                Label("Play in VidHub", systemImage: "play.fill").font(.caption)
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5)
-                        }.buttonStyle(.borderless).disabled(!cloud.ready || busy || provider == nil)
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "play.circle.fill").font(.title2).foregroundStyle(.mint).padding(.top, 3)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(file.short_name?.isEmpty == false ? file.short_name! : file.name)
+                                        .font(.subheadline).foregroundStyle(.primary).lineLimit(3)
+                                    PlaybackAudioBadge(audio: StreamAudioInfo(texts: [file.name]), compact: true)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }.padding(.vertical, 8).contentShape(Rectangle())
+                        }.buttonStyle(.plain).disabled(busy || provider == nil)
+                            .accessibilityLabel("Play in VidHub · \(file.name) · \(StreamAudioInfo(texts: [file.name]).label)")
                             .accessibilityIdentifier("torbox-file-\(file.id)")
+                        if file.id != cloud.videoFiles.last?.id { Divider() }
                     }
                 }
             }
-            if let error { Text(error).font(.callout).foregroundStyle(.orange).accessibilityIdentifier("torbox-playback-error") }
-            if let message = playback.playerMessage { Text(message).font(.caption).accessibilityIdentifier("torbox-player-message") }
+            if anime == nil, let message = playback.playerMessage {
+                Text(message).font(.caption).accessibilityIdentifier("torbox-player-message")
+            }
         }
         .confirmationDialog("Forget this local reference?", isPresented: $forgetConfirmed, titleVisibility: .visible) {
             Button("Forget reference", role: .destructive) { seanime.forgetJob(for: torrent); job = nil; cloud = nil; checked = false; load() }
@@ -133,7 +152,7 @@ struct TorBoxPlaybackControls: View {
     private func cancel() { generation = UUID(); work?.cancel(); statusWork?.cancel(); runner?.cancel(); busy = false }
     private func followStatus() {
         statusWork?.cancel()
-        guard job != nil, cloud?.ready != true, scenePhase == .active, provider != nil else { return }
+        guard job != nil, cloud?.ready != true, !needsAttention, scenePhase == .active, provider != nil else { return }
         statusWork = Task {
             do { try await Task.sleep(for: .seconds(5)); try Task.checkCancellation(); load() }
             catch {}
@@ -202,7 +221,7 @@ struct TorBoxPlaybackControls: View {
                     seanime.forgetJob(for: torrent); job = nil; submitted = false
                     if rejection == .notCached { needsDownload = true; return }
                 }
-                self.error = submitted ? "The release was submitted. Refresh TorBox files to continue. \(error.localizedDescription)" : error.localizedDescription
+                self.error = submitted ? "The request may have reached TorBox. Check its status before trying again. \(error.localizedDescription)" : error.localizedDescription
             }
         }
     }

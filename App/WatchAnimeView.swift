@@ -19,7 +19,8 @@ struct WatchAnimeView: View {
     @State private var filter = ""
     @State private var playableOnly = true
     @AppStorage("playback.audioFilter") private var audioFilterValue = StreamAudioFilter.all.rawValue
-    @State private var sourceOptionsExpanded = false
+    @State private var options = false
+    @State private var help = false
     @State private var restart = false
     @State private var searchTask: Task<Void, Never>?
     @State private var lookupID = UUID()
@@ -48,139 +49,64 @@ struct WatchAnimeView: View {
     private var visible: [Int] {
         StreamSourceSelection.indices(in: streams, audio: audioFilter, playableOnly: playableOnly, search: filter)
     }
+    private var englishDirect: Int {
+        streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count
+    }
+    private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count }
+    private var englishSummary: String? {
+        if playback.ready && sourceKind != "torrents" && !searched { return nil }
+        guard searched || torrents.searched else { return nil }
+        if sourceKind == "torrents" || !playback.ready {
+            return englishTorrents > 0 ? "English audio · \(englishTorrents) TorBox \(englishTorrents == 1 ? "release" : "releases")" : "No English audio listed yet"
+        }
+        if sourceKind == "all" && !torrents.providers.isEmpty {
+            return "English audio · \(englishDirect) direct · \(englishTorrents) TorBox"
+        }
+        return englishDirect > 0 ? "English audio · \(englishDirect) playable \(englishDirect == 1 ? "source" : "sources")" : "No playable English source listed"
+    }
     var body: some View {
-        let visibleSources = choices
         NavigationStack {
-            List {
-                Section {
-                    Text(anime.displayTitle).font(.title3.bold())
-                    if anime.format != "MOVIE" {
-                        if initialized {
-                            episodeControls
-                            if let entry = store.entry(for: anime.id) {
-                                Text("AniList · \(entry.progressValue) episodes watched").font(.caption).foregroundStyle(.secondary)
-                                    .accessibilityIdentifier("playback-anilist-progress")
-                                if let total = anime.episodes, total > 0, entry.progressValue >= total {
-                                    Text("All known episodes are watched. Choose an episode to replay.").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        } else { ProgressView("Loading AniList progress…") }
-                    }
-                    if let notice = store.libraryError {
-                        Text("AniList progress could not refresh: \(notice) Choose the episode manually if needed.")
-                            .font(.caption).foregroundStyle(.orange)
-                    }
-                    if let saved = playback.saved(animeID: anime.id, episode: episode) {
-                        if saved.finished { Label("Finished in VidHub on this device", systemImage: "checkmark.circle").foregroundStyle(.mint) }
-                        else if saved.position > 0 {
-                            Text("Resume at \(timeLabel(saved.position))").font(.subheadline)
-                                .accessibilityIdentifier("playback-resume-position")
-                            Toggle("Start from beginning", isOn: $restart)
-                        }
-                    }
-                    Picker("Source type", selection: $sourceKind) {
-                        Text("All").tag("all")
-                        Text("Streaming").tag("streaming")
-                        Text("Torrents").tag("torrents")
-                    }.pickerStyle(.segmented).accessibilityIdentifier("playback-source-kind")
-                    Button { commitEpisode(); torBoxFiles = true } label: { Label("Browse TorBox files", systemImage: "folder") }
-                        .disabled(!initialized)
-                        .accessibilityIdentifier("watch-torbox-files")
-                    if playback.ready {
-                        if loading { ProgressView("Checking add-ons · \(sourceResults?.pendingCount ?? playback.activeAddons.count) remaining").accessibilityIdentifier("playback-loading") }
-                    } else {
-                        Text(playback.installations.isEmpty ? "Add a streaming manifest to find sources." : "No stream add-ons are enabled. Catalog or subtitle add-ons do not supply video streams.")
-                        NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
-                    }
-                }
-                if !playback.installations.isEmpty {
-                    Section {
-                        NavigationLink("Browse add-on catalogs / other video IDs") { AddonCatalogHome() }
-                        Text("IMDb/Kitsu-only add-ons need their exact provider video IDs. Catalog playback stays separate from AniList; seasons are never guessed.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if let error {
-                    Section {
-                        NoticeView(message: error) { loadSources() }
-                        if !streams.isEmpty { Text("Showing the previously loaded sources for episode \(episode).").font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-                ForEach(sourceResults?.issues ?? []) { issue in
-                    Section {
-                        NoticeView(message: "\(issue.addonName): \(issue.error.localizedDescription)") { loadSources() }
-                        if issue.usingSavedSources {
-                            Text("Showing the previously loaded sources for episode \(episode) from this add-on.").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if let message = playback.playerMessage {
-                    Section("Playback") {
-                        Text(message).font(.subheadline)
-                        if playback.saved(animeID: anime.id, episode: episode)?.finished == true && store.isSignedIn {
-                            Button("Mark episode watched on AniList") { markWatched() }
-                                .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
-                        }
-                    }
-                }
-                if searched && sourceKind != "torrents" {
-                    Section("Streaming sources · \(streams.count)") {
-                        if streams.isEmpty {
-                            Text(sourceResults?.issues.isEmpty == false ? "Some add-ons could not be checked. Retry above or manage your add-ons in Settings." : "No sources were returned for this episode. Check your add-on providers or try another episode.")
-                                .foregroundStyle(.secondary).accessibilityIdentifier("playback-empty-results")
-                        } else {
-                            audioControls
-                            DisclosureGroup("Source options", isExpanded: $sourceOptionsExpanded) {
-                                TextField("Search source details", text: $filter).autocorrectionDisabled()
-                                    .accessibilityIdentifier("playback-source-search")
-                                Toggle("Playable sources only", isOn: $playableOnly)
-                            }
-                            if visibleSources.isEmpty {
-                                Text(audioFilter == .english ? "No sources match English audio. Sources with unlisted languages may still include it." : "No sources match these audio or search filters.")
-                                    .font(.subheadline).foregroundStyle(.secondary)
-                                Button("Show all sources") { audioFilterValue = StreamAudioFilter.all.rawValue; filter = ""; playableOnly = false }
-                                    .accessibilityIdentifier("playback-reset-source-filters")
-                            }
-                            ForEach(visibleSources) { choice in
-                                let stream = choice.source.stream
-                                let sourceEpisode = episode
-                                PlaybackSourceRow(stream: stream, index: choice.index,
-                                    preferred: choice.id == visibleSources.first?.id && stream.unavailableReason == nil,
-                                    openingPlayer: playback.openingPlayer,
-                                    addonName: playback.installations.count > 1 ? choice.source.addonName : nil,
-                                    play: { play(stream, expectedEpisode: sourceEpisode) }, information: { sourceInformation = choice.source })
-                                    .contextMenu {
-                                        if stream.unavailableReason == nil {
-                                            Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, expectedEpisode: sourceEpisode, fromBeginning: true) }
-                                            ForEach(Array((stream.subtitles ?? []).filter { $0.videoURL != nil }.enumerated()), id: \.offset) { index, subtitle in
-                                                Button("Play with \(subtitle.lang ?? "track \(index + 1)") subtitles") { play(stream, expectedEpisode: sourceEpisode, subtitle: subtitle.videoURL) }
-                                            }
-                                        }
-                                    }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    episodeHeader
+                    StreamPickerFilters(kind: $sourceKind, audio: $audioFilterValue, query: $filter,
+                        englishSummary: englishSummary, hasEnglish: sourceKind == "torrents" ? englishTorrents > 0 : englishDirect + englishTorrents > 0)
+                    if let message = playback.playerMessage {
+                        StreamPickerCard {
+                            Text(message).font(.subheadline).accessibilityIdentifier("playback-player-message")
+                            if playback.saved(animeID: anime.id, episode: episode)?.finished == true && store.isSignedIn {
+                                Button("Mark episode watched on AniList") { markWatched() }
+                                    .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
                             }
                         }
-                        if skipped > 0 { Text("\(skipped) malformed source entries were skipped.").font(.caption).foregroundStyle(.secondary) }
                     }
-                    Section {
-                        DisclosureGroup("Playback information") {
-                            Text("Tap a source to open VidHub. Touch and hold for subtitles or to play from the beginning.")
-                            Text("Audio labels come from each source's reported languages, names and filename. English subtitles alone do not indicate English audio. Multi audio without named languages stays unconfirmed.")
-                            Text("VidHub resume is saved on this device. AniList progress changes only when you use the watched-progress controls.")
-                        }
-                    }.font(.caption).foregroundStyle(.secondary)
-                }
-                if initialized && sourceKind != "streaming" {
-                    SeanimeSourcesSections(search: torrents, anime: anime, episode: episode, restart: restart)
-                }
-            }.navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                    if sourceKind != "torrents" { streamingSources }
+                    if initialized && sourceKind != "streaming" {
+                        SeanimeSourcesSections(search: torrents, anime: anime, episode: episode, restart: restart,
+                            resultFilter: filter, showsAudioControls: false)
+                    }
+                }.frame(maxWidth: 780).padding(16).padding(.bottom, 16).frame(maxWidth: .infinity)
+            }.background(Theme.background).accessibilityIdentifier("stream-picker-scroll")
+                .scrollDismissesKeyboard(.interactively)
+                .navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        if initialized {
-                            Button { loadSources(); torrents.search() } label: { Image(systemName: "arrow.clockwise") }
-                                .disabled(loading || playback.openingPlayer).accessibilityLabel("Reload sources")
-                                .accessibilityIdentifier("reload-playback-sources")
-                        }
+                        Button { loadSources(); torrents.search() } label: { Image(systemName: "arrow.clockwise") }
+                            .disabled(!initialized || loading || playback.openingPlayer).accessibilityLabel("Reload sources")
+                            .accessibilityIdentifier("reload-playback-sources")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button { commitEpisode(); torBoxFiles = true } label: { Label("Browse TorBox files", systemImage: "folder") }
+                                .disabled(!initialized).accessibilityIdentifier("watch-torbox-files")
+                            Button { options = true } label: { Label("Sources & options", systemImage: "slider.horizontal.3") }
+                            Button { help = true } label: { Label("Playback help", systemImage: "questionmark.circle") }
+                        } label: { Image(systemName: "ellipsis.circle") }
+                            .accessibilityLabel("Stream options").accessibilityIdentifier("stream-picker-options")
+                    }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    ToolbarItemGroup(placement: .keyboard) {
+                        if episodeFocused { Spacer(); Button("Apply episode") { commitEpisode() } }
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
@@ -189,37 +115,107 @@ struct WatchAnimeView: View {
                     torrents.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
                     torrents.search()
                 }
-                .sheet(item: $sourceInformation) { source in
-                    SourceInformationView(stream: source.stream, addonName: source.addonName)
-                }
+                .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
+                .sheet(isPresented: $options) { NavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
+                .sheet(isPresented: $help) { NavigationStack { StreamPickerHelpView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { help = false } } } } }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
-                    searchTask?.cancel()
-                    torrents.stop()
+                    searchTask?.cancel(); torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
                 .onChange(of: scenePhase) { _, phase in if phase != .active { torrents.stop() } }
         }.disabled(playback.openingPlayer)
     }
-    private var audioControls: some View {
-        let playable = streams.filter { $0.unavailableReason == nil }
-        let audio = playable.map { StreamSourceMetadata(stream: $0).audio }
-        let englishCount = audio.filter(\.english).count
-        let unlisted = audio.filter { !$0.english && !$0.japanese }.count
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(englishCount > 0 ? "English audio · \(englishCount) playable \(englishCount == 1 ? "source" : "sources")" : "No playable English source listed")
-                .font(.headline).foregroundStyle(englishCount > 0 ? Color.green : Color.secondary)
-                .accessibilityIdentifier("playback-english-availability")
-            if unlisted > 0 {
-                Text("\(unlisted) \(unlisted == 1 ? "source does" : "sources do") not confirm an audio language. Open source information to review the original text.")
-                    .font(.caption).foregroundStyle(.secondary)
+    private var episodeHeader: some View {
+        StreamPickerCard {
+            HStack(alignment: .top, spacing: 12) {
+                ArtworkImage(url: anime.coverURL, pointSize: 64) { image in image.resizable().scaledToFill() } placeholder: { Color.white.opacity(0.06) }
+                    .frame(width: 48, height: 68).clipShape(RoundedRectangle(cornerRadius: 8)).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(anime.displayTitle).font(.headline).lineLimit(2).accessibilityIdentifier("stream-picker-title")
+                    if let entry = store.entry(for: anime.id) {
+                        Text("AniList · \(entry.progressValue) episodes watched").font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("playback-anilist-progress")
+                    } else { Text(anime.format == "MOVIE" ? "Movie · VidHub" : "Choose an episode · VidHub").font(.caption).foregroundStyle(.secondary) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            Picker("Audio language", selection: $audioFilterValue) {
-                ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
-            }.pickerStyle(.segmented).accessibilityIdentifier("playback-audio-filter")
-        }.padding(.vertical, 4)
+            if anime.format != "MOVIE" {
+                if initialized { episodeControls } else { ProgressView("Loading AniList progress…").font(.caption) }
+            }
+            if let notice = store.libraryError { Text("Progress could not refresh. Choose the episode manually if needed. \(notice)").font(.caption).foregroundStyle(.orange) }
+            if let saved = playback.saved(animeID: anime.id, episode: episode) {
+                if saved.finished { Label("Finished on this device", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.mint) }
+                else if saved.position > 0 {
+                    Text("Resume at \(timeLabel(saved.position))").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("playback-resume-position")
+                    Toggle("Start from beginning", isOn: $restart).font(.caption)
+                }
+            }
+        }
+    }
+    @ViewBuilder private var streamingSources: some View {
+        let visibleSources = choices
+        if !playback.ready {
+            StreamPickerCard {
+                Label("Streaming add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
+                Text(playback.installations.isEmpty ? "Add a streaming manifest to include direct video sources." : "No compatible streaming add-ons are enabled.")
+                    .font(.caption).foregroundStyle(.secondary)
+                NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
+            }
+        } else {
+            StreamPickerHeading(title: "Streaming", count: visibleSources.count, loading: loading, countID: "playback-result-count")
+            if loading && streams.isEmpty {
+                ProgressView("Checking streaming add-ons…").font(.caption).padding(12).accessibilityIdentifier("playback-loading")
+            }
+            if let error {
+                StreamPickerCard {
+                    Text(error).font(.caption).foregroundStyle(.orange)
+                    if !streams.isEmpty { Text("Showing the previously loaded sources for episode \(episode).").font(.caption).foregroundStyle(.secondary) }
+                    Button("Try again") { loadSources() }
+                }
+            }
+            ForEach(sourceResults?.issues ?? []) { issue in
+                StreamPickerCard {
+                    Text("\(issue.addonName): \(issue.error.localizedDescription)").font(.caption).foregroundStyle(.orange)
+                    if issue.usingSavedSources { Text("Showing the previously loaded sources for episode \(episode) from this add-on.").font(.caption).foregroundStyle(.secondary) }
+                    Button("Retry source") { loadSources() }
+                }
+            }
+            if searched && streams.isEmpty && !loading {
+                StreamPickerEmptyState(title: "No streaming sources", message: "Try another episode or check your enabled add-ons.", symbol: "play.slash")
+                    .accessibilityIdentifier("playback-empty-results")
+            }
+            if !streams.isEmpty && visibleSources.isEmpty {
+                StreamPickerCard {
+                    Text(audioFilter == .english ? "No sources match English audio. Unlisted sources may still include it." : "No sources match these filters.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Button("Show all sources") { audioFilterValue = StreamAudioFilter.all.rawValue; filter = ""; playableOnly = false }
+                        .accessibilityIdentifier("playback-reset-source-filters")
+                }
+            }
+            LazyVStack(spacing: 12) {
+                ForEach(visibleSources) { choice in
+                    let stream = choice.source.stream
+                    let sourceEpisode = episode
+                    StreamPickerCard {
+                        PlaybackSourceRow(stream: stream, index: choice.index,
+                            preferred: choice.id == visibleSources.first?.id && stream.unavailableReason == nil,
+                            openingPlayer: playback.openingPlayer, addonName: choice.source.addonName,
+                            play: { play(stream, expectedEpisode: sourceEpisode) }, information: { sourceInformation = choice.source })
+                            .contextMenu {
+                                if stream.unavailableReason == nil {
+                                    Button("Play from beginning", systemImage: "backward.end.fill") { play(stream, expectedEpisode: sourceEpisode, fromBeginning: true) }
+                                    ForEach(Array((stream.subtitles ?? []).filter { $0.videoURL != nil }.enumerated()), id: \.offset) { index, subtitle in
+                                        Button("Play with \(subtitle.lang ?? "track \(index + 1)") subtitles") { play(stream, expectedEpisode: sourceEpisode, subtitle: subtitle.videoURL) }
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+            if skipped > 0 { Text("\(skipped) malformed source entries were skipped.").font(.caption2).foregroundStyle(.secondary) }
+        }
     }
     private func initializeEpisode() {
         guard !episodeChangedByUser else { return }

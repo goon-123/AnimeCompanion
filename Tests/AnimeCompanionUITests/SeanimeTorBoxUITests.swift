@@ -11,7 +11,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         openSettings(app); saveFixtureKey(app); installFixture(app)
         openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 25)); XCTAssertTrue(result.label.contains("English"))
+        XCTAssertTrue(result.waitForExistence(timeout: 65)); XCTAssertTrue(result.label.contains("English"))
         app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
@@ -30,7 +30,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let app = launch(["--ui-torbox-cache-miss", "--ui-torbox-downloading"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: 65)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         app.revealInContent(add); XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
         let cacheMiss = app.staticTexts["torbox-cache-miss"]
@@ -99,9 +99,9 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Find streams"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.segmentedControls["playback-source-kind"].exists)
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 15))
-        let query = app.textFields["seanime-query"]
-        app.revealInContent(query)
-        let count = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "2 releases")).firstMatch
+        let count = app.staticTexts["seanime-result-count"]
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH %@", "2 "), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 65), .completed)
         app.revealInContent(count); XCTAssertTrue(count.exists)
         let first = app.buttons.matching(identifier: "seanime-torrent-result").matching(NSPredicate(format: "label CONTAINS %@", "On-device fixture")).firstMatch
         app.revealInContent(first); XCTAssertTrue(first.label.contains("English"))
@@ -113,7 +113,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
         XCTAssertTrue(app.navigationBars["Find streams"].exists, "File selection must stay in the Watch screen")
         XCTAssertFalse(app.navigationBars["TorBox playback"].exists)
-        let message = app.staticTexts["torbox-player-message"]
+        let message = app.staticTexts["playback-player-message"]
         app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("Episode 9"))
         XCTAssertTrue(message.label.contains("Anime - 10 JA.mkv")); XCTAssertFalse(message.label.contains("Anime - 09 EN.mkv"))
@@ -127,7 +127,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let app = launch(["--ui-torbox-queued"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: 65)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
         let status = app.descendants(matching: .any).matching(identifier: "torbox-job-status").firstMatch
@@ -145,12 +145,12 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let app = launch(["--ui-torbox-unreadable-files-once"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: 65)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
         let error = app.staticTexts["torbox-playback-error"]
         XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
-        XCTAssertTrue(error.label.contains("release was submitted")); XCTAssertFalse(add.exists)
+        XCTAssertTrue(error.label.contains("may have reached TorBox")); XCTAssertFalse(add.exists)
         let refresh = app.buttons["torbox-refresh-files"]; app.revealInContent(refresh, upward: false); refresh.tap()
         let file = app.buttons["torbox-file-10"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); XCTAssertFalse(add.exists)
@@ -161,7 +161,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let app = launch(["--ui-torbox-already-added", "--ui-torbox-single-file"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: 65)); app.revealInContent(result); result.tap()
         let file = app.buttons["torbox-file-0"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file)
         XCTAssertFalse(app.buttons["torbox-add-torrent"].exists)

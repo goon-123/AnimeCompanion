@@ -124,6 +124,7 @@ test_arguments+=(-only-testing:AnimeCompanionUITests/PhaseThreePerformanceUITest
 test_arguments+=(-only-testing:AnimeCompanionUITests/ExploreAndAddonUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/AddonDirectoryUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests)
+test_arguments+=(-only-testing:AnimeCompanionUITests/StreamPickerUITests)
 fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
@@ -145,13 +146,11 @@ if [[ "$test_scope" == fixes ]]; then
   )
 fi
 if [[ "$test_scope" == streams ]]; then
-  # Exercise the reported WebDAV refresh-404/newest-first bug, settings
-  # categories, and the one-action uncached download/status/file handoff. The
+  # Focus on the clean picker, shared audio filters, and the actual inline
+  # uncached download/status/file handoff. Settings/WebDAV cases remain in the
   # broader fixes/focused/full scopes retain all previous regression cases.
   test_arguments=(
-    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWebDAVBrowserNavigatesSearchesRefreshesAndOpensExactFile
-    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testSettingsCategoriesKeepConnectionAndPreferencesEasyToFind
-    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testHTTP400CacheMissExplainsTheCauseAndCanBeRetriedWithUserApproval
+    -only-testing:AnimeCompanionUITests/StreamPickerUITests
   )
 fi
 run_tests() {

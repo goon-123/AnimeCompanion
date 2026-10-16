@@ -39,7 +39,7 @@ public struct StreamAudioInfo: Equatable, Sendable {
             if line.contains("invalid expression") || line.contains("syntaxerror") || line.contains("typeerror") || line.contains("referenceerror") { return "" }
             // English subtitles do not make a stream an English dub. AIOStreams uses 📝 for subtitles.
             let language = #"(?:en(?:[-_](?:us|gb))?|eng|english|ja|jpn|japanese|fr|fra|fre|french|es|spa|spanish|de|deu|ger|german|pt|por|portuguese|🇺🇸|🇬🇧|🇯🇵)"#
-            line = Self.removing(#"(?i)(?<![\p{L}\p{N}])"# + language + #"(?:\s*(?:[/,&+]|and)\s*"# + language + #")*[ ._-]+(?:subtitles?|subs?|subbed|cc|sdh)\b(?!\s*[:=])"#, from: line)
+            line = Self.removing(#"(?i)(?<![\p{L}\p{N}])"# + language + #"(?:\s*(?:[/,&+]|and)\s*"# + language + #")*[ ._-]+(?:(?:hard|soft)[ ._-]*)?(?:subtitles?|subs?|subbed|cc|sdh)\b(?!\s*[:=])"#, from: line)
             line = Self.removing(#"(?i)\b(?:en|eng|english)\s*\(\s*(?:subtitles?|subs?|cc|sdh)\s*\)"#, from: line)
             line = Self.removing(#"(?i)(?:\b(?:subtitles?|subs?|cc|sdh)\s*[:=/\-]?|📝|💬)[^\n]*?(?=\b(?:audio|languages?)\s*[:=]|$)"#, from: line)
             line = Self.removing(#"(?i)\b(?:no|without|not)\s+(?:english|en|eng)(?:\s+(?:audio|dub))?\b|\benglish\s+(?:audio|dub)\s+(?:not available|unavailable|absent)\b"#, from: line)

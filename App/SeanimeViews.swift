@@ -145,7 +145,11 @@ struct SeanimeSearchView: View {
     var anime: Anime? = nil
     var episode: Int = 1
     var body: some View {
-        List { SeanimeSourcesSections(search: search, anime: anime, episode: episode) }
+        ScrollView {
+            SeanimeSourcesSections(search: search, anime: anime, episode: episode)
+                .frame(maxWidth: 780).padding(16).padding(.bottom, 16).frame(maxWidth: .infinity)
+        }.background(Theme.background).accessibilityIdentifier("stream-picker-scroll")
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
             .task(id: "\(seanime.revision)-\(store.includeAdult)") {
                 search.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
@@ -163,76 +167,130 @@ struct SeanimeSourcesSections: View {
     var anime: Anime? = nil
     var episode: Int = 1
     var restart = false
+    var resultFilter = ""
+    var showsAudioControls = true
     @AppStorage("playback.audioFilter") private var audioValue = StreamAudioFilter.all.rawValue
+    @State private var editingSearch = false
+    @State private var releaseInfo: SeanimeSearchModel.Choice?
     @FocusState private var editing: Bool
     private var visible: [SeanimeSearchModel.Choice] {
         let audio = StreamAudioFilter(rawValue: audioValue) ?? .all
-        return search.results.enumerated().filter { audio.includes($0.element.audio) }
-            .sorted { lhs, rhs in
-                let l = lhs.element.audio.english
-                let r = rhs.element.audio.english
-                return l != r ? l : lhs.offset < rhs.offset
-            }.map(\.element)
+        let filter = resultFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        return search.results.enumerated().filter {
+            let value = $0.element
+            return audio.includes(value.audio) && (filter.isEmpty ||
+                (value.torrent.name + " " + value.provider.manifest.name + " " + value.audio.searchableText +
+                 " " + (value.torrent.formattedSize ?? "")).localizedCaseInsensitiveContains(filter))
+        }.sorted { lhs, rhs in
+            let l = lhs.element.audio.english, r = rhs.element.audio.english
+            return l != r ? l : lhs.offset < rhs.offset
+        }.map(\.element)
     }
     var body: some View {
-        Section("Torrent providers · TorBox") {
+        VStack(alignment: .leading, spacing: 12) {
+            StreamPickerHeading(title: "TorBox releases", count: visible.count, loading: search.loading, countID: "seanime-result-count")
             if search.providers.isEmpty {
-                Text("Enable a Seanime torrent provider in Settings to include torrent results.").font(.caption).foregroundStyle(.secondary)
-                NavigationLink("Manage providers & TorBox") { SeanimeSettingsView() }
+                StreamPickerCard {
+                    Text("No torrent providers enabled").font(.subheadline.weight(.semibold))
+                    NavigationLink("Manage Seanime extensions") { SeanimeSettingsView() }
+                }
             } else {
-                TextField("Search release titles", text: $search.query).focused($editing).submitLabel(.search).onSubmit { runSearch() }
-                    .autocorrectionDisabled().accessibilityIdentifier("seanime-query")
-                if search.providers.count > 1 {
-                    Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
-                        Text("All enabled providers").tag(Optional<UUID>.none)
-                        ForEach(search.providers) { Text($0.manifest.name).tag(Optional($0.id)) }
-                    }.accessibilityIdentifier("seanime-provider-picker")
+                if anime == nil {
+                    searchPanel
+                } else {
+                    DisclosureGroup("Edit torrent search", isExpanded: $editingSearch) { searchPanel.padding(.top, 8) }
+                        .font(.subheadline).padding(.horizontal, 4).accessibilityIdentifier("seanime-edit-search")
                 }
-                Button(search.providers.count > 1 && search.providerID == nil ? "Search all torrent providers" : "Search torrent releases") { runSearch() }
-                    .disabled(search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || search.loading)
-                    .accessibilityIdentifier("seanime-run-search")
-                if search.loading {
-                    ProgressView("Searching · \(search.remaining) providers remaining")
-                    Button("Cancel search") { search.stop() }
-                }
-                if search.searched || !search.results.isEmpty {
-                    Picker("Torrent audio", selection: $audioValue) {
+                if showsAudioControls {
+                    Picker("Audio language", selection: $audioValue) {
                         ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("seanime-audio-filter")
-                    Text("\(visible.count) releases · English audio listed first").font(.caption).foregroundStyle(.secondary)
-                    if !search.loading && visible.isEmpty {
-                        Text(search.results.isEmpty ? "No releases found. Try another title or provider." : "No releases match the audio filter. Unlisted releases may still include your language.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                }
+                if search.loading {
+                    HStack {
+                        Text("Searching \(search.remaining) \(search.remaining == 1 ? "provider" : "providers")…").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Cancel search") { search.stop() }.font(.caption)
+                    }.padding(.horizontal, 4)
                 }
                 ForEach(Array(search.errors.enumerated()), id: \.offset) { _, message in
-                    Text(message).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("seanime-search-error")
+                    StreamPickerCard {
+                        Text(message).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("seanime-search-error")
+                        Button("Retry torrent search") { runSearch() }.font(.subheadline)
+                    }
                 }
-                Text("Select a release to see TorBox files here. Check the episode and audio before playing; batches may contain several episodes.")
-                    .font(.caption).foregroundStyle(.secondary)
+                if search.searched && !search.loading && visible.isEmpty {
+                    StreamPickerEmptyState(title: search.results.isEmpty ? "No releases found" : "No matching releases",
+                        message: search.results.isEmpty ? "Try another title or torrent provider." : "Try All audio or clear the release filter. Unlisted audio may still include your language.",
+                        symbol: "magnifyingglass")
+                }
+                LazyVStack(spacing: 12) {
+                    ForEach(visible) { choice in
+                        releaseCard(choice)
+                    }
+                }
             }
-        }
-        ForEach(visible) { choice in
-            Section {
-                Button { search.selected = search.selected == choice.id ? nil : choice.id } label: {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(choice.provider.manifest.name).font(.caption).foregroundStyle(.secondary)
+        }.sheet(item: $releaseInfo) { choice in
+            NavigationStack {
+                Form {
+                    Section(choice.provider.manifest.name) {
                         PlaybackAudioBadge(audio: choice.audio)
-                        Text(choice.torrent.name).font(.headline).foregroundStyle(.primary)
-                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Label(search.selected == choice.id ? "Hide files" : "Show TorBox files", systemImage: search.selected == choice.id ? "chevron.up" : "play.rectangle")
-                            .font(.subheadline)
-                    }.padding(.vertical, 5)
-                }.accessibilityIdentifier("seanime-torrent-result")
-                if search.selected == choice.id {
-                    TorBoxPlaybackControls(providerID: choice.provider.id, torrent: choice.torrent, anime: anime, episode: episode, restart: restart)
-                        .id("\(choice.id)-\(episode)")
-                }
+                        Text(choice.torrent.name).textSelection(.enabled)
+                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Section { Text("Release titles and audio hints are supplied by this provider. Verify the episode and file before playing.").font(.caption).foregroundStyle(.secondary) }
+                }.navigationTitle("Release information").navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { releaseInfo = nil } } }
             }
         }
     }
-    private func runSearch() { editing = false; search.search() }
+    private var searchPanel: some View {
+        StreamPickerCard {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                TextField("Anime or release title", text: $search.query).focused($editing).submitLabel(.search).onSubmit { runSearch() }
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("seanime-query")
+                Button { runSearch() } label: { Image(systemName: "arrow.right.circle.fill").font(.title2) }
+                    .disabled(search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || search.loading)
+                    .accessibilityLabel("Search torrent releases").accessibilityIdentifier("seanime-run-search")
+            }
+            if search.providers.count > 1 {
+                Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
+                    Text("All enabled providers").tag(Optional<UUID>.none)
+                    ForEach(search.providers) { Text($0.manifest.name).tag(Optional($0.id)) }
+                }.accessibilityIdentifier("seanime-provider-picker")
+            }
+        }
+    }
+    private func releaseCard(_ choice: SeanimeSearchModel.Choice) -> some View {
+        let selected = search.selected == choice.id
+        return StreamPickerCard {
+            HStack(alignment: .top, spacing: 4) {
+                Button { search.selected = selected ? nil : choice.id } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(choice.provider.manifest.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Image(systemName: selected ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        }
+                        Text(choice.torrent.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(selected ? 3 : 2)
+                        PlaybackAudioBadge(audio: choice.audio, compact: true)
+                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders").font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("seanime-torrent-result")
+                    .accessibilityLabel("\(choice.provider.manifest.name) · \(choice.audio.label) · \(choice.torrent.name) · \(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders · \(selected ? "Hide files" : "Show TorBox files")")
+                Button { releaseInfo = choice } label: { Image(systemName: "info.circle").frame(width: 44, height: 44) }
+                    .buttonStyle(.borderless).accessibilityLabel("Release information")
+                    .accessibilityIdentifier("seanime-release-info")
+            }
+            if selected {
+                Divider()
+                TorBoxPlaybackControls(providerID: choice.provider.id, torrent: choice.torrent, anime: anime, episode: episode, restart: restart)
+                    .id("\(choice.id)-\(episode)")
+            }
+        }
+    }
+    private func runSearch() { editing = false; editingSearch = false; search.search() }
 }
 
 private struct SeanimeLicensesView: View {

@@ -48,7 +48,20 @@ final class SeanimeStore: ObservableObject {
         preview = false
         #endif
         #if DEBUG
-        if preview { client = SeanimeClient(transport: transport); return }
+        if preview {
+            client = SeanimeClient(transport: transport)
+            if ProcessInfo.processInfo.arguments.contains("--ui-stream-picker-preview") {
+                // Owned, opt-in test setup. Never reads/writes real Keychain data
+                // and still exercises the actual WebKit/TypeScript search path.
+                let source = #"class Provider { async search(opts: any): Promise<any[]> { const response = await fetch('https://provider.example/results'); return response.json(); } }"#
+                let json = #"{"id":"fixture","name":"On-device fixture","version":"1","type":"anime-torrent-provider","language":"typescript"}"#
+                if let manifest = try? JSONDecoder().decode(SeanimeManifest.self, from: Data(json.utf8)) {
+                    saved.installations = [SeanimeInstallation(manifestURL:URL(string:"https://provider.example/fixture.json")!,manifest:manifest,source:source,preferences:[:],allowedHosts:["provider.example"],adult:false)]
+                    saved.torBoxKey = "synthetic-torbox-key"
+                }
+            }
+            return
+        }
         #endif
         client = SeanimeClient()
         do {
