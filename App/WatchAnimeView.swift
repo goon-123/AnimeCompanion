@@ -16,6 +16,7 @@ struct WatchAnimeView: View {
     @State private var loading = false
     @State private var searched = false
     @State private var error: String?
+    @State private var trackingError: String?
     @State private var filter = ""
     @State private var playableOnly = true
     @AppStorage("playback.audioFilter") private var audioFilterValue = StreamAudioFilter.all.rawValue
@@ -78,6 +79,7 @@ struct WatchAnimeView: View {
                                 Button("Mark episode watched on AniList") { markWatched() }
                                     .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
                             }
+                            if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("playback-tracking-error") }
                         }
                     }
                     if sourceKind != "torrents" { streamingSources }
@@ -136,7 +138,8 @@ struct WatchAnimeView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(anime.displayTitle).font(.headline).lineLimit(2).accessibilityIdentifier("stream-picker-title")
                     if let entry = store.entry(for: anime.id) {
-                        Text("AniList · \(entry.progressValue) episodes watched").font(.caption).foregroundStyle(.secondary)
+                        let completed = anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false
+                        Text("AniList · \(entry.progressValue) episodes watched\(completed ? " · Completed" : "")").font(.caption).foregroundStyle(.secondary)
                             .accessibilityIdentifier("playback-anilist-progress")
                     } else { Text(anime.format == "MOVIE" ? "Movie · VidHub" : "Choose an episode · VidHub").font(.caption).foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
@@ -254,7 +257,7 @@ struct WatchAnimeView: View {
     }
     private func commitEpisode() { episodeFocused = false; selectEpisode(Int(episodeText) ?? episode) }
     private func resetSources() {
-        searchTask?.cancel(); lookupID = UUID(); sourceResults = nil; searched = false; loading = false; error = nil; filter = ""
+        searchTask?.cancel(); lookupID = UUID(); sourceResults = nil; searched = false; loading = false; error = nil; trackingError = nil; filter = ""
     }
     private func loadSources() {
         guard initialized, playback.ready else { return }
@@ -279,17 +282,19 @@ struct WatchAnimeView: View {
     }
     private func play(_ stream: StremioStream, expectedEpisode: Int, subtitle: URL? = nil, fromBeginning: Bool? = nil) {
         guard expectedEpisode == episode else { return }
+        trackingError = nil
         let requestedEpisode = episode, requestedRestart = fromBeginning ?? restart
         Task { await playback.play(stream: stream, anime: anime, episode: requestedEpisode, subtitle: subtitle, restart: requestedRestart) }
     }
     private func markWatched() {
+        trackingError = nil
         let progress = max(episode, store.entry(for: anime.id)?.progressValue ?? 0)
         let complete = anime.episodes.map { $0 > 0 && progress >= $0 } ?? false
         Task {
             do {
                 try await store.save(anime: anime, progress: progress, status: complete ? .completed : .watching)
                 playback.playerMessage = "Watched progress saved to AniList."
-            } catch { self.error = error.localizedDescription }
+            } catch { self.trackingError = error.localizedDescription }
         }
     }
     private func timeLabel(_ seconds: Double) -> String {
