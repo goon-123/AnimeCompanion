@@ -164,11 +164,74 @@ final class SeanimeTorBoxTests: XCTestCase {
             (401,"private \(key)",TorBoxError.unauthorized), (429,"private \(key)",.rateLimited),
             (200,#"{"success":false,"error":"DOWNLOAD_NOT_CACHED","data":null}"#,.notCached),
             (200,#"{"success":false,"error":"MONTHLY_LIMIT","data":{"monthly_limit":1}}"#,.quota),
-            (200,#"{"success":true,"error":null,"data":"wrong"}"#,.invalidResponse), (302,"private redirect",.unavailable)] {
+            (200,#"{"success":true,"error":null,"data":"wrong"}"#,.invalidResponse), (302,"private redirect",.rejected(status: 302, code: nil))] {
             do { try await TorBoxClient(key:key,transport:SeanimeTestTransport([(status,json)])).verify(); XCTFail("Expected error") }
             catch { XCTAssertEqual(error as? TorBoxError,expected); XCTAssertFalse(error.localizedDescription.contains(key)); XCTAssertFalse(error.localizedDescription.contains("private redirect")) }
         }
     }
+    func testHTTP400CacheMissAndAccountLimitsAreNotNetworkFailures() async throws {
+        for (code, detail, expected) in [
+            ("DOWNLOAD_NOT_CACHED", "Not cached", TorBoxError.notCached),
+            ("DIFF_ISSUE", "This torrent is not cached on TorBox", .notCached),
+            ("DIFF_ISSUE", "You have reached the maximum queued downloads limit", .quota),
+            ("MONTHLY_LIMIT", "Monthly limit", .quota), ("ACTIVE_LIMIT", "Active limit", .quota),
+            ("COOLDOWN_LIMIT", "Cooldown", .quota), ("DOWNLOAD_TOO_LARGE", "Too large", .quota),
+            ("PLAN_RESTRICTED_FEATURE", "Upgrade required", .planRestricted),
+            ("BOZO_TORRENT", "Invalid torrent", .invalidTorrent), ("ITEM_NOT_FOUND", "Missing", .missingTorrent)
+        ] {
+            let json = "{\"success\":false,\"error\":\"\(code)\",\"detail\":\"\(detail) private \(key)\",\"data\":null}"
+            let transport = SeanimeTestTransport([(400, json)])
+            do { _ = try await TorBoxClient(key:key, transport:transport).add(magnet:magnet, cachedOnly:true); XCTFail("Expected TorBox rejection") }
+            catch { XCTAssertEqual(error as? TorBoxError, expected); XCTAssertFalse(error.localizedDescription.contains(key)) }
+            let requests = await transport.requests
+            XCTAssertEqual(requests.count, 1, "A rejected add must never be resubmitted automatically")
+        }
+    }
+    func testUnknownHTTPRejectionsAndServerErrorsRetainOnlySafeDiagnostics() async throws {
+        for (status, code) in [(400, "FUTURE_OPTION"), (500, "DOWNLOAD_SERVER_ERROR"), (403, "PLAN_RESTRICTED_FEATURE")] {
+            let json = "{\"success\":false,\"error\":\"\(code)\",\"detail\":\"https://private.example/?token=\(key)\",\"data\":{\"token\":\"\(key)\"}}"
+            let expected: TorBoxError = code == "PLAN_RESTRICTED_FEATURE" ? .planRestricted : .rejected(status:status, code:code)
+            do { try await TorBoxClient(key:key, transport:SeanimeTestTransport([(status, json)])).verify(); XCTFail("Expected rejection") }
+            catch { XCTAssertEqual(error as? TorBoxError, expected); XCTAssertFalse(error.localizedDescription.contains(key)); XCTAssertFalse(error.localizedDescription.contains("private.example")) }
+        }
+        for code in [key, "BAD_" + key, "PRIVATE TOKEN", String(repeating:"X", count:65)] {
+            let json = "{\"success\":false,\"error\":\"\(code)\",\"detail\":\"\(key)\",\"data\":null}"
+            do { try await TorBoxClient(key:key, transport:SeanimeTestTransport([(400, json)])).verify(); XCTFail("Expected rejection") }
+            catch { XCTAssertEqual(error as? TorBoxError, .rejected(status:400, code:nil)); XCTAssertFalse(error.localizedDescription.contains(key)) }
+        }
+    }
+    func testNonJSONHTTPFailureDoesNotClaimAnOfflineDeviceOrAnInvalidKey() async throws {
+        for status in [400, 403, 422, 500, 503] {
+            do { try await TorBoxClient(key:key, transport:SeanimeTestTransport([(status, "private \(key)")])).verify(); XCTFail("Expected rejection") }
+            catch { XCTAssertEqual(error as? TorBoxError, .rejected(status:status, code:nil)); XCTAssertFalse(error.localizedDescription.contains(key)) }
+        }
+    }
+    func testCacheOnlyCanBeChangedOnlyByAnExplicitSecondAdd() async throws {
+        let transport = SeanimeTestTransport([(400, #"{"success":false,"error":"DOWNLOAD_NOT_CACHED","data":null}"#), (200, result(#"{"torrent_id":7}"#))])
+        let client = try TorBoxClient(key:key, transport:transport)
+        do { _ = try await client.add(magnet:magnet, cachedOnly:true); XCTFail("Expected cache miss") }
+        catch { XCTAssertEqual(error as? TorBoxError, .notCached) }
+        let beforeRetry = await transport.requests
+        XCTAssertEqual(beforeRetry.count, 1)
+        let id = try await client.add(magnet:magnet, cachedOnly:false)
+        XCTAssertEqual(id, 7)
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertTrue(String(data:requests[1].httpBody!, encoding:.utf8)!.contains("name=\"add_only_if_cached\"\r\n\r\nfalse"))
+    }
+    func testNetworkTimeoutOfflineAndCancellationHaveDifferentSafeOutcomes() async throws {
+        for (code, expected) in [(URLError.Code.notConnectedToInternet, TorBoxError.offline), (.timedOut, .timedOut), (.cannotConnectToHost, .unavailable)] {
+            do { try await TorBoxClient(key:key, transport:TorBoxFailingTransport(code:code)).verify(); XCTFail("Expected network failure") }
+            catch { XCTAssertEqual(error as? TorBoxError, expected); XCTAssertFalse(error.localizedDescription.contains(key)) }
+        }
+        do { try await TorBoxClient(key:key, transport:TorBoxFailingTransport(code:.cancelled)).verify(); XCTFail("Expected cancellation") }
+        catch { XCTAssertTrue(error is CancellationError) }
+    }
+}
+
+private struct TorBoxFailingTransport: HTTPTransport {
+    let code: URLError.Code
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) { throw URLError(code) }
 }
 
 private actor SeanimeTestTransport: HTTPTransport {

@@ -1,3 +1,13 @@
+## Explore pagination and TorBox error recovery — build 27
+
+Version 0.11.2, based on build 26 on main. Addresses the reported stalled Explore footer and misleading TorBox connection error.
+
+- Replace footer-frame preference tracking with an observer of the enclosing scroll view's real offset, viewport and content size. Re-evaluate after appended pages and layout changes; preserve list/grid sizing, request identity, deduplication and results on detail return. Pause automatic continuation after an empty or duplicate-only batch; a new upward gesture continues the bounded scan. No Load more button is restored.
+- Decode TorBox error envelopes before rejecting HTTP 400/5xx responses. Map cache misses, account limits, plan restrictions, invalid/missing torrents, offline state and timeout separately. Unknown HTTP failures show a status and validated code, never raw response details or API credentials. Keep cached-only enabled by default, explain its effect, and require the existing explicit account-action confirmation for an uncached retry. Do not auto-resubmit failed account writes.
+- Add four pagination-policy and five TorBox HTTP/transport regressions, plus native large-two-column/list pagination and HTTP 400 cache-miss/retry cases. Add separate targeted iPhone/iPad CI jobs while keeping all prior native suites enabled. Tests use owned scripts, synthetic TorBox responses and in-memory state, never a user's TorBox API key or real account downloads.
+
+Native tests, compilation and the IPA for this change must be verified on the new GitHub run. Actual playback with the user's TorBox account is not asserted from fixture tests; the original screenshot alone does not reveal the HTTP status/error code hidden by the old implementation.
+
 ## Standalone Seanime torrent-provider runtime + TorBox only — build 25
 
 Version 0.11.0 on `feature/on-device-seanime`, based on merged PR #15 (`f3796d8d04080bca34ae9f5fbcf5a72af6cf25e4`). User explicitly chose iPhone/iPad-only execution, no Seanime server, and **TorBox only**. No Real-Debrid integration or key was requested/used.

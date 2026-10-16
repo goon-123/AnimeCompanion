@@ -28,6 +28,35 @@ final class SeanimeTorBoxUITests: XCTestCase {
         capture("On-Device-TS-TorBox-Exact-File")
     }
     @MainActor
+    func testHTTP400CacheMissExplainsTheCauseAndCanBeRetriedWithUserApproval() {
+        let app = launch(["--ui-torbox-cache-miss"])
+        openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
+        let result = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        let add = app.buttons["torbox-add-torrent"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.buttons["Confirm add to TorBox"].tap()
+        let error = app.staticTexts["torbox-playback-error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
+        XCTAssertTrue(error.label.contains("not cached"))
+        XCTAssertFalse(error.label.contains("could not be reached"))
+        XCTAssertFalse(error.label.contains("synthetic-torbox-key"))
+        XCTAssertFalse(app.buttons["torbox-file-10"].exists)
+        let cached = app.switches["torbox-cached-only"]
+        app.revealInContent(cached, upward: false)
+        XCTAssertEqual(cached.value as? String, "1", "An error must not silently allow uncached account downloads")
+        capture("HTTP400-Cache-Miss-Explained")
+        cached.tap()
+        app.revealInContent(add); add.tap()
+        app.buttons["Confirm add to TorBox"].tap()
+        let file = app.buttons["torbox-file-10"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
+        let message = app.staticTexts["torbox-player-message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        XCTAssertTrue(message.label.contains("selected-file-10.mkv"))
+        capture("Explicit-Uncached-Retry-Exact-File")
+    }
+    @MainActor
     func testUnapprovedHostCannotBecomeSuccessfulEmptySearch() {
         let app = launch(["--ui-seanime-blocked-host"])
         openSettings(app); installFixture(app); openSearch(app)

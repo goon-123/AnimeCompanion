@@ -69,6 +69,45 @@ final class ExploreAndAddonUITests: XCTestCase {
         XCTAssertTrue(next.isHittable)
         capture("Automatic-Pagination-And-Back")
     }
+    @MainActor
+    func testLargeTwoColumnPostersAutomaticallyLoadMoreAfterScrollingStops() {
+        let app = launch(); app.buttons["explore-search"].tap()
+        XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 10))
+        app.buttons["discovery-layout"].tap(); app.buttons["discovery-layout-option-grid"].tap()
+        app.buttons["discovery-columns"].tap(); app.buttons["discovery-column-option-2"].tap()
+        app.buttons["explore-display-options"].tap()
+        let size = app.sliders["explore-grid-size"]
+        app.revealInContent(size); size.adjust(toNormalizedSliderPosition: 1)
+        app.buttons["Done"].tap()
+        assertScrollLoadsNextPage(app)
+        let next = app.buttons["discovery-entry-25"]
+        app.revealInContent(next); next.tap()
+        XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10))
+        app.returnToBrowsing()
+        XCTAssertTrue(app.staticTexts["discovery-count"].label.contains("48"))
+        XCTAssertTrue(next.isHittable)
+        capture("Large-Two-Column-Automatic-Pagination")
+    }
+    @MainActor
+    func testListAutomaticallyLoadsMoreAfterScrollingStops() {
+        let app = launch(); app.buttons["explore-search"].tap()
+        XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 10))
+        app.buttons["discovery-layout"].tap(); app.buttons["discovery-layout-option-list"].tap()
+        assertScrollLoadsNextPage(app)
+        capture("List-Automatic-Pagination")
+    }
+    @MainActor private func assertScrollLoadsNextPage(_ app: XCUIApplication) {
+        let next = app.buttons["discovery-entry-25"]
+        let marker = app.descendants(matching: .any).matching(identifier: "discovery-pagination").firstMatch
+        for _ in 0..<40 {
+            if next.exists || marker.isHittable { break }
+            app.browseSurface.swipeUp()
+        }
+        // Stop gestures at the old footer. The page must arrive on its own.
+        XCTAssertTrue(next.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["discovery-count"].label.contains("48"))
+        XCTAssertFalse(app.buttons["discovery-more"].exists)
+    }
     @MainActor private func launch() -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()

@@ -108,7 +108,14 @@ actor SeanimePreviewTransport: HTTPTransport {
         guard let url = request.url, ["provider.example", "api.torbox.app"].contains(url.host ?? "") else { throw SeanimeError.invalidNetwork }
         let text: String
         if url.host == "api.torbox.app" {
-            if url.path.hasSuffix("createtorrent") { text = #"{"success":true,"error":null,"data":{"torrent_id":7}}"# }
+            if url.path.hasSuffix("createtorrent") {
+                if ProcessInfo.processInfo.arguments.contains("--ui-torbox-cache-miss"),
+                   String(data: request.httpBody ?? Data(), encoding: .utf8)?.contains("name=\"add_only_if_cached\"\r\n\r\ntrue") == true {
+                    let json = #"{"success":false,"error":"DIFF_ISSUE","detail":"This torrent is not cached on TorBox. private synthetic-torbox-key","data":null}"#
+                    return (Data(json.utf8), HTTPURLResponse(url: url, statusCode: 400, httpVersion: nil, headerFields: nil)!)
+                }
+                text = #"{"success":true,"error":null,"data":{"torrent_id":7}}"#
+            }
             else if url.path.hasSuffix("mylist") { text = #"{"success":true,"error":null,"data":[{"id":7,"name":"Fixture batch","download_present":true,"download_finished":true,"files":[{"id":9,"name":"Anime - 09 EN.mkv","size":1000},{"id":10,"name":"Anime - 10 JA.mkv","size":1000}]}]}"# }
             else if url.path.hasSuffix("requestdl") {
                 let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "file_id" }?.value ?? "0"

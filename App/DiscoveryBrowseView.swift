@@ -2,10 +2,6 @@ import SwiftUI
 import AnimeCore
 
 private struct DiscoveryRequestKey: Hashable { let filters: DiscoveryFilters; let includeAdult: Bool }
-private struct DiscoveryPaginationBounds: PreferenceKey {
-    static var defaultValue: CGRect { .null }
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
 
 struct DiscoveryBrowseView: View {
     @EnvironmentObject private var store: AppStore
@@ -33,6 +29,8 @@ struct DiscoveryBrowseView: View {
     @State private var loadedFilters: DiscoveryFilters?
     @State private var loadedAdult: Bool?
     @State private var paginationVisible = false
+    @State private var paginationPaused = false
+    @State private var paginationScheduled = false
     @FocusState private var searching: Bool
 
     init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil, initialGenre: String? = nil) {
@@ -133,12 +131,6 @@ struct DiscoveryBrowseView: View {
                         else if paginationError == nil { Text("Keep scrolling for more anime").font(.caption).foregroundStyle(.secondary) }
                     }.frame(maxWidth: .infinity, minHeight: 44)
                         .accessibilityIdentifier("discovery-pagination")
-                        .background {
-                            GeometryReader { marker in
-                                Color.clear.preference(key: DiscoveryPaginationBounds.self,
-                                    value: marker.frame(in: .named("discovery-viewport")))
-                            }
-                        }
                 }
                 if visibleResults.isEmpty && error == nil && paginationError == nil, let title = coverage.emptyTitle {
                     ContentUnavailableView(title, systemImage: "magnifyingglass", description: Text(coverage.emptyMessage ?? ""))
@@ -147,23 +139,18 @@ struct DiscoveryBrowseView: View {
                 }
                 DiscoveryDataNote()
             }.padding(12).readableContent(width: layout == "grid" ? 1280 : 1000)
+                .background {
+                    DiscoveryScrollObserver { nearEnd, userContinued in
+                        if paginationVisible != nearEnd { paginationVisible = nearEnd }
+                        if userContinued { paginationPaused = false }
+                        if nearEnd { automaticallyContinue() }
+                    }.frame(width: 0, height: 0)
+                }
            }.scrollDismissesKeyboard(.interactively)
-               .coordinateSpace(name: "discovery-viewport")
                .accessibilityIdentifier("discovery-scroll")
-               .onPreferenceChange(DiscoveryPaginationBounds.self) { bounds in
-                   let visible = !bounds.isNull && bounds.minY.isFinite && bounds.maxY > 0 && bounds.minY < geometry.size.height + 320
-                   let entered = visible && !paginationVisible
-                   paginationVisible = visible
-                   if entered { automaticallyContinue() }
-               }
                .onChange(of: loading) { _, busy in if !busy { automaticallyContinue() } }
-               .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-                   // One bounded filtered scan per scroll gesture, even when no
-                   // matches have appeared. An empty batch never loops by itself.
-                   if value.translation.height < -20 { automaticallyContinue() }
-               })
                .onChange(of: filters) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
-               .onChange(of: dubFilters.selection) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
+               .onChange(of: dubFilters.selection) { _, _ in paginationPaused = false; scroll.scrollTo("discovery-top", anchor: .top) }
           }
         }.background(Theme.background)
             .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
@@ -240,7 +227,7 @@ struct DiscoveryBrowseView: View {
         if loadedFilters != selected || loadedAdult != requestedAdult {
             results = []; loadedFilters = nil; page = 1; hasMore = false
         }
-        scanID = UUID(); scanning = false
+        scanID = UUID(); scanning = false; paginationPaused = false
         loading = true; loadingMore = false; error = nil; paginationError = nil
         defer { if requestID == attempt { loading = false } }
         do {
@@ -265,28 +252,38 @@ struct DiscoveryBrowseView: View {
         } catch is CancellationError {} catch { if !Task.isCancelled, requestID == attempt { paginationError = error.localizedDescription } }
     }
     private func continueBrowsing() async {
+        let attempt = requestID, previousPage = page, previousMatches = visibleResults.count
         if locallyFiltered { await fillFilteredPages(force: true) }
         else { await loadMore() }
+        if requestID == attempt, page > previousPage {
+            paginationPaused = DiscoveryPaginationPolicy.shouldPause(previousMatches: previousMatches, currentMatches: visibleResults.count)
+        }
     }
     private func automaticallyContinue() {
-        guard paginationVisible, hasMore, !loading, !loadingMore, !scanning,
+        guard paginationVisible, !paginationPaused, !paginationScheduled, hasMore, !loading, !loadingMore, !scanning,
+              dubFilters.selection.dub == .all || dubs.loaded,
               error == nil, paginationError == nil, loadedFilters == queryFilters, loadedAdult == store.includeAdult else { return }
-        Task { await continueBrowsing() }
+        paginationScheduled = true
+        Task { defer { paginationScheduled = false }; await continueBrowsing() }
     }
     private func fillFilteredPages(force: Bool = false) async {
         guard locallyFiltered, (dubFilters.selection.dub == .all || dubs.loaded), loadedFilters == queryFilters,
               loadedAdult == store.includeAdult, !loading, !loadingMore, !scanning else { return }
         let choice = dubFilters.selection, attempt = requestID, scan = UUID()
+        let previousMatches = visibleResults.count
+        var scanned = 0
         scanID = scan; scanning = true
         defer {
             if scanID == scan {
+                if scanned > 0 {
+                    paginationPaused = DiscoveryPaginationPolicy.shouldPause(previousMatches: previousMatches, currentMatches: visibleResults.count)
+                }
                 scanning = false
                 // A new local filter can arrive while the previous scan is being cancelled.
                 if choice != dubFilters.selection { Task { await fillFilteredPages() } }
             }
         }
         let target = force ? visibleResults.count + DiscoveryScanPolicy.targetMatches : DiscoveryScanPolicy.targetMatches
-        var scanned = 0
         if force { paginationError = nil }
         while DiscoveryScanPolicy.shouldContinue(matches: visibleResults.count, hasMore: hasMore, pagesScanned: scanned, target: target) {
             guard !Task.isCancelled, requestID == attempt, scanID == scan, dubFilters.selection == choice,

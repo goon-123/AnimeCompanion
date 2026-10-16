@@ -5,6 +5,8 @@ import FoundationNetworking
 
 public enum TorBoxError: LocalizedError, Equatable {
     case missingKey, unauthorized, rateLimited, notCached, quota, unavailable, invalidResponse, invalidTorrent, notReady, invalidFile
+    case planRestricted, missingTorrent, offline, timedOut
+    case rejected(status: Int, code: String?)
     public var errorDescription: String? {
         switch self {
         case .missingKey: return "Enter your TorBox API key in Seanime & TorBox settings."
@@ -12,7 +14,14 @@ public enum TorBoxError: LocalizedError, Equatable {
         case .rateLimited: return "TorBox is rate limiting requests. Wait before retrying."
         case .notCached: return "This torrent is not cached on TorBox. Turn off Cached only if you want TorBox to download it."
         case .quota: return "TorBox could not add this torrent because of an account, storage or download limit. Check your TorBox dashboard."
-        case .unavailable: return "TorBox could not be reached. Your API key has not been included in this error."
+        case .unavailable: return "The connection to TorBox failed. Check your connection and TorBox service status before retrying."
+        case .offline: return "This device is offline. Reconnect to the internet, then retry."
+        case .timedOut: return "TorBox took too long to respond. Check your TorBox dashboard before submitting the torrent again."
+        case .planRestricted: return "Your TorBox plan does not support this request. Check your plan in the TorBox dashboard."
+        case .missingTorrent: return "This torrent or file is no longer available in TorBox. Check your dashboard and forget the local reference if it was deleted."
+        case let .rejected(status, code):
+            let reason = code.map { " · \($0)" } ?? ""
+            return "TorBox returned HTTP \(status)\(reason). Check your TorBox dashboard or try another release."
         case .invalidResponse: return "TorBox returned an unexpected response."
         case .invalidTorrent: return "This result has no valid BitTorrent v1 magnet or info hash."
         case .notReady: return "TorBox is still preparing this torrent. Check readiness again later; it has not been added a second time."
@@ -53,7 +62,7 @@ private struct TorBoxEnvelope<T: Decodable>: Decodable {
 }
 private struct TorBoxCreated: Decodable { let torrent_id: Int }
 private struct TorBoxUser: Decodable { let id: Int }
-private struct TorBoxStatus: Decodable { let success: Bool; let error: String? }
+private struct TorBoxStatus: Decodable { let success: Bool; let error: String?; let detail: String? }
 private struct TorBoxList: Decodable {
     let values: [TorBoxTorrent]
     init(from decoder: Decoder) throws {
@@ -87,7 +96,7 @@ public struct TorBoxClient: Sendable {
         let boundary = "AnimeCompanion-" + UUID().uuidString
         let values = [("magnet", magnet), ("allow_zip", "false"), ("add_only_if_cached", cachedOnly ? "true" : "false")]
         let body = values.map { "--\(boundary)\r\nContent-Disposition: form-data; name=\"\($0.0)\"\r\n\r\n\($0.1)\r\n" }.joined() + "--\(boundary)--\r\n"
-        let result: TorBoxCreated = try await request("torrents/createtorrent", method: "POST", body: Data(body.utf8), contentType: "multipart/form-data; boundary=\(boundary)")
+        let result: TorBoxCreated = try await request("torrents/createtorrent", method: "POST", body: Data(body.utf8), contentType: "multipart/form-data; boundary=\(boundary)", cachedOnly: cachedOnly)
         guard result.torrent_id >= 0 else { throw TorBoxError.invalidResponse }
         return result.torrent_id
     }
@@ -110,7 +119,7 @@ public struct TorBoxClient: Sendable {
               !value.contains(key), value.removingPercentEncoding?.contains(key) != true else { throw TorBoxError.invalidResponse }
         return url
     }
-    private func request<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, contentType: String? = nil) async throws -> T {
+    private func request<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, contentType: String? = nil, cachedOnly: Bool = false) async throws -> T {
         do {
             var parts = URLComponents(string: "https://api.torbox.app/v1/api/\(path)")!
             if !query.isEmpty { parts.queryItems = query }
@@ -121,23 +130,54 @@ public struct TorBoxClient: Sendable {
             if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
             let (data, response) = try await transport.data(for: request)
             try Task.checkCancellation()
-            if response.statusCode == 401 || response.statusCode == 403 { throw TorBoxError.unauthorized }
             if response.statusCode == 429 { throw TorBoxError.rateLimited }
-            guard (200..<300).contains(response.statusCode), data.count <= 4_000_000 else { throw TorBoxError.unavailable }
-            guard let status = try? JSONDecoder().decode(TorBoxStatus.self, from: data) else { throw TorBoxError.invalidResponse }
-            if !status.success || status.error != nil {
-                switch status.error {
-                case "NO_AUTH", "BAD_TOKEN", "AUTH_ERROR": throw TorBoxError.unauthorized
-                case "DOWNLOAD_NOT_CACHED": throw TorBoxError.notCached
-                case "MONTHLY_LIMIT", "COOLDOWN_LIMIT", "ACTIVE_LIMIT", "DOWNLOAD_TOO_LARGE": throw TorBoxError.quota
-                default: throw TorBoxError.invalidResponse
-                }
+            guard data.count <= 4_000_000 else { throw TorBoxError.invalidResponse }
+            let httpSuccess = (200..<300).contains(response.statusCode)
+            // TorBox uses HTTP 400 for cache misses/account limits and HTTP 5xx
+            // for service errors. Decode its error envelope before status gating.
+            let status = try? JSONDecoder().decode(TorBoxStatus.self, from: data)
+            if let status, !status.success || status.error != nil {
+                throw rejection(status, http: response.statusCode, cachedOnly: cachedOnly)
             }
+            if response.statusCode == 401 { throw TorBoxError.unauthorized }
+            guard httpSuccess else { throw TorBoxError.rejected(status: response.statusCode, code: nil) }
+            guard status != nil else { throw TorBoxError.invalidResponse }
             guard let envelope = try? JSONDecoder().decode(TorBoxEnvelope<T>.self, from: data) else { throw TorBoxError.invalidResponse }
             guard let value = envelope.data else { throw TorBoxError.invalidResponse }
             return value
         } catch is CancellationError { throw CancellationError() }
         catch let error as TorBoxError { throw error }
+        catch let error as URLError {
+            switch error.code {
+            case .cancelled: throw CancellationError()
+            case .notConnectedToInternet: throw TorBoxError.offline
+            case .timedOut: throw TorBoxError.timedOut
+            default: throw TorBoxError.unavailable
+            }
+        }
         catch { throw TorBoxError.unavailable }
+    }
+    private func rejection(_ response: TorBoxStatus, http: Int, cachedOnly: Bool) -> TorBoxError {
+        switch response.error {
+        case "NO_AUTH", "BAD_TOKEN", "AUTH_ERROR": return .unauthorized
+        case "DOWNLOAD_NOT_CACHED": return .notCached
+        case "MONTHLY_LIMIT", "COOLDOWN_LIMIT", "ACTIVE_LIMIT", "DOWNLOAD_TOO_LARGE": return .quota
+        case "PLAN_RESTRICTED_FEATURE": return .planRestricted
+        case "BOZO_TORRENT": return .invalidTorrent
+        case "ITEM_NOT_FOUND": return .missingTorrent
+        case "DIFF_ISSUE":
+            // Inspect only for known meanings; never display raw server detail,
+            // which could echo credentials, private URLs or torrent metadata.
+            let detail = (response.detail ?? "").lowercased()
+            if cachedOnly, ["not cached", "isn't cached", "not in the cache"].contains(where: detail.contains) { return .notCached }
+            if detail.contains("maximum queued downloads") { return .quota }
+        default: break
+        }
+        let code = response.error.flatMap { value -> String? in
+            guard value.range(of: "^[A-Z][A-Z0-9_]{0,63}$", options: .regularExpression) != nil,
+                  value.range(of: key, options: .caseInsensitive) == nil else { return nil }
+            return value
+        }
+        return .rejected(status: http, code: code)
     }
 }

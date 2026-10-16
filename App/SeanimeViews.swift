@@ -244,7 +244,9 @@ private struct TorBoxPlaybackView: View {
                 if let anime { Text("Selected episode · \(anime.displayTitle) · \(episode)").font(.caption) }
                 Text("Choose the correct video file yourself, especially for batches. Adding a torrent may use TorBox account limits. Closing this screen does not delete cloud torrents. If submission is interrupted, check TorBox before submitting again.").font(.caption).foregroundStyle(.secondary)
                 if cloudID == nil {
-                    Toggle("Cached only", isOn: $cachedOnly)
+                    Toggle("Cached only", isOn: $cachedOnly).accessibilityIdentifier("torbox-cached-only")
+                    Text(cachedOnly ? "Only torrents already cached on TorBox can be added. Try another release, or turn this off to let TorBox download an uncached torrent." : "TorBox can download uncached torrents. They may need time to finish before playback is available.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Button("Add torrent to TorBox & choose file") { confirmed = true }
                         .disabled(busy || !seanime.hasTorBoxKey || provider == nil).accessibilityIdentifier("torbox-add-torrent")
                 } else {

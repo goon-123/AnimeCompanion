@@ -143,6 +143,37 @@ jobs:
         env:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
+  playback-fixes:
+    name: Pagination and TorBox ${{ matrix.device }} regressions
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Verify reported scrolling and TorBox regressions
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} fixes
+      - name: Upload targeted screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-fixes-${{ matrix.device }}
+          path: |
+            build/fixes-${{ matrix.device }}-screenshots
+            build/Fixes-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   simulator:
     name: ${{ matrix.label }}
     runs-on: macos-15
