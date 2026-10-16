@@ -54,6 +54,11 @@ struct WatchAnimeView: View {
         streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count
     }
     private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count }
+    private var hasEnglishReports: Bool {
+        if sourceKind == "streaming" { return englishDirect > 0 }
+        if sourceKind == "torrents" { return englishTorrents > 0 }
+        return englishDirect + englishTorrents > 0
+    }
     private var englishSummary: String? {
         if playback.ready && sourceKind != "torrents" && !searched { return nil }
         guard searched || torrents.searched else { return nil }
@@ -71,7 +76,7 @@ struct WatchAnimeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     episodeHeader
                     StreamPickerFilters(kind: $sourceKind, audio: $audioFilterValue, query: $filter,
-                        englishSummary: englishSummary, hasEnglish: sourceKind == "torrents" ? englishTorrents > 0 : englishDirect + englishTorrents > 0)
+                        englishSummary: englishSummary, hasEnglish: hasEnglishReports)
                     if let message = playback.playerMessage {
                         StreamPickerCard {
                             Text(message).font(.subheadline).accessibilityIdentifier("playback-player-message")
