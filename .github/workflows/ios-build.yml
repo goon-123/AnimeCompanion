@@ -171,6 +171,7 @@ jobs:
           name: AnimeCompanion-fixes-${{ matrix.device }}
           path: |
             build/fixes-${{ matrix.device }}-screenshots
+            build/fixes-${{ matrix.device }}-diagnostics
             build/Fixes-${{ matrix.device }}.xcresult
           if-no-files-found: ignore
           retention-days: 30

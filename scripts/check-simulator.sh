@@ -116,9 +116,22 @@ if [[ "$test_scope" == fixes ]]; then
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testOnDeviceTypeScriptSearchAndExactTorBoxFileHandoff
   )
 fi
+run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
   "${test_arguments[@]}" \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+}
+if [[ "$test_scope" == fixes ]]; then
+  # XCTest can otherwise spend the whole job waiting for a process that aborted
+  # before its first screen. Keep the actual crash, rather than masking a timeout.
+  run_tests &
+  native_test_pid=$!
+  python3 scripts/watch-simulator-crash.py "$native_test_pid" "$simulator_id" "build/fixes-${device_family}-diagnostics" &
+  background_watcher_pid=$!
+  wait "$native_test_pid"
+else
+  run_tests
+fi
