@@ -120,7 +120,7 @@ struct WatchAnimeView: View {
                     }
                 }
                 if searched && sourceKind != "torrents" {
-                    Section("Sources · \(streams.count)") {
+                    Section("Streaming sources · \(streams.count)") {
                         if streams.isEmpty {
                             Text(sourceResults?.issues.isEmpty == false ? "Some add-ons could not be checked. Retry above or manage your add-ons in Settings." : "No sources were returned for this episode. Check your add-on providers or try another episode.")
                                 .foregroundStyle(.secondary).accessibilityIdentifier("playback-empty-results")

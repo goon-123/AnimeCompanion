@@ -6,7 +6,12 @@ final class SeanimeSearchModel: ObservableObject {
     struct Choice: Identifiable {
         let provider: SeanimeInstallation
         let torrent: SeanimeTorrent
+        let audio: StreamAudioInfo
         var id: String { "\(provider.id)-\(torrent.id)" }
+        init(provider: SeanimeInstallation, torrent: SeanimeTorrent) {
+            self.provider = provider; self.torrent = torrent
+            audio = StreamAudioInfo(texts: [torrent.name])
+        }
     }
     @Published var query = ""
     @Published var selected: String?

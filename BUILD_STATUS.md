@@ -7,7 +7,7 @@ Version 0.12.0. The user tested build 27 and confirmed Explore scrolling is fixe
 - Find already-added releases by exact normalized info hash, including base32 and paged account lists. Persist a pending reference before POST, preserve accepted/uncertain references across closing/reopening, and refresh using GET only. A cache/account rejection permits a separately confirmed retry. A queued ID is never used as a torrent ID. Existing saved numeric references migrate without losing their jobs, and changing API keys clears both reference formats.
 - Add seven core cases and four native scenarios covering queued receipts, unreadable file-list recovery, previously added releases and the unified Watch flow. Use owned providers and synthetic account responses throughout. Keep the confirmed pagination fix and all existing test suites.
 
-Validation for this build is pending CI; live playback with the user's TorBox account is not claimed from fixture tests.
+The first build-28 run compiled and packaged the universal Release app; all 252 active core cases and 14 runtime cases passed (257 core cases enumerated, five optional/live skips). Native verification continues with two-provider coverage, an observed thumb tap for the cached-only switch, and exact tracked/untracked handoff assertions. Audio metadata is computed once per torrent result, rather than on every sort comparison. Live playback with the user's TorBox account is not claimed from fixture tests.
 
 ## Explore pagination and TorBox error recovery — build 27
 

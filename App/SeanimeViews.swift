@@ -168,10 +168,10 @@ struct SeanimeSourcesSections: View {
     @FocusState private var editing: Bool
     private var visible: [SeanimeSearchModel.Choice] {
         let audio = StreamAudioFilter(rawValue: audioValue) ?? .all
-        return search.results.enumerated().filter { audio.includes(StreamAudioInfo(texts: [$0.element.torrent.name])) }
+        return search.results.enumerated().filter { audio.includes($0.element.audio) }
             .sorted { lhs, rhs in
-                let l = StreamAudioInfo(texts: [lhs.element.torrent.name]).english
-                let r = StreamAudioInfo(texts: [rhs.element.torrent.name]).english
+                let l = lhs.element.audio.english
+                let r = rhs.element.audio.english
                 return l != r ? l : lhs.offset < rhs.offset
             }.map(\.element)
     }
@@ -218,7 +218,7 @@ struct SeanimeSourcesSections: View {
                 Button { search.selected = search.selected == choice.id ? nil : choice.id } label: {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(choice.provider.manifest.name).font(.caption).foregroundStyle(.secondary)
-                        PlaybackAudioBadge(audio: StreamAudioInfo(texts: [choice.torrent.name]))
+                        PlaybackAudioBadge(audio: choice.audio)
                         Text(choice.torrent.name).font(.headline).foregroundStyle(.primary)
                         Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders")
                             .font(.caption).foregroundStyle(.secondary)

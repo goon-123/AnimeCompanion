@@ -155,7 +155,8 @@ actor SeanimePreviewTransport: HTTPTransport {
             } else {
                 payload = #"class Provider { getSettings() { return { supportsAdult: false }; } async search(opts: any): Promise<any[]> { const response = await fetch('https://provider.example/results'); return response.json(); } }"#
             }
-            let object: [String: Any] = ["id": "fixture", "name": "On-device fixture", "version": "1", "type": "anime-torrent-provider", "language": "typescript",
+            let manifestID = url.deletingPathExtension().lastPathComponent
+            let object: [String: Any] = ["id": manifestID, "name": manifestID == "fixture" ? "On-device fixture" : "Another provider", "version": "1", "type": "anime-torrent-provider", "language": "typescript",
                 "payload": payload]
             let data = try JSONSerialization.data(withJSONObject: object)
             return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
