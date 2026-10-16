@@ -99,7 +99,7 @@ final class SeanimeTorBoxTests: XCTestCase {
     func testExplicitTorBoxAddUsesMultipartAndCachedOnlyWithoutOverridingSeedingSettings() async throws {
         let transport = SeanimeTestTransport([(200,result(#"{"torrent_id":7}"#))])
         let id = try await TorBoxClient(key:key,transport:transport).add(magnet:magnet,cachedOnly:true)
-        XCTAssertEqual(id,7)
+        XCTAssertEqual(id.torrentID,7)
         let requests = await transport.requests, request = try XCTUnwrap(requests.first)
         XCTAssertEqual(request.httpMethod,"POST"); XCTAssertEqual(request.url?.path,"/v1/api/torrents/createtorrent")
         let body = String(data:request.httpBody!,encoding:.utf8)!
@@ -214,7 +214,7 @@ final class SeanimeTorBoxTests: XCTestCase {
         let beforeRetry = await transport.requests
         XCTAssertEqual(beforeRetry.count, 1)
         let id = try await client.add(magnet:magnet, cachedOnly:false)
-        XCTAssertEqual(id, 7)
+        XCTAssertEqual(id.torrentID, 7)
         let requests = await transport.requests
         XCTAssertEqual(requests.count, 2)
         XCTAssertTrue(String(data:requests[1].httpBody!, encoding:.utf8)!.contains("name=\"add_only_if_cached\"\r\n\r\nfalse"))
@@ -226,6 +226,81 @@ final class SeanimeTorBoxTests: XCTestCase {
         }
         do { try await TorBoxClient(key:key, transport:TorBoxFailingTransport(code:.cancelled)).verify(); XCTFail("Expected cancellation") }
         catch { XCTAssertTrue(error is CancellationError) }
+    }
+    func testQueuedSubmissionRecoversByHashAndResolvesTheSelectedFileWithOnlyOnePOST() async throws {
+        let batch = ready.replacingOccurrences(of: "\"name\":\"Batch\"", with: "\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"name\":\"Batch\"")
+        let transport = SeanimeTestTransport([
+            (200, result(#"{"queued_id":31,"torrent_id":null,"active_limit":3}"#)),
+            (200, result("[\(batch)]")), (200, result(#""https://cdn.example/episode10.mkv""#))])
+        let client = try TorBoxClient(key:key, transport:transport)
+        let job = try await client.add(magnet:magnet, cachedOnly:false)
+        XCTAssertNil(job.torrentID); XCTAssertEqual(job.queuedID,31)
+        let resolved = try await client.resolve(job)
+        let cloud = try XCTUnwrap(resolved)
+        XCTAssertEqual(cloud.id,7)
+        let url = try await client.download(torrent:cloud, fileID:10)
+        XCTAssertEqual(url.absoluteString,"https://cdn.example/episode10.mkv")
+        let requests = await transport.requests
+        XCTAssertEqual(requests.filter { $0.httpMethod == "POST" }.count,1)
+        XCTAssertFalse(requests[1].url!.absoluteString.contains("id=31"), "A queue ID is never a torrent ID")
+        XCTAssertTrue(requests[2].url!.absoluteString.contains("file_id=10"))
+    }
+    func testSuccessfulReceiptWithoutIDsIsRecoverableAndNeverAutomaticallyResubmitted() async throws {
+        for payload in ["null", "{}", #"{"torrent_id":"7"}"#, #"{"torrent_id":false,"queued_id":null}"#] {
+            let batch = ready.replacingOccurrences(of:"\"id\":7", with:"\"id\":\"7\",\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"")
+            let transport = SeanimeTestTransport([(200,result(payload)),(200,result("[\(batch)]"))])
+            let client = try TorBoxClient(key:key,transport:transport)
+            let job = try await client.add(magnet:magnet,cachedOnly:true)
+            XCTAssertEqual(job.infoHash,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            let cloud = try await client.resolve(job)
+            XCTAssertEqual(cloud?.id,7)
+            let requests = await transport.requests
+            XCTAssertEqual(requests.map(\.httpMethod),["POST","GET"])
+        }
+    }
+    func testSDKArbitraryErrorValueDoesNotInvalidateASuccessfulReceipt() async throws {
+        for value in ["false", "{}", "[]", "null", "\"\""] {
+            let json = "{\"success\":true,\"error\":\(value),\"detail\":null,\"data\":{\"torrent_id\":7}}"
+            let job = try await TorBoxClient(key:key,transport:SeanimeTestTransport([(200,json)])).add(magnet:magnet,cachedOnly:true)
+            XCTAssertEqual(job.torrentID,7)
+        }
+    }
+    func testOptionalDisplayMetadataDoesNotBreakFilesAndUnknownSafetyFlagsCannotPlay() async throws {
+        let json = #"{"id":"7","download_present":true,"download_finished":true,"progress":"1","files":[{"id":"9","name":"episode.mkv","short_name":null,"mimetype":false,"size":"123"},{"id":10,"name":"unsafe.mkv","infected":"unknown"},{"id":11,"name":"zipped.mkv","zipped":{}}]}"#
+        let client = try TorBoxClient(key:key,transport:SeanimeTestTransport([(200,result(json))]))
+        let cloud = try await client.torrent(id:7)
+        XCTAssertTrue(cloud.ready); XCTAssertEqual(cloud.videoFiles.map(\.id),[9])
+        XCTAssertNil(cloud.progress); XCTAssertNil(cloud.videoFiles[0].mimetype)
+    }
+    func testHashRecoveryDoesNotChooseSimilarNamesAndNormalizesBase32() async throws {
+        let unrelated = #"{"id":8,"name":"Batch","hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","files":[]}"#
+        let transport = SeanimeTestTransport([(200,result("[\(unrelated)]"))])
+        let value = try await TorBoxClient(key:key,transport:transport).resolve(TorBoxJob(magnet:magnet))
+        XCTAssertNil(value)
+        let job = try TorBoxJob(magnet:"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        XCTAssertEqual(job.infoHash,String(repeating:"0",count:40))
+        XCTAssertEqual(try JSONDecoder().decode(TorBoxJob.self,from:JSONEncoder().encode(job)),job)
+    }
+    func testHashRecoveryPagesPastAnAccountPageAndKeepsTheExactFileID() async throws {
+        let first = (0..<100).map { "{\"id\":\($0 + 100),\"hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}" }.joined(separator:",")
+        let batch = ready.replacingOccurrences(of:"\"id\":7", with:"\"id\":7,\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"")
+        let transport = SeanimeTestTransport([(200,result("[\(first)]")),(200,result("[\(batch)]"))])
+        let cloud = try await TorBoxClient(key:key,transport:transport).resolve(TorBoxJob(magnet:magnet))
+        XCTAssertEqual(cloud?.videoFiles.map(\.id),[9,10])
+        let requests = await transport.requests
+        XCTAssertTrue(requests[1].url!.absoluteString.contains("offset=100"))
+        XCTAssertTrue(requests.allSatisfy { $0.httpMethod == "GET" })
+    }
+    func testAcceptedJobCanWaitForMetadataWithoutLosingItsID() async throws {
+        let transport = SeanimeTestTransport([(200,result("null")),(200,result(ready))])
+        let client = try TorBoxClient(key:key,transport:transport)
+        let job = TorBoxJob(torrentID:7)
+        let waiting = try await client.resolve(job)
+        XCTAssertNil(waiting)
+        let ready = try await client.resolve(job)
+        XCTAssertEqual(ready?.id,7)
+        let requests = await transport.requests
+        XCTAssertTrue(requests.allSatisfy { $0.httpMethod == "GET" })
     }
 }
 

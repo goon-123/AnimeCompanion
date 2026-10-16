@@ -142,182 +142,98 @@ struct SeanimeSearchView: View {
     @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var search = SeanimeSearchModel()
     var anime: Anime? = nil
     var episode: Int = 1
-    @State private var providerID: UUID?
-    @State private var query = ""
-    @State private var results: [SeanimeTorrent] = []
-    @State private var loading = false
-    @State private var error: String?
-    @State private var selected: SeanimeTorrent?
-    @State private var task: Task<Void, Never>?
-    @State private var runner: SeanimeRunner?
-    @State private var audio = StreamAudioFilter.all
-    @State private var lookupID = UUID()
+    var body: some View {
+        List { SeanimeSourcesSections(search: search, anime: anime, episode: episode) }
+            .navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
+            .task(id: "\(seanime.revision)-\(store.includeAdult)") {
+                search.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
+                if anime != nil { search.search() }
+            }
+            .onChange(of: scenePhase) { _, phase in if phase != .active { search.stop() } }
+            .onDisappear { search.stop() }
+    }
+}
+
+/// Sections share their parent's lifecycle; scrolling a row offscreen must not
+/// cancel another provider or restart the whole search.
+struct SeanimeSourcesSections: View {
+    @ObservedObject var search: SeanimeSearchModel
+    var anime: Anime? = nil
+    var episode: Int = 1
+    var restart = false
+    @AppStorage("playback.audioFilter") private var audioValue = StreamAudioFilter.all.rawValue
     @FocusState private var editing: Bool
-    private var providers: [SeanimeInstallation] { seanime.installations.filter { $0.enabled && (store.includeAdult || !$0.adult) } }
-    private var provider: SeanimeInstallation? { providers.first { $0.id == providerID } }
-    private var visible: [SeanimeTorrent] {
-        results.enumerated().filter { audio.includes(StreamAudioInfo(texts: [$0.element.name])) }
+    private var visible: [SeanimeSearchModel.Choice] {
+        let audio = StreamAudioFilter(rawValue: audioValue) ?? .all
+        return search.results.enumerated().filter { audio.includes(StreamAudioInfo(texts: [$0.element.torrent.name])) }
             .sorted { lhs, rhs in
-                let l = StreamAudioInfo(texts: [lhs.element.name]).english, r = StreamAudioInfo(texts: [rhs.element.name]).english
+                let l = StreamAudioInfo(texts: [lhs.element.torrent.name]).english
+                let r = StreamAudioInfo(texts: [rhs.element.torrent.name]).english
                 return l != r ? l : lhs.offset < rhs.offset
             }.map(\.element)
     }
     var body: some View {
-        List {
-            Section("On-device provider search") {
-                if let anime { Text("\(anime.displayTitle) · Episode \(episode)").font(.headline) }
-                Picker("Provider", selection: $providerID) {
-                    Text("Choose provider").tag(Optional<UUID>.none)
-                    ForEach(providers) { Text($0.manifest.name).tag(Optional($0.id)) }
-                }.accessibilityIdentifier("seanime-provider-picker")
-                TextField("Search release titles", text: $query).focused($editing).submitLabel(.search).onSubmit { search() }
+        Section("Torrent providers · TorBox") {
+            if search.providers.isEmpty {
+                Text("Enable a Seanime torrent provider in Settings to include torrent results.").font(.caption).foregroundStyle(.secondary)
+                NavigationLink("Manage providers & TorBox") { SeanimeSettingsView() }
+            } else {
+                TextField("Search release titles", text: $search.query).focused($editing).submitLabel(.search).onSubmit { runSearch() }
                     .autocorrectionDisabled().accessibilityIdentifier("seanime-query")
-                Button("Search on this device") { search() }.disabled(provider == nil || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loading)
+                if search.providers.count > 1 {
+                    Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
+                        Text("All enabled providers").tag(Optional<UUID>.none)
+                        ForEach(search.providers) { Text($0.manifest.name).tag(Optional($0.id)) }
+                    }.accessibilityIdentifier("seanime-provider-picker")
+                }
+                Button(search.providers.count > 1 && search.providerID == nil ? "Search all torrent providers" : "Search torrent releases") { runSearch() }
+                    .disabled(search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || search.loading)
                     .accessibilityIdentifier("seanime-run-search")
-                if loading { ProgressView("Running provider…"); Button("Cancel search") { stop() } }
-                NavigationLink("Install/configure providers & TorBox") { SeanimeSettingsView() }
-                Text("Regular title search. Verify the episode and chosen file manually; no automatic season mapping. Audio badges reflect filenames, not verified tracks.").font(.caption).foregroundStyle(.secondary)
-            }
-            if let error { Text(error).foregroundStyle(.orange).accessibilityIdentifier("seanime-search-error") }
-            Section("Torrents · \(results.count)") {
-                Picker("Audio", selection: $audio) { ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0) } }.pickerStyle(.segmented)
-                ForEach(visible) { torrent in
-                    Button { selected = torrent } label: {
-                        VStack(alignment: .leading, spacing: 7) {
-                            PlaybackAudioBadge(audio: StreamAudioInfo(texts: [torrent.name]))
-                            Text(torrent.name).font(.headline).foregroundStyle(.primary)
-                            Text("\(torrent.formattedSize ?? "Size unlisted") · \(torrent.seeders ?? 0) seeders").font(.caption).foregroundStyle(.secondary)
-                            Label("Review in TorBox", systemImage: "play.rectangle").font(.subheadline)
-                        }.padding(.vertical, 6)
-                    }.accessibilityIdentifier("seanime-torrent-result")
+                if search.loading {
+                    ProgressView("Searching · \(search.remaining) providers remaining")
+                    Button("Cancel search") { search.stop() }
                 }
-            }
-        }.navigationTitle("Seanime sources").navigationBarTitleDisplayMode(.inline)
-            .onAppear { if providerID == nil { providerID = providers.first?.id }; if query.isEmpty { query = anime?.title?.romaji ?? anime?.displayTitle ?? "" } }
-            .onChange(of: providerID) { _, _ in stop(); results = []; error = nil }
-            .onChange(of: seanime.revision) { _, _ in stop(); results = []; if provider == nil { providerID = providers.first?.id } }
-            .onChange(of: store.includeAdult) { _, _ in stop(); results = []; if provider == nil { providerID = providers.first?.id } }
-            .onChange(of: scenePhase) { _, phase in if phase != .active { stop() } }
-            .onDisappear { stop() }
-            .sheet(item: $selected) { torrent in
-                if let provider { NavigationStack { TorBoxPlaybackView(providerID: provider.id, torrent: torrent, anime: anime, episode: episode) } }
-            }
-    }
-    private func stop() { lookupID = UUID(); task?.cancel(); runner?.cancel(); loading = false }
-    private func search() {
-        guard let provider, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        stop(); editing = false; loading = true; error = nil; results = []
-        let expected = UUID(); lookupID = expected
-        let engine = SeanimeRunner(client: seanime.client); runner = engine
-        task = Task {
-            defer { if lookupID == expected { loading = false } }
-            do { let value = try await engine.search(provider, query: query, anime: anime, allowAdult: store.includeAdult); try Task.checkCancellation(); if lookupID == expected { results = value; error = engine.warning } }
-            catch is CancellationError {} catch { if lookupID == expected { self.error = error.localizedDescription } }
-        }
-    }
-}
-
-private struct TorBoxPlaybackView: View {
-    @EnvironmentObject private var seanime: SeanimeStore
-    @EnvironmentObject private var playback: PlaybackStore
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    let providerID: UUID
-    let torrent: SeanimeTorrent
-    let anime: Anime?
-    let episode: Int
-    @State private var cachedOnly = true
-    @State private var confirmed = false
-    @State private var cloudID: Int?
-    @State private var cloud: TorBoxTorrent?
-    @State private var busy = false
-    @State private var error: String?
-    @State private var work: Task<Void, Never>?
-    @State private var runner: SeanimeRunner?
-    private var provider: SeanimeInstallation? { seanime.installations.first { $0.id == providerID && $0.enabled && (store.includeAdult || !$0.adult) } }
-    var body: some View {
-        List {
-            Section {
-                Text(torrent.name).font(.headline)
-                if let anime { Text("Selected episode · \(anime.displayTitle) · \(episode)").font(.caption) }
-                Text("Choose the correct video file yourself, especially for batches. Adding a torrent may use TorBox account limits. Closing this screen does not delete cloud torrents. If submission is interrupted, check TorBox before submitting again.").font(.caption).foregroundStyle(.secondary)
-                if cloudID == nil {
-                    Toggle("Cached only", isOn: $cachedOnly).accessibilityIdentifier("torbox-cached-only")
-                    Text(cachedOnly ? "Only torrents already cached on TorBox can be added. Try another release, or turn this off to let TorBox download an uncached torrent." : "TorBox can download uncached torrents. They may need time to finish before playback is available.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button("Add torrent to TorBox & choose file") { confirmed = true }
-                        .disabled(busy || !seanime.hasTorBoxKey || provider == nil).accessibilityIdentifier("torbox-add-torrent")
-                } else {
-                    Text("TorBox torrent #\(cloudID!) · \(cloud?.download_state ?? "Preparing")").font(.caption)
-                    Button("Check TorBox readiness") { load() }.disabled(busy).accessibilityIdentifier("torbox-refresh-files")
-                    Button("Forget this local TorBox reference", role: .destructive) { seanime.forgetJob(for: torrent); cloudID = nil; cloud = nil }
-                        .disabled(busy)
-                    Text("Forgetting a reference does not delete anything from TorBox. Use this if the cloud torrent was deleted.").font(.caption).foregroundStyle(.secondary)
-                }
-                if !seanime.hasTorBoxKey { Text("Save your TorBox key in Seanime & TorBox settings first.").foregroundStyle(.orange) }
-                if provider == nil { Text("This provider is disabled, removed, or hidden by your content setting.").foregroundStyle(.orange) }
-                if busy { ProgressView() }
-            }
-            if let cloud {
-                Section("Choose video file") {
-                    if !cloud.ready { Text("TorBox is not ready yet. Check readiness later; no automatic resubmission or polling.").font(.caption).foregroundStyle(.secondary) }
-                    ForEach(cloud.videoFiles) { file in
-                        Button { play(file, cloud: cloud) } label: {
-                            VStack(alignment: .leading) { PlaybackAudioBadge(audio: StreamAudioInfo(texts: [file.name])); Text(file.name); Text("Play in VidHub").font(.caption) }
-                        }.disabled(!cloud.ready || busy || provider == nil).accessibilityIdentifier("torbox-file-\(file.id)")
+                if search.searched || !search.results.isEmpty {
+                    Picker("Torrent audio", selection: $audioValue) {
+                        ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("seanime-audio-filter")
+                    Text("\(visible.count) releases · English audio listed first").font(.caption).foregroundStyle(.secondary)
+                    if !search.loading && visible.isEmpty {
+                        Text(search.results.isEmpty ? "No releases found. Try another title or provider." : "No releases match the audio filter. Unlisted releases may still include your language.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                ForEach(Array(search.errors.enumerated()), id: \.offset) { _, message in
+                    Text(message).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("seanime-search-error")
+                }
+                Text("Select a release to see TorBox files here. Check the episode and audio before playing; batches may contain several episodes.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            if let error { Text(error).foregroundStyle(.orange).accessibilityIdentifier("torbox-playback-error") }
-            if let message = playback.playerMessage { Text(message).font(.caption).accessibilityIdentifier("torbox-player-message") }
-        }.navigationTitle("TorBox playback").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-            .confirmationDialog("Add this torrent to your TorBox account?", isPresented: $confirmed, titleVisibility: .visible) {
-                Button("Confirm add to TorBox") { add() }
-            } message: { Text(cachedOnly ? "Cached-only is on. Uncached torrents will not be queued." : "TorBox may download this torrent using your account’s storage and download limits.") }
-            .onDisappear { work?.cancel(); runner?.cancel() }
-            .onAppear { if cloudID == nil, let id = seanime.job(for: torrent) { cloudID = id; load() } }
-            .onChange(of: seanime.revision) { _, _ in work?.cancel(); runner?.cancel(); cloud = nil; cloudID = seanime.job(for: torrent); busy = false }
-    }
-    private func add() {
-        guard cloudID == nil, !busy, let provider else { return }
-        busy = true; error = nil
-        let engine = SeanimeRunner(client: seanime.client); runner = engine
-        work = Task {
-            defer { busy = false }
-            do {
-                let magnet = try await engine.magnet(provider, torrent: torrent, allowAdult: store.includeAdult)
-                let client = try seanime.torBox()
-                cloudID = try await client.add(magnet: magnet, cachedOnly: cachedOnly)
-                if !seanime.recordJob(cloudID!, for: torrent) { error = "The cloud torrent was added, but its local reference could not be saved. Check your TorBox dashboard before submitting again." }
-                cloud = try await client.torrent(id: cloudID!)
-            } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        }
+        ForEach(visible) { choice in
+            Section {
+                Button { search.selected = search.selected == choice.id ? nil : choice.id } label: {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(choice.provider.manifest.name).font(.caption).foregroundStyle(.secondary)
+                        PlaybackAudioBadge(audio: StreamAudioInfo(texts: [choice.torrent.name]))
+                        Text(choice.torrent.name).font(.headline).foregroundStyle(.primary)
+                        Text("\(choice.torrent.formattedSize ?? "Size unlisted") · \(choice.torrent.seeders ?? 0) seeders")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Label(search.selected == choice.id ? "Hide files" : "Show TorBox files", systemImage: search.selected == choice.id ? "chevron.up" : "play.rectangle")
+                            .font(.subheadline)
+                    }.padding(.vertical, 5)
+                }.accessibilityIdentifier("seanime-torrent-result")
+                if search.selected == choice.id {
+                    TorBoxPlaybackControls(providerID: choice.provider.id, torrent: choice.torrent, anime: anime, episode: episode, restart: restart)
+                        .id("\(choice.id)-\(episode)")
+                }
+            }
         }
     }
-    private func load() {
-        guard !busy, let cloudID else { return }
-        busy = true; error = nil
-        work = Task { defer { busy = false }
-            do { cloud = try await seanime.torBox().torrent(id: cloudID) }
-            catch is CancellationError {} catch { self.error = error.localizedDescription }
-        }
-    }
-    private func play(_ file: TorBoxFile, cloud: TorBoxTorrent) {
-        guard !busy, provider != nil else { return }; busy = true; error = nil
-        work = Task { defer { busy = false }
-            do {
-                let url = try await seanime.torBox().download(torrent: cloud, fileID: file.id)
-                try Task.checkCancellation()
-                guard provider != nil, seanime.hasTorBoxKey else { throw SeanimeError.runtime }
-                let data = try JSONSerialization.data(withJSONObject: ["name": file.name, "url": url.absoluteString, "behaviorHints": ["filename": file.name]])
-                let stream = try JSONDecoder().decode(StremioStream.self, from: data)
-                if let anime { await playback.play(stream: stream, anime: anime, episode: episode, subtitle: nil, restart: false) }
-                else { await playback.playUntracked(stream: stream, title: file.name) }
-            } catch is CancellationError {} catch { self.error = error.localizedDescription }
-        }
-    }
+    private func runSearch() { editing = false; search.search() }
 }
 
 private struct SeanimeLicensesView: View {

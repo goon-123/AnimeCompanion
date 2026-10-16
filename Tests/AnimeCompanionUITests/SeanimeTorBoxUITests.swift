@@ -86,6 +86,80 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertFalse(app.buttons["seanime-torrent-result"].exists)
         capture("Worker-Explicit-Cancellation")
     }
+    @MainActor
+    func testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff() {
+        let app = launch()
+        openSettings(app); saveFixtureKey(app); installFixture(app)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["Done"].tap()
+        let watch = app.buttons["featured-watch-1"]
+        app.revealInContent(watch, upward: false); watch.tap()
+        XCTAssertTrue(app.navigationBars["Find streams"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.segmentedControls["playback-source-kind"].exists)
+        XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 15))
+        let result = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        let add = app.buttons["torbox-add-torrent"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.buttons["Confirm add to TorBox"].tap()
+        let file = app.buttons["torbox-file-10"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
+        XCTAssertTrue(app.navigationBars["Find streams"].exists, "File selection must stay in the Watch screen")
+        XCTAssertFalse(app.navigationBars["TorBox playback"].exists)
+        let message = app.staticTexts["torbox-player-message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("selected-file-10.mkv"))
+        capture("Unified-Watch-Streaming-Torrents-Inline-Files")
+    }
+    @MainActor
+    func testQueuedReceiptCanRefreshToFilesWithoutAnotherAdd() {
+        let app = launch(["--ui-torbox-queued"])
+        openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
+        let result = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        let add = app.buttons["torbox-add-torrent"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.buttons["Confirm add to TorBox"].tap()
+        let status = app.staticTexts["torbox-job-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 15)); app.revealInContent(status)
+        XCTAssertTrue(status.label.contains("Queued in TorBox")); XCTAssertTrue(status.label.contains("41"))
+        XCTAssertFalse(add.exists); XCTAssertFalse(app.staticTexts["torbox-playback-error"].exists)
+        let refresh = app.buttons["torbox-refresh-files"]; app.revealInContent(refresh); refresh.tap()
+        let file = app.buttons["torbox-file-10"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
+        XCTAssertTrue(app.staticTexts["torbox-player-message"].waitForExistence(timeout: 10))
+        capture("Queued-Receipt-Refresh-To-Exact-Files")
+    }
+    @MainActor
+    func testAcceptedTorrentSurvivesUnreadableFileResponseAndRefreshesWithoutResubmitting() {
+        let app = launch(["--ui-torbox-unreadable-files-once"])
+        openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
+        let result = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        let add = app.buttons["torbox-add-torrent"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
+        app.buttons["Confirm add to TorBox"].tap()
+        let error = app.staticTexts["torbox-playback-error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
+        XCTAssertTrue(error.label.contains("release was submitted")); XCTAssertFalse(add.exists)
+        let refresh = app.buttons["torbox-refresh-files"]; app.revealInContent(refresh, upward: false); refresh.tap()
+        let file = app.buttons["torbox-file-10"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15)); XCTAssertFalse(add.exists)
+        capture("Accepted-Torrent-Read-Only-Recovery")
+    }
+    @MainActor
+    func testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd() {
+        let app = launch(["--ui-torbox-already-added"])
+        openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
+        let result = app.buttons["seanime-torrent-result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
+        let file = app.buttons["torbox-file-10"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file)
+        XCTAssertFalse(app.buttons["torbox-add-torrent"].exists)
+        XCTAssertTrue(app.navigationBars["Find streams"].exists)
+        file.tap(); XCTAssertTrue(app.staticTexts["torbox-player-message"].waitForExistence(timeout: 10))
+        capture("Previously-Added-Release-Recovered-By-Hash")
+    }
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()

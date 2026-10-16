@@ -4,6 +4,9 @@ import AnimeCore
 struct WatchAnimeView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
+    @EnvironmentObject private var seanime: SeanimeStore
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var torrents = SeanimeSearchModel()
     @Environment(\.dismiss) private var dismiss
     let anime: Anime
     var requestedEpisode: Int? = nil
@@ -23,6 +26,7 @@ struct WatchAnimeView: View {
     @State private var initialized = false
     @State private var episodeChangedByUser = false
     @State private var sourceInformation: AddonStreamSource?
+    @State private var sourceKind = "all"
     @FocusState private var episodeFocused: Bool
     private var limit: Int { anime.format == "MOVIE" ? 1 : min(100_000, max(1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000)) }
     private var initializationKey: String {
@@ -73,6 +77,11 @@ struct WatchAnimeView: View {
                             Toggle("Start from beginning", isOn: $restart)
                         }
                     }
+                    Picker("Source type", selection: $sourceKind) {
+                        Text("All").tag("all")
+                        Text("Streaming").tag("streaming")
+                        Text("Torrents").tag("torrents")
+                    }.pickerStyle(.segmented).accessibilityIdentifier("playback-source-kind")
                     if playback.ready {
                         if loading { ProgressView("Checking add-ons · \(sourceResults?.pendingCount ?? playback.activeAddons.count) remaining").accessibilityIdentifier("playback-loading") }
                     } else {
@@ -86,10 +95,6 @@ struct WatchAnimeView: View {
                         Text("IMDb/Kitsu-only add-ons need their exact provider video IDs. Catalog playback stays separate from AniList; seasons are never guessed.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                }
-                Section {
-                    NavigationLink("Search Seanime torrent providers") { SeanimeSearchView(anime: anime, episode: episode) }
-                        .accessibilityIdentifier("seanime-watch-search")
                 }
                 if let error {
                     Section {
@@ -114,7 +119,7 @@ struct WatchAnimeView: View {
                         }
                     }
                 }
-                if searched {
+                if searched && sourceKind != "torrents" {
                     Section("Sources · \(streams.count)") {
                         if streams.isEmpty {
                             Text(sourceResults?.issues.isEmpty == false ? "Some add-ons could not be checked. Retry above or manage your add-ons in Settings." : "No sources were returned for this episode. Check your add-on providers or try another episode.")
@@ -160,18 +165,26 @@ struct WatchAnimeView: View {
                         }
                     }.font(.caption).foregroundStyle(.secondary)
                 }
-            }.navigationTitle("Watch in VidHub").navigationBarTitleDisplayMode(.inline)
+                if initialized && sourceKind != "streaming" {
+                    SeanimeSourcesSections(search: torrents, anime: anime, episode: episode, restart: restart)
+                }
+            }.navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        if playback.ready {
-                            Button { loadSources() } label: { Image(systemName: "arrow.clockwise") }
+                        if initialized {
+                            Button { loadSources(); torrents.search() } label: { Image(systemName: "arrow.clockwise") }
                                 .disabled(loading || playback.openingPlayer).accessibilityLabel("Reload sources")
                                 .accessibilityIdentifier("reload-playback-sources")
                         }
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
+                .task(id: "\(initialized)-\(episode)-\(seanime.revision)-\(store.includeAdult)") {
+                    guard initialized else { return }
+                    torrents.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
+                    torrents.search()
+                }
                 .sheet(item: $sourceInformation) { source in
                     SourceInformationView(stream: source.stream, addonName: source.addonName)
                 }
@@ -179,8 +192,10 @@ struct WatchAnimeView: View {
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
                     searchTask?.cancel()
+                    torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
+                .onChange(of: scenePhase) { _, phase in if phase != .active { torrents.stop() } }
         }.disabled(playback.openingPlayer)
     }
     private var audioControls: some View {

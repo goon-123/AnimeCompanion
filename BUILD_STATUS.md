@@ -1,3 +1,14 @@
+## Unified stream search and TorBox accepted-job recovery — build 28
+
+Version 0.12.0. The user tested build 27 and confirmed Explore scrolling is fixed. Their TorBox account also received the selected torrent, but the app could not read its response or open its video.
+
+- Keep streaming add-on results, on-device torrent search and TorBox video-file choices on the title's Find streams screen. Search all enabled torrent providers with two workers at a time, display results progressively with provider identity and English/JA hints, and share the audio preference. Selecting a torrent expands its file controls inline. Preserve explicit episode selection, subtitles, resume callbacks and manual AniList progress.
+- Accept queued creation receipts separately from active torrent IDs. Tolerate TorBox's arbitrary success-error JSON and string integer IDs; optional display metadata cannot invalidate the file list. Keep required file identities and completion/safety checks strict. Choose batch files explicitly before handing the resolved CDN URL to VidHub.
+- Find already-added releases by exact normalized info hash, including base32 and paged account lists. Persist a pending reference before POST, preserve accepted/uncertain references across closing/reopening, and refresh using GET only. A cache/account rejection permits a separately confirmed retry. A queued ID is never used as a torrent ID. Existing saved numeric references migrate without losing their jobs, and changing API keys clears both reference formats.
+- Add seven core cases and four native scenarios covering queued receipts, unreadable file-list recovery, previously added releases and the unified Watch flow. Use owned providers and synthetic account responses throughout. Keep the confirmed pagination fix and all existing test suites.
+
+Validation for this build is pending CI; live playback with the user's TorBox account is not claimed from fixture tests.
+
 ## Explore pagination and TorBox error recovery — build 27
 
 Version 0.11.2, based on build 26 on main. Addresses the reported stalled Explore footer and misleading TorBox connection error.

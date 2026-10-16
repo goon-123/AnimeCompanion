@@ -138,6 +138,10 @@ if [[ "$test_scope" == fixes ]]; then
     -only-testing:AnimeCompanionUITests/PhaseOneReliabilityUITests/testPartialFilteredScanExplainsCoverageAndCanContinueToCatalogEnd
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testHTTP400CacheMissExplainsTheCauseAndCanBeRetriedWithUserApproval
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testOnDeviceTypeScriptSearchAndExactTorBoxFileHandoff
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testQueuedReceiptCanRefreshToFilesWithoutAnotherAdd
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testAcceptedTorrentSurvivesUnreadableFileResponseAndRefreshesWithoutResubmitting
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testAlreadyAddedReleaseOpensFilesWithoutAnAccountAdd
   )
 fi
 run_tests() {

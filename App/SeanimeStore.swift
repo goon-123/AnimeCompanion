@@ -6,6 +6,7 @@ private struct SeanimeSavedState: Codable {
     var installations: [SeanimeInstallation] = []
     var torBoxKey = ""
     var jobs: [String: Int]? = [:]
+    var submissions: [String: TorBoxJob]? = [:]
 }
 private enum SeanimeKeychain {
     static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -36,14 +37,18 @@ final class SeanimeStore: ObservableObject {
     let client: SeanimeClient
     private let preview: Bool
     private var loadFailed = false
+    #if DEBUG
+    private let previewTransport: SeanimePreviewTransport
+    #endif
     init() {
         #if DEBUG
+        let transport = SeanimePreviewTransport(); previewTransport = transport
         preview = ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview")
         #else
         preview = false
         #endif
         #if DEBUG
-        if preview { client = SeanimeClient(transport: SeanimePreviewTransport()); return }
+        if preview { client = SeanimeClient(transport: transport); return }
         #endif
         client = SeanimeClient()
         do {
@@ -54,7 +59,7 @@ final class SeanimeStore: ObservableObject {
     var hasTorBoxKey: Bool { !saved.torBoxKey.isEmpty }
     func torBox() throws -> TorBoxClient {
         #if DEBUG
-        if preview { return try TorBoxClient(key: saved.torBoxKey, transport: SeanimePreviewTransport()) }
+        if preview { return try TorBoxClient(key: saved.torBoxKey, transport: previewTransport) }
         #endif
         return try TorBoxClient(key: saved.torBoxKey)
     }
@@ -62,17 +67,22 @@ final class SeanimeStore: ObservableObject {
         let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if !value.isEmpty, (try? TorBoxClient(key: value)) == nil { error = TorBoxError.missingKey.localizedDescription; return false }
         var updated = saved; updated.torBoxKey = value
-        if value != saved.torBoxKey { updated.jobs = [:] }
+        if value != saved.torBoxKey { updated.jobs = [:]; updated.submissions = [:] }
         return persist(updated)
     }
-    func job(for torrent: SeanimeTorrent) -> Int? { saved.jobs?[torrent.id] }
-    @discardableResult func recordJob(_ id: Int, for torrent: SeanimeTorrent) -> Bool {
-        var updated = saved; var jobs = updated.jobs ?? [:]; jobs[torrent.id] = id
-        if jobs.count > 256, let oldest = jobs.keys.sorted().first { jobs.removeValue(forKey: oldest) }
-        updated.jobs = jobs; return persist(updated, invalidateSearch: false)
+    func job(for torrent: SeanimeTorrent) -> TorBoxJob? {
+        if let job = saved.submissions?[torrent.id] { return job }
+        return saved.jobs?[torrent.id].map { TorBoxJob(torrentID: $0) }
+    }
+    @discardableResult func recordJob(_ job: TorBoxJob, for torrent: SeanimeTorrent) -> Bool {
+        var updated = saved; var jobs = updated.submissions ?? [:]; jobs[torrent.id] = job
+        if jobs.count > 256, let oldest = jobs.keys.sorted().first(where: { $0 != torrent.id }) { jobs.removeValue(forKey: oldest) }
+        updated.submissions = jobs; updated.jobs?.removeValue(forKey: torrent.id)
+        return persist(updated, invalidateSearch: false)
     }
     func forgetJob(for torrent: SeanimeTorrent) {
-        var updated = saved; updated.jobs?.removeValue(forKey: torrent.id); _ = persist(updated, invalidateSearch: false)
+        var updated = saved; updated.jobs?.removeValue(forKey: torrent.id); updated.submissions?.removeValue(forKey: torrent.id)
+        _ = persist(updated, invalidateSearch: false)
     }
     func install(_ candidate: SeanimeInstallation) -> Bool {
         var updated = saved
@@ -104,6 +114,8 @@ final class SeanimeStore: ObservableObject {
 
 #if DEBUG
 actor SeanimePreviewTransport: HTTPTransport {
+    private var added = false
+    private var delayedList = false
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url, ["provider.example", "api.torbox.app"].contains(url.host ?? "") else { throw SeanimeError.invalidNetwork }
         let text: String
@@ -114,9 +126,22 @@ actor SeanimePreviewTransport: HTTPTransport {
                     let json = #"{"success":false,"error":"DIFF_ISSUE","detail":"This torrent is not cached on TorBox. private synthetic-torbox-key","data":null}"#
                     return (Data(json.utf8), HTTPURLResponse(url: url, statusCode: 400, httpVersion: nil, headerFields: nil)!)
                 }
-                text = #"{"success":true,"error":null,"data":{"torrent_id":7}}"#
+                added = true
+                text = ProcessInfo.processInfo.arguments.contains("--ui-torbox-queued")
+                    ? #"{"success":true,"error":null,"data":{"queued_id":41,"torrent_id":null}}"#
+                    : #"{"success":true,"error":false,"data":{"torrent_id":"7"}}"#
             }
-            else if url.path.hasSuffix("mylist") { text = #"{"success":true,"error":null,"data":[{"id":7,"name":"Fixture batch","download_present":true,"download_finished":true,"files":[{"id":9,"name":"Anime - 09 EN.mkv","size":1000},{"id":10,"name":"Anime - 10 JA.mkv","size":1000}]}]}"# }
+            else if url.path.hasSuffix("mylist") {
+                if !added && !ProcessInfo.processInfo.arguments.contains("--ui-torbox-already-added") {
+                    text = #"{"success":true,"error":null,"data":[]}"#
+                } else if !delayedList && ProcessInfo.processInfo.arguments.contains("--ui-torbox-unreadable-files-once") {
+                    delayedList = true; text = #"{"success":true,"error":null,"data":"unreadable file list"}"#
+                } else if !delayedList && ProcessInfo.processInfo.arguments.contains("--ui-torbox-queued") {
+                    delayedList = true; text = #"{"success":true,"error":null,"data":[]}"#
+                } else {
+                    text = #"{"success":true,"error":null,"data":[{"id":"7","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","name":"Fixture batch","download_present":true,"download_finished":true,"files":[{"id":"9","name":"Anime - 09 EN.mkv","short_name":null,"mimetype":null,"size":1000},{"id":"10","name":"Anime - 10 JA.mkv","size":1000}]}]}"#
+                }
+            }
             else if url.path.hasSuffix("requestdl") {
                 let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "file_id" }?.value ?? "0"
                 text = "{\"success\":true,\"error\":null,\"data\":\"https://video.example/selected-file-\(id).mkv\"}"
