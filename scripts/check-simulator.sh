@@ -80,6 +80,30 @@ except subprocess.TimeoutExpired:
     raise SystemExit('Simulator startup timed out; rerun on a fresh runner.')
 PY
 
+# iOS 18.5 can omit WebKit's Swift overlay from dyld's default search path
+# (WebKit bug 293831). Resolve the library from this exact simulator runtime,
+# and expose it only in the disposable simulator build-products directory.
+simulator_runtime_root="$(python3 - "$simulator_id" <<'PY'
+import json, pathlib, subprocess, sys
+devices=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','--json']))['devices']
+runtime_id=next(key for key,items in devices.items() if any(d['udid']==sys.argv[1] for d in items))
+runtimes=json.loads(subprocess.check_output(['xcrun','simctl','list','runtimes','--json']))['runtimes']
+runtime=next(r for r in runtimes if r['identifier']==runtime_id)
+print(pathlib.Path(runtime['bundlePath'])/'Contents/Resources/RuntimeRoot')
+PY
+)"
+simulator_products="build/Simulator/Build/Products/Debug-iphonesimulator"
+for simulator_swift_library in \
+  "$simulator_runtime_root/System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib" \
+  "$simulator_runtime_root/usr/lib/swift/libswiftWebKit.dylib"; do
+  if [[ -f "$simulator_swift_library" ]]; then
+    mkdir -p "$simulator_products"
+    ln -sf "$simulator_swift_library" "$simulator_products/libswiftWebKit.dylib"
+    echo "Using the selected simulator runtime's WebKit Swift library."
+    break
+  fi
+done
+
 # Leave simulator services running normally. Suspending system services can
 # interfere with browser navigation, account UI, and XCTest app launch.
 
