@@ -17,6 +17,7 @@ final class ExploreAndAddonUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Alpha sources"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Beta sources"].exists)
         XCTAssertEqual(app.switches["Enable Alpha sources"].value as? String, "0")
+        let manage = app.buttons["addon-manage-Alpha sources"]; app.revealInContent(manage); manage.tap()
         let remove = app.buttons["Remove Alpha sources"]
         app.revealInContent(remove); remove.tap()
         XCTAssertFalse(app.staticTexts["Alpha sources"].exists)
@@ -120,7 +121,7 @@ final class ExploreAndAddonUITests: XCTestCase {
         app.openExploreControl("explore-settings")
         let setup = app.buttons["playback-settings"]
         app.revealInContent(setup); setup.tap()
-        XCTAssertTrue(app.navigationBars["Add-ons & playback"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Stremio add-ons"].waitForExistence(timeout: 10))
         app.revealInContent(app.textFields["addon-install-url"])
     }
     @MainActor private func install(_ path: String, name: String, in app: XCUIApplication) {

@@ -4,84 +4,78 @@ import AnimeCore
 
 struct SeanimeSettingsView: View {
     @EnvironmentObject private var seanime: SeanimeStore
-    @State private var key = ""
     @State private var manifestURL = ""
     @State private var candidate: SeanimeInstallation?
     @State private var busy = false
     @State private var notice: String?
     @State private var marketplace = false
-    @State private var files = false
     @State private var work: Task<Void, Never>?
-    private enum Editing { case key, manifest }
-    @FocusState private var editing: Editing?
+    @FocusState private var editing: Bool
     var body: some View {
         Form {
-            Section("TorBox · no Seanime server") {
-                Text(seanime.hasTorBoxKey ? "TorBox API key saved securely on this device." : "Enter your existing TorBox API key. Extensions never receive it.").font(.caption).foregroundStyle(.secondary)
-                SecureField("TorBox API key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .focused($editing, equals: .key).submitLabel(.done).onSubmit { editing = nil }.accessibilityIdentifier("torbox-api-key")
-                Button("Save TorBox key") { if seanime.saveKey(key) { key = ""; editing = nil; notice = "TorBox key saved." } }
-                    .disabled(key.isEmpty || busy).accessibilityIdentifier("torbox-save-key")
-                Button("Verify TorBox connection") {
-                    work = Task { busy = true; defer { busy = false }
-                        do { try await seanime.torBox().verify(); notice = "TorBox connected. No torrents were added." }
-                        catch is CancellationError {} catch { notice = error.localizedDescription }
-                    }
-                }.disabled(!seanime.hasTorBoxKey || busy).accessibilityIdentifier("torbox-verify")
-                Button("Remove saved TorBox key", role: .destructive) { if seanime.saveKey("") { notice = "TorBox key removed from this device." } }
-                    .disabled(!seanime.hasTorBoxKey || busy)
-                Link("Open TorBox account", destination: URL(string: "https://torbox.app/settings")!)
-                Button { editing = nil; files = true } label: { Label("Browse TorBox files (WebDAV)", systemImage: "folder") }
-                    .accessibilityIdentifier("torbox-webdav-browse")
-                Link("TorBox WebDAV help", destination: URL(string: "https://support.torbox.app/en/articles/14662867-torbox-webdav")!)
+            Section {
+                Button { editing = false; marketplace = true } label: { Label("Browse Seanime Marketplace", systemImage: "globe") }.accessibilityIdentifier("seanime-marketplace")
+                NavigationLink { SeanimeSearchView() } label: { Label("Search installed providers", systemImage: "magnifyingglass") }.accessibilityIdentifier("seanime-search")
+                NavigationLink { TorBoxSettingsView() } label: {
+                    LabeledContent("TorBox connection", value: seanime.hasTorBoxKey ? "Key saved" : "Not connected")
+                }.accessibilityIdentifier("seanime-torbox-settings")
             }
-            Section("Seanime torrent providers") {
-                Button("Browse Seanime Marketplace") { editing = nil; marketplace = true }.accessibilityIdentifier("seanime-marketplace")
+            Section {
                 TextField("Paste Seanime extension JSON URL", text: $manifestURL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .keyboardType(.URL).focused($editing, equals: .manifest).submitLabel(.done).onSubmit { editing = nil }.accessibilityIdentifier("seanime-manifest-url")
+                    .keyboardType(.URL).focused($editing).submitLabel(.done).onSubmit { editing = false }.accessibilityIdentifier("seanime-manifest-url")
                 PasteButton(payloadType: String.self) { values in if let value = values.first { manifestURL = value } }
                 Button("Review extension") {
-                    editing = nil
+                    editing = false
                     work = Task { busy = true; notice = nil; defer { busy = false }
                         do { let value = try await seanime.client.inspect(manifestURL); try Task.checkCancellation(); candidate = value }
                         catch is CancellationError {} catch { notice = error.localizedDescription }
                     }
                 }.disabled(busy || manifestURL.isEmpty).accessibilityIdentifier("seanime-review")
                 if busy { ProgressView() }
-                NavigationLink("Search installed Seanime providers") { SeanimeSearchView() }.accessibilityIdentifier("seanime-search")
-                Text("Only torrent-provider JavaScript/TypeScript is supported in this first on-device runtime. Search uses the provider’s regular search—not Seanime Smart Search or automatic season matching. Other runtime APIs may be unsupported.").font(.caption).foregroundStyle(.secondary)
-            }
+            } header: { Text("Install from URL") } footer: { Text("Review and install trusted torrent-provider extensions. Runs on this device; no Seanime server needed.") }
             Section("Installed · \(seanime.installations.count)") {
                 ForEach(seanime.installations) { installation in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(installation.manifest.name).font(.headline)
-                        Text("\(installation.manifest.version) · \(installation.manifest.language)").font(.caption).foregroundStyle(.secondary)
                         Toggle("Enable \(installation.manifest.name)", isOn: Binding(get: {
                             seanime.installations.first { $0.id == installation.id }?.enabled ?? false
                         }, set: { enabled in var value = installation; value.enabled = enabled; _ = seanime.update(value) }))
-                        NavigationLink("Configure \(installation.manifest.name)") { SeanimeConfigurationView(installation: installation) }
-                        Button("Remove \(installation.manifest.name)", role: .destructive) { seanime.remove(installation.id) }
+                        DisclosureGroup("Details & configuration") {
+                            Text("\(installation.manifest.version) · \(installation.manifest.language)").font(.caption).foregroundStyle(.secondary)
+                            NavigationLink("Configure \(installation.manifest.name)") { SeanimeConfigurationView(installation: installation) }
+                            Button("Remove \(installation.manifest.name)", role: .destructive) { seanime.remove(installation.id) }
+                        }
                     }
                 }
             }
             if let notice { Section { Text(notice).font(.caption).accessibilityIdentifier("seanime-notice") } }
             if let error = seanime.error { Section { Text(error).foregroundStyle(.orange) } }
-            Section("Execution & account safety") {
-                Text("Install only code you trust. Reviewed source snapshots are saved on this device; nothing updates or executes silently. The worker has no app credentials or tracking access. Only bounded HTTPS GETs to approved hosts are bridged; direct web networking, private-address URLs, redirects and unsupported runtime APIs are blocked.")
-                Text("The host allowlist is not a DNS firewall: only approve domains you trust. Third-party providers may log searches. Filename/episode hints are approximate; always verify the selected torrent and file.")
-                Text("TorBox is contacted only by native code. Adding a torrent requires confirmation and may use account storage/download limits. File readiness is refreshed manually. No Real-Debrid integration or local torrent engine is included.")
-                Text("Known adult providers follow Show adult anime. Other providers may return unrated content. Marketplace web pages use the website’s own filters.")
-                NavigationLink("Runtime licenses") { SeanimeLicensesView() }
-            }.font(.caption).foregroundStyle(.secondary)
-        }.navigationTitle("Seanime & TorBox").navigationBarTitleDisplayMode(.inline)
+            Section { NavigationLink("Compatibility & privacy") { SeanimeSafetyView() } }
+        }.navigationTitle("Seanime extensions").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $candidate) { value in
                 NavigationStack { SeanimeInstallReview(installation: value) { if seanime.install($0) { candidate = nil; manifestURL = ""; notice = "Seanime extension installed." } } }
             }
             .sheet(isPresented: $marketplace) {
                 NavigationStack { SeanimeMarketplaceView { value in manifestURL = value; marketplace = false } }
             }
-            .sheet(isPresented: $files) { TorBoxFilesView() }
-            .onDisappear { work?.cancel(); key = "" }
+            .onDisappear { work?.cancel() }
+    }
+}
+
+private struct SeanimeSafetyView: View {
+    var body: some View {
+        Form {
+            Section("On-device compatibility") {
+                Text("Supports torrent-provider JavaScript/TypeScript using regular search, not Seanime Smart Search or automatic season matching. Other plugin types and some runtime APIs are unsupported. No Real-Debrid integration or local torrent engine is included.")
+            }
+            Section("Execution & account safety") {
+                Text("Install only code you trust. Reviewed source snapshots are saved on this device; nothing updates or executes silently. The worker has no app credentials or tracking access. Only bounded HTTPS GETs to approved hosts are bridged; direct web networking, private-address URLs, redirects and unsupported runtime APIs are blocked.")
+                Text("The host allowlist is not a DNS firewall: only approve domains you trust. Third-party providers may log searches. Filename/episode hints are approximate; always verify the selected torrent and file.")
+                Text("Only native code contacts TorBox. Each add/download requires your explicit action and may use account limits. While an expanded release is preparing, its status updates automatically in the foreground; checks never resubmit it.")
+                Text("Known adult providers follow Show adult anime. Other providers may return unrated content. Marketplace web pages use the website’s own filters.")
+                NavigationLink("Runtime licenses") { SeanimeLicensesView() }
+            }.font(.caption).foregroundStyle(.secondary)
+        }.navigationTitle("Compatibility & privacy").navigationBarTitleDisplayMode(.inline)
     }
 }
 

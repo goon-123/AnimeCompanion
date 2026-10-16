@@ -123,6 +123,7 @@ actor SeanimePreviewTransport: HTTPTransport {
     private var added = false
     private var delayedList = false
     private var refreshedDAV = false
+    private var downloadReads = 0
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url, ["provider.example", "api.torbox.app", "webdav.torbox.app"].contains(url.host ?? "") else { throw SeanimeError.invalidNetwork }
         if url.host == "webdav.torbox.app" { return webDAV(request, url: url) }
@@ -147,6 +148,11 @@ actor SeanimePreviewTransport: HTTPTransport {
                 } else if !delayedList && ProcessInfo.processInfo.arguments.contains("--ui-torbox-queued") {
                     delayedList = true; text = #"{"success":true,"error":null,"data":[]}"#
                 } else {
+                    if ProcessInfo.processInfo.arguments.contains("--ui-torbox-downloading"), downloadReads < 3 {
+                        downloadReads += 1
+                        text = #"{"success":true,"error":null,"data":[{"id":"7","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","download_state":"downloading","download_present":false,"download_finished":false,"progress":0.42,"files":[]}]}"#
+                        return (Data(text.utf8),HTTPURLResponse(url:url,statusCode:200,httpVersion:nil,headerFields:nil)!)
+                    }
                     let files = ProcessInfo.processInfo.arguments.contains("--ui-torbox-single-file")
                         ? #"[{"id":"0","name":"Anime - 01 EN.mkv","size":1000}]"#
                         : #"[{"id":"9","name":"Anime - 09 EN.mkv","short_name":null,"mimetype":null,"size":1000},{"id":"10","name":"Anime - 10 JA.mkv","size":1000},{"id":"14","name":"Anime - 11 JA.mkv","size":1000},{"id":"18","name":"Anime - 12 JA.mkv","size":1000}]"#
@@ -184,18 +190,21 @@ actor SeanimePreviewTransport: HTTPTransport {
         let auth = "Basic " + Data("torbox:synthetic-torbox-key".utf8).base64EncodedString()
         guard request.value(forHTTPHeaderField:"Authorization") == auth else { return response(401,"") }
         let path = (URLComponents(url:url,resolvingAgainstBaseURL:false)?.path ?? "").trimmingCharacters(in:CharacterSet(charactersIn:"/"))
-        if path == "refresh", request.httpMethod == "GET" { refreshedDAV = true; return response(200,"refreshed") }
+        if path == "refresh", request.httpMethod == "GET" {
+            refreshedDAV = true
+            return ProcessInfo.processInfo.arguments.contains("--ui-webdav-refresh-404") ? response(404,"private synthetic-torbox-key") : response(200,"refreshed")
+        }
         guard request.httpMethod == "PROPFIND", request.value(forHTTPHeaderField:"Depth") == "1" else { return response(405,"") }
         func escaped(_ text: String) -> String { text.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;") }
-        func entry(_ href: String, _ name: String, folder: Bool = false) -> String {
-            "<d:response><d:href>\(escaped(href))</d:href><d:propstat><d:prop><d:displayname>\(escaped(name))</d:displayname><d:resourcetype>\(folder ? "<d:collection/>" : "")</d:resourcetype><d:getcontentlength>1234567</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+        func entry(_ href: String, _ name: String, folder: Bool = false, date: String = "2026-10-14T08:00:00Z") -> String {
+            "<d:response><d:href>\(escaped(href))</d:href><d:propstat><d:prop><d:displayname>\(escaped(name))</d:displayname><d:resourcetype>\(folder ? "<d:collection/>" : "")</d:resourcetype><d:getcontentlength>1234567</d:getcontentlength><d:creationdate>\(date)</d:creationdate></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
         }
         let entries: String
         switch path {
         case "":
             entries = entry("/","TorBox",folder:true) + entry("/Fixture%20batch/","Fixture batch",folder:true)
-                + entry("/Loose%20Episode.mkv","Loose Episode.mkv") + entry("/Readme.txt","Readme.txt")
-                + (refreshedDAV ? entry("/Fresh%20Episode.mkv","Fresh Episode.mkv") : "")
+                + entry("/Loose%20Episode.mkv","Loose Episode.mkv",date:"2026-10-15T08:00:00Z") + entry("/Readme.txt","Readme.txt")
+                + (refreshedDAV ? entry("/Fresh%20Episode.mkv","Fresh Episode.mkv",date:"2026-10-16T08:00:00Z") : "")
         case "Fixture batch":
             entries = entry("/Fixture%20batch/","Fixture batch",folder:true) + entry("/Fixture%20batch/Extras/","Extras",folder:true)
                 + entry("/Fixture%20batch/Episode%2001%20EN.mkv","Episode 01 EN.mkv")

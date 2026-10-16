@@ -1,14 +1,22 @@
 # Anime Companion
 
-### Standalone Seanime torrent providers + TorBox (0.11.0 / build 25)
+### Cleaner settings and TorBox downloads (0.14.0 / build 31)
 
-Settings → Add-ons & playback → **Seanime extensions & TorBox** adds an independent on-device runtime for Seanime `anime-torrent-provider` JavaScript/TypeScript. **No Seanime server or separate server app is required. Only TorBox is integrated; Real-Debrid is not.** Enter your TorBox key inside the app; it remains in the device-only Keychain and is never passed to extension code.
+Settings now has dedicated TorBox, Stremio add-on, Seanime extension, video player, browsing/content and watch-tracking pages. Credentials and longer compatibility/privacy details no longer crowd the main page. Manifest URLs remain readable; API keys remain masked and device-only.
+
+TorBox files defaults to **Newest first**, using WebDAV creation dates, then modification dates when creation dates are absent. Undated items sort last with a stable natural-name fallback; a Name sort is also available. An optional `/refresh/` failure no longer prevents the folder from reloading: a separate notice explains the index delay instead of reporting that working browsing failed. Actual missing folders still report a folder error.
+
+Selecting a Seanime release checks existing TorBox files without submitting anything. **Add cached copy** explicitly requests a cached-only add; a cache miss offers **Download with TorBox** with an account-usage note. That one download tap authorizes the uncached add—no toggle or second confirmation. Accepted/queued releases show download status/progress and refresh with GET requests every five seconds while expanded in the foreground. Closing the release or backgrounding stops checks; a failed check waits for a manual retry. Status checks never resubmit a torrent. Choose the exact ready video file before opening VidHub.
+
+### Standalone Seanime torrent providers + TorBox
+
+Settings → **Seanime extensions** adds an independent on-device runtime for Seanime `anime-torrent-provider` JavaScript/TypeScript. **No Seanime server or separate server app is required. Only TorBox is integrated; Real-Debrid is not.** Enter your TorBox key in Settings → TorBox; it remains in the device-only Keychain and is never passed to extension code.
 
 Browse the real [Seanime Community Marketplace](https://bas1874.github.io/Seanime-Marketplace/), copy/select an extension JSON link, then review its source preview, capabilities and proposed network hosts before explicitly trusting/installing it. Manage multiple independent snapshots with enable/remove controls, provider preferences and approved public HTTPS hosts. Updating code requires another review; changing a preference does not automatically authorize a new hostname. Marketplace data is not mirrored or redistributed. Known adult providers, including Sukebei, follow the app's adult-content setting; the website controls its own web filters and providers can return unrated content.
 
 **Search Seanime torrent providers** is available from native Watch with its selected AniList episode context, or search independently from settings. This initial runtime uses **regular title search**, not Seanime Smart Search or automatic season matching. It compiles real TypeScript on-device in a disposable Web Worker with a native approved-host GET bridge. It includes a limited inert DOM adapter and conservative filename hints, not every Seanime runtime helper. Filename-based EN/JA audio badges and English-first ordering remain visible; they do not verify embedded audio tracks. Unsupported APIs and failed network requests are not presented as successful empty searches.
 
-Tap a torrent to review the TorBox action. **Cached only** starts on. Explicitly confirm adding the torrent, then choose the exact video file—especially for batches. Only the selected file's CDN link goes to VidHub, not an API-key permalink. Readiness uses a manual refresh rather than polling/resubmission. Successful cloud job references are remembered locally for that TorBox key; forgetting a reference or removing an extension does not delete the cloud torrent. Changing/removing the key clears local job references. An interrupted submission may have reached TorBox: check your dashboard before adding again.
+Successful cloud job references are remembered locally for that TorBox key; forgetting a reference or removing an extension does not delete the cloud torrent. Changing/removing the key clears local references. An interrupted submission may have reached TorBox: the saved reference provides read-only recovery. Playing explicitly shares the selected file's authenticated TorBox permalink (or its WebDAV address when browsing cloud files) with VidHub, so keep that address private. These URLs are not displayed, logged or saved in resume progress.
 
 Watch-context playback uses the existing local-resume callback for the episode you explicitly selected; independent searches remain untracked. Neither route automatically writes AniList watched progress. Providers and their results are never allowed to choose a different episode or file automatically. ChromeDP, CryptoJS, `$scannerUtils`/Smart Search, custom-header/POST fetches, torrent-file parsing, UI plugins, manga and online-streaming providers are not supported by this initial runtime. There is no local P2P engine. Runtime limits, build steps, third-party notices and validation boundaries are detailed in [Tools/SeanimeRuntime](Tools/SeanimeRuntime/README.md).
 
@@ -16,7 +24,7 @@ Local core/runtime checks pass; actual SwiftUI/WebKit compilation, native screen
 
 ### Add-on directory and standard resources (0.10.0 / build 24)
 
-Settings → Add-ons & playback → **Browse stremio-addons.net** opens the real directory inside the app, starting in its Anime category. Use the site's own search, filters and provider configuration pages. HTTPS `manifest.json` and `stremio://` install links (including new-window links) open a native manifest/capability review; nothing installs until you confirm. Cancel leaves the installed collection unchanged. Configuration-required manifests direct you to the provider's setup page instead of saving an unusable connection. The site's own content preferences apply to its web pages. If web verification blocks a page, open it in Safari and paste the resulting manifest link.
+Settings → Stremio add-ons → **Browse stremio-addons.net** opens the real directory inside the app, starting in its Anime category. Use the site's own search, filters and provider configuration pages. HTTPS `manifest.json` and `stremio://` install links (including new-window links) open a native manifest/capability review; nothing installs until you confirm. Cancel leaves the installed collection unchanged. Configuration-required manifests direct you to the provider's setup page instead of saving an unusable connection. The site's own content preferences apply to its web pages. If web verification blocks a page, open it in Safari and paste the resulting manifest link.
 
 Manifest entry is plain, readable text, not a password field. Installed entries show capabilities, individual enable/remove controls, configuration links where advertised, and an expandable readable manifest URL. Treat configured links as private: they can contain account tokens. Persistent installed links remain in this device's Keychain; the isolated browser is not given the app's installed collection, and the app does not register itself as a global Stremio handler.
 
@@ -36,7 +44,7 @@ Explore has no top bar. A floating search button sits above the tab bar while a 
 
 Category results load the next page as you approach the bottom, in list or grid. Filtered scans remain bounded and continue with another upward swipe even when a batch has no matches. Errors retain current titles and offer Retry. Loaded pages survive detail/back navigation.
 
-Add multiple compatible `manifest.json` URLs in Settings → Add-ons & playback. Every installation has an independent enable toggle and removal action; reconnecting the same URL updates it without replacing the others. Existing single-add-on Keychain data migrates automatically. Enabled providers return sources progressively, with provider labels, stable source identities and English-first selection. A failed provider does not hide working providers, and a failed refresh keeps that provider's previously loaded sources for the same episode.
+Add multiple compatible `manifest.json` URLs in Settings → Stremio add-ons. Every installation has an independent enable toggle and removal action; reconnecting the same URL updates it without replacing the others. Existing single-add-on Keychain data migrates automatically. Enabled providers return sources progressively, with provider labels, stable source identities and English-first selection. A failed provider does not hide working providers, and a failed refresh keeps that provider's previously loaded sources for the same episode.
 
 Local core/syntax checks and pending native/IPA validation are recorded in `BUILD_STATUS.md`.
 
@@ -128,10 +136,10 @@ Version 0.2.2 also saves the public Explore catalog on the device, separately fo
 
 ## AIOStreams and VidHub playback
 
-Version 0.2 adds **Settings → Add-ons & playback** and **Watch in VidHub** on released anime pages.
+Version 0.2 adds **Settings → Stremio add-ons** and **Watch in VidHub** on released anime pages.
 
 1. Install a current VidHub version on the same iPhone or iPad.
-2. Open **Settings → Add-ons & playback**, paste an install link and tap **Add add-on**. Repeat to install more manifests. Both a base install link and a URL ending in `/manifest.json` work; `stremio://` links are normalized to HTTPS.
+2. Open **Settings → Stremio add-ons**, paste an install link and tap **Add add-on**. Repeat to install more manifests. Both a base install link and a URL ending in `/manifest.json` work; `stremio://` links are normalized to HTTPS.
 3. Tap the play button on a library card, or open details and tap **Watch in VidHub**. Sources load automatically for the next unwatched AniList episode (four episodes watched selects episode five). An untracked title can resume its local episode. Choosing another episode reloads the sources and stays selected during synchronization. **Tap a source to open VidHub directly**—there is no separate confirmation screen. Touch and hold a source for optional external subtitles or to play from the beginning. The reload icon retries the current episode.
 
 Full add-on URLs are stored only in this device's Keychain, never bundled in the app, committed to this repository, or written to request logs. Add-on requests use an ephemeral network session. Returned video URLs remain in memory and are passed only to the chosen player. A new installation validates and saves successfully before the visible collection changes. Enable or remove one installation without changing the others.

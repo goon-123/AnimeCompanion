@@ -15,7 +15,8 @@ public enum TorBoxWebDAVError: LocalizedError, Equatable {
         case .invalidFile: return "Choose a video file to open in VidHub."
         case .unauthorized: return "TorBox WebDAV rejected the saved API key. Check your key and WebDAV access in TorBox settings."
         case .unavailable: return "Could not connect to TorBox WebDAV. Check your connection and try again."
-        case .http(let code): return "TorBox WebDAV returned HTTP \(code). Try refreshing or check your TorBox account."
+        case .http(404): return "This TorBox folder is no longer available. Go back to TorBox files and refresh the list."
+        case .http(let code): return "TorBox WebDAV returned HTTP \(code). Try again or check your TorBox account."
         }
     }
 }
@@ -28,9 +29,38 @@ public struct TorBoxWebDAVEntry: Identifiable, Hashable, Sendable {
     public let name: String
     public let isDirectory: Bool
     public let size: Int64?
+    public let createdAt: Date?
+    public let modifiedAt: Date?
+    public var date: Date? { createdAt ?? modifiedAt }
+    public init(url: URL, name: String, isDirectory: Bool, size: Int64?, createdAt: Date? = nil, modifiedAt: Date? = nil) {
+        self.url = url; self.name = name; self.isDirectory = isDirectory; self.size = size
+        self.createdAt = createdAt; self.modifiedAt = modifiedAt
+    }
     public var isVideo: Bool {
         !isDirectory && ["mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts", "mpg", "mpeg"].contains(url.pathExtension.lowercased())
     }
+}
+
+public enum TorBoxWebDAVSort: String, CaseIterable, Identifiable, Sendable {
+    case newest, name
+    public var id: String { rawValue }
+    public var label: String { self == .newest ? "Newest first" : "Name" }
+    public func sorted(_ entries: [TorBoxWebDAVEntry]) -> [TorBoxWebDAVEntry] {
+        entries.sorted {
+            if self == .newest, $0.date != $1.date {
+                // Undated items must not displace items with a known date.
+                return ($0.date ?? .distantPast) > ($1.date ?? .distantPast)
+            }
+            if $0.isDirectory != $1.isDirectory { return $0.isDirectory }
+            let order = $0.name.localizedStandardCompare($1.name)
+            return order == .orderedSame ? $0.url.absoluteString < $1.url.absoluteString : order == .orderedAscending
+        }
+    }
+}
+
+public struct TorBoxWebDAVListing: Sendable {
+    public let entries: [TorBoxWebDAVEntry]
+    public let indexRefreshUnavailable: Bool
 }
 
 /// TorBox-only, read-only WebDAV browsing. No provider script receives these
@@ -43,6 +73,20 @@ public struct TorBoxWebDAVClient: Sendable {
         _ = try TorBoxClient(key: key)
         self.key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         self.transport = transport
+    }
+    /// Index refresh is optional: an unavailable /refresh/ endpoint must not
+    /// prevent a fresh PROPFIND of the actual folder. Never retry a mutation.
+    public func browse(folder: URL = Self.root, refresh: Bool = false) async throws -> TorBoxWebDAVListing {
+        _ = try Self.location(folder)
+        var unavailable = false
+        if refresh {
+            do { try await refreshIndex() }
+            catch is CancellationError { throw CancellationError() }
+            catch { unavailable = true }
+        }
+        try Task.checkCancellation()
+        let entries = try await list(folder: folder)
+        return TorBoxWebDAVListing(entries: entries, indexRefreshUnavailable: unavailable)
     }
     public func list(folder: URL = Self.root) async throws -> [TorBoxWebDAVEntry] {
         let url = try Self.location(folder)
@@ -59,7 +103,7 @@ public struct TorBoxWebDAVClient: Sendable {
         guard parser.parse(), parser.parserError == nil, delegate.validRoot, delegate.closedRoot, !delegate.invalid else { throw TorBoxWebDAVError.invalidResponse }
         let parent = try Self.segments(url)
         var seen: Set<URL> = []
-        return delegate.items.compactMap { item -> TorBoxWebDAVEntry? in
+        let entries = delegate.items.compactMap { item -> TorBoxWebDAVEntry? in
             guard let href = item.href, !href.contains("\\"),
                   let hrefParts = URLComponents(string: href), (try? Self.pathSegments(hrefParts.percentEncodedPath)) != nil,
                   let relative = URL(string: href, relativeTo: url)?.absoluteURL,
@@ -72,12 +116,10 @@ public struct TorBoxWebDAVClient: Sendable {
             guard let canonical = components.url, seen.insert(canonical).inserted else { return nil }
             let display = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
             let name = display?.isEmpty == false ? display! : filename
-            return TorBoxWebDAVEntry(url: canonical, name: name, isDirectory: directory, size: item.size)
-        }.sorted {
-            if $0.isDirectory != $1.isDirectory { return $0.isDirectory }
-            let order = $0.name.localizedStandardCompare($1.name)
-            return order == .orderedSame ? $0.url.absoluteString < $1.url.absoluteString : order == .orderedAscending
+            return TorBoxWebDAVEntry(url: canonical, name: name, isDirectory: directory, size: item.size,
+                                    createdAt: item.createdAt, modifiedAt: item.modifiedAt)
         }
+        return TorBoxWebDAVSort.newest.sorted(entries)
     }
     /// TorBox documents /refresh/ for manually updating its WebDAV index.
     public func refreshIndex() async throws {
@@ -123,7 +165,7 @@ public struct TorBoxWebDAVClient: Sendable {
                 request.setValue("1", forHTTPHeaderField: "Depth")
                 request.setValue("application/xml; charset=utf-8", forHTTPHeaderField: "Content-Type")
                 request.setValue("application/xml, text/xml", forHTTPHeaderField: "Accept")
-                request.httpBody = Data(#"<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>"#.utf8)
+                request.httpBody = Data(#"<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/><d:getcontentlength/><d:creationdate/><d:getlastmodified/></d:prop></d:propfind>"#.utf8)
             }
             let (data, response) = try await transport.data(for: request)
             try Task.checkCancellation()
@@ -142,7 +184,17 @@ public struct TorBoxWebDAVClient: Sendable {
 }
 
 private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
-    struct Item { var href: String?; var name: String?; var directory: Bool?; var size: Int64? }
+    struct Item { var href: String?; var name: String?; var directory: Bool?; var size: Int64?; var createdAt: Date?; var modifiedAt: Date? }
+    private let isoDate = ISO8601DateFormatter()
+    private let fractionalDate: ISO8601DateFormatter = {
+        let value = ISO8601DateFormatter(); value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return value
+    }()
+    private let httpDate: DateFormatter = {
+        let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX")
+        value.calendar = Calendar(identifier: .gregorian); value.timeZone = TimeZone(secondsFromGMT: 0)
+        value.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"; return value
+    }()
+    private func date(_ text: String) -> Date? { fractionalDate.date(from: text) ?? isoDate.date(from: text) ?? httpDate.date(from: text) }
     private struct Element { let name: String; let namespace: String?; var text = "" }
     private var stack: [Element] = []
     private var item = Item()
@@ -176,7 +228,7 @@ private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
     }
     func parser(_ parser: XMLParser, foundCharacters string: String) {
         guard let current = stack.last, current.namespace == "DAV:",
-              ["href", "status", "displayname", "getcontentlength"].contains(current.name) else { return }
+              ["href", "status", "displayname", "getcontentlength", "creationdate", "getlastmodified"].contains(current.name) else { return }
         if stack[stack.count - 1].text.utf8.count + string.utf8.count > 32_000 { invalid = true; parser.abortParsing(); return }
         stack[stack.count - 1].text += string
     }
@@ -194,12 +246,16 @@ private final class TorBoxDAVParser: NSObject, XMLParserDelegate {
         case "multistatus/response/propstat/prop/displayname":
             if !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) { properties.name = text }
         case "multistatus/response/propstat/prop/getcontentlength": properties.size = Int64(text).flatMap { $0 >= 0 ? $0 : nil }
+        case "multistatus/response/propstat/prop/creationdate": properties.createdAt = date(text)
+        case "multistatus/response/propstat/prop/getlastmodified": properties.modifiedAt = date(text)
         case "multistatus/response/propstat":
             if let status = propertyStatus, (200..<300).contains(status) {
                 hasProperties = true
                 if let name = properties.name { item.name = name }
                 if let directory = properties.directory { item.directory = directory }
                 if let size = properties.size { item.size = size }
+                if let date = properties.createdAt { item.createdAt = date }
+                if let date = properties.modifiedAt { item.modifiedAt = date }
             }
         case "multistatus/response":
             if hasProperties, responseStatus.map({ (200..<300).contains($0) }) ?? true { items.append(item) }

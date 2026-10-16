@@ -30,6 +30,8 @@ private struct TorBoxFolderView: View {
     @State private var key = ""
     @State private var loading = false
     @State private var error: String?
+    @State private var refreshNotice: String?
+    @AppStorage("torbox.files.sort") private var sortValue = TorBoxWebDAVSort.newest.rawValue
     @State private var message: String?
     @State private var generation = UUID()
     @State private var loadedRevision: UUID?
@@ -38,7 +40,8 @@ private struct TorBoxFolderView: View {
     @FocusState private var enteringKey: Bool
     private var visible: [TorBoxWebDAVEntry] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? entries : entries.filter { $0.name.localizedStandardContains(text) }
+        let filtered = text.isEmpty ? entries : entries.filter { $0.name.localizedStandardContains(text) }
+        return (TorBoxWebDAVSort(rawValue: sortValue) ?? .newest).sorted(filtered)
     }
     var body: some View {
         List {
@@ -52,17 +55,16 @@ private struct TorBoxFolderView: View {
                         .accessibilityIdentifier("webdav-connect-torbox")
                     Link("Find your TorBox API key", destination: URL(string: "https://torbox.app/settings")!)
                     Text("Use your TorBox API key to browse files. A Seanime extension is not required.").font(.caption).foregroundStyle(.secondary)
+                    if let error = seanime.error { Text(error).foregroundStyle(.orange) }
                 }
             } else {
                 Section {
                     if let anime { Text("\(anime.displayTitle) · Episode \(episode)").font(.subheadline) }
-                    Text("Browse your TorBox folders and tap a video to open it in VidHub.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text("Uses your saved TorBox key. Play sends the file’s private WebDAV address to VidHub.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                    Label("Tap a video to play in VidHub", systemImage: "play.rectangle").font(.subheadline)
+                } footer: { Text("Play shares this file’s private WebDAV address with VidHub.") }
                 if loading && entries.isEmpty { ProgressView("Loading TorBox files…").accessibilityIdentifier("torbox-webdav-loading") }
                 if let error { Text(error).foregroundStyle(.orange).accessibilityIdentifier("torbox-webdav-error") }
+                if let refreshNotice { Text(refreshNotice).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("torbox-webdav-refresh-notice") }
                 Section {
                     ForEach(visible) { entry in
                         if entry.isDirectory {
@@ -73,6 +75,11 @@ private struct TorBoxFolderView: View {
                                 .disabled(playback.openingPlayer)
                                 .accessibilityIdentifier("torbox-webdav-video-\(entry.url.lastPathComponent)")
                         } else { row(entry).foregroundStyle(.secondary) }
+                    }
+                } header: { Text((TorBoxWebDAVSort(rawValue: sortValue) ?? .newest).label).accessibilityIdentifier("torbox-webdav-sort-label") }
+                footer: {
+                    if !entries.isEmpty && sortValue == TorBoxWebDAVSort.newest.rawValue {
+                        Text("Sorted by added date, or modified date when available. Undated items appear last.")
                     }
                 }
                 if !loading && visible.isEmpty && error == nil {
@@ -86,6 +93,14 @@ private struct TorBoxFolderView: View {
             .searchable(text: $query, prompt: "Search this folder")
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker("Sort files", selection: $sortValue) {
+                            ForEach(TorBoxWebDAVSort.allCases) { Text($0.label).tag($0.rawValue) }
+                        }
+                    } label: { Image(systemName: "arrow.up.arrow.down") }
+                        .accessibilityLabel("Sort TorBox files").accessibilityIdentifier("torbox-webdav-sort")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { work?.cancel(); work = Task { await load(refresh: true) } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(loading || !seanime.hasTorBoxKey).accessibilityLabel("Refresh TorBox files")
@@ -108,6 +123,7 @@ private struct TorBoxFolderView: View {
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 5) {
                 Text(entry.name).font(.body).foregroundStyle(.primary).lineLimit(3)
+                if let date = entry.date { Text(date, format: .dateTime.month(.abbreviated).day().year().hour().minute()).font(.caption).foregroundStyle(.secondary) }
                 if !entry.isDirectory {
                     HStack {
                         if let size = entry.size { Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
@@ -121,14 +137,14 @@ private struct TorBoxFolderView: View {
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); generation = attempt
         guard seanime.hasTorBoxKey else { entries = []; loading = false; error = nil; return }
-        loading = true; error = nil
+        loading = true; error = nil; refreshNotice = nil
         defer { if generation == attempt { loading = false } }
         do {
             let client = try seanime.webDAV()
-            if refresh { try await client.refreshIndex() }
-            let values = try await client.list(folder: folder?.url ?? TorBoxWebDAVClient.root)
+            let result = try await client.browse(folder: folder?.url ?? TorBoxWebDAVClient.root, refresh: refresh)
             try Task.checkCancellation(); guard generation == attempt else { return }
-            entries = values
+            entries = result.entries
+            if result.indexRefreshUnavailable { refreshNotice = "Folder reloaded. TorBox’s index refresh is temporarily unavailable; new downloads may take up to 15 minutes to appear." }
         } catch is CancellationError {} catch { if generation == attempt { self.error = error.localizedDescription } }
     }
     private func play(_ entry: TorBoxWebDAVEntry) {

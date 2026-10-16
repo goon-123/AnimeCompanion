@@ -10,10 +10,10 @@ public enum TorBoxError: LocalizedError, Equatable {
     case rejected(status: Int, code: String?)
     public var errorDescription: String? {
         switch self {
-        case .missingKey: return "Enter your TorBox API key in Seanime & TorBox settings."
+        case .missingKey: return "Enter your API key in Settings → TorBox."
         case .unauthorized: return "TorBox rejected the API key. Check it in your TorBox account."
         case .rateLimited: return "TorBox is rate limiting requests. Wait before retrying."
-        case .notCached: return "This torrent is not cached on TorBox. Turn off Cached only if you want TorBox to download it."
+        case .notCached: return "This torrent is not cached on TorBox. Choose Download with TorBox to download it to your account."
         case .quota: return "TorBox could not add this torrent because of an account, storage or download limit. Check your TorBox dashboard."
         case .unavailable: return "The connection to TorBox failed. Check your connection and TorBox service status before retrying."
         case .offline: return "This device is offline. Reconnect to the internet, then retry."

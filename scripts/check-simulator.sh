@@ -145,11 +145,13 @@ if [[ "$test_scope" == fixes ]]; then
   )
 fi
 if [[ "$test_scope" == streams ]]; then
-  # Exercise WebDAV browsing and the private torrent-file handoff. The
+  # Exercise the reported WebDAV refresh-404/newest-first bug, settings
+  # categories, and the one-action uncached download/status/file handoff. The
   # broader fixes/focused/full scopes retain all previous regression cases.
   test_arguments=(
     -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWebDAVBrowserNavigatesSearchesRefreshesAndOpensExactFile
-    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testWatchCombinesStreamingTorrentSearchAndInlineFileHandoff
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testSettingsCategoriesKeepConnectionAndPreferencesEasyToFind
+    -only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests/testHTTP400CacheMissExplainsTheCauseAndCanBeRetriedWithUserApproval
   )
 fi
 run_tests() {

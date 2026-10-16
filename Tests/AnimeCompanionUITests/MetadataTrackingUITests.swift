@@ -71,12 +71,14 @@ final class MetadataTrackingUITests: XCTestCase {
     }
     @MainActor private func setAdult(_ enabled: Bool, app: XCUIApplication) {
         app.buttons["Account and settings"].firstMatch.tap()
+        let browsing = app.buttons["settings-browsing"]; app.revealInContent(browsing); browsing.tap()
         let toggle = app.switches["settings-adult-content"]
         reveal(toggle, app: app)
         if (toggle.value as? String == "1") != enabled {
             toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
         }
         capture(enabled ? "Adult-Setting-Enabled" : "Adult-Setting-Disabled")
+        app.navigationBars.buttons.firstMatch.tap()
         app.buttons["Done"].tap()
     }
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {

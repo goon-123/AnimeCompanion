@@ -64,6 +64,7 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")
             UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
             UserDefaults.standard.set(StreamAudioFilter.all.rawValue, forKey: "playback.audioFilter")
+            UserDefaults.standard.set(TorBoxWebDAVSort.newest.rawValue, forKey: "torbox.files.sort")
         }
         if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") {
             for key in ["library.layout", "library.sort", "discovery.layout", "explore.poster.fillScreen", "explore.poster.balanced"] {

@@ -61,6 +61,7 @@ final class AddonDirectoryUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Needs setup"].exists)
         let toggle = app.switches["Enable Configured sources"]
         app.revealInContent(toggle); toggle.tap(); XCTAssertEqual(toggle.value as? String, "0")
+        let manage = app.buttons["addon-manage-Configured sources"]; app.revealInContent(manage); manage.tap()
         let remove = app.buttons["Remove Configured sources"]
         app.revealInContent(remove); remove.tap()
         XCTAssertFalse(app.staticTexts["Configured sources"].exists)
@@ -114,7 +115,7 @@ final class AddonDirectoryUITests: XCTestCase {
         app.openExploreControl("explore-settings")
         let setup = app.buttons["playback-settings"]
         app.revealInContent(setup); setup.tap()
-        XCTAssertTrue(app.navigationBars["Add-ons & playback"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Stremio add-ons"].waitForExistence(timeout: 10))
     }
     @MainActor private func openBrowser(_ app: XCUIApplication) {
         let browser = app.buttons["browse-addon-directory"]

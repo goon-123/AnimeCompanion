@@ -9,45 +9,35 @@ struct PlaybackSettingsView: View {
     @FocusState private var enteringManifest: Bool
     var body: some View {
         Form {
-            Section("External player") {
-                Label("VidHub", systemImage: "play.rectangle.fill")
-                Text("Videos open in VidHub. When you return, supported versions send the playback position back so you can resume here.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Link("VidHub integration help", destination: URL(string: "https://vidhub.okaapps.com/3rd-party-app-integration/")!)
-            }
-            Section("Discover add-ons") {
-                NavigationLink("Seanime extensions & TorBox") { SeanimeSettingsView() }
-                    .accessibilityIdentifier("seanime-settings")
+            Section {
                 NavigationLink { AddonDirectoryBrowser() } label: { Label("Browse stremio-addons.net", systemImage: "globe") }
                     .accessibilityIdentifier("browse-addon-directory")
                 NavigationLink { AddonCatalogHome() } label: { Label("Browse installed catalogs", systemImage: "rectangle.stack") }
                     .accessibilityIdentifier("browse-installed-catalogs")
-                Text("Browse the real website, configure a provider, then use its Install button. You review each manifest here before it is saved.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            } header: { Text("Discover add-ons") } footer: { Text("Browse, configure a provider and use its Install button. You review each manifest before it is saved.") }
             if !playback.installations.isEmpty {
                 Section("Installed add-ons · \(playback.installations.count)") {
                     Toggle("Enable add-ons", isOn: $playback.enabled).accessibilityIdentifier("addon-enabled")
                     ForEach(playback.installations) { installation in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(installation.addon.manifest.name).font(.headline).accessibilityIdentifier("installed-addon-name")
-                            Text(installation.addon.endpoint.displayHost).font(.caption).foregroundStyle(.secondary)
                             Text(installation.addon.manifest.capabilitySummary).font(.caption).foregroundStyle(.secondary)
-                            DisclosureGroup("Support & manifest URL") {
-                                AddonCompatibilityText(addon: installation.addon)
-                                Text(installation.addon.endpoint.manifestURL.absoluteString).font(.caption).textSelection(.enabled)
-                            }
-                            if installation.addon.manifest.behaviorHints?.configurable == true || installation.addon.manifest.behaviorHints?.configurationRequired == true {
-                                NavigationLink("Configure \(installation.addon.manifest.name)") {
-                                    AddonDirectoryBrowser(startURL: installation.addon.endpoint.configurationURL)
-                                }
-                            }
                             Toggle("Enable \(installation.addon.manifest.name)", isOn: Binding(
                                 get: { playback.installations.first { $0.id == installation.id }?.enabled ?? false },
                                 set: { playback.setEnabled($0, id: installation.id) }))
                                 .disabled(playback.installing).accessibilityIdentifier("addon-enabled-\(installation.id)")
-                            Button("Remove \(installation.addon.manifest.name)", role: .destructive) { playback.remove(id: installation.id); saved = false }
-                                .disabled(playback.installing).accessibilityIdentifier("addon-remove-\(installation.id)")
+                            DisclosureGroup("Details & management") {
+                                Text(installation.addon.endpoint.displayHost).font(.caption).foregroundStyle(.secondary)
+                                AddonCompatibilityText(addon: installation.addon)
+                                Text(installation.addon.endpoint.manifestURL.absoluteString).font(.caption).textSelection(.enabled)
+                                if installation.addon.manifest.behaviorHints?.configurable == true || installation.addon.manifest.behaviorHints?.configurationRequired == true {
+                                    NavigationLink("Configure \(installation.addon.manifest.name)") {
+                                        AddonDirectoryBrowser(startURL: installation.addon.endpoint.configurationURL)
+                                    }
+                                }
+                                Button("Remove \(installation.addon.manifest.name)", role: .destructive) { playback.remove(id: installation.id); saved = false }
+                                    .disabled(playback.installing).accessibilityIdentifier("addon-remove-\(installation.id)")
+                            }.accessibilityIdentifier("addon-manage-\(installation.addon.manifest.name)")
                         }.padding(.vertical, 4)
                     }
                 }
@@ -74,11 +64,14 @@ struct PlaybackSettingsView: View {
                 Text("The URL is visible as requested. It may contain private tokens—avoid including it in screenshots or sharing it.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Playback support") {
+                NavigationLink("VidHub & resume") { PlayerSettingsView() }
+                DisclosureGroup("Compatibility details") {
                 Text("Supports standard HTTPS Stremio manifests with catalogs, metadata, streams and subtitles. Native anime Watch uses AniList/MAL IDs; installed catalogs and exact-ID lookup also support IMDb, Kitsu and provider IDs. Enabled compatible stream sources appear together, with English-audio choices first.")
                 Text("Not every Stremio add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories and legacy/IPFS transports are not supported natively. Supported Seanime torrent-provider scripts run separately in Seanime extensions & TorBox; other plugin types remain unsupported.")
                 Text("Native anime Watch saves resume on this device. Catalog/exact-ID playback does not save resume here. Update AniList using the watched-progress controls.")
+                }
             }.font(.caption).foregroundStyle(.secondary)
-        }.navigationTitle("Add-ons & playback").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Stremio add-ons").navigationBarTitleDisplayMode(.inline)
             .onDisappear { installationTask?.cancel(); installURL = "" }
     }
 }

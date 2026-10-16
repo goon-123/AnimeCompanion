@@ -8,10 +8,10 @@ import FoundationNetworking
 final class TorBoxWebDAVTests: XCTestCase {
     private let key = "synthetic-webdav-key"
     private func xml(_ entries: String) -> String { "<?xml version=\"1.0\" encoding=\"utf-8\"?><d:multistatus xmlns:d=\"DAV:\">\(entries)</d:multistatus>" }
-    private func resource(_ href: String, name: String? = nil, directory: Bool = false, extra: String = "") -> String {
+    private func resource(_ href: String, name: String? = nil, directory: Bool = false, properties: String = "", extra: String = "") -> String {
         func escape(_ value: String) -> String { value.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;") }
         let display = name.map { "<d:displayname>\(escape($0))</d:displayname>" } ?? ""
-        return "<d:response><d:href>\(escape(href))</d:href><d:propstat><d:prop>\(display)<d:resourcetype>\(directory ? "<d:collection/>" : "")</d:resourcetype><d:getcontentlength>1234567</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>\(extra)</d:response>"
+        return "<d:response><d:href>\(escape(href))</d:href><d:propstat><d:prop>\(display)<d:resourcetype>\(directory ? "<d:collection/>" : "")</d:resourcetype><d:getcontentlength>1234567</d:getcontentlength>\(properties)</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>\(extra)</d:response>"
     }
     func testRootListingShowsFoldersAndFlattenedVideosWithoutListingItself() async throws {
         let body = xml(resource("/",directory:true) + resource("/Episode%2010.mkv") + resource("/Folder/",directory:true)
@@ -110,6 +110,48 @@ final class TorBoxWebDAVTests: XCTestCase {
         XCTAssertEqual(requests.map(\.httpMethod),["GET","PROPFIND"])
         XCTAssertEqual(requests[0].url?.absoluteString,"https://webdav.torbox.app/refresh/")
         XCTAssertTrue(requests.allSatisfy { $0.url?.host == "webdav.torbox.app" })
+    }
+    func testUnavailableIndexRefreshStillReadsFreshFolderAndDoesNotReportABrowseFailure() async throws {
+        for code in [404,405,500] {
+            let transport = WebDAVTestTransport([(207,xml(resource("/Old.mkv"))), (code,"private \(key)"), (207,xml(resource("/New.mkv")))])
+            let client = try TorBoxWebDAVClient(key:key,transport:transport)
+            let old = try await client.browse(); XCTAssertEqual(old.entries.map(\.name),["Old.mkv"])
+            let fresh = try await client.browse(refresh:true)
+            XCTAssertEqual(fresh.entries.map(\.name),["New.mkv"])
+            XCTAssertTrue(fresh.indexRefreshUnavailable)
+            let requests = await transport.requests
+            XCTAssertEqual(requests.map(\.httpMethod),["PROPFIND","GET","PROPFIND"])
+        }
+    }
+    func testActualMissingFolderIsNotHiddenByOptionalIndexRefreshHandling() async throws {
+        let transport = WebDAVTestTransport([(404,"refresh unavailable"),(404,"private \(key)")])
+        do { _ = try await TorBoxWebDAVClient(key:key,transport:transport).browse(refresh:true); XCTFail("Folder read must fail") }
+        catch { XCTAssertEqual(error as? TorBoxWebDAVError,.http(404)); XCTAssertFalse(error.localizedDescription.contains(key)) }
+        let success = try await TorBoxWebDAVClient(key:key,transport:WebDAVTestTransport([(200,""),(207,xml(resource("/Fresh.mkv")))])).browse(refresh:true)
+        XCTAssertFalse(success.indexRefreshUnavailable)
+    }
+    func testNewestFirstUsesCreationThenModifiedDatesNotAlphabeticalOrderOrResponseOrder() async throws {
+        let failedDates = "<d:propstat><d:prop><d:creationdate>2099-01-01T00:00:00Z</d:creationdate></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>"
+        let body = xml(resource("/A%20old/",directory:true,properties:"<d:creationdate>2026-10-10T00:00:00Z</d:creationdate><d:getlastmodified>Fri, 16 Oct 2026 10:00:00 GMT</d:getlastmodified>")
+            + resource("/Undated.mkv",properties:"<d:creationdate>invalid</d:creationdate>",extra:failedDates)
+            + resource("/Z%20new/",directory:true,properties:"<d:creationdate>2026-10-16T09:00:00.125+00:00</d:creationdate>")
+            + resource("/M%20modified.mkv",properties:"<d:getlastmodified>Thu, 15 Oct 2026 18:30:00 GMT</d:getlastmodified>")
+            + resource("/B%20offset.mkv",properties:"<d:creationdate>2026-10-16T10:00:00+02:00</d:creationdate>"))
+        let transport = WebDAVTestTransport([(207,body)])
+        let entries = try await TorBoxWebDAVClient(key:key,transport:transport).list()
+        XCTAssertEqual(entries.map(\.name),["Z new","B offset.mkv","M modified.mkv","A old","Undated.mkv"])
+        XCTAssertNotNil(entries[0].createdAt); XCTAssertNotNil(entries[2].modifiedAt); XCTAssertNil(entries.last?.date)
+        XCTAssertEqual(TorBoxWebDAVSort.name.sorted(entries).map(\.name),["A old","Z new","B offset.mkv","M modified.mkv","Undated.mkv"])
+        let requests = await transport.requests
+        let request = String(data:try XCTUnwrap(requests.first?.httpBody),encoding:.utf8)!
+        XCTAssertTrue(request.contains("creationdate")); XCTAssertTrue(request.contains("getlastmodified"))
+    }
+    func testEqualAndMissingDatesUseDeterministicNaturalNameOrder() {
+        let date = Date(timeIntervalSince1970:1000)
+        let entries = ["Episode 10.mkv","Episode 2.mkv","Episode 1.mkv"].map {
+            TorBoxWebDAVEntry(url:TorBoxWebDAVClient.root.appendingPathComponent($0),name:$0,isDirectory:false,size:nil,modifiedAt:date)
+        }
+        XCTAssertEqual(TorBoxWebDAVSort.newest.sorted(entries).map(\.name),["Episode 1.mkv","Episode 2.mkv","Episode 10.mkv"])
     }
     func testExternalPlayerPermalinkUsesExactReadyFileAndDoesNotResolveReturnedAccountLinks() async throws {
         let json = #"{"id":123456789,"download_present":true,"download_finished":true,"files":[{"id":0,"name":"Episode 1.mkv"},{"id":5,"name":"Episode 2.mkv"},{"id":8,"name":"readme.txt"}]}"#

@@ -1,3 +1,15 @@
+## Settings and TorBox UX — build 31
+
+Version 0.14.0. Address the reported WebDAV HTTP 404 after refresh, alphabetical cloud listings, crowded settings and repetitive uncached-download confirmations.
+
+- Always re-read a folder even when the optional index-refresh endpoint fails. Show a separate index-delay notice; do not obscure actual folder/authentication errors.
+- Request and parse DAV creation/modification timestamps; default to newest first with unknown dates last, a deterministic fallback, visible dates and a Name sort option.
+- Replace the long settings page with categorized account, TorBox, Stremio, Seanime, player, content, tracking and attribution screens. Keep readable manifest URLs and secure key storage.
+- Remove the cached-only toggle and extra add confirmation. A cache miss offers one explicit Download with TorBox action with an account-usage note. Show queued/downloading/ready states and percentage when supplied. Expanded foreground downloads use read-only five-second status checks, stopping on cancellation/background/error/readiness. Never automatically retry a submission.
+- Add offline refresh-404/date-ordering regressions and native settings, uncached-progress-to-exact-file, and WebDAV navigation/search/404/newest-first scenarios on both device families. CI validation is pending; fixtures cannot prove live playback with a private TorBox account.
+
+Reference: https://support.torbox.app/en/articles/14662867-torbox-webdav documents optional manual index refresh and a 15-minute index interval. The screenshot contains populated folders alongside a 404; the refresh request is a likely failure point, not a verified live-account diagnosis.
+
 ## TorBox WebDAV file browser and private player handoff — build 30
 
 Version 0.13.0. The user's build-29 screenshot identifies the remaining failure as the app's rejection of an authenticated/account playback URL, before VidHub opens. Their existing TorBox WebDAV connection in VidHub lists the same folders and videos.

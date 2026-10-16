@@ -146,7 +146,7 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
   playback-fixes:
-    name: TorBox WebDAV and playback ${{ matrix.device }} regression
+    name: Settings and TorBox UX ${{ matrix.device }} regression
     runs-on: macos-15
     timeout-minutes: 30
     strategy:

@@ -15,8 +15,6 @@ final class SeanimeTorBoxUITests: XCTestCase {
         app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
-        XCTAssertTrue(app.buttons["Confirm add to TorBox"].waitForExistence(timeout: 10))
-        app.buttons["Confirm add to TorBox"].tap()
         let file = app.buttons["torbox-file-10"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
         let message = app.staticTexts["torbox-player-message"]
@@ -29,34 +27,35 @@ final class SeanimeTorBoxUITests: XCTestCase {
     }
     @MainActor
     func testHTTP400CacheMissExplainsTheCauseAndCanBeRetriedWithUserApproval() {
-        let app = launch(["--ui-torbox-cache-miss"])
+        let app = launch(["--ui-torbox-cache-miss", "--ui-torbox-downloading"])
         openSettings(app); saveFixtureKey(app); installFixture(app); openSearch(app)
         let result = app.buttons["seanime-torrent-result"].firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         app.revealInContent(add); XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
-        app.buttons["Confirm add to TorBox"].tap()
-        let error = app.staticTexts["torbox-playback-error"]
-        XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
-        XCTAssertTrue(error.label.contains("not cached"))
-        XCTAssertFalse(error.label.contains("could not be reached"))
-        XCTAssertFalse(error.label.contains("synthetic-torbox-key"))
+        let cacheMiss = app.staticTexts["torbox-cache-miss"]
+        XCTAssertTrue(cacheMiss.waitForExistence(timeout: 15)); app.revealInContent(cacheMiss)
+        XCTAssertTrue(cacheMiss.label.contains("Not cached"))
+        XCTAssertFalse(app.staticTexts["torbox-playback-error"].exists)
         XCTAssertFalse(app.buttons["torbox-file-10"].exists)
-        let cached = app.switches["torbox-cached-only"]
-        app.revealInContent(cached, upward: false)
-        XCTAssertEqual(cached.value as? String, "1", "An error must not silently allow uncached account downloads")
-        capture("HTTP400-Cache-Miss-Explained")
-        cached.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        let uncached = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "0"), object: cached)
-        XCTAssertEqual(XCTWaiter.wait(for: [uncached], timeout: 5), .completed)
-        app.revealInContent(add); add.tap()
-        app.buttons["Confirm add to TorBox"].tap()
+        XCTAssertFalse(app.switches["torbox-cached-only"].exists)
+        capture("Cache-Miss-Single-Download-Action")
+        let download = app.buttons["torbox-download-torrent"]
+        app.revealInContent(download); download.tap()
+        XCTAssertFalse(app.buttons["Confirm add to TorBox"].exists, "The clearly labeled download tap is the account authorization")
+        let status = app.descendants(matching: .any).matching(identifier: "torbox-job-status").firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 10)); app.revealInContent(status)
+        XCTAssertTrue(status.label.contains("Downloading") || status.label.contains("Ready to play"))
+        XCTAssertFalse(download.exists); XCTAssertFalse(add.exists, "An accepted release must not offer a second submission")
+        capture("Uncached-Download-Progress")
+        // Status checks are automatic GETs: no extra confirmation or refresh.
         let file = app.buttons["torbox-file-10"]
-        XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
+        XCTAssertTrue(file.waitForExistence(timeout: 35)); app.revealInContent(file); file.tap()
         let message = app.staticTexts["torbox-player-message"]
-        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        app.revealInContent(message); XCTAssertTrue(message.waitForExistence(timeout: 10))
         XCTAssertTrue(message.label.contains("TorBox file 10"))
-        capture("Explicit-Uncached-Retry-Exact-File")
+        XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
+        capture("Uncached-Auto-Ready-Exact-File")
     }
     @MainActor
     func testUnapprovedHostCannotBecomeSuccessfulEmptySearch() {
@@ -94,7 +93,6 @@ final class SeanimeTorBoxUITests: XCTestCase {
         openSettings(app); saveFixtureKey(app); installFixture(app)
         installFixture(app, suffix: "second")
         app.navigationBars.buttons.firstMatch.tap()
-        app.navigationBars.buttons.firstMatch.tap()
         app.buttons["Done"].tap()
         let watch = app.buttons["featured-watch-1"]
         app.revealInContent(watch, upward: false); watch.tap()
@@ -111,7 +109,6 @@ final class SeanimeTorBoxUITests: XCTestCase {
         app.revealInContent(result); XCTAssertTrue(result.label.contains("English")); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         app.revealInContent(add); XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
-        app.buttons["Confirm add to TorBox"].tap()
         let file = app.buttons["torbox-file-10"]
         XCTAssertTrue(file.waitForExistence(timeout: 15)); app.revealInContent(file); file.tap()
         XCTAssertTrue(app.navigationBars["Find streams"].exists, "File selection must stay in the Watch screen")
@@ -133,11 +130,9 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
-        app.buttons["Confirm add to TorBox"].tap()
-        let status = app.staticTexts["torbox-job-status"]
+        let status = app.descendants(matching: .any).matching(identifier: "torbox-job-status").firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 15)); app.revealInContent(status)
-        let queued = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Queued in TorBox", "41"), object: status)
-        XCTAssertEqual(XCTWaiter.wait(for: [queued], timeout: 10), .completed)
+        XCTAssertTrue(status.label.contains("Queued in TorBox") || status.label.contains("Ready to play"))
         XCTAssertFalse(add.exists); XCTAssertFalse(app.staticTexts["torbox-playback-error"].exists)
         let refresh = app.buttons["torbox-refresh-files"]; app.revealInContent(refresh); refresh.tap()
         let file = app.buttons["torbox-file-10"]
@@ -153,7 +148,6 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(result.waitForExistence(timeout: 25)); app.revealInContent(result); result.tap()
         let add = app.buttons["torbox-add-torrent"]
         XCTAssertTrue(add.waitForExistence(timeout: 10)); app.revealInContent(add); add.tap()
-        app.buttons["Confirm add to TorBox"].tap()
         let error = app.staticTexts["torbox-playback-error"]
         XCTAssertTrue(error.waitForExistence(timeout: 15)); app.revealInContent(error)
         XCTAssertTrue(error.label.contains("release was submitted")); XCTAssertFalse(add.exists)
@@ -181,7 +175,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
     }
     @MainActor
     func testWebDAVBrowserNavigatesSearchesRefreshesAndOpensExactFile() {
-        let app = launch()
+        let app = launch(["--ui-webdav-refresh-404"])
         let tab = app.appTab("My Library"); XCTAssertTrue(tab.waitForExistence(timeout:10)); tab.tap()
         let browse = app.buttons["library-torbox-files"]
         XCTAssertTrue(browse.waitForExistence(timeout:10)); browse.tap()
@@ -190,7 +184,11 @@ final class SeanimeTorBoxUITests: XCTestCase {
         XCTAssertTrue(key.waitForExistence(timeout:10)); key.tap(); key.typeText("synthetic-torbox-key")
         let connect = app.buttons["webdav-connect-torbox"]; app.revealInContent(connect); connect.tap()
         let loose = app.buttons["torbox-webdav-video-Loose Episode.mkv"]
-        XCTAssertTrue(loose.waitForExistence(timeout:15)); app.revealInContent(loose); loose.tap()
+        XCTAssertTrue(loose.waitForExistence(timeout:15)); app.revealInContent(loose)
+        XCTAssertTrue(app.staticTexts["torbox-webdav-sort-label"].label.contains("Newest first"))
+        let older = app.buttons["torbox-webdav-folder-Fixture batch"]
+        XCTAssertLessThan(loose.frame.minY, older.frame.minY, "Dates, not folder/name order, determine newest first")
+        loose.tap()
         let message = app.staticTexts["torbox-webdav-player-message"]
         app.revealInContent(message)
         XCTAssertTrue(message.label.contains("WebDAV · Loose Episode.mkv")); XCTAssertFalse(message.label.contains("synthetic-torbox-key"))
@@ -216,7 +214,37 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let refresh = app.buttons["torbox-webdav-refresh"]; refresh.tap()
         let fresh = app.buttons["torbox-webdav-video-Fresh Episode.mkv"]
         app.revealInContent(fresh); XCTAssertTrue(fresh.waitForExistence(timeout:15))
-        capture("WebDAV-Manual-Index-Refresh")
+        XCTAssertFalse(app.staticTexts["torbox-webdav-error"].exists, "Optional index HTTP 404 must not block folder browsing")
+        let notice = app.staticTexts["torbox-webdav-refresh-notice"]
+        app.revealInContent(notice, upward: false)
+        XCTAssertTrue(notice.label.contains("Folder reloaded"))
+        XCTAssertFalse(notice.label.contains("synthetic-torbox-key"))
+        app.revealInContent(fresh); XCTAssertLessThan(fresh.frame.minY, loose.frame.minY)
+        capture("WebDAV-Refresh-404-Recovered-Newest-First")
+    }
+    @MainActor
+    func testSettingsCategoriesKeepConnectionAndPreferencesEasyToFind() {
+        let app = launch()
+        app.openExploreControl("explore-settings")
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout:10))
+        XCTAssertTrue(app.buttons["settings-torbox"].exists)
+        XCTAssertTrue(app.buttons["playback-settings"].exists)
+        XCTAssertTrue(app.buttons["seanime-settings"].exists)
+        capture("Settings-Clean-Categories")
+        for (id, title, control) in [
+            ("settings-torbox", "TorBox", "torbox-api-key"),
+            ("settings-player", "Video player", ""),
+            ("settings-browsing", "Browsing & content", "settings-adult-content"),
+            ("settings-tracking", "Watch tracking", "settings-auto-complete")
+        ] {
+            let row = app.buttons[id]; app.revealInContent(row); row.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout:10))
+            if !control.isEmpty { XCTAssertTrue(app.descendants(matching:.any).matching(identifier:control).firstMatch.exists) }
+            capture("Settings-\(title.replacingOccurrences(of:" ",with:"-"))")
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout:10))
     }
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
@@ -226,23 +254,26 @@ final class SeanimeTorBoxUITests: XCTestCase {
     }
     @MainActor private func openSettings(_ app: XCUIApplication) {
         app.openExploreControl("explore-settings")
-        let playback = app.buttons["playback-settings"]; app.revealInContent(playback); playback.tap()
         let seanime = app.buttons["seanime-settings"]; XCTAssertTrue(seanime.waitForExistence(timeout: 10)); app.revealInContent(seanime); seanime.tap()
-        XCTAssertTrue(app.navigationBars["Seanime & TorBox"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Seanime extensions"].waitForExistence(timeout: 10))
     }
     @MainActor private func saveFixtureKey(_ app: XCUIApplication) {
+        let connection = app.buttons["seanime-torbox-settings"]; app.revealInContent(connection); connection.tap()
+        XCTAssertTrue(app.navigationBars["TorBox"].waitForExistence(timeout: 10))
         let key = app.secureTextFields["torbox-api-key"]; app.revealInContent(key); key.tap(); key.typeText("synthetic-torbox-key\n")
         let save = app.buttons["torbox-save-key"]; app.revealInContent(save); save.tap()
         let verify = app.buttons["torbox-verify"]; app.revealInContent(verify); verify.tap()
         let message = app.staticTexts["seanime-notice"]; app.revealInContent(message)
         XCTAssertTrue(message.waitForExistence(timeout: 10)); XCTAssertTrue(message.label.contains("No torrents were added"))
+        capture("TorBox-Connection-Settings")
+        app.navigationBars.buttons.firstMatch.tap()
     }
     @MainActor private func installFixture(_ app: XCUIApplication, suffix: String = "fixture") {
         let field = app.textFields["seanime-manifest-url"]; app.revealInContent(field, upward: false); field.tap(); field.typeText("https://provider.example/\(suffix).json\n")
         let review = app.buttons["seanime-review"]; app.revealInContent(review); review.tap()
         let install = app.buttons["seanime-install-confirm"]
         XCTAssertTrue(install.waitForExistence(timeout: 10)); app.revealInContent(install); install.tap()
-        XCTAssertTrue(app.navigationBars["Seanime & TorBox"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Seanime extensions"].waitForExistence(timeout: 10))
     }
     @MainActor private func openSearch(_ app: XCUIApplication) {
         let search = app.buttons["seanime-search"]; app.revealInContent(search); search.tap()
