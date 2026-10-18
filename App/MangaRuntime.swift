@@ -24,6 +24,16 @@ enum MangaRuntime {
     static func pages(_ apk: Data, source: MangaRuntimeSource, modern: Bool, chapter: SourceMangaChapter) async throws -> [SourceMangaImage] {
         try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": ["url": chapter.url, "name": chapter.name]], networking: true)
     }
+    static func book(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga) async throws -> MangaBook {
+        try await run(apk, command: ["op": "book", "source": source.index, "modern": modern,
+                                    "manga": ["url": manga.url, "title": manga.title]], networking: true)
+    }
+    static func image(_ apk: Data, source: MangaRuntimeSource, modern: Bool, image: SourceMangaImage) async throws -> Data {
+        let response: MangaImageEnvelope = try await run(apk, command: ["op": "image", "source": source.index, "modern": modern,
+            "image": ["index": image.index, "url": image.url, "imageURL": image.imageURL]], networking: true)
+        guard let data = Data(base64Encoded: response.bodyBase64), !data.isEmpty, data.count <= 16_000_000 else { throw ArtworkError.invalidData }
+        return data
+    }
     private static func run<T: Decodable>(_ apk: Data, command: [String: Any], networking: Bool) async throws -> T {
         let input = try JSONSerialization.data(withJSONObject: command)
         guard let json = String(data: input, encoding: .utf8) else { throw MangaExtensionError.runtimeFailure }
@@ -58,6 +68,7 @@ enum MangaRuntime {
     }
 }
 
+private struct MangaImageEnvelope: Decodable { let bodyBase64: String }
 private struct MangaRuntimeEnvelope<T: Decodable>: Decodable { let ok: Bool; let data: T? }
 private let mangaHTTPCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? = { context, input in
     guard let context, let input else { return nil }
