@@ -75,6 +75,8 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "dexvm",
+ "dom_query",
+ "fancy-regex",
  "rquickjs",
  "serde",
  "serde_json",
