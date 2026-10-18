@@ -16,4 +16,3 @@ for package in sorted(metadata["packages"], key=lambda item: (item["name"], item
     for file in files:
         if file.is_file(): parts.append(file.read_text(errors="replace"))
 (root / "App/MangaRuntimeLicenses.txt").write_text("\n".join(parts))
-

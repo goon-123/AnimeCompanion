@@ -31,4 +31,3 @@ with tempfile.TemporaryDirectory() as temporary:
         data = archive.read("classes.dex")
     assert hashlib.sha256(data).hexdigest() == "0b01afdea1a52e6b760dcbabc858fbbdea73a3f8dac78049b20cce5681eb8ef5"
     (ROOT / "Tools/MangaRuntime/support/serialization-decoder.dex").write_bytes(data)
-

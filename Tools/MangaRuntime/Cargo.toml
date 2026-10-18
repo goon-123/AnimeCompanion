@@ -23,4 +23,3 @@ rquickjs = { version = "=0.12.2", default-features = false, features = ["bindgen
 opt-level = "s"
 lto = "thin"
 strip = "debuginfo"
-
