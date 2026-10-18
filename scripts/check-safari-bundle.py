@@ -3,6 +3,7 @@
 import json
 import pathlib
 import plistlib
+import re
 import sys
 
 repo = pathlib.Path(__file__).resolve().parent.parent
@@ -37,4 +38,9 @@ for name in files:
     assert (root / name).is_file(), f"Missing bundled Safari resource: {name}"
 if app:
     assert manifest["version"] == app_info["CFBundleShortVersionString"]
+else:
+    version = re.search(r"^\s+MARKETING_VERSION:\s*['\"]?([0-9]+(?:\.[0-9]+){1,3})['\"]?\s*$",
+                        (repo / "project.yml").read_text(), re.MULTILINE)
+    assert version is not None, "App marketing version is missing"
+    assert manifest["version"] == version.group(1), "Safari and app versions must match"
 print(f"Safari extension verified: {len(files)} resources" + (" inside the app" if app else ""))

@@ -14,7 +14,8 @@ final class SafariExtensionUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         app.revealInContent(row); row.tap()
         XCTAssertTrue(app.staticTexts["Keep browsing in Safari"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Enable the extension"].exists)
+        let instructions = app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Enable the extension")).firstMatch
+        XCTAssertTrue(instructions.waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Safari-VidHub-Setup"
         screenshot.lifetime = .keepAlways
