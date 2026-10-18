@@ -17,6 +17,9 @@ final class TabletPresentationUITests: XCTestCase {
                 capture("Full-Width-\(tab)-\(orientation.isLandscape ? "Landscape" : "Portrait")")
             }
         }
+        // Enter text before rotation; the hosted iPad simulator can miss native
+        // keyboard focus immediately after its landscape navigation transition.
+        if UIDevice.current.userInterfaceIdiom == .pad { rotate(.portrait, app: app) }
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
@@ -28,7 +31,12 @@ final class TabletPresentationUITests: XCTestCase {
         XCTAssertTrue(detail.waitForExistence(timeout: 15))
         XCTAssertGreaterThan(detail.frame.width, app.frame.width * 0.90)
         capture("Full-Width-Anime-Detail")
-        if UIDevice.current.userInterfaceIdiom == .pad { rotate(.portrait, app: app) }
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            rotate(.landscapeLeft, app: app)
+            waitForWidth(detail, minimum: app.frame.width * 0.90)
+            capture("Full-Width-Anime-Detail-Landscape")
+            rotate(.portrait, app: app)
+        }
         app.returnToBrowsing()
         XCTAssertTrue(search.waitForExistence(timeout: 10)); XCTAssertEqual(search.value as? String, "Phase")
         XCTAssertTrue(entry.exists)
@@ -92,7 +100,13 @@ final class TabletPresentationUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10)); app.revealInContent(row); row.tap()
         let toggle = app.switches["settings-ipad-split-view"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10)); XCTAssertEqual(toggle.value as? String, enabled ? "0" : "1")
-        toggle.tap(); capture(enabled ? "Enable-Side-By-Side" : "Disable-Side-By-Side")
+        // SwiftUI exposes the entire labeled row as a Switch. Its center can
+        // be the inert label on iPad; target the actual trailing thumb.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -20, dy: 0)).tap()
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", enabled ? "1" : "0"), object: toggle)
+        let result = XCTWaiter.wait(for: [changed], timeout: 5)
+        capture(enabled ? "Enable-Side-By-Side" : "Disable-Side-By-Side")
+        XCTAssertEqual(result, .completed)
         app.navigationBars["iPad layout"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.navigationBars["Settings"])
