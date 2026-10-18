@@ -108,10 +108,13 @@ struct WebtoonCanvas: UIViewRepresentable {
             return (index, min(1, max(0, (y - offsets[index]) / max(1, offsets[index + 1] - offsets[index]))))
         }
         private func index(at y: CGFloat) -> Int {
+            // UIScrollView rounds offsets to physical pixels. A jump can land
+            // just before an image boundary; keep its displayed page correct.
+            let aligned = y + 0.5
             var low = 0, high = max(0, pages.count - 1)
             while low < high {
                 let mid = (low + high + 1) / 2
-                if offsets[mid] <= y { low = mid } else { high = mid - 1 }
+                if offsets[mid] <= aligned { low = mid } else { high = mid - 1 }
             }
             return low
         }

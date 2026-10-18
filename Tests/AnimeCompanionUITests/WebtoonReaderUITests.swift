@@ -41,6 +41,9 @@ final class WebtoonReaderUITests: XCTestCase {
         let retry = app.buttons["webtoon-retry-5"]
         XCTAssertTrue(retry.waitForExistence(timeout: 15)); retry.tap()
         XCTAssertTrue(app.images["webtoon-page-image-5"].waitForExistence(timeout: 20))
+        let counter = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "6 / 8"),
+            object: app.staticTexts["webtoon-page-counter"])
+        XCTAssertEqual(XCTWaiter.wait(for: [counter], timeout: 5), .completed)
         showControls(app)
         app.buttons["webtoon-settings"].tap()
         let padding = app.sliders["webtoon-side-padding"]
