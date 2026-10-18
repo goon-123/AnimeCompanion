@@ -76,10 +76,23 @@ final class TabNavigationState: ObservableObject {
 @MainActor
 final class AppNavigationStore: ObservableObject {
     @Published var selectedTab: AppTab = .explore
+    @Published private(set) var tabletLayout = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
     let explore = TabNavigationState()
     let schedule = TabNavigationState()
     let library = TabNavigationState()
     let news = TabNavigationState()
+
+    /// Apply on settings dismissal so changing topology cannot tear down its
+    /// presenting sheet while the user is still editing preferences.
+    func applyLayoutPreference() {
+        let value = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
+        guard value != tabletLayout else { return }
+        for state in [explore, schedule, library, news] {
+            state.path = NavigationPath(); state.detailPath = NavigationPath()
+            state.animeID = nil; state.column = .sidebar; state.visibility = .all
+        }
+        tabletLayout = value
+    }
 
     func state(for tab: AppTab) -> TabNavigationState {
         switch tab {
@@ -105,19 +118,17 @@ final class AppNavigationStore: ObservableObject {
 struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     var body: some View {
-        if #available(iOS 18.0, *) {
-            tabs.tabViewStyle(.sidebarAdaptable)
-        } else { tabs }
+        tabs.task { navigation.applyLayoutPreference() }
     }
     private var tabs: some View {
         TabView(selection: $navigation.selectedTab) {
-            AnimeTabPane(state: navigation.explore) { ExploreView() }
+            AnimeTabPane(state: navigation.explore, layout: navigation.tabletLayout) { ExploreView() }
                 .tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
-            AnimeTabPane(state: navigation.schedule) { ScheduleView() }
+            AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
                 .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
-            AnimeTabPane(state: navigation.library) { LibraryView() }
+            AnimeTabPane(state: navigation.library, layout: navigation.tabletLayout) { LibraryView() }
                 .tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
-            AnimeTabPane(state: navigation.news) { NewsView() }
+            NavigationStack { NewsView() }
                 .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }.onChange(of: navigation.selectedTab) { _, tab in
             if tab == .schedule {
@@ -131,20 +142,32 @@ struct AppTabs: View {
     }
 }
 
-/// One navigation topology at every size: compact devices collapse it into a
-/// stack; iPad keeps browsing and the selected title side by side. Rotation never
-/// recreates the browse view, so its query, loaded pages and scroll state survive.
+/// The chosen topology stays stable through rotation. Full-width navigation is
+/// the default; iPad users can opt into a native, resizable split presentation.
 private struct AnimeTabPane<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ObservedObject var state: TabNavigationState
+    let layout: TabletLayout
     let content: Content
-    init(state: TabNavigationState, @ViewBuilder content: () -> Content) {
-        self.state = state; self.content = content()
+    init(state: TabNavigationState, layout: TabletLayout, @ViewBuilder content: () -> Content) {
+        self.state = state; self.layout = layout; self.content = content()
     }
+    private var usesSplit: Bool { UIDevice.current.userInterfaceIdiom == .pad && layout == .sideBySide }
+    @ViewBuilder
     var body: some View {
+        if usesSplit {
+            GeometryReader { geometry in
+                split(browseWidth: TabletLayout.browseWidth(windowWidth: geometry.size.width))
+            }.environment(\.animeSplitPresentation, true)
+        } else {
+            NavigationStack(path: $state.path) { content }
+                .environment(\.animeSplitPresentation, false)
+        }
+    }
+    private func split(browseWidth: Double) -> some View {
         NavigationSplitView(columnVisibility: $state.visibility, preferredCompactColumn: $state.column) {
             NavigationStack(path: $state.path) { content }
-                .navigationSplitViewColumnWidth(min: 320, ideal: 460, max: 600)
+                .navigationSplitViewColumnWidth(min: 480, ideal: browseWidth, max: 820)
         } detail: {
             NavigationStack(path: $state.detailPath) {
                 Group {
@@ -175,7 +198,12 @@ private struct AnimeTabPane<Content: View>: View {
 }
 
 private struct AnimeDetailContextKey: EnvironmentKey { static let defaultValue = false }
+private struct AnimeSplitPresentationKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
+    var animeSplitPresentation: Bool {
+        get { self[AnimeSplitPresentationKey.self] }
+        set { self[AnimeSplitPresentationKey.self] = newValue }
+    }
     var animeDetailContext: Bool {
         get { self[AnimeDetailContextKey.self] }
         set { self[AnimeDetailContextKey.self] = newValue }
@@ -187,18 +215,21 @@ extension EnvironmentValues {
 struct AnimeLink<Content: View>: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.animeDetailContext) private var inDetail
+    @Environment(\.animeSplitPresentation) private var usesSplit
     let id: Int
     let content: Content
     init(id: Int, @ViewBuilder label: () -> Content) { self.id = id; content = label() }
     var body: some View {
-        if inDetail { NavigationLink(value: AnimeRoute(id: id)) { content } }
+        if inDetail || !usesSplit { NavigationLink(value: AnimeRoute(id: id)) { content } }
         else { Button { navigation.state(for: navigation.selectedTab).open(id) } label: { content } }
     }
 }
 
 struct AnimeNavigation: ViewModifier {
     func body(content: Content) -> some View {
-        content.navigationDestination(for: AnimeRoute.self) { AnimeDetailView(mediaID: $0.id).toolbar(.visible, for: .navigationBar) }
+        content.navigationDestination(for: AnimeRoute.self) {
+            AnimeDetailView(mediaID: $0.id).environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
+        }
             .navigationDestination(for: DiscoveryRoute.self) { route in
                 DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
                     // Replacing a path with the same destination type otherwise reuses its

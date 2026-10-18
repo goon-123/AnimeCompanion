@@ -1,5 +1,9 @@
 # Anime Companion
 
+### iPad full-width and optional split layout (0.16.0 / build 34)
+
+iPad now defaults to full-width pages with native push/back navigation, like iPhone. **Settings → iPad layout → Side-by-side browsing** restores the optional browsing/detail arrangement; the saved choice applies when Settings closes. Each mode keeps its navigation structure through rotation. News always gets a full page. The extra tab sidebar is removed. Split mode gives browsing more width, caps featured poster height to its column’s proportions, and fits fewer grid cards when needed so titles, dub labels and actions stay readable without overwriting your saved density.
+
 ### Saved torrent sorting (0.15.1 / build 33)
 
 Find streams has a **Sort** menu beside TorBox releases: **Highest seeders**, **Release name**, or **Provider order**. English/dub audio stays first in every mode. Highest seeders is the initial default and sorts each audio group from most to fewest; missing or invalid counts appear last. Your selection is automatically saved for future searches in both the title picker and independent Seanime search. Changing sort reorders existing results without another search or cloud submission.

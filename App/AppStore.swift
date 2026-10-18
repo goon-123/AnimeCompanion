@@ -50,6 +50,13 @@ final class AppStore: ObservableObject {
         #if DEBUG
         let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
         let phaseTwoPreview = ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")
+        if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences"),
+           !ProcessInfo.processInfo.arguments.contains("--ui-keep-ipad-layout") {
+            UserDefaults.standard.set(TabletLayout.fullWidth.rawValue, forKey: TabletLayout.preferenceKey)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-ipad-split-preview") {
+            UserDefaults.standard.set(TabletLayout.sideBySide.rawValue, forKey: TabletLayout.preferenceKey)
+        }
         if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
         else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }
         exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()

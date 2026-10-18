@@ -47,7 +47,7 @@ struct NewsView: View {
                 }
                 if !unavailable.isEmpty { Text("Temporarily unavailable: " + unavailable.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
             }
-        }.scrollContentBackground(.hidden).readableContent().background(Theme.background)
+        }.accessibilityIdentifier("news-list").scrollContentBackground(.hidden).readableContent().background(Theme.background)
             .navigationTitle("Anime News").task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
             .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
     }

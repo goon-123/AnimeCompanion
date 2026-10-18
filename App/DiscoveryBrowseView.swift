@@ -9,6 +9,7 @@ struct DiscoveryBrowseView: View {
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
     @AppStorage("discovery.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.animeSplitPresentation) private var usesSplit
     private var posters = PosterPreferences(.explore)
     @State private var showDisplay = false
     @State private var showDubFilters = false
@@ -109,8 +110,8 @@ struct DiscoveryBrowseView: View {
                     Text("\(visibleResults.count) matches in \(results.count) checked titles · More titles remain")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("discovery-partial-results")
                 }
-                if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
-                    Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
+                if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit) < posters.preferredColumns {
+                    Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)) per row. Your saved choice is \(posters.preferredColumns).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if layout == "list", posters.listPosterWidth(in: contentWidth - 18) < posters.listWidth - 1 {
@@ -118,7 +119,7 @@ struct DiscoveryBrowseView: View {
                         .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("explore-list-size-constrained")
                 }
                 if layout == "grid" {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 18) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)), alignment: .leading, spacing: 18) {
                         ForEach(visibleResults) { DiscoveryAnimeTile(anime: $0, posterWidth: posters.gridPosterWidth) }
                     }
                 } else {

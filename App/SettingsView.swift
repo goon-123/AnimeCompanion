@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var seanime: SeanimeStore
+    @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -31,6 +32,11 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-player")
                 }
                 Section("Preferences") {
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        NavigationLink { TabletLayoutSettingsView() } label: {
+                            SettingsCategoryLabel(title: "iPad layout", detail: "Full-width pages or side-by-side browsing", symbol: "rectangle.split.2x1", tint: .cyan)
+                        }.accessibilityIdentifier("settings-ipad-layout")
+                    }
                     NavigationLink { BrowsingSettingsView() } label: {
                         SettingsCategoryLabel(title: "Browsing & content", detail: "Metadata source & adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
                     }.accessibilityIdentifier("settings-browsing")
@@ -47,7 +53,23 @@ struct SettingsView: View {
                 }
             }.navigationTitle("Settings")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
+        }.onDisappear { navigation.applyLayoutPreference() }
+    }
+}
+
+private struct TabletLayoutSettingsView: View {
+    @AppStorage(TabletLayout.preferenceKey) private var layoutValue = TabletLayout.fullWidth.rawValue
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Side-by-side browsing", isOn: Binding(get: {
+                    TabletLayout(preference: layoutValue) == .sideBySide
+                }, set: { layoutValue = ($0 ? TabletLayout.sideBySide : .fullWidth).rawValue }))
+                    .accessibilityIdentifier("settings-ipad-split-view")
+            } header: { Text("iPad layout") } footer: {
+                Text("Off: browse full-width pages and open titles like on iPhone. On: keep browsing beside anime details. Compact windows use one column. News always uses the full page. Your choice is saved and applies when you close Settings.")
+            }
+        }.navigationTitle("iPad layout").navigationBarTitleDisplayMode(.inline)
     }
 }
 

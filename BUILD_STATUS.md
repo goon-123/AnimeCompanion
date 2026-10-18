@@ -1,3 +1,11 @@
+## iPad full-width and optional split presentation — build 34
+
+Version 0.16.0. Default to a full-width NavigationStack on iPad and iPhone. Add Settings → iPad layout → Side-by-side browsing, saved on this device and applied after Settings dismisses so the sheet is not destroyed while editing. Explicitly switching modes returns each tab to browsing; normal rotation leaves its chosen navigation topology and route state intact. Single-page anime and related-title links use native push/back navigation. Optional split selection retains the existing independent detail stack.
+
+News always uses one full-width stack instead of an unrelated empty anime-detail pane. Remove the extra adaptable tab sidebar. Request 60% of the available split window for browsing, bounded to 480–820 points. Fit split-grid cells to at least 160 points and limit split hero posters to the column’s 2:3 proportions. Saved poster density and full-width immersive preferences remain intact.
+
+Add four core preference/width/poster/density regressions and native full-width, push/back retention, portrait/landscape, split enable/disable/persistence, proportioned poster and full-width News checks. Retain the previous split search/detail/rotation regression with an explicit opt-in fixture. The targeted iPhone/iPad gate exercises these layout scenarios; prior stream and playback suites remain in the broader scopes. CI validation is pending.
+
 ## Saved torrent sorting — build 33
 
 Version 0.15.1. Add a compact Sort menu to the shared Seanime results section, available in both tracked Find streams and independent provider searches. Save Highest seeders, Release name or Provider order on this device. Default to English audio first, then descending seeders within each audio group. Missing/negative counts follow a known zero; equal ranks keep provider order. Subtitle-only English hints retain their existing non-dub classification.

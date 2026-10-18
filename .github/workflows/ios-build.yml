@@ -146,7 +146,7 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
   playback-fixes:
-    name: Find streams UI ${{ matrix.device }} regression
+    name: Full-width and split layout ${{ matrix.device }} regression
     runs-on: macos-15
     timeout-minutes: 30
     strategy:
@@ -164,8 +164,8 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Verify clean Find streams filters and inline TorBox playback
-        run: bash scripts/check-simulator.sh ${{ matrix.device }} streams
+      - name: Verify full-width browsing, optional split layout and saved preferences
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} layout
       - name: Upload targeted screenshots and results
         if: always()
         uses: actions/upload-artifact@v4

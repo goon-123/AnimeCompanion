@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams ]]; then
-  echo "Expected full, focused, weekly, fixes or streams test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout ]]; then
+  echo "Expected full, focused, weekly, fixes, streams or layout test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -27,7 +27,7 @@ if [[ "$test_scope" == weekly ]]; then
   result_path="build/Weekly-${device_family}.xcresult"
   screenshot_path="build/weekly-${device_family}-screenshots"
 fi
-if [[ "$test_scope" == fixes || "$test_scope" == streams ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout ]]; then
   result_path="build/Fixes-${device_family}.xcresult"
   screenshot_path="build/fixes-${device_family}-screenshots"
 fi
@@ -125,6 +125,7 @@ test_arguments+=(-only-testing:AnimeCompanionUITests/ExploreAndAddonUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/AddonDirectoryUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/StreamPickerUITests)
+test_arguments+=(-only-testing:AnimeCompanionUITests/TabletPresentationUITests)
 fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"
@@ -153,6 +154,12 @@ if [[ "$test_scope" == streams ]]; then
     -only-testing:AnimeCompanionUITests/StreamPickerUITests
   )
 fi
+if [[ "$test_scope" == layout ]]; then
+  test_arguments=(
+    -only-testing:AnimeCompanionUITests/TabletPresentationUITests
+    -only-testing:AnimeCompanionUITests/PhaseTwoNavigationUITests/testBrowseDetailRotationRetainsQueryResultsAndGenreNavigation
+  )
+fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
@@ -161,7 +168,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes || "$test_scope" == streams ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

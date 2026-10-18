@@ -6,6 +6,7 @@ struct ExploreView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.animeSplitPresentation) private var usesSplit
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
@@ -35,7 +36,8 @@ struct ExploreView: View {
                     FeaturedAnimeCarousel(anime: featured,
                         height: CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
                             viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
-                            fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured)) + (textSize.isAccessibilitySize ? 240 : 0),
+                            fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
+                            splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0),
                         topInset: geometry.safeAreaInsets.top, background: $posterBackground)
                 }
                 LazyVStack(alignment: .leading, spacing: 26) {

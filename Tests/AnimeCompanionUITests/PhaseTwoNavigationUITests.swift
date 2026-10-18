@@ -113,7 +113,7 @@ final class PhaseTwoNavigationUITests: XCTestCase {
 
     @MainActor
     func testBrowseDetailRotationRetainsQueryResultsAndGenreNavigation() throws {
-        let app = launch()
+        let app = launch(["--ui-ipad-split-preview"])
         app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
@@ -181,10 +181,10 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         capture("Balanced-Explore")
     }
 
-    @MainActor private func launch() -> XCUIApplication {
+    @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-phase2-preview", "--ui-playback-preview", "--ui-playback-stale-resume", "--ui-reset-content-preferences"]
+        app.launchArguments = ["--ui-phase2-preview", "--ui-playback-preview", "--ui-playback-stale-resume", "--ui-reset-content-preferences"] + extra
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
         return app

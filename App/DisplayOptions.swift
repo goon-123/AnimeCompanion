@@ -34,8 +34,8 @@ struct PosterPreferences: DynamicProperty {
     func listPosterWidth(in width: CGFloat) -> CGFloat {
         CGFloat(PosterLayout.listWidth(preferred: listWidth, availableWidth: Double(width)))
     }
-    func fittingColumns(in width: CGFloat, accessible: Bool = false) -> Int {
-        PosterLayout.columns(requested: preferredColumns, availableWidth: Double(width), minimumWidth: accessible ? 160 : 80)
+    func fittingColumns(in width: CGFloat, accessible: Bool = false, split: Bool = false) -> Int {
+        PosterLayout.columns(requested: preferredColumns, availableWidth: Double(width), minimumWidth: accessible || split ? 160 : 80)
     }
     func reset() {
         let pad = UIDevice.current.userInterfaceIdiom == .pad

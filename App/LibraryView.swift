@@ -11,6 +11,7 @@ struct LibraryView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @AppStorage("library.layout") private var layout = "list"
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.animeSplitPresentation) private var usesSplit
     @Environment(\.scenePhase) private var scenePhase
     private var posters = PosterPreferences(.library)
     @AppStorage("library.sort") private var sortValue = LibrarySort.airing.rawValue
@@ -83,14 +84,14 @@ struct LibraryView: View {
                             Text("Covers fit this pane at \(Int(posters.listPosterWidth(in: contentWidth))) pt. Your saved width is \(Int(posters.listWidth)) pt.")
                                 .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("library-list-size-constrained")
                         }
-                        if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize) < posters.preferredColumns {
-                            Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)) per row. Your saved choice is \(posters.preferredColumns).")
+                        if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit) < posters.preferredColumns {
+                            Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)) per row. Your saved choice is \(posters.preferredColumns).")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                         if layout == "grid" {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize)), alignment: .leading, spacing: 20) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)), alignment: .leading, spacing: 20) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
                                         LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
