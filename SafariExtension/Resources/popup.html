@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Safari → VidHub</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="core.js" defer></script>
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <header><div class="eyebrow">ANIME COMPANION</div><h1>Safari → VidHub</h1><p id="site">Your video, in your player.</p></header>
+  <main>
+    <section class="preferences" aria-label="Playback preferences">
+      <label><span>Video detection</span><input type="checkbox" id="enabled" role="switch"></label>
+      <label><span>Ask when a video plays</span><input type="checkbox" id="prompts" role="switch"></label>
+      <label><span id="site-label">Allow this website</span><input type="checkbox" id="site-enabled" role="switch"></label>
+    </section>
+    <div class="section-title"><h2>Detected streams</h2><button type="button" id="scan">Scan again</button></div>
+    <p id="status" role="status" aria-live="polite">Looking for videos…</p>
+    <div id="streams" aria-label="Detected video streams"></div>
+    <p class="help">Start the video first. For embedded players, allow access to the player’s website too. Protected or login-dependent streams may need Safari.</p>
+    <p id="error" role="alert" hidden></p>
+  </main>
+  <footer><button type="button" id="reset">Reset website preferences</button><span>Links stay on this device until you open VidHub.</span></footer>
+</body>
+</html>

@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.16.1'
-    CURRENT_PROJECT_VERSION: '35'
+    MARKETING_VERSION: '0.17.0'
+    CURRENT_PROJECT_VERSION: '36'
 packages:
   AnimeCore:
     path: .
@@ -57,6 +57,32 @@ targets:
     dependencies:
       - package: AnimeCore
         product: AnimeCore
+      - target: SafariVideoExtension
+        embed: true
+  SafariVideoExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: '18.0'
+    sources:
+      - path: SafariExtension/SafariWebExtensionHandler.swift
+      - path: SafariExtension/Resources
+        buildPhase: resources
+    info:
+      path: SafariExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Anime Companion – VidHub
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.animecompanion.ios.safari
+        GENERATE_INFOPLIST_FILE: false
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
+        CODE_SIGN_STYLE: Automatic
   AnimeCompanionUITests:
     type: bundle.ui-testing
     platform: iOS

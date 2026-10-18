@@ -12,6 +12,33 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  safari-extension:
+    name: Safari video detection and VidHub handoff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check extension resources and regressions
+        run: |
+          python3 scripts/check-safari-bundle.py
+          npm --prefix Tools/SafariExtension ci --ignore-scripts --no-audit --no-fund
+          npm --prefix Tools/SafariExtension test
+      - name: Install WebKit browser
+        working-directory: Tools/SafariExtension
+        run: npx playwright install --with-deps webkit
+      - name: Exercise real playback, embedded frames and SPA navigation
+        run: npm --prefix Tools/SafariExtension run test:browser
+      - name: Upload Safari browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-safari-browser
+          path: build/safari-browser
+          if-no-files-found: ignore
+          retention-days: 30
   seanime-runtime:
     name: On-device extension runtime regressions
     runs-on: ubuntu-24.04
@@ -105,6 +132,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
+    needs: safari-extension
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -131,6 +159,7 @@ jobs:
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
+          python3 scripts/check-safari-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
           ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa

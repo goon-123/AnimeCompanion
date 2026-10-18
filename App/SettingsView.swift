@@ -29,6 +29,9 @@ struct SettingsView: View {
                     NavigationLink { PlayerSettingsView() } label: {
                         SettingsCategoryLabel(title: "Video player", detail: "VidHub · Playback & resume", symbol: "play.rectangle.fill", tint: .pink)
                     }.accessibilityIdentifier("settings-player")
+                    NavigationLink { SafariVideoSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Safari → VidHub", detail: "Open website videos in your player", symbol: "safari.fill", tint: .cyan)
+                    }.accessibilityIdentifier("settings-safari-vidhub")
                 }
                 Section("Preferences") {
                     if UIDevice.current.userInterfaceIdiom == .pad {

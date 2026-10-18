@@ -1,3 +1,13 @@
+## Safari → VidHub bundled extension — build 36
+
+Version 0.17.0. Embed a Safari web-extension target in the existing app/IPA. Add Settings → Safari → VidHub with enable/website-access/sideloading guidance. The extension requires iOS/iPadOS 18 for MAIN-world declarative content scripts; the host app retains iOS 17 support.
+
+Detect direct video sources, embedded frames, shadow-root players, resource timing and successful fetch/XHR URL/content-type metadata. Offer a dismissible top-page Open in VidHub prompt for eligible playing videos and a toolbar stream list, manual scan, global detection/prompt switches and persistent per-site exclusions. Hand off title, signed URL and available current timestamp through VidHub's documented `/play` route without anime callbacks or tracking changes. Ignore transport chunks, browser blob addresses and detected DRM. Sources requiring Safari sessions or unsupported headers may still fail.
+
+Only preferences/excluded hosts persist. Private URLs use a bounded session cache and are cleared for disabled sites, tab closure and navigation. No external resolver, analytics, cookies permission, native messaging or unsupported iOS `webRequest` API. The extension/app versions, bundle relationship, executable and all manifest resources are verified in the Release app before IPA packaging.
+
+Local checks: all 15 Node regressions, six real WebKit browser scenarios, and source-resource/syntax checks pass. Prompt and stream-picker screenshots were visually reviewed at an iPhone viewport. Browser testing caught and fixed MIME evidence being dropped during the second validation step for extensionless streams. Native setup UI, full app compilation and IPA packaging are pending and will be updated with observed results. Browser tests use a test-only WebExtension API bridge; an installed signed extension handing off to an installed VidHub still requires real-device testing.
+
 ## iPad full-width and optional split presentation — build 35
 
 Version 0.16.1. Default to a full-width NavigationStack on iPad and iPhone. Add Settings → iPad layout → Side-by-side browsing, saved on this device and applied by the presenting sheet's onDismiss callback so the sheet is not destroyed while editing. Explicitly switching modes returns each tab to browsing; normal rotation leaves its chosen navigation topology and route state intact. Single-page anime and related-title links use native push/back navigation. Optional split selection retains the existing independent detail stack.
