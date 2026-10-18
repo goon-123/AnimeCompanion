@@ -21,6 +21,64 @@ fn abstract_function(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
         "Unimplemented Java functional interface".into(),
     )))
 }
+
+// Network natives complete inline, but async must still retain thrown results
+// until await. The pinned host silently converted every failed task to null.
+fn coroutine_async(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::{error::JvmError, object::Native};
+    let (value, error) = match vm.invoke_virtual_args(
+        args[3],
+        "invoke",
+        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+        vec![args[0], JValue::Null],
+    ) {
+        Ok(value) => (value, JValue::Null),
+        Err(JvmError::Uncaught(error)) => (JValue::Null, JValue::Obj(error)),
+        Err(error) => return Err(NatErr::Fatal(error)),
+    };
+    vm.alloc_native(
+        "Lkotlinx/coroutines/Deferred;",
+        Native::Deferred { value, error },
+    )
+    .map_err(NatErr::Fatal)
+}
+
+fn coroutine_await(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    match vm.payload_of(args[0]) {
+        Some(dexvm::vm::object::Native::Deferred { value, error }) => {
+            if error.is_null() {
+                Ok(value)
+            } else {
+                Err(NatErr::Throw(error.as_obj()))
+            }
+        }
+        _ => Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/NullPointerException;",
+            "Invalid deferred result",
+        ))),
+    }
+}
+
+fn install_host_fields(vm: &mut Vm) -> Result<(), dexvm::vm::error::JvmError> {
+    let owner = vm.ensure_class_by_desc("Lkotlin/time/Instant;")?;
+    let name = vm.intern("Companion");
+    let ty = vm.intern("Lkotlin/time/Instant$Companion;");
+    if !vm.classes[owner as usize]
+        .static_fields
+        .contains_key(&(name, ty))
+    {
+        let value = vm.alloc_native(
+            "Lkotlin/time/Instant$Companion;",
+            dexvm::vm::object::Native::Opaque,
+        )?;
+        let class = &mut vm.classes[owner as usize];
+        let offset = class.statics.len() as u32;
+        class.statics.push(value);
+        class.statics_lazy.push(None);
+        class.static_fields.insert((name, ty), (owner, offset));
+    }
+    Ok(())
+}
 fn compute_if_absent(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     let existing = vm
         .invoke_virtual_args(
@@ -282,6 +340,20 @@ fn image_url_request(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     .map_err(NatErr::Fatal)
 }
 static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry {
+        class: "Lkotlinx/coroutines/BuildersKt;",
+        name: "async$default",
+        sig: "(Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/CoroutineContext;Lkotlinx/coroutines/CoroutineStart;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lkotlinx/coroutines/Deferred;",
+        instance: false,
+        f: coroutine_async,
+    },
+    NativeEntry {
+        class: "Lkotlinx/coroutines/Deferred;",
+        name: "await",
+        sig: "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        instance: true,
+        f: coroutine_await,
+    },
     NativeEntry {
         class: "Leu/kanade/tachiyomi/source/online/HttpSource;",
         name: "imageUrlRequest",
@@ -787,6 +859,7 @@ where
     ext.ctx()
         .register_natives(&[FUNCTION_INTERFACES])
         .map_err(|e| e.to_string())?;
+    install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     ext.set_http(http);
     let manifest = ext.manifest().map_err(|e| e.to_string())?;
     if !manifest
@@ -970,6 +1043,9 @@ pub unsafe extern "C" fn ac_manga_free_string(string: *mut c_char) {
         drop(CString::from_raw(string));
     }
 }
+
+#[cfg(test)]
+mod weebcentral_tests;
 
 #[cfg(test)]
 mod tests {

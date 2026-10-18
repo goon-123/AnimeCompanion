@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.19.0'
-    CURRENT_PROJECT_VERSION: '38'
+    MARKETING_VERSION: '0.19.1'
+    CURRENT_PROJECT_VERSION: '39'
 packages:
   AnimeCore:
     path: .
@@ -105,8 +105,11 @@ targets:
     platform: iOS
     sources:
       - path: Tests/MangaRuntimeTests
-        excludes: [Fixtures]
+        excludes: [Fixtures, OwnedFixtures]
       - path: Tests/MangaRuntimeTests/Fixtures
+        type: folder
+        buildPhase: resources
+      - path: Tests/MangaRuntimeTests/OwnedFixtures
         type: folder
         buildPhase: resources
     settings:
@@ -119,6 +122,8 @@ targets:
       - target: AnimeCompanion
       - package: AnimeCore
         product: AnimeCore
+      - framework: build/MangaRuntime.xcframework
+        embed: false
 schemes:
   AnimeCompanion:
     build:

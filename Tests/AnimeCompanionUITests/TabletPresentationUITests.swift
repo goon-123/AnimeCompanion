@@ -23,9 +23,7 @@ final class TabletPresentationUITests: XCTestCase {
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
-        // Target the leading text rather than empty space in the wide field.
-        search.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 16, dy: 0)).tap()
-        search.typeText("Phase\n")
+        search.tap(); search.typeText("Phase\n")
         let entry = app.buttons["discovery-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         app.revealInContent(entry); entry.tap()
