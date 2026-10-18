@@ -1,0 +1,10 @@
+{
+  "name": "animecompanion-safari-extension-tests",
+  "private": true,
+  "version": "0.17.0",
+  "scripts": {
+    "test": "node --test test/core.test.cjs test/background.test.cjs",
+    "test:browser": "node --test --test-concurrency=1 test/browser.test.cjs"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}

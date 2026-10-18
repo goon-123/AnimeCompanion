@@ -1,5 +1,13 @@
 # Anime Companion
 
+### Safari videos in VidHub (0.17.0 / build 36)
+
+AnimeCompanion now includes **Safari → VidHub**, a Safari extension for iPhone and iPad. Enable it in Settings → Apps → Safari → Extensions → **Anime Companion – VidHub**, then allow All Websites for automatic detection. Keep the embedded extension when signing/sideloading the IPA. The extension requires iOS/iPadOS 18 or later; the anime app still supports iOS 17.
+
+Start a website video and tap **Open in VidHub**, or use Safari's extension menu to choose a detected stream manually. Available playback position is passed to VidHub. Turn prompts/detection on or off, exclude a website, re-enable it or reset website preferences from the extension menu. AnimeCompanion's Settings → **Safari → VidHub** contains setup instructions. Safari playback does not modify anime watch progress.
+
+Detection runs across permitted HTTP(S) websites and embedded player frames. Direct video files and accessible HLS/DASH playlists are supported; DRM, opaque browser-only media and links requiring Safari's login cookies or special headers may still need Safari. Detected URLs stay in bounded session storage, with preferences saved separately. No every-website guarantee or live-device playback verification is implied. See [Safari extension setup, design and validation](SafariExtension/README.md).
+
 ### iPad full-width and optional split layout (0.16.1 / build 35)
 
 iPad now defaults to full-width pages with native push/back navigation, like iPhone. **Settings → iPad layout → Side-by-side browsing** restores the optional browsing/detail arrangement; the saved choice applies when Settings closes. Each mode keeps its navigation structure through rotation. News always gets a full page. The extra tab sidebar is removed. Split mode gives browsing more width, caps featured poster height to its column’s proportions, and fits fewer grid cards when needed so titles, dub labels and actions stay readable without overwriting your saved density.
