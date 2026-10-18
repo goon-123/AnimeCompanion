@@ -1,0 +1,4 @@
+module AnimeMangaRuntime {
+    header "AnimeMangaRuntime.h"
+    export *
+}

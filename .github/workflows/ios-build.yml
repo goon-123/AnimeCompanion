@@ -12,6 +12,41 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  manga-runtime:
+    name: Build on-device manga runtime
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Tools/MangaRuntime/target
+          key: manga-ios-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock', 'Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/support/**', 'scripts/build-manga-runtime.sh') }}
+      - name: Build device and universal simulator libraries
+        run: bash scripts/build-manga-runtime.sh
+      - name: Test real classic and modern APKs through the C bridge
+        run: bash scripts/test-manga-runtime.sh
+      - name: Upload bundled manga runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+          retention-days: 30
+      - name: Upload pinned native test fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tools/MangaRuntime/target/fixtures
+          retention-days: 30
+      - name: Upload runtime license notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App/MangaRuntimeLicenses.txt
+          retention-days: 30
   safari-extension:
     name: Safari video detection and VidHub handoff
     runs-on: ubuntu-24.04
@@ -77,6 +112,21 @@ jobs:
           node-version: '22'
       - name: Build bundled on-device JavaScript resources
         run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -113,6 +163,21 @@ jobs:
           node-version: '22'
       - name: Build bundled on-device JavaScript resources
         run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -132,7 +197,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
-    needs: safari-extension
+    needs: [safari-extension, manga-runtime]
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -148,6 +213,21 @@ jobs:
           node-version: '22'
       - name: Build bundled on-device JavaScript resources
         run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -175,6 +255,7 @@ jobs:
           ANIMECOMPANION_LIVE_SERVICES: '1'
         run: swift test -j 2 --filter LiveServiceTests
   playback-fixes:
+    needs: manga-runtime
     name: Full-width and split layout ${{ matrix.device }} regression
     runs-on: macos-15
     timeout-minutes: 30
@@ -189,6 +270,21 @@ jobs:
           node-version: '22'
       - name: Build bundled on-device JavaScript resources
         run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -238,6 +334,21 @@ jobs:
           node-version: '22'
       - name: Build bundled on-device JavaScript resources
         run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
       - name: Generate Xcode project
         run: |
           brew install xcodegen
