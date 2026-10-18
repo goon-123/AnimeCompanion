@@ -84,6 +84,9 @@ async function updateOptions(message, sender) {
   await browser.storage.local.set({ [OPTIONS_KEY]: prefs });
   const tabs = await cache();
   const ids = new Set(Object.keys(tabs).map(Number));
+  // Disabled tabs have no cached URLs. Still notify them when a global switch
+  // is turned back on, without requiring each page to reload or reopen Safari.
+  for (const tab of await browser.tabs.query({})) if (Number.isInteger(tab.id)) ids.add(tab.id);
   if (Number.isInteger(sender.tab?.id ?? message.tabId)) ids.add(sender.tab?.id ?? message.tabId);
   for (const id of ids) if (tabs[id] && !Video.allowed(tabs[id].pageURL, prefs)) delete tabs[id];
   await saveCache(tabs);

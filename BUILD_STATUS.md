@@ -6,7 +6,7 @@ Detect direct video sources, embedded frames, shadow-root players, resource timi
 
 Only preferences/excluded hosts persist. Private URLs use a bounded session cache and are cleared for disabled sites, tab closure and navigation. No external resolver, analytics, cookies permission, native messaging or unsupported iOS `webRequest` API. The extension/app versions, bundle relationship, executable and all manifest resources are verified in the Release app before IPA packaging.
 
-Local checks: all 15 Node regressions, six real WebKit browser scenarios, and source-resource/syntax checks pass. Prompt and stream-picker screenshots were visually reviewed at an iPhone viewport. Browser testing caught and fixed MIME evidence being dropped during the second validation step for extensionless streams. Native setup UI, full app compilation and IPA packaging are pending and will be updated with observed results. Browser tests use a test-only WebExtension API bridge; an installed signed extension handing off to an installed VidHub still requires real-device testing.
+Local checks: all 16 Node regressions, six real WebKit browser scenarios, and source-resource/syntax checks pass. Prompt and stream-picker screenshots were visually reviewed at an iPhone viewport. Browser testing caught and fixed MIME evidence being dropped during the second validation step for extensionless streams. The PR workflow runs native setup UI checks and verifies full compilation/IPA packaging; PR #17 tracks the current run and results. Browser tests use a test-only WebExtension API bridge; an installed signed extension handing off to an installed VidHub still requires real-device testing.
 
 ## iPad full-width and optional split presentation — build 35
 

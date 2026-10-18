@@ -31,6 +31,15 @@ test("site exclusion clears private links, survives restart, and can be undone",
   await restarted.dispatch({ type: "ac-set-options", tabId: 12, siteEnabled: true });
   assert.equal((await restarted.dispatch({ type: "ac-get-state", tabId: 12 })).enabled, true);
 });
+test("re-enabling global detection wakes existing tabs even after their private cache was cleared", async () => {
+  const h = harness({ getTabs: () => [{ id: 12 }, { id: 99 }] });
+  await h.dispatch({ type: "ac-report", report: report() }, sender);
+  await h.dispatch({ type: "ac-set-options", tabId: 12, enabled: false });
+  assert.equal(Object.keys(h.stores.session.safariVideoTabs).length, 0);
+  h.delivered.length = 0;
+  await h.dispatch({ type: "ac-set-options", tabId: 12, enabled: true });
+  assert.equal(h.delivered.some(x => x.id === 99 && x.message.type === "ac-options-changed"), true);
+});
 test("new pages, reloads, and closed tabs cannot reuse an earlier page's links", async () => {
   let pageURL = sender.tab.url;
   const h = harness({ getTab: id => ({ id, url: pageURL }) });

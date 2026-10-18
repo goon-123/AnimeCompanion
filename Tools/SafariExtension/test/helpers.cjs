@@ -19,6 +19,7 @@ function harness(config = {}) {
     tabs: {
       onRemoved: event("removed"), onUpdated: event("updated"),
       async get(id) { return config.getTab?.(id) || { id, url: "https://watch.example/episode" }; },
+      async query() { return config.getTabs?.() || []; },
       async sendMessage(id, message, options) { delivered.push({ id, message, options }); return config.onTabMessage?.(id, message, options); }
     },
     scripting: { async executeScript(value) { injected.push(value); } }
