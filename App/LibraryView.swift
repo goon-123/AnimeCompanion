@@ -130,7 +130,7 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") }
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .sheet(isPresented: $showTorBoxFiles) { TorBoxFilesView() }
             .task(id: syncKey) { await loadDubs() }

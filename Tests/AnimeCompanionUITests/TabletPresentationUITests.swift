@@ -19,7 +19,8 @@ final class TabletPresentationUITests: XCTestCase {
         }
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("Phase\n")
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap(); search.typeText("Phase\n")
         let entry = app.buttons["discovery-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         app.revealInContent(entry); entry.tap()
@@ -108,7 +109,13 @@ final class TabletPresentationUITests: XCTestCase {
         let sized = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             element.exists && element.frame.width >= minimum && element.frame.width < maximum
         }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [sized], timeout: 10), .completed)
+        let result = XCTWaiter.wait(for: [sized], timeout: 10)
+        if result != .completed {
+            capture("Unexpected-Pane-Width")
+            let tree = XCTAttachment(string: XCUIApplication().debugDescription)
+            tree.name = "Unexpected-Pane-Width-Hierarchy"; tree.lifetime = .keepAlways; add(tree)
+        }
+        XCTAssertEqual(result, .completed, "Expected width \(minimum)..<\(maximum); actual frame \(element.frame)")
     }
     @MainActor private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

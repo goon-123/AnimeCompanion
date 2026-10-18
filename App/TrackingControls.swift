@@ -187,7 +187,7 @@ struct CompactTrackingBar: View {
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
         }.padding(12).background(.ultraThinMaterial)
             .sheet(isPresented: $editing) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
-            .sheet(isPresented: $settings) { SettingsView() }
+            .appSettingsSheet(isPresented: $settings)
             .sheet(isPresented: $playback) { WatchAnimeView(anime: anime) }
     }
     private var busy: Bool { store.loadingLibrary || store.savedAt == nil || store.savingMedia.contains(anime.id) }

@@ -74,7 +74,7 @@ struct AnimeDetailView: View {
                 }
             }
             .task(id: "\(mediaID)-\(store.includeAdult)-\(store.metadataSource.rawValue)") { await load() }.refreshable { await load(refresh: true) }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .appSettingsSheet(isPresented: $showSettings)
             .sheet(item: $playbackRequest) { request in
                 if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
             }

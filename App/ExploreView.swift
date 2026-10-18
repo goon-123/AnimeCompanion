@@ -72,7 +72,7 @@ struct ExploreView: View {
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottomTrailing) { floatingSearch.padding(.trailing, 20).padding(.bottom, 16) }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
             .sheet(isPresented: $showSeasons) { seasonPicker }

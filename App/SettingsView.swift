@@ -7,7 +7,6 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var seanime: SeanimeStore
-    @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -53,7 +52,21 @@ struct SettingsView: View {
                 }
             }.navigationTitle("Settings")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }.onDisappear { navigation.applyLayoutPreference() }
+        }
+    }
+}
+
+private struct AppSettingsSheet: ViewModifier {
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @Binding var isPresented: Bool
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented, onDismiss: { navigation.applyLayoutPreference() }) { SettingsView() }
+    }
+}
+
+extension View {
+    func appSettingsSheet(isPresented: Binding<Bool>) -> some View {
+        modifier(AppSettingsSheet(isPresented: isPresented))
     }
 }
 

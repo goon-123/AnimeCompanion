@@ -61,7 +61,7 @@ struct ScheduleView: View {
                         .accessibilityLabel("Account and settings")
                 }
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .appSettingsSheet(isPresented: $showSettings)
             .onChange(of: navigation.selectedTab) { _, tab in if tab == .schedule { mode = .airing } }
             .onChange(of: mode) { _, mode in if mode == .weekly { refreshToday() } }
             .onChange(of: scenePhase) { _, phase in if phase == .active { refreshToday() } }

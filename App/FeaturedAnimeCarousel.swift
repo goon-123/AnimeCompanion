@@ -70,7 +70,7 @@ private struct FeaturedAnimePanel: View {
         }.foregroundStyle(.white)
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {

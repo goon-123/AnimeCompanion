@@ -117,8 +117,12 @@ final class AppNavigationStore: ObservableObject {
 
 struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
+    @State private var loadedLayout = false
     var body: some View {
-        tabs.task { navigation.applyLayoutPreference() }
+        tabs.task {
+            guard !loadedLayout else { return }
+            loadedLayout = true; navigation.applyLayoutPreference()
+        }
     }
     private var tabs: some View {
         TabView(selection: $navigation.selectedTab) {
