@@ -2,7 +2,7 @@ import SwiftUI
 import AnimeCore
 
 struct MangaExtensionsView: View {
-    @StateObject private var store = MangaExtensionStore()
+    @EnvironmentObject private var store: MangaExtensionStore
     @AppStorage("manga.showMatureSources") private var showMature = false
     @State private var repositoryLink = "https://keiyoushi.github.io"
     @State private var query = ""
@@ -23,7 +23,7 @@ struct MangaExtensionsView: View {
         List {
             Section {
                 Label("Runs on this device", systemImage: "iphone.gen3").foregroundStyle(.mint)
-                Text("Install manga and manhwa sources from Keiyoushi, then browse them here. The page reader is the next stage.")
+                Text("Install manga and manhwa sources from Keiyoushi. Browse their covers and read vertically in the Manga tab.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text("Source compatibility is experimental. Some extensions need additional runtime support.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -162,14 +162,14 @@ private struct MangaExtensionDetailView: View {
                         }
                     }
                     ForEach(installed.sources.filter { sourceLanguage.isEmpty || $0.language == sourceLanguage || $0.language == "all" }, id: \.index) { source in
-                        NavigationLink { MangaSourceBrowseView(store: store, extensionID: entry.id, source: source) } label: {
+                            NavigationLink { MangaSourceBrowseView(source: MangaSourceReference(installation: installed, source: source)) } label: {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(source.name)
                                 Text(source.language == "all" ? "Multilingual" : source.language.uppercased()).font(.caption).foregroundStyle(.secondary)
                             }
                         }.disabled(!installed.enabled || store.installing != nil)
                     }
-                } header: { Text("Browse sources") } footer: { Text("Browsing runs the installed extension on your phone. Source and website compatibility can vary; page reading follows in the reader update.") }
+                } header: { Text("Browse sources") } footer: { Text("Sources also appear in the Manga tab. Source and website compatibility can vary.") }
             } else {
                 Section("Included sources") {
                     ForEach(entry.sources.prefix(12)) { source in
@@ -194,68 +194,5 @@ private struct MangaExtensionDetailView: View {
             HStack { Text(title); if store.installing == entry.id { Spacer(); ProgressView() } }
         }.disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || (!showMature && entry.adult))
             .accessibilityIdentifier("manga-install-extension")
-    }
-}
-
-private struct MangaSourceBrowseView: View {
-    @ObservedObject var store: MangaExtensionStore
-    let extensionID: String
-    let source: MangaRuntimeSource
-    @State private var mode = "popular"
-    @State private var query = ""
-    @State private var submittedQuery = ""
-    @State private var mangas: [SourceManga] = []
-    @State private var page = 0
-    @State private var hasNext = false
-    @State private var loading = false
-    @State private var error: String?
-    @State private var generation = UUID()
-    private var requestKey: String { mode + "\u{1f}" + submittedQuery }
-    var body: some View {
-        List {
-            Section {
-                Picker("Browse", selection: $mode) {
-                    Text("Popular").tag("popular")
-                    if source.supportsLatest { Text("Latest").tag("latest") }
-                    if !submittedQuery.isEmpty { Text("Search").tag("search") }
-                }.pickerStyle(.segmented)
-            } footer: { Text("Source browsing preview. Chapter and page reading will be added next.") }
-            if let error {
-                Section {
-                    Text(error).foregroundStyle(.orange)
-                    Button("Try again") { Task { await load(reset: true) } }.disabled(loading)
-                }
-            }
-            Section(mode == "search" ? "Results for “\(submittedQuery)”" : "Titles") {
-                ForEach(mangas) { manga in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(manga.title).font(.headline)
-                        if !manga.author.isEmpty { Text(manga.author).font(.caption).foregroundStyle(.secondary) }
-                    }.padding(.vertical, 3)
-                }
-                if loading { ProgressView("Loading source…") }
-                else if mangas.isEmpty && error == nil { Text("This source returned no titles.").foregroundStyle(.secondary) }
-                if hasNext && !loading { Button("Load more") { Task { await load(reset: false) } } }
-            }
-        }.navigationTitle(source.name).navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Search this source")
-            .onSubmit(of: .search) { submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines); mode = submittedQuery.isEmpty ? "popular" : "search" }
-            .task(id: requestKey) { await load(reset: true) }
-    }
-    private func load(reset: Bool) async {
-        if reset { generation = UUID(); mangas = []; page = 0; hasNext = false }
-        let token = generation, key = requestKey, nextPage = reset ? 1 : page + 1
-        loading = true; error = nil
-        defer { if token == generation { loading = false } }
-        do {
-            let result = try await store.browse(extensionID: extensionID, sourceID: source.id, mode: mode, query: submittedQuery, page: nextPage)
-            try Task.checkCancellation()
-            guard token == generation, key == requestKey else { return }
-            var seen = Set(mangas.map(\.id))
-            mangas += result.mangas.filter { !$0.url.isEmpty && seen.insert($0.id).inserted }
-            page = nextPage; hasNext = result.hasNext
-        } catch is CancellationError {} catch {
-            if token == generation, key == requestKey { self.error = error.localizedDescription }
-        }
     }
 }

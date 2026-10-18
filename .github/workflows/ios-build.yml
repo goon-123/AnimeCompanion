@@ -47,6 +47,54 @@ jobs:
           name: AnimeCompanion-manga-licenses
           path: App/MangaRuntimeLicenses.txt
           retention-days: 30
+  manga-reader:
+    needs: manga-runtime
+    name: Webtoon reader ${{ matrix.device }} regression
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Verify covers, reading, saved positions and failed-page recovery
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} reader
+      - name: Upload reader screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-reader-${{ matrix.device }}
+          path: |
+            build/reader-${{ matrix.device }}-screenshots
+            build/reader-${{ matrix.device }}-diagnostics
+            build/Reader-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   safari-extension:
     name: Safari video detection and VidHub handoff
     runs-on: ubuntu-24.04

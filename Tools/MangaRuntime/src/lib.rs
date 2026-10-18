@@ -187,7 +187,89 @@ fn integer_iterator_boxed(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr
     )
     .map_err(NatErr::Fatal)
 }
+// The pinned host maps Regex.findAll$default to a single MatchResult. Sequence
+// operations need every match. Materialize the host's collection representation
+// with an aggregate bound instead of returning a malformed sequence.
+fn regex_find_all(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{MatcherState, Native};
+    let invalid = || {
+        NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Invalid regex sequence".into(),
+        ))
+    };
+    let Some(Native::Pattern { re, .. }) = vm.payload_of(args[0]) else {
+        return Err(invalid());
+    };
+    let text = vm.str_of_jvalue(args[1]).ok_or_else(invalid)?;
+    let start = args[2].as_int();
+    if start < 0 || start as usize > text.encode_utf16().count() {
+        return Err(invalid());
+    }
+    let mut utf16 = 0;
+    let byte_start = text
+        .char_indices()
+        .find_map(|(byte, ch)| {
+            let hit = utf16 >= start as usize;
+            utf16 += ch.len_utf16();
+            hit.then_some(byte)
+        })
+        .unwrap_or(text.len());
+    let mut items = Vec::new();
+    for matched in re.captures_iter(&text) {
+        let matched = matched.map_err(|_| invalid())?;
+        let range = matched.get(0).ok_or_else(invalid)?;
+        if range.start() < byte_start {
+            continue;
+        }
+        if items.len() >= 10000 || (items.len() + 1) * text.len() > 32_000_000 {
+            return Err(invalid());
+        }
+        let state = MatcherState {
+            pattern: re.clone(),
+            text: text.clone(),
+            pos: range.end(),
+            last: Some((range.start(), range.end())),
+            groups: (0..matched.len())
+                .map(|i| matched.get(i).map(|m| (m.start(), m.end())))
+                .collect(),
+        };
+        items.push(
+            vm.alloc_native("Lkotlin/text/MatcherMatchResult;", Native::Matcher(state))
+                .map_err(NatErr::Fatal)?,
+        );
+    }
+    vm.alloc_native("Ljava/util/ArrayList;", Native::List(items))
+        .map_err(NatErr::Fatal)
+}
+fn regex_find_all_default(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    regex_find_all(
+        vm,
+        &[
+            args[0],
+            args[1],
+            if args[3].as_int() & 2 != 0 {
+                JValue::Int(0)
+            } else {
+                args[2]
+            },
+        ],
+    )
+}
 static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry {
+        class: "Lkotlin/text/Regex;",
+        name: "findAll$default",
+        sig: "(Lkotlin/text/Regex;Ljava/lang/CharSequence;IILjava/lang/Object;)Lkotlin/sequences/Sequence;",
+        instance: false,
+        f: regex_find_all_default,
+    },
+    NativeEntry {
+        class: "Lkotlin/text/Regex;",
+        name: "findAll",
+        sig: "(Ljava/lang/CharSequence;I)Lkotlin/sequences/Sequence;",
+        instance: true,
+        f: regex_find_all,
+    },
     NativeEntry {
         class: "Lkotlin/collections/IntIterator;",
         name: "hasNext",
@@ -313,6 +395,8 @@ struct Command {
     manga: MangaInput,
     #[serde(default)]
     chapter: ChapterInput,
+    #[serde(default)]
+    image: ImageInput,
 }
 fn first_page() -> i32 {
     1
@@ -329,6 +413,250 @@ struct MangaInput {
 struct ChapterInput {
     url: String,
     name: String,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct ImageInput {
+    index: i32,
+    url: String,
+    #[serde(rename = "imageURL")]
+    image_url: String,
+}
+
+fn chapter_numbers(ext: &mut Keiyoushi) -> std::collections::HashMap<String, f32> {
+    ext.ctx()
+        .vm()
+        .arena
+        .objects
+        .iter()
+        .filter_map(|object| {
+            if let Some(dexvm::vm::object::Native::SChapter {
+                url,
+                chapter_number,
+                ..
+            }) = &object.native
+            {
+                if chapter_number.is_finite() && *chapter_number >= 0.0 {
+                    return Some((url.clone(), *chapter_number));
+                }
+            }
+            None
+        })
+        .collect()
+}
+
+fn chapters_json(ext: &mut Keiyoushi, list: Vec<Chapter>) -> Value {
+    let numbers = chapter_numbers(ext);
+    json!(list
+        .into_iter()
+        .map(
+            |c| json!({"url":c.url,"name":c.name,"uploadedAt":c.date_upload,
+        "scanlator":c.scanlator,"chapterNumber":numbers.get(&c.url)})
+        )
+        .collect::<Vec<_>>())
+}
+
+fn modern_book(ext: &mut Keiyoushi, src: &Source, manga: &Manga) -> Result<Value, String> {
+    use dexvm::vm::object::Native;
+    let update = ext.manga_update_coro(src, manga, true, true).map_err(|e| {
+        #[cfg(test)]
+        eprintln!("Manga update trace: {:?}", ext.ctx().vm().trace_ring);
+        ext.describe_error(&e)
+    })?;
+    let m = ext
+        .ctx()
+        .invoke_on(
+            update.as_obj(),
+            "getManga",
+            "()Leu/kanade/tachiyomi/source/model/SManga;",
+            &[],
+        )
+        .map_err(|e| ext.describe_error(&e))?;
+    let data = match ext.ctx().vm().payload_of(m) {
+        Some(Native::SManga {
+            title,
+            author,
+            artist,
+            description,
+            genre,
+            status,
+            thumbnail_url,
+            url,
+            ..
+        }) => manga_json(Manga {
+            title,
+            author: author.unwrap_or_default(),
+            artist: artist.unwrap_or_default(),
+            description: description.unwrap_or_default(),
+            genre: genre.unwrap_or_default(),
+            status,
+            thumbnail_url,
+            url,
+        }),
+        _ => return Err("The source returned invalid title details.".into()),
+    };
+    let list = ext
+        .ctx()
+        .invoke_on(update.as_obj(), "getChapters", "()Ljava/util/List;", &[])
+        .map_err(|e| ext.describe_error(&e))?;
+    let Some(Native::List(items)) = ext.ctx().vm().payload_of(list) else {
+        return Err("The source returned an invalid chapter list.".into());
+    };
+    if items.len() > 10000 {
+        return Err("This title has too many chapters.".into());
+    }
+    let chapters: Vec<Value> = items.into_iter().filter_map(|item| {
+        match ext.ctx().vm().payload_of(item) {
+            Some(Native::SChapter { name, url, date_upload, scanlator, chapter_number, .. }) =>
+                Some(json!({"name":name,"url":url,"uploadedAt":date_upload,"scanlator":scanlator,
+                    "chapterNumber":if chapter_number.is_finite() && chapter_number >= 0.0 {Some(chapter_number)}else{None}})),
+            _ => None,
+        }
+    }).collect();
+    Ok(json!({"manga":data,"chapters":chapters}))
+}
+
+/// Keep the source Page, imageRequest, headers and OkHttp interceptors together.
+/// URL resolution is lazy; source image bytes can be decrypted by its own client.
+fn source_image(
+    ext: &mut Keiyoushi,
+    src: &Source,
+    input: ImageInput,
+    modern: bool,
+) -> Result<Vec<u8>, String> {
+    use dexvm::vm::object::Native;
+    let page = ext
+        .ctx()
+        .vm()
+        .alloc_native(
+            "Leu/kanade/tachiyomi/source/model/Page;",
+            Native::SPPage {
+                index: input.index,
+                name: String::new(),
+                url: input.url,
+                image_url: input.image_url.clone(),
+            },
+        )
+        .map_err(|e| ext.describe_error(&e))?;
+    if input.image_url.is_empty() {
+        let resolved = if modern {
+            let cid = ext
+                .ctx()
+                .vm()
+                .ensure_class_by_desc("Lkotlin/coroutines/jvm/internal/ContinuationImpl;")
+                .map_err(|e| ext.describe_error(&e))?;
+            let continuation = JValue::Obj(
+                ext.ctx()
+                    .vm()
+                    .alloc_instance(cid)
+                    .map_err(|e| ext.describe_error(&e))?,
+            );
+            ext.ctx().invoke_on(src.inst(), "getImageUrl",
+                "(Leu/kanade/tachiyomi/source/model/Page;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", &[page, continuation])
+                .map_err(|e| ext.describe_error(&e))?
+        } else {
+            let observable = ext
+                .ctx()
+                .invoke_on(
+                    src.inst(),
+                    "fetchImageUrl",
+                    "(Leu/kanade/tachiyomi/source/model/Page;)Lrx/Observable;",
+                    &[page],
+                )
+                .map_err(|e| ext.describe_error(&e))?;
+            let blocking = ext
+                .ctx()
+                .invoke_on(
+                    observable.as_obj(),
+                    "toBlocking",
+                    "()Lrx/observables/BlockingObservable;",
+                    &[],
+                )
+                .map_err(|e| ext.describe_error(&e))?;
+            ext.ctx()
+                .invoke_on(blocking.as_obj(), "first", "()Ljava/lang/Object;", &[])
+                .map_err(|e| ext.describe_error(&e))?
+        };
+        let url = ext
+            .ctx()
+            .string_of(resolved.as_obj())
+            .filter(|s| !s.is_empty())
+            .ok_or("The source did not resolve an image.")?;
+        if let Some(Native::SPPage { image_url, .. }) = ext.ctx().vm().arena.objects
+            [page.as_obj() as usize]
+            .native
+            .as_mut()
+        {
+            *image_url = url;
+        }
+    }
+    let source_headers = ext
+        .ctx()
+        .invoke_on(src.inst(), "getHeaders", "()Lokhttp3/Headers;", &[])
+        .map_err(|e| ext.describe_error(&e))?;
+    let mut additions = match ext.ctx().vm().payload_of(source_headers) {
+        Some(Native::Headers(headers)) => headers,
+        _ => return Err("The source returned invalid image headers.".into()),
+    };
+    if !additions
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("referer"))
+    {
+        let base = ext
+            .source_base_url(src)
+            .map_err(|e| ext.describe_error(&e))?;
+        additions.push(("Referer".into(), format!("{}/", base.trim_end_matches('/'))));
+    }
+    let request = ext
+        .ctx()
+        .invoke_on(
+            src.inst(),
+            "imageRequest",
+            "(Leu/kanade/tachiyomi/source/model/Page;)Lokhttp3/Request;",
+            &[page],
+        )
+        .map_err(|e| ext.describe_error(&e))?;
+    let Some(Native::Request { headers, .. }) = ext.ctx().vm().arena.objects
+        [request.as_obj() as usize]
+        .native
+        .as_mut()
+    else {
+        return Err("The source returned an invalid image request.".into());
+    };
+    for (name, value) in additions {
+        if !headers
+            .iter()
+            .any(|(existing, _)| existing.eq_ignore_ascii_case(&name))
+        {
+            headers.push((name, value));
+        }
+    }
+    let client = ext
+        .ctx()
+        .invoke_on(src.inst(), "getClient", "()Lokhttp3/OkHttpClient;", &[])
+        .map_err(|e| ext.describe_error(&e))?;
+    let call = ext
+        .ctx()
+        .invoke_on(
+            client.as_obj(),
+            "newCall",
+            "(Lokhttp3/Request;)Lokhttp3/Call;",
+            &[request],
+        )
+        .map_err(|e| ext.describe_error(&e))?;
+    let response = ext
+        .ctx()
+        .invoke_on(call.as_obj(), "execute", "()Lokhttp3/Response;", &[])
+        .map_err(|e| ext.describe_error(&e))?;
+    match ext.ctx().vm().payload_of(response) {
+        Some(Native::Response {
+            code: 200..=299,
+            body: Some(data),
+            ..
+        }) if !data.is_empty() && data.len() <= 16_000_000 => Ok(data),
+        _ => Err("The source image could not be loaded.".into()),
+    }
 }
 
 #[derive(Deserialize)]
@@ -461,6 +789,27 @@ where
         ..Default::default()
     };
     match command.op.as_str() {
+        "image" => {
+            let data = source_image(&mut ext, src, command.image, command.modern)?;
+            Ok(json!({"bodyBase64":STANDARD.encode(data)}))
+        }
+        "book" => {
+            if command.modern {
+                modern_book(&mut ext, src, &manga)
+            } else {
+                let details = ext
+                    .manga_details(src, &manga)
+                    .map_err(|e| ext.describe_error(&e))?;
+                let chapters = ext
+                    .chapters(src, &manga)
+                    .map_err(|e| ext.describe_error(&e))?;
+                if chapters.len() > 10000 {
+                    return Err("This title has too many chapters.".into());
+                }
+                let chapters = chapters_json(&mut ext, chapters);
+                Ok(json!({"manga":manga_json(details),"chapters":chapters}))
+            }
+        }
         "popular" | "latest" | "search" => {
             let result = match (command.op.as_str(), command.modern) {
                 ("popular", true) => ext.popular_coro(src, command.page),
@@ -491,7 +840,7 @@ where
                 ext.chapters(src, &manga)
             }
             .map_err(|e| ext.describe_error(&e))?;
-            Ok(json!(list.into_iter().map(|c| json!({"url":c.url,"name":c.name,"uploadedAt":c.date_upload,"scanlator":c.scanlator})).collect::<Vec<_>>()))
+            Ok(chapters_json(&mut ext, list))
         }
         "pages" => {
             let list = if command.modern {
@@ -500,6 +849,9 @@ where
                 ext.pages(src, &chapter)
             }
             .map_err(|e| ext.describe_error(&e))?;
+            if list.len() > 5000 {
+                return Err("This chapter has too many pages.".into());
+            }
             Ok(json!(list
                 .into_iter()
                 .map(|p| json!({"index":p.index,"url":p.url,"imageURL":p.image_url}))
@@ -589,6 +941,90 @@ pub unsafe extern "C" fn ac_manga_free_string(string: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn image_bytes_follow_the_real_source_client_and_headers_for_both_apis() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        for (file, modern) in [
+            ("tachiyomi-all.akuma-v1.4.10.apk", false),
+            ("tachiyomi-all.commitstrip-v1.6.0.apk", true),
+        ] {
+            let apk = std::fs::read(format!("{dir}/{file}")).unwrap();
+            let command = serde_json::from_value(json!({"op":"image","modern":modern,
+                "image":{"index":7,"url":"https://source.example/chapter#page-data","imageURL":"https://images.example/page.jpg"}})).unwrap();
+            let result = execute(&apk, command, |request| {
+                assert_eq!(request.method, "GET");
+                assert_eq!(request.url, "https://images.example/page.jpg");
+                assert!(request
+                    .headers
+                    .iter()
+                    .any(|(key, value)| key.eq_ignore_ascii_case("referer") && !value.is_empty()));
+                HttpResp {
+                    code: 200,
+                    message: "OK".into(),
+                    headers: vec![("Content-Type".into(), "image/jpeg".into())],
+                    body: Some(vec![0, 255, 10, 128, 65]),
+                }
+            })
+            .unwrap();
+            assert_eq!(
+                STANDARD
+                    .decode(result["bodyBase64"].as_str().unwrap())
+                    .unwrap(),
+                vec![0, 255, 10, 128, 65]
+            );
+        }
+    }
+    #[test]
+    fn failed_image_responses_are_not_returned_as_readable_page_data() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        let apk = std::fs::read(format!("{dir}/tachiyomi-all.commitstrip-v1.6.0.apk")).unwrap();
+        let command = serde_json::from_value(json!({"op":"image","modern":true,
+            "image":{"imageURL":"https://images.example/unavailable.jpg"}}))
+        .unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let result = execute(&apk, command, move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            HttpResp {
+                code: 403,
+                message: "Forbidden".into(),
+                headers: vec![],
+                body: Some(b"<html>denied</html>".to_vec()),
+            }
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(result.is_err());
+    }
+    #[test]
+    fn modern_book_and_pages_execute_real_extension_parsers() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        let apk = std::fs::read(format!("{dir}/tachiyomi-all.commitstrip-v1.6.0.apk")).unwrap();
+        let command = serde_json::from_value(json!({"op":"book","modern":true,
+            "manga":{"url":"https://www.commitstrip.com/en/2026","title":"Owned parser fixture"}}))
+        .unwrap();
+        let book = execute(&apk, command, |request| {
+            assert!(request.url.starts_with("https://www.commitstrip.com/"));
+            HttpResp::ok(r#"<html><body><div class="excerpt"><a href="https://www.commitstrip.com/2026/09/04/second"><span>Owned second chapter</span></a><a href="https://www.commitstrip.com/2026/09/03/first"><span>Owned first chapter</span></a></div></body></html>"#)
+        }).unwrap();
+        assert_eq!(book["manga"]["title"], "Owned parser fixture");
+        let chapters = book["chapters"].as_array().unwrap();
+        assert_eq!(chapters.len(), 2);
+        assert_eq!(chapters[0]["chapterNumber"], 2.0);
+        assert_eq!(chapters[1]["chapterNumber"], 1.0);
+        let command = serde_json::from_value(json!({"op":"pages","modern":true,
+            "chapter":{"url":chapters[0]["url"],"name":chapters[0]["name"]}}))
+        .unwrap();
+        let pages = execute(&apk, command, |_| HttpResp::ok(r#"<html><body><div class="entry-content"><p><img src="https://images.example/owned-strip.png"></p></div></body></html>"#)).unwrap();
+        assert_eq!(pages[0]["index"], 0);
+        assert_eq!(
+            pages[0]["imageURL"],
+            "https://images.example/owned-strip.png"
+        );
+    }
     #[test]
     fn modern_extension_executes_its_real_catalog_and_detail_code() {
         let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");

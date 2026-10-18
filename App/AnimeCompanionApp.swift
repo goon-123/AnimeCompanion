@@ -9,6 +9,8 @@ struct AnimeCompanionApp: App {
     @StateObject private var playback = PlaybackStore()
     @StateObject private var seanime = SeanimeStore()
     @StateObject private var navigation = AppNavigationStore()
+    @StateObject private var mangaExtensions = MangaExtensionStore()
+    @StateObject private var mangaReading = MangaReadingStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
@@ -16,8 +18,10 @@ struct AnimeCompanionApp: App {
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .environmentObject(seanime)
                 .environmentObject(navigation)
+                .environmentObject(mangaExtensions).environmentObject(mangaReading)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
+                    Task { await MangaImagePipeline.shared.clearMemory() }
                 }
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
                 .task(id: scenePhase) {
@@ -59,7 +63,7 @@ struct DiscoveryRoute: Hashable {
     var shortcutID: UUID? = nil
 }
 
-enum AppTab: Hashable { case explore, schedule, library, news }
+enum AppTab: Hashable { case explore, schedule, library, manga, news }
 
 @MainActor
 final class TabNavigationState: ObservableObject {
@@ -81,6 +85,7 @@ final class AppNavigationStore: ObservableObject {
     let schedule = TabNavigationState()
     let library = TabNavigationState()
     let news = TabNavigationState()
+    let manga = TabNavigationState()
 
     /// Apply on settings dismissal so changing topology cannot tear down its
     /// presenting sheet while the user is still editing preferences.
@@ -100,6 +105,7 @@ final class AppNavigationStore: ObservableObject {
         case .schedule: return schedule
         case .library: return library
         case .news: return news
+        case .manga: return manga
         }
     }
 
@@ -128,10 +134,12 @@ struct AppTabs: View {
         TabView(selection: $navigation.selectedTab) {
             AnimeTabPane(state: navigation.explore, layout: navigation.tabletLayout) { ExploreView() }
                 .tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
-            AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
-                .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
             AnimeTabPane(state: navigation.library, layout: navigation.tabletLayout) { LibraryView() }
                 .tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
+            NavigationStack(path: $navigation.manga.path) { MangaHubView() }
+                .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
+            AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
+                .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
             NavigationStack { NewsView() }
                 .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }.onChange(of: navigation.selectedTab) { _, tab in

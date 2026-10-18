@@ -1,3 +1,13 @@
+## Webtoon reader and manga library — build 38
+
+Version 0.19.0. Add a dedicated Manga tab with Library/Sources/History, cover-based popular/latest/search catalogs, pinned/recent sources, title details, chapter search/order/read filters, local favorites and reading history. Read with a continuous vertical canvas, gapless pages, chapter picker/previous/next, page scrubber, pinch/double-tap zoom, appearance settings and optional auto-scroll. Save exact positions within tall images; retry failed images without replacing the last readable position.
+
+Route covers and pages through the actual extension's image request, source headers and image client. Preserve original page metadata and source array order. Bound encoded/decoded memory, decode tall strips by width and area, slice display textures, retain only nearby page views and cancel offscreen work. Local reading state is source-scoped, versioned and atomic; corrupt or failed writes retain existing files. The runtime remains experimental; this feature does not establish compatibility with every listed source.
+
+Local validation: all 300 active Swift core tests passed (306 enumerated, six optional skips), including ten new reading-state/order/storage regressions. Eight Rust tests passed with pinned real classic/modern APKs, including binary image requests through both source clients, rejected HTTP failures and the modern extension's combined chapter/page parsers using owned HTML. This exposed and fixed the pinned host's malformed regex match sequence. Swift syntax parsing, Safari version/resource verification, shell syntax and whitespace checks passed. Native ImageIO and iPhone/iPad reader UI checks plus Release IPA packaging are pending the PR workflow; no native result is claimed yet.
+
+The dedicated reader CI scope keeps the existing suites and tests the owned Debug-only source/cover/page fixtures, long-strip resume across relaunch, failed-page retry/progress retention, chapter selection and settings, alongside all native runtime and image tests. No copyrighted chapter fixtures are bundled in the app.
+
 ## On-device Keiyoushi manga extensions — build 37
 
 Version 0.18.0. Settings → Manga extensions accepts the supplied Keiyoushi link, loads its current gzip/protobuf catalog, and manages source APKs directly on iPhone/iPad. Include search, language/mature-source filters, manual installation and updates, enable/disable, removal, cached catalogs and popular/latest/search browsing. Verify the published SHA-256 and package/version before committing an installation; failed updates retain the previous package and saved state. A bundled, pinned DEX interpreter runs source bytecode off the main thread, with Swift-owned HTTPS and no remote execution service.

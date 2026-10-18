@@ -92,6 +92,10 @@ public struct MangaRuntimeSource: Codable, Equatable, Identifiable, Sendable {
     public let language: String
     public let homeURL: String
     public let supportsLatest: Bool
+    public init(index: Int, id: String, name: String, language: String, homeURL: String, supportsLatest: Bool) {
+        self.index = index; self.id = id; self.name = name; self.language = language
+        self.homeURL = homeURL; self.supportsLatest = supportsLatest
+    }
 }
 
 public struct MangaExtensionInspection: Codable, Sendable {
@@ -132,17 +136,39 @@ public struct SourceManga: Codable, Equatable, Identifiable, Sendable {
     public let genre: String
     public let status: Int
     public let thumbnailURL: String
+    public init(url: String, title: String, author: String = "", artist: String = "", description: String = "",
+                genre: String = "", status: Int = 0, thumbnailURL: String = "") {
+        self.url = url; self.title = title; self.author = author; self.artist = artist
+        self.description = description; self.genre = genre; self.status = status; self.thumbnailURL = thumbnailURL
+    }
+    public func merging(_ details: SourceManga) -> SourceManga {
+        SourceManga(url: url, title: details.title.isEmpty ? title : details.title,
+                    author: details.author.isEmpty ? author : details.author,
+                    artist: details.artist.isEmpty ? artist : details.artist,
+                    description: details.description.isEmpty ? description : details.description,
+                    genre: details.genre.isEmpty ? genre : details.genre,
+                    status: details.status == 0 ? status : details.status,
+                    thumbnailURL: details.thumbnailURL.isEmpty ? thumbnailURL : details.thumbnailURL)
+    }
 }
-public struct SourceMangaPage: Codable, Sendable { public let mangas: [SourceManga]; public let hasNext: Bool }
-public struct SourceMangaChapter: Codable, Identifiable, Sendable {
+public struct SourceMangaPage: Codable, Sendable {
+    public let mangas: [SourceManga]; public let hasNext: Bool
+    public init(mangas: [SourceManga], hasNext: Bool) { self.mangas = mangas; self.hasNext = hasNext }
+}
+public struct SourceMangaChapter: Codable, Hashable, Identifiable, Sendable {
     public var id: String { url }
     public let url: String
     public let name: String
     public let uploadedAt: Int64
     public let scanlator: String
+    public let chapterNumber: Double?
+    public init(url: String, name: String, uploadedAt: Int64 = 0, scanlator: String = "", chapterNumber: Double? = nil) {
+        self.url = url; self.name = name; self.uploadedAt = uploadedAt; self.scanlator = scanlator; self.chapterNumber = chapterNumber
+    }
 }
-public struct SourceMangaImage: Codable, Sendable {
+public struct SourceMangaImage: Codable, Hashable, Sendable {
     public let index: Int
     public let url: String
     public let imageURL: String
+    public init(index: Int, url: String = "", imageURL: String) { self.index = index; self.url = url; self.imageURL = imageURL }
 }

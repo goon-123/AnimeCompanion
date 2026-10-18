@@ -1,4 +1,4 @@
-# On-device Keiyoushi extensions — first stage
+# On-device Keiyoushi extensions and webtoon reader
 
 Settings → Manga extensions accepts `https://keiyoushi.github.io` and the official repository/install-link variants. It reads the current gzip/protobuf v2 catalog; the obsolete JSON list is never used. Search, language/mature-source filters, manual installation/updates, enable/disable, removal and catalog refresh are included. Cached catalogs remain available when a refresh fails.
 
@@ -8,7 +8,11 @@ Installation enumerates the actual bytecode's sources before saving. Updating wr
 
 ## Compatibility and reader scope
 
-This is an **experimental extension layer**, not a universal compatibility claim. Matching extension API versions establishes eligibility to try a package, not full support for every source. The manager explicitly labels this distinction. Source browsing supports popular/latest/search and pagination; the bridge also exposes details, chapters and page lists for the next reader stage. This change does not add a page reader, downloads, AniList manga tracking, source preference screens or browser-challenge handling.
+This is an **experimental extension layer**, not a universal compatibility claim. Matching extension API versions establishes eligibility to try a package, not full support for every source. The manager explicitly labels this distinction. Manga provides source popular/latest/search catalogs, cover grids, combined title details/chapters, a local library and reading history, and a continuous vertical webtoon reader. This version does not add downloads, AniList manga tracking, source preference screens or browser-challenge handling.
+
+The reader retains source page-array order, including when a source's `Page.index` differs. Its image command keeps the original page URL/metadata while resolving an empty image URL lazily, then runs the source's `imageRequest`, headers and client/interceptors. Covers use the same image path. Classic detail/chapter calls share one VM; modern sources use their combined manga-update API. The image pipeline rejects undecodable data, isolates caches by source and installed package hash, bounds encoded/decoded caches and bitmap area, slices long strips for display, and retains only page views near the viewport. Page retries do not advance saved progress. Chapter completion requires every image to have loaded and the reader to reach the final image's bottom.
+
+Saved reading data is versioned JSON written atomically, separate from extension installations and anime/AniList data. Identity includes extension, source and original title URL. Positions include chapter, page and a normalized position within the source image; failed saves retain the previous file. Library saves, source pins, recent sources, read states and reader appearance persist on this device.
 
 Verification includes real legacy APK metadata and request/HTML parsing; real 1.6 APK metadata; the current Commit Strip 1.6.0 extension's own catalog/detail code; the live Keiyoushi catalog. Live probes found HTTP 403 responses from MangaPill/CuuTruyen in this environment and an unsupported descriptor API in current MANGA Plus. Those probes are not reported as successful source compatibility. Authenticated/challenged sources and less common host APIs need further runtime work. No copyrighted chapter/image fixtures or extension APKs are bundled in the production app.
 
@@ -23,6 +27,6 @@ swift test -j 2
 xcodegen generate
 ```
 
-CI builds the XCFramework once and shares it, test-only APK fixtures and license notices with native build/test jobs. The layout checks run `MangaRuntimeTests` on both iPhone and iPad simulators, exercising the actual Swift/C/Rust bridge and a 1.6 catalog. Test APKs are resources of the test bundle only. Third-party license notices are generated from Cargo's resolved dependency metadata and displayed in About → Runtime licenses.
+CI builds the XCFramework once and shares it, test-only APK fixtures and license notices with native build/test jobs. The layout checks and dedicated reader checks run `MangaRuntimeTests` on both iPhone and iPad simulators, exercising the actual Swift/C/Rust bridge and a 1.6 catalog. Reader checks also verify long-strip decoding, cache isolation, invalid-image retry, covers, relaunch/resume, chapter switching and settings. The reader's UI fixtures use owned geometric artwork generated only in Debug builds. Test APKs are resources of the test bundle only. Third-party license notices are generated from Cargo's resolved dependency metadata and displayed in About → Runtime licenses.
 
 `support/serialization-decoder.dex` contains unmodified Apache-2.0 classes from JetBrains' kotlinx.serialization 1.9.0 (AbstractDecoder, serialization kinds and protobuf annotations), filling missing host types. It does not contain website-specific logic. Rebuild with `python3 scripts/rebuild-manga-support.py` (Java 17); both input artifacts and resulting bytecode are hash-pinned. Standard Kotlin progression iteration and Java functional/map APIs are implemented in the host bridge; unsupported abstract calls fail explicitly.

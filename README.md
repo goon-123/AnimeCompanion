@@ -1,10 +1,18 @@
 # Anime Companion
 
+### Webtoon reader and manga library (0.19.0 / build 38)
+
+Open **Manga** for a cover-based library, installed sources and reading history. Browse a source's popular/latest/search catalog, open a title for its description and chapters, and save it to your library. Extension setup is available from Manga → Extensions as well as Settings.
+
+Read chapters in a continuous vertical canvas with no page gaps. Tap for controls, scrub to a page, switch chapters, and pinch or double-tap to zoom. The reader saves the chapter, page and position within a tall strip on this device. Appearance options include black/charcoal/paper backgrounds, side padding, keeping the screen awake and optional auto-scroll. Failed pages have their own retry action and do not replace the last readable position. Reading history and saved titles are local; this version does not add offline downloads or AniList manga tracking.
+
+Covers and chapter images use the installed extension's requests, headers and image client. Source compatibility remains experimental; unsupported APIs, website restrictions and browser challenges can still prevent a source from working. See [runtime and reader verification](Tools/MangaRuntime/README.md) and [build status](BUILD_STATUS.md).
+
 ### On-device manga extensions — experimental first stage (0.18.0 / build 37)
 
 Settings → **Manga extensions** adds the Keiyoushi repository directly on iPhone/iPad. Browse the current extension catalog, filter by language, install/update/remove packages, enable or disable sources and try their popular/latest/search catalogs. Packages and source bytecode run locally; no server is needed. Installation verifies the published package hash and identity before saving, and failed updates retain the previous installation.
 
-Source compatibility is experimental. Some websites block automated requests and some extensions require host APIs that are not implemented yet. A listed/installed extension does not guarantee that its website can be browsed. The page reader is the next stage; this build provides extension management and source browsing. See [runtime design, compatibility, build instructions and verification](Tools/MangaRuntime/README.md).
+Source compatibility is experimental. Some websites block automated requests and some extensions require host APIs that are not implemented yet. A listed/installed extension does not guarantee that its website can be browsed. See [runtime design, compatibility, build instructions and verification](Tools/MangaRuntime/README.md).
 
 ### Safari videos in VidHub (0.17.0 / build 36)
 
