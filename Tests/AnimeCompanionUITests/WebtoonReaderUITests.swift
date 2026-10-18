@@ -37,10 +37,10 @@ final class WebtoonReaderUITests: XCTestCase {
         openFirstTitle(app)
         app.buttons["manga-read"].tap()
         XCTAssertTrue(app.images["webtoon-page-image-0"].waitForExistence(timeout: 20))
-        app.sliders["webtoon-page-scrubber"].adjust(toNormalizedSliderPosition: 2.0 / 7)
-        let retry = app.buttons["webtoon-retry-2"]
+        app.sliders["webtoon-page-scrubber"].adjust(toNormalizedSliderPosition: 5.0 / 7)
+        let retry = app.buttons["webtoon-retry-5"]
         XCTAssertTrue(retry.waitForExistence(timeout: 15)); retry.tap()
-        XCTAssertTrue(app.images["webtoon-page-image-2"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.images["webtoon-page-image-5"].waitForExistence(timeout: 20))
         showControls(app)
         app.buttons["webtoon-settings"].tap()
         let padding = app.sliders["webtoon-side-padding"]
@@ -60,8 +60,8 @@ final class WebtoonReaderUITests: XCTestCase {
         openFirstTitle(app)
         app.buttons["manga-read"].tap()
         XCTAssertTrue(app.images["webtoon-page-image-0"].waitForExistence(timeout: 20))
-        app.sliders["webtoon-page-scrubber"].adjust(toNormalizedSliderPosition: 2.0 / 7)
-        XCTAssertTrue(app.buttons["webtoon-retry-2"].waitForExistence(timeout: 15))
+        app.sliders["webtoon-page-scrubber"].adjust(toNormalizedSliderPosition: 5.0 / 7)
+        XCTAssertTrue(app.buttons["webtoon-retry-5"].waitForExistence(timeout: 15))
         showControls(app)
         app.buttons["webtoon-close"].tap()
         let position = app.staticTexts["manga-reading-progress"]

@@ -93,6 +93,8 @@ struct WebtoonReaderView: View {
     @StateObject private var model: WebtoonReaderModel
     @State private var preferences = WebtoonPreferences()
     @State private var loadedPreferences = false
+    @State private var scrubbing = false
+    @State private var scrubPage = 0.0
     @State private var settings = false
     @State private var chapters = false
     @State private var closing = false
@@ -127,7 +129,7 @@ struct WebtoonReaderView: View {
             .onChange(of: preferences.keepAwake) { _, _ in updateAwake() }
             .onChange(of: scene) { _, value in
                 if value != .active {
-                    model.autoScroll = false; UIApplication.shared.isIdleTimerDisabled = originalIdleTimer
+                    model.autoScroll = false; scrubbing = false; UIApplication.shared.isIdleTimerDisabled = originalIdleTimer
                     Task { await model.flush(); await reading.preferences(preferences) }
                 } else { updateAwake() }
             }
@@ -183,12 +185,21 @@ struct WebtoonReaderView: View {
                     Button { Task { await model.move(-1) } } label: { Image(systemName: "backward.end.fill") }
                         .readerCircle().disabled(!model.hasPrevious).accessibilityLabel("Previous chapter").accessibilityIdentifier("webtoon-previous-chapter")
                     VStack(spacing: 5) {
-                        Text("\(model.currentPage + 1) / \(model.pages.count)").font(.caption.monospacedDigit().bold())
+                        Text("\(controlPage + 1) / \(model.pages.count)").font(.caption.monospacedDigit().bold())
                             .accessibilityIdentifier("webtoon-page-counter")
-                        Slider(value: Binding(get: { Double(model.currentPage) }, set: { model.goToPage(Int($0.rounded())) }),
-                            in: 0...Double(max(1, model.pages.count - 1)), step: 1)
+                        Slider(value: Binding(get: { scrubbing ? scrubPage : Double(model.currentPage) }, set: {
+                            scrubPage = $0
+                            // Accessibility adjustments can arrive without a touch-editing session.
+                            if !scrubbing { model.goToPage(Int($0.rounded())) }
+                        }), in: 0...Double(max(1, model.pages.count - 1)), step: 1, onEditingChanged: { editing in
+                            if editing { scrubPage = Double(model.currentPage); scrubbing = true; model.autoScroll = false }
+                            else {
+                                let target = Int(scrubPage.rounded()); scrubbing = false
+                                model.goToPage(target)
+                            }
+                        })
                             .disabled(model.pages.count == 1).accessibilityLabel("Page")
-                            .accessibilityValue("Page \(model.currentPage + 1) of \(model.pages.count)")
+                            .accessibilityValue("Page \(controlPage + 1) of \(model.pages.count)")
                             .accessibilityIdentifier("webtoon-page-scrubber")
                     }.padding(.horizontal, 16).padding(.vertical, 10).background(.ultraThinMaterial, in: Capsule())
                     Button { Task { await model.move(1) } } label: { Image(systemName: "forward.end.fill") }
@@ -197,6 +208,7 @@ struct WebtoonReaderView: View {
             }
         }.foregroundStyle(.white)
     }
+    private var controlPage: Int { scrubbing ? Int(scrubPage.rounded()) : model.currentPage }
     private var chapterPicker: some View {
         NavigationStack {
             List(model.chapters) { chapter in

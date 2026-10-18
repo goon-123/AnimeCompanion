@@ -45,7 +45,9 @@ enum MangaReaderPreview {
     }
     private static var failed = Set<String>()
     static func image(_ image: SourceMangaImage) throws -> Data {
-        if ProcessInfo.processInfo.arguments.contains("--ui-webtoon-failed-page"), image.imageURL.hasSuffix("/page/2"),
+        // Keep the failure beyond the initial preload window, so a canceled
+        // preload cannot consume the one-shot failure before the retry test.
+        if ProcessInfo.processInfo.arguments.contains("--ui-webtoon-failed-page"), image.imageURL.hasSuffix("/page/5"),
            failed.insert(image.imageURL).inserted { throw ArtworkError.invalidData }
         let cover = image.imageURL.contains("/cover/")
         let index = Int(image.imageURL.split(separator: "/").last ?? "0") ?? 0
