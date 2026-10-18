@@ -16,10 +16,16 @@ rustup toolchain install 1.99.1 --profile minimal
 python3 scripts/manga-licenses.py
 rustup target add --toolchain 1.99.1 aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 export IPHONEOS_DEPLOYMENT_TARGET=17.0
+export LIBCLANG_PATH="$(dirname "$(xcrun --find clang)")/../lib"
 manifest="Tools/MangaRuntime/Cargo.toml"
 for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
-  if [[ "$target" == aarch64-apple-ios ]]; then sdk=iphoneos; else sdk=iphonesimulator; fi
-  SDKROOT="$(xcrun --sdk "$sdk" --show-sdk-path)" \
+  case "$target" in
+    aarch64-apple-ios) sdk=iphoneos; clang_target=arm64-apple-ios17.0 ;;
+    aarch64-apple-ios-sim) sdk=iphonesimulator; clang_target=arm64-apple-ios17.0-simulator ;;
+    x86_64-apple-ios) sdk=iphonesimulator; clang_target=x86_64-apple-ios17.0-simulator ;;
+  esac
+  sdk_path="$(xcrun --sdk "$sdk" --show-sdk-path)"
+  SDKROOT="$sdk_path" BINDGEN_EXTRA_CLANG_ARGS="--target=$clang_target -isysroot $sdk_path" \
     cargo +1.99.1 build --locked --release --manifest-path "$manifest" --target "$target" -j 3
 done
 xcrun lipo -create \
