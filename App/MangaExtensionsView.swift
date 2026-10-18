@@ -192,7 +192,7 @@ private struct MangaExtensionDetailView: View {
     private func installButton(_ entry: MangaExtensionDescriptor, title: String) -> some View {
         Button { Task { await store.install(entry) } } label: {
             HStack { Text(title); if store.installing == entry.id { Spacer(); ProgressView() } }
-        }.disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || !canShow)
+        }.disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || (!showMature && entry.adult))
             .accessibilityIdentifier("manga-install-extension")
     }
 }
