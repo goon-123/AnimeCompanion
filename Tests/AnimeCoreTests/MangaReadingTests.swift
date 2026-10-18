@@ -60,6 +60,10 @@ final class MangaReadingTests: XCTestCase {
         let ordered = MangaChapterSequence.readingOrder(newest)
         XCTAssertEqual(ordered.map(\.url), ["one", "two", "half", "special", "three"])
         XCTAssertEqual(MangaChapterSequence.readingOrder(ordered), ordered)
+        // The host defaults unset native numbers to zero. Explicit chapter
+        // names still establish direction, including an ascending source.
+        let unnamedNumbers = (0...3).map { SourceMangaChapter(url: "n\($0)", name: "Chapter \($0)", chapterNumber: 0) }
+        XCTAssertEqual(MangaChapterSequence.readingOrder(unnamedNumbers), unnamedNumbers)
     }
     func testContinueResumesUnfinishedThenMovesToFollowingUnreadChapter() {
         let chapters = (1...3).map { SourceMangaChapter(url: "/chapter/\($0)", name: "Chapter \($0)", chapterNumber: Double($0)) }

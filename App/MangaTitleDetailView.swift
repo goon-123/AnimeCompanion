@@ -102,7 +102,7 @@ struct MangaTitleDetailView: View {
                 Button {
                     Task { await reading.save(current, saved: record?.saved != true) }
                 } label: { Label(record?.saved == true ? "In library" : "Add to library", systemImage: record?.saved == true ? "bookmark.fill" : "bookmark") }
-                    .font(.subheadline.bold()).buttonStyle(.bordered).disabled(reading.loading || reading.unreadable)
+                    .font(.subheadline.bold()).buttonStyle(.bordered).buttonBorderShape(.capsule).disabled(reading.loading || reading.unreadable)
                     .accessibilityIdentifier("manga-save-title")
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.padding(20).padding(.top, 12).frame(maxWidth: .infinity, alignment: .leading)
@@ -117,7 +117,7 @@ struct MangaTitleDetailView: View {
                 Button { open(chapter) } label: {
                     Label(record?.position(for: chapter.url)?.completed == false ? "Continue \(chapter.name)" : "Read \(chapter.name)", systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
-                }.buttonStyle(.borderedProminent).tint(MangaStyle.accent).foregroundStyle(.black).accessibilityIdentifier("manga-read")
+                }.buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(MangaStyle.accent).foregroundStyle(.black).accessibilityIdentifier("manga-read")
             }
             if let url = record?.lastChapterURL, let point = record?.position(for: url) {
                 Text(point.chapterName + (point.completed ? " · Finished" : " · Page \(point.pageIndex + 1) of \(point.pageCount)"))

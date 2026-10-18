@@ -169,7 +169,7 @@ public enum MangaChapterSequence {
         return chapters.first(where: { record?.position(for: $0.url)?.completed != true }) ?? chapters.first
     }
     private static func number(_ chapter: SourceMangaChapter) -> Double? {
-        if let n = chapter.chapterNumber, n.isFinite, n >= 0 { return n }
+        if let n = chapter.chapterNumber, n.isFinite, n > 0 { return n }
         let name = chapter.name
         let patterns = [#"(?i)(?:chapter|chap|ch\.?|episode|ep\.?)\s*#?\s*(\d+(?:\.\d+)?)"#, #"^\s*(\d+(?:\.\d+)?)(?:\s|$|:)"#]
         for pattern in patterns {
@@ -178,7 +178,7 @@ public enum MangaChapterSequence {
                   let range = Range(match.range(at: 1), in: name), let value = Double(name[range]) else { continue }
             return value
         }
-        return nil
+        return chapter.chapterNumber == 0 ? 0 : nil
     }
 }
 

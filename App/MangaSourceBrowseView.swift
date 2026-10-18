@@ -9,8 +9,13 @@ final class MangaBrowseModel: ObservableObject {
     @Published var error: String?
     private var page = 0
     private var generation = UUID()
+    private var selection = ""
+    func loadIfNeeded(_ source: MangaSourceReference, extensions: MangaExtensionStore, mode: String, query: String) async {
+        guard selection != mode + "\u{1f}" + query || (mangas.isEmpty && !loading && error == nil) else { return }
+        await load(source, extensions: extensions, mode: mode, query: query, reset: true)
+    }
     func load(_ source: MangaSourceReference, extensions: MangaExtensionStore, mode: String, query: String, reset: Bool) async {
-        if reset { generation = UUID(); mangas = []; page = 0; hasNext = false }
+        if reset { generation = UUID(); selection = mode + "\u{1f}" + query; mangas = []; page = 0; hasNext = false }
         else if loading || !hasNext { return }
         let token = generation, next = page + 1
         loading = true; error = nil
@@ -55,7 +60,7 @@ struct MangaSourceBrowseView: View {
                 guard showMature || !source.adult else { return }
                 await reading.load()
                 await reading.visit(source)
-                await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: true)
+                await model.loadIfNeeded(source, extensions: extensions, mode: mode, query: submitted)
             }
     }
     private var catalog: some View {

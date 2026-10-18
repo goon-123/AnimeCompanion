@@ -136,7 +136,7 @@ struct AppTabs: View {
                 .tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
             AnimeTabPane(state: navigation.library, layout: navigation.tabletLayout) { LibraryView() }
                 .tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
-            NavigationStack(path: $navigation.manga.path) { MangaHubView() }
+            MangaTabPane(state: navigation.manga)
                 .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
             AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
                 .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
@@ -152,6 +152,11 @@ struct AppTabs: View {
             }
         }
     }
+}
+
+private struct MangaTabPane: View {
+    @ObservedObject var state: TabNavigationState
+    var body: some View { NavigationStack(path: $state.path) { MangaHubView() } }
 }
 
 /// The chosen topology stays stable through rotation. Full-width navigation is

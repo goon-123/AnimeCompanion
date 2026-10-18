@@ -258,6 +258,9 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         @objc private func tick(_ link: CADisplayLink) {
             guard let scroll, parent.autoScroll, !scroll.isDragging, !scroll.isDecelerating, !scroll.isZooming else { lastTick = 0; return }
+            guard !pages.isEmpty, cells[index(at: max(0, scroll.contentOffset.y / scroll.zoomScale))]?.hasImage == true else {
+                lastTick = 0; parent.onAutoStop(); return
+            }
             let delta = lastTick == 0 ? 0 : min(0.05, link.timestamp - lastTick); lastTick = link.timestamp
             let maximum = max(0, scroll.contentSize.height - scroll.bounds.height)
             let next = min(maximum, scroll.contentOffset.y + CGFloat(delta * parent.preferences.autoScrollSpeed))

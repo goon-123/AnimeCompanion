@@ -92,6 +92,7 @@ struct WebtoonReaderView: View {
     @Environment(\.scenePhase) private var scene
     @StateObject private var model: WebtoonReaderModel
     @State private var preferences = WebtoonPreferences()
+    @State private var loadedPreferences = false
     @State private var settings = false
     @State private var chapters = false
     @State private var closing = false
@@ -115,7 +116,7 @@ struct WebtoonReaderView: View {
             .persistentSystemOverlays(model.controls ? .visible : .hidden)
             .task(id: model.chapter.url) {
                 await reading.load()
-                preferences = reading.state.preferences
+                if !loadedPreferences { preferences = reading.state.preferences; loadedPreferences = true }
                 await model.load(extensions: extensions, reading: reading)
             }
             .onAppear {
@@ -248,14 +249,15 @@ private struct WebtoonSettingsView: View {
                         Slider(value: $preferences.sidePadding, in: 0...0.12, step: 0.01).accessibilityIdentifier("webtoon-side-padding")
                     }
                 }
-                Section("Reading") {
+                Section {
                     Toggle("Auto-scroll", isOn: $autoScroll).accessibilityIdentifier("webtoon-auto-scroll")
                     VStack(alignment: .leading) {
                         LabeledContent("Scroll speed", value: "\(Int(preferences.autoScrollSpeed)) pt/s")
                         Slider(value: $preferences.autoScrollSpeed, in: 15...140, step: 5)
                     }
                     Toggle("Keep screen awake", isOn: $preferences.keepAwake)
-                } footer: { Text("Auto-scroll pauses when you drag, switch chapters, leave the app, or reach the end.") }
+                } header: { Text("Reading") }
+                footer: { Text("Auto-scroll pauses when you drag, switch chapters, leave the app, or reach the end.") }
             }.navigationTitle("Webtoon reader").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent)

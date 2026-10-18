@@ -255,7 +255,40 @@ fn regex_find_all_default(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr
         ],
     )
 }
+fn image_url_request(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::Native;
+    let Some(Native::SPPage { url, .. }) = vm.payload_of(args[1]) else {
+        return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Invalid source page".into(),
+        )));
+    };
+    let headers = vm
+        .invoke_virtual(args[0], "getHeaders", "()Lokhttp3/Headers;")
+        .map_err(NatErr::Fatal)?;
+    let Some(Native::Headers(headers)) = vm.payload_of(headers) else {
+        return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Invalid source headers".into(),
+        )));
+    };
+    vm.alloc_native(
+        "Lokhttp3/Request;",
+        Native::Request {
+            url,
+            method: "GET".into(),
+            headers,
+            body: None,
+        },
+    )
+    .map_err(NatErr::Fatal)
+}
 static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry {
+        class: "Leu/kanade/tachiyomi/source/online/HttpSource;",
+        name: "imageUrlRequest",
+        sig: "(Leu/kanade/tachiyomi/source/model/Page;)Lokhttp3/Request;",
+        instance: true,
+        f: image_url_request,
+    },
     NativeEntry {
         class: "Lkotlin/text/Regex;",
         name: "findAll$default",
@@ -1023,6 +1056,49 @@ mod tests {
         assert_eq!(
             pages[0]["imageURL"],
             "https://images.example/owned-strip.png"
+        );
+    }
+    #[test]
+    fn classic_book_pages_and_lazy_images_execute_real_extension_parsers() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        let apk = std::fs::read(format!("{dir}/tachiyomi-all.akuma-v1.4.10.apk")).unwrap();
+        let html = r#"<html><body><h1 class="entry-title">Owned parser story</h1><span>Owned synopsis</span><img class="img-thumbnail" src="https://images.example/cover.jpg"><select class="nav-select"><option value="1">1</option><option value="2">2</option></select><div class="entry-content"><img src="https://images.example/owned-page.jpg"></div></body></html>"#;
+        let command = serde_json::from_value(json!({"op":"book","modern":false,
+            "manga":{"url":"/g/fixture","title":"Owned parser story"}}))
+        .unwrap();
+        let book = execute(&apk, command, move |_| HttpResp::ok(html)).unwrap();
+        assert_eq!(book["manga"]["title"], "Owned parser story");
+        let chapter = &book["chapters"][0];
+        let command = serde_json::from_value(json!({"op":"pages","modern":false,
+            "chapter":{"url":chapter["url"],"name":chapter["name"]}}))
+        .unwrap();
+        let pages = execute(&apk, command, move |_| HttpResp::ok(html)).unwrap();
+        assert_eq!(pages.as_array().unwrap().len(), 2);
+        assert_eq!(
+            pages[0]["imageURL"],
+            "https://images.example/owned-page.jpg"
+        );
+        assert_eq!(pages[1]["imageURL"], "");
+        let command =
+            serde_json::from_value(json!({"op":"image","modern":false,"image":pages[1]})).unwrap();
+        let image = execute(&apk, command, move |request| {
+            if request.url == "https://images.example/owned-page.jpg" {
+                HttpResp {
+                    code: 200,
+                    message: "OK".into(),
+                    headers: vec![],
+                    body: Some(vec![1, 2, 255, 0]),
+                }
+            } else {
+                HttpResp::ok(html)
+            }
+        })
+        .unwrap();
+        assert_eq!(
+            STANDARD
+                .decode(image["bodyBase64"].as_str().unwrap())
+                .unwrap(),
+            vec![1, 2, 255, 0]
         );
     }
     #[test]

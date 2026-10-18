@@ -26,7 +26,7 @@ final class MangaReadingStore: ObservableObject {
     func load() async {
         guard !loaded else { return }; loaded = true
         do { state = try await storage.load() }
-        catch { unreadable = true; error = "Saved reading data could not be opened. Your existing data has been kept." }
+        catch { unreadable = true; self.error = "Saved reading data could not be opened. Your existing data has been kept." }
         loading = false
     }
     func record(_ id: String) -> MangaReadingRecord? { state.record(id) }
@@ -54,7 +54,7 @@ final class MangaReadingStore: ObservableObject {
         do {
             let value = try await storage.update(mutation)
             if value.revision >= state.revision { state = value }
-        } catch { error = "Your reading changes could not be saved. Try again." }
+        } catch { self.error = "Your reading changes could not be saved. Try again." }
     }
 }
 
