@@ -3,6 +3,16 @@ import AnimeCore
 import AnimeMangaRuntime
 
 final class WeebCentralRuntimeTests: XCTestCase {
+    func testAlpineReaderSectionReturnsPagesWithoutUnrelatedImages() throws {
+        let host = try WeebCentralFixtureHTTP()
+        let pages: [SourceMangaImage] = try host.execute([
+            "op": "pages", "chapter": ["url": "/chapters/owned-2", "name": "Chapter 2"]
+        ])
+        XCTAssertEqual(pages.map(\.index), [0, 1])
+        XCTAssertEqual(pages.map(\.imageURL), ["https://images.example/owned-1.webp", "https://images.example/owned-2.webp"])
+        XCTAssertEqual(host.urls, ["https://weebcentral.com/chapters/owned-2/images?is_prev=False&reading_style=long_strip"])
+    }
+
     func testDatedChaptersAndLongStripRequestsThroughTheNativeBridge() throws {
         let host = try WeebCentralFixtureHTTP()
         let book: MangaBook = try host.execute(bookCommand)

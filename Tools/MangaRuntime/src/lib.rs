@@ -13,6 +13,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
+mod jsoup_compat;
+
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
 // invoking an unimplemented abstract method must fail, never return fake data.
@@ -860,6 +862,7 @@ where
         .register_natives(&[FUNCTION_INTERFACES])
         .map_err(|e| e.to_string())?;
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     ext.set_http(http);
     let manifest = ext.manifest().map_err(|e| e.to_string())?;
     if !manifest
