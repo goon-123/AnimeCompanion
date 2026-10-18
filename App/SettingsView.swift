@@ -33,6 +33,11 @@ struct SettingsView: View {
                         SettingsCategoryLabel(title: "Safari → VidHub", detail: "Open website videos in your player", symbol: "safari.fill", tint: .cyan)
                     }.accessibilityIdentifier("settings-safari-vidhub")
                 }
+                Section("Reading") {
+                    NavigationLink { MangaExtensionsView() } label: {
+                        SettingsCategoryLabel(title: "Manga extensions", detail: "Keiyoushi · Manga & manhwa sources", symbol: "book.closed.fill", tint: .teal)
+                    }.accessibilityIdentifier("settings-manga-extensions")
+                }
                 Section("Preferences") {
                     if UIDevice.current.userInterfaceIdiom == .pad {
                         NavigationLink { TabletLayoutSettingsView() } label: {
@@ -222,6 +227,16 @@ private struct AboutSettingsView: View {
                 Link("Anime News Network", destination: URL(string: "https://www.animenewsnetwork.com")!)
                 Link("Crunchyroll", destination: URL(string: "https://www.crunchyroll.com/news")!)
                 Link("Anime Corner", destination: URL(string: "https://animecorner.me")!)
+            }
+            Section("Manga extensions") {
+                Link("Keiyoushi repository", destination: URL(string: "https://keiyoushi.github.io")!)
+                Link("On-device interpreter · dexvm", destination: URL(string: "https://github.com/tachibana-shin/dexvm")!)
+                NavigationLink("Runtime licenses") {
+                    ScrollView {
+                        Text((Bundle.main.url(forResource: "MangaRuntimeLicenses", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "License notices are unavailable in this build.")
+                            .font(.caption.monospaced()).textSelection(.enabled).padding()
+                    }.navigationTitle("Runtime licenses").navigationBarTitleDisplayMode(.inline)
+                }
             }
         }.navigationTitle("About & data sources").navigationBarTitleDisplayMode(.inline)
     }

@@ -1,6 +1,6 @@
 # Safari → VidHub
 
-The Safari web extension is embedded in AnimeCompanion 0.17.0/build 36, not a separate browser or player. It requires iOS/iPadOS 18 or later; the host app retains its iOS 17 minimum.
+The Safari web extension is embedded in AnimeCompanion and first shipped in 0.17.0/build 36. It requires iOS/iPadOS 18 or later; the host app retains its iOS 17 minimum.
 
 ## Enable on iPhone or iPad
 

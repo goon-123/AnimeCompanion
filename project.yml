@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.17.0'
-    CURRENT_PROJECT_VERSION: '36'
+    MARKETING_VERSION: '0.18.0'
+    CURRENT_PROJECT_VERSION: '37'
 packages:
   AnimeCore:
     path: .
@@ -54,11 +54,16 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: false
         CODE_SIGN_STYLE: Automatic
+        OTHER_LDFLAGS: $(inherited) -lc++ -lz -liconv -lresolv
     dependencies:
       - package: AnimeCore
         product: AnimeCore
       - target: SafariVideoExtension
         embed: true
+      - framework: build/MangaRuntime.xcframework
+        embed: false
+      - sdk: CoreText.framework
+      - sdk: CoreGraphics.framework
   SafariVideoExtension:
     type: app-extension
     platform: iOS
@@ -95,6 +100,25 @@ targets:
         TEST_TARGET_NAME: AnimeCompanion
     dependencies:
       - target: AnimeCompanion
+  MangaRuntimeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/MangaRuntimeTests
+        excludes: [Fixtures]
+      - path: Tests/MangaRuntimeTests/Fixtures
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.animecompanion.ios.mangatests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AnimeCompanion.app/AnimeCompanion
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: AnimeCompanion
+      - package: AnimeCore
+        product: AnimeCore
 schemes:
   AnimeCompanion:
     build:
@@ -106,5 +130,6 @@ schemes:
       config: Debug
       targets:
         - AnimeCompanionUITests
+        - MangaRuntimeTests
     archive:
       config: Release

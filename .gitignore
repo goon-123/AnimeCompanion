@@ -11,3 +11,6 @@ SafariExtension/Info.plist
 Tools/SafariExtension/node_modules/
 Tools/SeanimeRuntime/node_modules/
 App/SeanimeRuntimeResources/
+Tools/MangaRuntime/target/
+App/MangaRuntimeLicenses.txt
+Tests/MangaRuntimeTests/Fixtures/

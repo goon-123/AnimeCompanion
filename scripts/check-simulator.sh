@@ -159,6 +159,8 @@ if [[ "$test_scope" == layout ]]; then
     -only-testing:AnimeCompanionUITests/TabletPresentationUITests
     -only-testing:AnimeCompanionUITests/PhaseTwoNavigationUITests/testBrowseDetailRotationRetainsQueryResultsAndGenreNavigation
     -only-testing:AnimeCompanionUITests/SafariExtensionUITests
+    -only-testing:AnimeCompanionUITests/MangaExtensionsUITests
+    -only-testing:MangaRuntimeTests
   )
 fi
 run_tests() {

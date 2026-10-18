@@ -1,5 +1,11 @@
 # Anime Companion
 
+### On-device manga extensions — experimental first stage (0.18.0 / build 37)
+
+Settings → **Manga extensions** adds the Keiyoushi repository directly on iPhone/iPad. Browse the current extension catalog, filter by language, install/update/remove packages, enable or disable sources and try their popular/latest/search catalogs. Packages and source bytecode run locally; no server is needed. Installation verifies the published package hash and identity before saving, and failed updates retain the previous installation.
+
+Source compatibility is experimental. Some websites block automated requests and some extensions require host APIs that are not implemented yet. A listed/installed extension does not guarantee that its website can be browsed. The page reader is the next stage; this build provides extension management and source browsing. See [runtime design, compatibility, build instructions and verification](Tools/MangaRuntime/README.md).
+
 ### Safari videos in VidHub (0.17.0 / build 36)
 
 AnimeCompanion now includes **Safari → VidHub**, a Safari extension for iPhone and iPad. Enable it in Settings → Apps → Safari → Extensions → **Anime Companion – VidHub**, then allow All Websites for automatic detection. Keep the embedded extension when signing/sideloading the IPA. The extension requires iOS/iPadOS 18 or later; the anime app still supports iOS 17.

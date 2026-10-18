@@ -1,0 +1,25 @@
+[package]
+name = "anime-manga-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+# Pin the interpreter: updating installed sources must not silently change the host runtime.
+dexvm = { git = "https://github.com/tachibana-shin/dexvm", rev = "38d3438d7e36b5c2c17414029fd36b2d717eefcb", features = ["keiyoushi"] }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# rquickjs ships desktop bindings; generate the iOS ABI with Xcode's libclang.
+rquickjs = { version = "=0.12.2", default-features = false, features = ["bindgen"] }
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = "debuginfo"

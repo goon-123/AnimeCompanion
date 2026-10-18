@@ -23,7 +23,7 @@ final class TabletPresentationUITests: XCTestCase {
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
-        search.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap(); search.typeText("Phase\n")
+        search.tap(); search.typeText("Phase\n")
         let entry = app.buttons["discovery-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         app.revealInContent(entry); entry.tap()
@@ -96,8 +96,9 @@ final class TabletPresentationUITests: XCTestCase {
     }
     @MainActor private func setSplit(_ enabled: Bool, app: XCUIApplication) {
         app.buttons["Account and settings"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         let row = app.buttons["settings-ipad-layout"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10)); app.revealInContent(row); row.tap()
+        app.revealInContent(row); XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
         let toggle = app.switches["settings-ipad-split-view"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10)); XCTAssertEqual(toggle.value as? String, enabled ? "0" : "1")
         // SwiftUI exposes the entire labeled row as a Switch. Its center can

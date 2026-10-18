@@ -1,0 +1,668 @@
+//! On-device Keiyoushi APK execution. The Swift host owns networking and storage.
+use base64::{engine::general_purpose::STANDARD, Engine};
+use dexvm::keiyoushi::{Chapter, HttpData, HttpResp, Keiyoushi, Manga, Source};
+use dexvm::permission::{FilesystemPermission, NetworkPermission, Permission, ProcessPermission};
+use dexvm::vm::{NatErr, NativeEntry, Vm};
+use dexvm::JValue;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::ffi::{c_char, c_void, CStr, CString};
+use std::io::Cursor;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+const MAX_APK: usize = 32 * 1024 * 1024;
+const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
+
+// The extension supplies these functional-interface implementations itself.
+// Register the host type so DEX lambdas can resolve their Java 8 interfaces;
+// invoking an unimplemented abstract method must fail, never return fake data.
+fn abstract_function(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
+    Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+        "Unimplemented Java functional interface".into(),
+    )))
+}
+fn compute_if_absent(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let existing = vm
+        .invoke_virtual_args(
+            args[0],
+            "get",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            vec![args[1]],
+        )
+        .map_err(NatErr::Fatal)?;
+    if !existing.is_null() {
+        return Ok(existing);
+    }
+    let value = vm
+        .invoke_virtual_args(
+            args[2],
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            vec![args[1]],
+        )
+        .map_err(NatErr::Fatal)?;
+    if !value.is_null() {
+        vm.invoke_virtual_args(
+            args[0],
+            "put",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            vec![args[1], value],
+        )
+        .map_err(NatErr::Fatal)?;
+    }
+    Ok(value)
+}
+fn descriptor_kind(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let name = vm
+        .invoke_virtual(args[0], "getSerialName", "()Ljava/lang/String;")
+        .map_err(NatErr::Fatal)?;
+    let name = vm.str_of_jvalue(name).unwrap_or_default();
+    let class = match name.as_str() {
+        "kotlin.String" => "Lkotlinx/serialization/descriptors/PrimitiveKind$STRING;",
+        "kotlin.Int" => "Lkotlinx/serialization/descriptors/PrimitiveKind$INT;",
+        "kotlin.Long" => "Lkotlinx/serialization/descriptors/PrimitiveKind$LONG;",
+        "kotlin.Boolean" => "Lkotlinx/serialization/descriptors/PrimitiveKind$BOOLEAN;",
+        "kotlin.Float" => "Lkotlinx/serialization/descriptors/PrimitiveKind$FLOAT;",
+        "kotlin.Double" => "Lkotlinx/serialization/descriptors/PrimitiveKind$DOUBLE;",
+        "kotlin.collections.ArrayList" | "kotlin.collections.LinkedHashSet" => {
+            "Lkotlinx/serialization/descriptors/StructureKind$LIST;"
+        }
+        "kotlin.collections.LinkedHashMap" => {
+            "Lkotlinx/serialization/descriptors/StructureKind$MAP;"
+        }
+        _ => "Lkotlinx/serialization/descriptors/StructureKind$CLASS;",
+    };
+    let field = dexvm::vm::FieldRef {
+        class_desc: vm.intern(class),
+        name: vm.intern("INSTANCE"),
+        ty: vm.intern(class),
+    };
+    vm.static_field_get(field).map_err(NatErr::Fatal)
+}
+fn element_annotations(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let JValue::Int(index) = args[1] else {
+        return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Invalid descriptor index".into(),
+        )));
+    };
+    let annotations = match vm.payload_of(args[0]) {
+        Some(dexvm::vm::object::Native::SerialDescriptor {
+            element_annotations,
+            ..
+        }) => element_annotations.get(index as usize).cloned(),
+        _ => None,
+    }
+    .ok_or_else(|| {
+        NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Descriptor index out of range".into(),
+        ))
+    })?;
+    vm.alloc_native(
+        "Ljava/util/ArrayList;",
+        dexvm::vm::object::Native::List(annotations),
+    )
+    .map_err(NatErr::Fatal)
+}
+fn progression_iterator(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::Native;
+    let (first, last, step) = match vm.payload_of(args[0]) {
+        Some(Native::IntProgression(a, b, c)) => (a, b, c),
+        Some(Native::IntRange(a, b)) => (a, b, 1),
+        _ => {
+            return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+                "Invalid integer progression".into(),
+            )))
+        }
+    };
+    if step == 0 {
+        return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Zero progression step".into(),
+        )));
+    }
+    let iterator = vm
+        .alloc_native(
+            "Lkotlin/collections/IntIterator;",
+            Native::IntProgression(first, last, step),
+        )
+        .map_err(NatErr::Fatal)?;
+    vm.arena.objects[iterator.as_obj() as usize]
+        .fields
+        .push(JValue::Int(i32::from(if step > 0 {
+            first <= last
+        } else {
+            first >= last
+        })));
+    Ok(iterator)
+}
+fn integer_iterator_has_next(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let object = &vm.arena.objects[args[0].as_obj() as usize];
+    if let Some(value) = object.fields.first() {
+        return Ok(*value);
+    }
+    match object.native {
+        Some(dexvm::vm::object::Native::IntRange(first, last)) => {
+            Ok(JValue::Int(i32::from(first <= last)))
+        }
+        _ => Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+            "Invalid integer iterator".into(),
+        ))),
+    }
+}
+fn integer_iterator_next(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    if integer_iterator_has_next(vm, args)?.is_zero() {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/util/NoSuchElementException;",
+            "Integer iterator is exhausted",
+        )));
+    }
+    let object = &mut vm.arena.objects[args[0].as_obj() as usize];
+    let (first, last, step) = match object.native {
+        Some(dexvm::vm::object::Native::IntProgression(a, b, c)) => (a, b, c),
+        Some(dexvm::vm::object::Native::IntRange(a, b)) => (a, b, 1),
+        _ => {
+            return Err(NatErr::Fatal(dexvm::vm::error::JvmError::Resolution(
+                "Invalid integer iterator".into(),
+            )))
+        }
+    };
+    let next = i64::from(first) + i64::from(step);
+    let more = if step > 0 {
+        next <= i64::from(last)
+    } else {
+        next >= i64::from(last)
+    };
+    object.native = Some(dexvm::vm::object::Native::IntProgression(
+        if more { next as i32 } else { first },
+        last,
+        step,
+    ));
+    object.fields = vec![JValue::Int(i32::from(more))];
+    Ok(JValue::Int(first))
+}
+fn integer_iterator_boxed(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let value = integer_iterator_next(vm, args)?.as_int();
+    vm.alloc_native(
+        "Ljava/lang/Integer;",
+        dexvm::vm::object::Native::IntBox(value),
+    )
+    .map_err(NatErr::Fatal)
+}
+static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry {
+        class: "Lkotlin/collections/IntIterator;",
+        name: "hasNext",
+        sig: "()Z",
+        instance: true,
+        f: integer_iterator_has_next,
+    },
+    NativeEntry {
+        class: "Lkotlin/collections/IntIterator;",
+        name: "nextInt",
+        sig: "()I",
+        instance: true,
+        f: integer_iterator_next,
+    },
+    NativeEntry {
+        class: "Lkotlin/collections/IntIterator;",
+        name: "next",
+        sig: "()Ljava/lang/Integer;",
+        instance: true,
+        f: integer_iterator_boxed,
+    },
+    NativeEntry {
+        class: "Lkotlin/collections/IntIterator;",
+        name: "next",
+        sig: "()Ljava/lang/Object;",
+        instance: true,
+        f: integer_iterator_boxed,
+    },
+    NativeEntry {
+        class: "Lkotlin/ranges/IntProgression;",
+        name: "iterator",
+        sig: "()Ljava/util/Iterator;",
+        instance: true,
+        f: progression_iterator,
+    },
+    NativeEntry {
+        class: "Ljava/lang/annotation/Annotation;",
+        name: "annotationType",
+        sig: "()Ljava/lang/Class;",
+        instance: true,
+        f: abstract_function,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        name: "getElementAnnotations",
+        sig: "(I)Ljava/util/List;",
+        instance: true,
+        f: element_annotations,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        name: "getKind",
+        sig: "()Lkotlinx/serialization/descriptors/SerialKind;",
+        instance: true,
+        f: descriptor_kind,
+    },
+    NativeEntry {
+        class: "Ljava/util/concurrent/ConcurrentHashMap;",
+        name: "computeIfAbsent",
+        sig: "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+        instance: true,
+        f: compute_if_absent,
+    },
+    NativeEntry {
+        class: "Ljava/util/HashMap;",
+        name: "computeIfAbsent",
+        sig: "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+        instance: true,
+        f: compute_if_absent,
+    },
+    NativeEntry {
+        class: "Ljava/util/function/Function;",
+        name: "apply",
+        sig: "(Ljava/lang/Object;)Ljava/lang/Object;",
+        instance: true,
+        f: abstract_function,
+    },
+    NativeEntry {
+        class: "Ljava/util/function/BiFunction;",
+        name: "apply",
+        sig: "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+        instance: true,
+        f: abstract_function,
+    },
+    NativeEntry {
+        class: "Ljava/util/function/Consumer;",
+        name: "accept",
+        sig: "(Ljava/lang/Object;)V",
+        instance: true,
+        f: abstract_function,
+    },
+    NativeEntry {
+        class: "Ljava/util/function/Predicate;",
+        name: "test",
+        sig: "(Ljava/lang/Object;)Z",
+        instance: true,
+        f: abstract_function,
+    },
+    NativeEntry {
+        class: "Ljava/util/function/Supplier;",
+        name: "get",
+        sig: "()Ljava/lang/Object;",
+        instance: true,
+        f: abstract_function,
+    },
+];
+type HttpCallback = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
+type ReleaseCallback = unsafe extern "C" fn(*mut c_char);
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Command {
+    op: String,
+    #[serde(default)]
+    source: usize,
+    #[serde(default = "first_page")]
+    page: i32,
+    #[serde(default)]
+    query: String,
+    #[serde(default)]
+    modern: bool,
+    #[serde(default)]
+    manga: MangaInput,
+    #[serde(default)]
+    chapter: ChapterInput,
+}
+fn first_page() -> i32 {
+    1
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct MangaInput {
+    url: String,
+    title: String,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ChapterInput {
+    url: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HostResponse {
+    code: i32,
+    #[serde(default)]
+    headers: Vec<(String, String)>,
+    #[serde(default)]
+    body_base64: String,
+}
+
+fn validate_apk(apk: &[u8]) -> Result<(), String> {
+    if apk.is_empty() || apk.len() > MAX_APK {
+        return Err("Extension exceeds the package size limit.".into());
+    }
+    let mut archive =
+        zip::ZipArchive::new(Cursor::new(apk)).map_err(|_| "Invalid extension archive.")?;
+    if archive.len() > 2048 {
+        return Err("Extension contains too many resources.".into());
+    }
+    let mut total = 0_u64;
+    let mut has_dex = false;
+    for i in 0..archive.len() {
+        let file = archive
+            .by_index(i)
+            .map_err(|_| "Invalid extension archive entry.")?;
+        total = total
+            .checked_add(file.size())
+            .ok_or("Invalid extension resource size.")?;
+        if total > MAX_EXPANDED || file.size() > MAX_APK as u64 {
+            return Err("Extension expands beyond the resource limit.".into());
+        }
+        has_dex |= file.name() == "classes.dex";
+    }
+    if !has_dex {
+        return Err("This package contains no Android extension bytecode.".into());
+    }
+    Ok(())
+}
+
+fn manga_json(m: Manga) -> Value {
+    json!({"url":m.url,"title":m.title,"author":m.author,"artist":m.artist,
+        "description":m.description,"genre":m.genre,"status":m.status,"thumbnailURL":m.thumbnail_url})
+}
+
+fn source_json(ext: &mut Keiyoushi, source: &Source, index: usize) -> Result<Value, String> {
+    // Source IDs remain strings throughout the C/Swift bridge (they exceed JS's integer range).
+    let name = ext
+        .source_name(source)
+        .map_err(|e| ext.describe_error(&e))?;
+    let language = ext
+        .source_lang(source)
+        .map_err(|e| ext.describe_error(&e))?;
+    let id = ext
+        .source_id(source)
+        .map_err(|e| ext.describe_error(&e))?
+        .to_string();
+    let home_url = ext
+        .source_base_url(source)
+        .map_err(|e| ext.describe_error(&e))?;
+    let supports_latest = ext.supports_latest(source).unwrap_or(false);
+    Ok(
+        json!({"index":index,"id":id,"name":name,"language":language,
+        "homeURL":home_url,"supportsLatest":supports_latest}),
+    )
+}
+
+fn execute<F>(apk: &[u8], command: Command, http: F) -> Result<Value, String>
+where
+    F: Fn(&HttpData) -> HttpResp + 'static,
+{
+    validate_apk(apk)?;
+    if command.page < 1 || command.page > 10000 || command.query.len() > 4096 {
+        return Err("Invalid source request.".into());
+    }
+    let mut ext = Keiyoushi::new_with_libraries(
+        apk,
+        &[include_bytes!("../support/serialization-decoder.dex")],
+    )
+    .map_err(|e| e.to_string())?;
+    // The convenience constructor grants all capabilities. Remove them before
+    // executing any extension constructor or method; only host-mediated HTTP remains.
+    for permission in [
+        Permission::Filesystem(FilesystemPermission::Any),
+        Permission::Process(ProcessPermission::Any),
+        Permission::Env,
+        Permission::Network(NetworkPermission::Any),
+    ] {
+        ext.ctx().revoke(&permission);
+    }
+    ext.ctx().grant(Permission::Network(NetworkPermission::Any));
+    ext.ctx().vm().budget = 30_000_000;
+    ext.ctx().vm().depth_limit = 256;
+    ext.ctx()
+        .register_natives(&[FUNCTION_INTERFACES])
+        .map_err(|e| e.to_string())?;
+    ext.set_http(http);
+    let manifest = ext.manifest().map_err(|e| e.to_string())?;
+    if !manifest
+        .package_id
+        .starts_with("eu.kanade.tachiyomi.extension.")
+    {
+        return Err("This APK is not a Mihon source extension.".into());
+    }
+    let sources = ext.sources().map_err(|e| ext.describe_error(&e))?;
+    if sources.is_empty() || sources.len() > 512 {
+        return Err("Extension declared an invalid source list.".into());
+    }
+    if command.op == "inspect" {
+        let mut list = Vec::with_capacity(sources.len());
+        for (index, source) in sources.iter().enumerate() {
+            list.push(source_json(&mut ext, source, index)?);
+        }
+        return Ok(
+            json!({"packageName":manifest.package_id,"versionName":manifest.version_name,"sources":list}),
+        );
+    }
+    let src = sources
+        .get(command.source)
+        .ok_or("This extension no longer contains the selected source.")?;
+    let manga = Manga {
+        url: command.manga.url,
+        title: command.manga.title,
+        ..Default::default()
+    };
+    let chapter = Chapter {
+        url: command.chapter.url,
+        name: command.chapter.name,
+        ..Default::default()
+    };
+    match command.op.as_str() {
+        "popular" | "latest" | "search" => {
+            let result = match (command.op.as_str(), command.modern) {
+                ("popular", true) => ext.popular_coro(src, command.page),
+                ("popular", false) => ext.popular(src, command.page),
+                ("latest", true) => ext.latest_coro(src, command.page),
+                ("latest", false) => ext.latest(src, command.page),
+                (_, true) => ext.search_coro(src, command.page, &command.query, &[]),
+                (_, false) => ext.search(src, command.page, &command.query, &[]),
+            }
+            .map_err(|e| ext.describe_error(&e))?;
+            Ok(
+                json!({"mangas":result.mangas.into_iter().map(manga_json).collect::<Vec<_>>(),"hasNext":result.has_next}),
+            )
+        }
+        "details" => {
+            let m = if command.modern {
+                ext.manga_update_details(src, &manga)
+            } else {
+                ext.manga_details(src, &manga)
+            }
+            .map_err(|e| ext.describe_error(&e))?;
+            Ok(manga_json(m))
+        }
+        "chapters" => {
+            let list = if command.modern {
+                ext.manga_update_chapters(src, &manga)
+            } else {
+                ext.chapters(src, &manga)
+            }
+            .map_err(|e| ext.describe_error(&e))?;
+            Ok(json!(list.into_iter().map(|c| json!({"url":c.url,"name":c.name,"uploadedAt":c.date_upload,"scanlator":c.scanlator})).collect::<Vec<_>>()))
+        }
+        "pages" => {
+            let list = if command.modern {
+                ext.pages_coro(src, &chapter)
+            } else {
+                ext.pages(src, &chapter)
+            }
+            .map_err(|e| ext.describe_error(&e))?;
+            Ok(json!(list
+                .into_iter()
+                .map(|p| json!({"index":p.index,"url":p.url,"imageURL":p.image_url}))
+                .collect::<Vec<_>>()))
+        }
+        _ => Err("Unknown manga runtime operation.".into()),
+    }
+}
+
+/// # Safety
+/// apk points to apk_length readable bytes; command_json is NUL-terminated.
+/// Host callbacks and context remain valid until this synchronous call returns.
+#[no_mangle]
+pub unsafe extern "C" fn ac_manga_execute(
+    apk: *const u8,
+    apk_length: usize,
+    command_json: *const c_char,
+    http: Option<HttpCallback>,
+    release_http: Option<ReleaseCallback>,
+    context: *mut c_void,
+) -> *mut c_char {
+    let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<Value, String> {
+        if apk.is_null() || command_json.is_null() || apk_length == 0 || apk_length > MAX_APK {
+            return Err("Invalid extension input.".into());
+        }
+        let command: Command = serde_json::from_slice(CStr::from_ptr(command_json).to_bytes())
+            .map_err(|_| "Invalid extension command.")?;
+        let bytes = std::slice::from_raw_parts(apk, apk_length);
+        execute(bytes, command, move |request| {
+            let fallback = || HttpResp {
+                code: 599,
+                message: "Source request failed".into(),
+                headers: vec![],
+                body: None,
+            };
+            let (Some(callback), Some(release)) = (http, release_http) else {
+                return fallback();
+            };
+            let Ok(input) = CString::new(
+                json!({"url":request.url,"method":request.method,
+                "headers":request.headers,"body":request.body})
+                .to_string(),
+            ) else {
+                return fallback();
+            };
+            let result = callback(context, input.as_ptr());
+            if result.is_null() {
+                return fallback();
+            }
+            let decoded = serde_json::from_slice::<HostResponse>(CStr::from_ptr(result).to_bytes());
+            release(result);
+            let Ok(response) = decoded else {
+                return fallback();
+            };
+            let Ok(body) = STANDARD.decode(response.body_base64) else {
+                return fallback();
+            };
+            HttpResp {
+                code: response.code,
+                message: "HTTP response".into(),
+                headers: response.headers,
+                body: Some(body),
+            }
+        })
+    }));
+    let response = match outcome {
+        Ok(Ok(value)) => json!({"ok":true,"data":value}),
+        Ok(Err(error)) => json!({"ok":false,"error":error}),
+        Err(_) => {
+            json!({"ok":false,"error":"This extension could not be executed by the on-device runtime."})
+        }
+    };
+    CString::new(response.to_string())
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// # Safety
+/// string was returned by ac_manga_execute and has not already been freed.
+#[no_mangle]
+pub unsafe extern "C" fn ac_manga_free_string(string: *mut c_char) {
+    if !string.is_null() {
+        drop(CString::from_raw(string));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn modern_extension_executes_its_real_catalog_and_detail_code() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        let apk = std::fs::read(format!("{dir}/tachiyomi-all.commitstrip-v1.6.0.apk")).unwrap();
+        let command = serde_json::from_value(json!({"op":"popular","modern":true})).unwrap();
+        let page = execute(&apk, command, |_| {
+            panic!("This extension builds its year catalog without HTTP")
+        })
+        .unwrap();
+        assert!(page["mangas"].as_array().unwrap().len() >= 5);
+        let first = &page["mangas"][0];
+        let command = serde_json::from_value(json!({"op":"details","modern":true,"manga":{"url":first["url"],"title":first["title"]}})).unwrap();
+        let detail = execute(&apk, command, |_| {
+            panic!("Title details are computed by the extension")
+        })
+        .unwrap();
+        assert_eq!(detail["url"], first["url"]);
+        assert!(!detail["title"].as_str().unwrap().is_empty());
+    }
+    #[test]
+    fn classic_extension_builds_requests_and_parses_host_responses() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+        let apk = std::fs::read(format!("{dir}/tachiyomi-all.akuma-v1.4.10.apk")).unwrap();
+        let command = serde_json::from_value(json!({"op":"popular","modern":false})).unwrap();
+        let result = execute(&apk, command, |request| {
+            assert!(request.url.starts_with("https://"));
+            assert!(["GET", "POST"].contains(&request.method.as_str()));
+            HttpResp::ok(r#"<html><body><div class="post-loop"><ul><li><a href="/manga/fixture"><div class="cover"><img src="/img/fixture.jpg"></div></a><div class="overlay-title">Fixture title</div></li></ul></div></body></html>"#)
+        }).unwrap();
+        assert_eq!(result["mangas"][0]["title"], "Fixture title");
+        assert_eq!(result["mangas"][0]["url"], "/manga/fixture");
+    }
+    #[test]
+    fn rejects_non_extensions() {
+        assert!(validate_apk(b"not an apk").is_err());
+        assert!(validate_apk(&[]).is_err());
+    }
+    #[test]
+    fn ffi_errors_are_owned_and_recoverable() {
+        unsafe {
+            let result = ac_manga_execute(
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                None,
+                None,
+                std::ptr::null_mut(),
+            );
+            let value: Value = serde_json::from_slice(CStr::from_ptr(result).to_bytes()).unwrap();
+            assert_eq!(value["ok"], false);
+            ac_manga_free_string(result);
+        }
+    }
+    #[test]
+    fn loads_both_extension_generations_without_network() {
+        let dir = std::env::var("MANGA_TEST_APK_DIR")
+            .expect("Run scripts/test-manga-runtime.sh to prepare pinned fixtures");
+        for (file, modern) in [
+            ("tachiyomi-en.mangapill-v1.4.9.apk", false),
+            ("tachiyomi-vi.cuutruyenmoe-v1.6.3.apk", true),
+        ] {
+            let apk = std::fs::read(format!("{dir}/{file}")).unwrap();
+            let command: Command =
+                serde_json::from_value(json!({"op":"inspect","modern":modern})).unwrap();
+            let result = execute(&apk, command, |_| {
+                panic!("Inspection must not make network requests")
+            })
+            .unwrap();
+            assert!(result["packageName"]
+                .as_str()
+                .unwrap()
+                .starts_with("eu.kanade.tachiyomi.extension."));
+            assert!(!result["sources"].as_array().unwrap().is_empty());
+            assert!(!result["sources"][0]["name"].as_str().unwrap().is_empty());
+        }
+    }
+}

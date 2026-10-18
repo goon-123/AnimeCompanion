@@ -1,3 +1,15 @@
+## On-device Keiyoushi manga extensions — build 37
+
+Version 0.18.0. Settings → Manga extensions accepts the supplied Keiyoushi link, loads its current gzip/protobuf catalog, and manages source APKs directly on iPhone/iPad. Include search, language/mature-source filters, manual installation and updates, enable/disable, removal, cached catalogs and popular/latest/search browsing. Verify the published SHA-256 and package/version before committing an installation; failed updates retain the previous package and saved state. A bundled, pinned DEX interpreter runs source bytecode off the main thread, with Swift-owned HTTPS and no remote execution service.
+
+This is the extension stage. The page reader remains next. Compatibility is experimental: current Commit Strip 1.6.0 catalog/detail execution and classic request/HTML parsing pass; current MANGA Plus needs additional descriptor APIs, while live MangaPill/CuuTruyen probes encountered HTTP 403. Installation and a matching extension API version do not establish universal website support. See `Tools/MangaRuntime/README.md` for limits and reproducible verification.
+
+Validation: 290 active Swift core tests passed with six opt-in skips, plus a separately enabled live Keiyoushi catalog check. Five Rust tests passed using integrity-pinned real classic/1.6 APKs. Device arm64 and both simulator architecture libraries build successfully using target-specific QuickJS bindgen and Xcode SDK arguments; the XCFramework supplies the C module without redundant repository header paths.
+
+All three native Swift/C/Rust cases and the manga settings UI case passed on both iPhone and iPad in [run 39149745333](https://github.com/goon-123/AnimeCompanion/actions/runs/39149745333). Both setup screenshots were visually reviewed. The [Release build in run 39151265227](https://github.com/goon-123/AnimeCompanion/actions/runs/39151265227) passed and produced [the unsigned build-37 IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/39151265227/artifacts/12144778781). Inspection confirms version 0.18.0/build 37, matching Safari extension versions, bundled runtime notices, iOS 17 host/iOS 18 Safari minimums, and no test APKs, fixture folders or XCTest bundles in the production app.
+
+The final combined iPhone/iPad layout rerun is still active at this checkpoint; its status is tracked in [PR #18](https://github.com/goon-123/AnimeCompanion/pull/18). The retained Safari heading assertion now waits for navigation and tolerates system case styling. The iPad settings scenario reveals lazy form rows before querying them and uses a native search-field tap. No layout assertions or existing suites were removed. The latest documentation/file-ending cleanup does not change executable code.
+
 ## Safari → VidHub bundled extension — build 36
 
 Version 0.17.0. Embed a Safari web-extension target in the existing app/IPA. Add Settings → Safari → VidHub with enable/website-access/sideloading guidance. The extension requires iOS/iPadOS 18 for MAIN-world declarative content scripts; the host app retains iOS 17 support.
