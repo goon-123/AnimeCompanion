@@ -1,3 +1,11 @@
+## On-device Keiyoushi manga extensions — build 37
+
+Version 0.18.0. Settings → Manga extensions accepts the supplied Keiyoushi link, loads its current gzip/protobuf catalog, and manages source APKs directly on iPhone/iPad. Include search, language/mature-source filters, manual installation and updates, enable/disable, removal, cached catalogs and popular/latest/search browsing. Verify the published SHA-256 and package/version before committing an installation; failed updates retain the previous package and saved state. A bundled, pinned DEX interpreter runs source bytecode off the main thread, with Swift-owned HTTPS and no remote execution service.
+
+This is the extension stage. The page reader remains next. Compatibility is experimental: current Commit Strip 1.6.0 catalog/detail execution and classic request/HTML parsing pass; current MANGA Plus needs additional descriptor APIs, while live MangaPill/CuuTruyen probes encountered HTTP 403. Installation and a matching extension API version do not establish universal website support. See `Tools/MangaRuntime/README.md` for limits and reproducible verification.
+
+Validation: 296 Swift core tests passed with six opt-in skips, plus a separately enabled live Keiyoushi catalog check; five Rust tests passed using integrity-pinned real classic/1.6 APKs. The iOS runtime initially failed because QuickJS had no pre-generated iOS bindings; target-specific bindgen and Xcode SDK arguments fixed all three device/simulator architecture builds. The macOS APK tests and other CI core/runtime checks passed in [run 39148698243](https://github.com/goon-123/AnimeCompanion/actions/runs/39148698243). Native Swift/C/Rust simulator tests, settings UI screenshots and Release IPA packaging are pending. Native tests import the runtime C module explicitly through the same header search paths as the app. Test APKs are bundled only in the test target.
+
 ## Safari → VidHub bundled extension — build 36
 
 Version 0.17.0. Embed a Safari web-extension target in the existing app/IPA. Add Settings → Safari → VidHub with enable/website-access/sideloading guidance. The extension requires iOS/iPadOS 18 for MAIN-world declarative content scripts; the host app retains iOS 17 support.

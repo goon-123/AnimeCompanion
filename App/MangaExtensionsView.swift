@@ -182,8 +182,8 @@ private struct MangaExtensionDetailView: View {
                 Section { Button("Remove extension", role: .destructive) { removing = true }.disabled(store.busy) }
             }
         }.navigationTitle(entry.name).navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                if let installed = installation, !installed.sources.contains(where: { $0.language == "en" || $0.language == "all" }) { sourceLanguage = "" }
+            .onChange(of: installation?.descriptor.sha256, initial: true) {
+                if let installed = installation, !installed.sources.contains(where: { $0.language == sourceLanguage || $0.language == "all" }) { sourceLanguage = "" }
             }
             .confirmationDialog("Remove \(entry.name)?", isPresented: $removing) {
                 Button("Remove extension", role: .destructive) { Task { await store.remove(entry.id) } }
