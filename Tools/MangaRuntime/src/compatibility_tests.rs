@@ -90,10 +90,9 @@ fn mangaplus_catalog_details_and_dated_chapters_use_real_serializers() {
 fn mangaplus_protobuf_reader_preserves_pages_and_view_token() {
     let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
     let apk = std::fs::read(format!("{dir}/tachiyomi-all.mangaplus-v1.6.67.apk")).unwrap();
-    let mut viewer = proto(
-        1,
-        &proto(1, &proto(1, b"https://images.example/owned-2.webp")),
-    );
+    let mut first_image = proto(1, b"https://images.example/owned-2.webp");
+    first_image.extend(proto(5, b"0f10aa"));
+    let mut viewer = proto(1, &proto(1, &first_image));
     viewer.extend(proto(
         1,
         &proto(1, &proto(1, b"https://images.example/owned-1.webp")),
@@ -117,7 +116,10 @@ fn mangaplus_protobuf_reader_preserves_pages_and_view_token() {
     })
     .unwrap();
     assert_eq!(result.as_array().unwrap().len(), 2);
-    assert_eq!(result[0]["imageURL"], "https://images.example/owned-2.webp");
+    assert_eq!(
+        result[0]["imageURL"],
+        "https://images.example/owned-2.webp#0f10aa"
+    );
     assert_eq!(result[1]["imageURL"], "https://images.example/owned-1.webp");
     assert_eq!(result[0]["url"], "owned-view-token");
     let command =
@@ -133,7 +135,7 @@ fn mangaplus_protobuf_reader_preserves_pages_and_view_token() {
             code: 200,
             message: "OK".into(),
             headers: vec![],
-            body: Some(vec![0, 255, 23, 128]),
+            body: Some(vec![15, 239, 189, 143]),
         }
     })
     .unwrap();
@@ -159,6 +161,63 @@ fn mangaplus_truncated_protobuf_returns_an_error() {
         body: Some(vec![0x0a, 0x7f, 0x52]),
     })
     .is_err());
+}
+
+#[test]
+fn mangaplus_source_image_interceptor_decodes_owned_bytes() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-all.mangaplus-v1.6.67.apk")).unwrap();
+    let command = serde_json::from_value(json!({"op":"image","modern":true,
+        "image":{"url":"owned-view-token","imageURL":"https://images.example/owned.webp#0f10"}}))
+    .unwrap();
+    let result = execute(&apk, command, |request| {
+        assert_eq!(request.url, "https://images.example/owned.webp");
+        HttpResp {
+            code: 200,
+            message: "OK".into(),
+            headers: vec![],
+            body: Some(vec![0x0f, 0xef, 0x18, 0x90]),
+        }
+    })
+    .unwrap();
+    assert_eq!(
+        STANDARD
+            .decode(result["bodyBase64"].as_str().unwrap())
+            .unwrap(),
+        vec![0, 255, 23, 128]
+    );
+}
+
+#[test]
+fn mangaplus_source_transform_preserves_key_position_across_read_chunks() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-all.mangaplus-v1.6.67.apk")).unwrap();
+    let plain: Vec<u8> = (0..1_048_579).map(|i| (i % 251) as u8).collect();
+    let key = [0x0f, 0x10, 0xaa];
+    let encrypted: Vec<u8> = plain
+        .iter()
+        .enumerate()
+        .map(|(i, byte)| byte ^ key[i % key.len()])
+        .collect();
+    let command = serde_json::from_value(json!({"op":"image","modern":true,
+        "image":{"url":"owned-view-token","imageURL":"https://images.example/owned.webp#0f10aa"}}))
+    .unwrap();
+    let result = execute(&apk, command, move |request| {
+        assert_eq!(request.url, "https://images.example/owned.webp");
+        HttpResp {
+            code: 200,
+            message: "OK".into(),
+            headers: vec![],
+            body: Some(encrypted.clone()),
+        }
+    })
+    .unwrap();
+    assert_eq!(
+        STANDARD
+            .decode(result["bodyBase64"].as_str().unwrap())
+            .unwrap(),
+        plain
+    );
 }
 
 #[test]

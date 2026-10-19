@@ -14,6 +14,7 @@ const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
 mod jsoup_compat;
+mod okio_compat;
 mod serialization_compat;
 use serialization_compat::*;
 
@@ -987,7 +988,19 @@ where
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
-    ext.set_http(http);
+    okio_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    ext.set_http(move |request| {
+        // A source may retain an image-decryption key in the URL fragment.
+        // HTTP never transmits fragments; keep it in the VM for interceptors,
+        // while the Swift transport receives only the network URL.
+        if let Some((url, _)) = request.url.split_once('#') {
+            let mut transport = request.clone();
+            transport.url = url.to_owned();
+            http(&transport)
+        } else {
+            http(request)
+        }
+    });
     let manifest = ext.manifest().map_err(|e| e.to_string())?;
     if !manifest
         .package_id
