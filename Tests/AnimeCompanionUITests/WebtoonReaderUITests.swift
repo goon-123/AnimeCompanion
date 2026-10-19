@@ -10,6 +10,7 @@ final class WebtoonReaderUITests: XCTestCase {
         app.buttons["source-setting-quality"].tap()
         let high = app.buttons["source-choice-high"]
         XCTAssertTrue(high.waitForExistence(timeout: 10)); high.tap()
+        XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("High"))
         let split = app.switches["source-setting-split"]
         XCTAssertTrue(split.waitForExistence(timeout: 10))
         split.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()

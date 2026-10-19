@@ -40,7 +40,7 @@ struct MangaSourceSettingsView: View {
                 }
             }
             .interactiveDismissDisabled(saving)
-            .task { await load() }
+            .task { if schema == nil { await load() } }
         }.tint(MangaStyle.accent)
     }
 
