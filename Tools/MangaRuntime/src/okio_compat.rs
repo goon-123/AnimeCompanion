@@ -221,6 +221,15 @@ fn buffered_source(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
 }
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for class in ["Lokio/Source;", "Lokio/BufferedSource;", "Lokio/Buffer;"] {
+        vm.register_native(NativeEntry {
+            class,
+            name: "read",
+            sig: "(Lokio/Buffer;J)J",
+            instance: true,
+            f: source_read,
+        })?;
+    }
     for entry in [
         NativeEntry {
             class: CURSOR,
@@ -294,6 +303,46 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     Ok(())
 }
 
+fn source_read(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let count = args[2].as_long();
+    if count < 0 {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IllegalArgumentException;",
+            "Negative byte count",
+        )));
+    }
+    if count == 0 {
+        return Ok(JValue::Long(0));
+    }
+    if args[0] == args[1] {
+        return Err(error(vm, "Cannot read a buffer into itself"));
+    }
+    let (JValue::Obj(source), JValue::Obj(target)) = (args[0], args[1]) else {
+        return Err(error(vm, "Missing source or destination buffer"));
+    };
+    let (chunk, next) = match vm.arena.objects[source as usize].native.as_ref() {
+        Some(Native::OkioBuf { bytes, pos }) if *pos <= bytes.len() && bytes.len() <= LIMIT => {
+            let size = (bytes.len() - *pos).min(count as u64 as usize);
+            (bytes[*pos..*pos + size].to_vec(), *pos + size)
+        }
+        _ => return Err(error(vm, "Invalid source buffer")),
+    };
+    if chunk.is_empty() {
+        return Ok(JValue::Long(-1));
+    }
+    let size = chunk.len();
+    match vm.arena.objects[target as usize].native.as_mut() {
+        Some(Native::OkioBuf { bytes, .. }) if bytes.len().saturating_add(size) <= LIMIT => {
+            bytes.extend_from_slice(&chunk)
+        }
+        _ => return Err(error(vm, "Invalid or oversized destination buffer")),
+    }
+    if let Some(Native::OkioBuf { pos, .. }) = vm.arena.objects[source as usize].native.as_mut() {
+        *pos = next;
+    }
+    Ok(JValue::Long(size as i64))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +402,48 @@ mod tests {
         close(&mut vm, &[cursor]).unwrap();
         assert!(
             matches!(vm.payload_of(buffer), Some(Native::OkioBuf { bytes, pos: 1 }) if bytes == vec![10,20,30,40])
+        );
+    }
+    #[test]
+    fn buffered_source_inherits_bounded_read_with_correct_zero_and_eof_semantics() {
+        let (mut vm, _, source) = context();
+        let target = vm
+            .alloc_native(
+                "Lokio/Buffer;",
+                Native::OkioBuf {
+                    bytes: vec![],
+                    pos: 0,
+                },
+            )
+            .unwrap();
+        assert!(source_read(&mut vm, &[source, target, JValue::Long(-1)]).is_err());
+        assert_eq!(
+            source_read(&mut vm, &[source, target, JValue::Long(0)]).unwrap(),
+            JValue::Long(0)
+        );
+        let read = vm
+            .invoke_virtual_args(
+                source,
+                "read",
+                "(Lokio/Buffer;J)J",
+                vec![target, JValue::Long(2)],
+            )
+            .unwrap();
+        assert_eq!(read, JValue::Long(2));
+        assert_eq!(
+            source_read(&mut vm, &[source, target, JValue::Long(99)]).unwrap(),
+            JValue::Long(1)
+        );
+        assert_eq!(
+            source_read(&mut vm, &[source, target, JValue::Long(99)]).unwrap(),
+            JValue::Long(-1)
+        );
+        assert_eq!(
+            source_read(&mut vm, &[source, target, JValue::Long(0)]).unwrap(),
+            JValue::Long(0)
+        );
+        assert!(
+            matches!(vm.payload_of(target), Some(Native::OkioBuf { bytes, pos: 0 }) if bytes == vec![20,30,40])
         );
     }
 }

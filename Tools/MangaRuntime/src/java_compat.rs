@@ -205,6 +205,67 @@ fn app_version(vm: &mut Vm, _args: &[JValue]) -> ResultValue {
 fn duration_infinite(_vm: &mut Vm, _args: &[JValue]) -> ResultValue {
     Ok(JValue::Long(i64::MAX))
 }
+fn mutex_lock(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let acquired = mutex_try_lock(vm, args)?;
+    if acquired.as_int() == 0 {
+        return Err(exception(
+            vm,
+            "Ljava/lang/IllegalStateException;",
+            "Mutex would suspend the single guest thread",
+        ));
+    }
+    let field = dexvm::vm::FieldRef {
+        class_desc: vm.intern("Lkotlin/Unit;"),
+        name: vm.intern("INSTANCE"),
+        ty: vm.intern("Lkotlin/Unit;"),
+    };
+    vm.static_field_get(field).map_err(NatErr::Fatal)
+}
+fn mutex_try_lock(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let id = args[0].as_obj() as usize;
+    let held = match vm.arena.objects[id].native {
+        Some(Native::Mutex { locked }) => locked,
+        _ => {
+            return Err(exception(
+                vm,
+                "Ljava/lang/IllegalStateException;",
+                "Invalid mutex",
+            ))
+        }
+    };
+    let owner = args.get(1).copied().unwrap_or(JValue::Null);
+    if held {
+        if !owner.is_null_ref() && vm.arena.objects[id].fields.first() == Some(&owner) {
+            return Err(exception(
+                vm,
+                "Ljava/lang/IllegalStateException;",
+                "Mutex is already locked by this owner",
+            ));
+        }
+        return Ok(JValue::Int(0));
+    }
+    vm.arena.objects[id].native = Some(Native::Mutex { locked: true });
+    vm.arena.objects[id].fields = vec![owner];
+    Ok(JValue::Int(1))
+}
+fn mutex_unlock(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let id = args[0].as_obj() as usize;
+    let held = matches!(
+        vm.arena.objects[id].native,
+        Some(Native::Mutex { locked: true })
+    );
+    let owner = args.get(1).copied().unwrap_or(JValue::Null);
+    if !held || (!owner.is_null_ref() && vm.arena.objects[id].fields.first() != Some(&owner)) {
+        return Err(exception(
+            vm,
+            "Ljava/lang/IllegalStateException;",
+            "Mutex is not locked by this owner",
+        ));
+    }
+    vm.arena.objects[id].native = Some(Native::Mutex { locked: false });
+    vm.arena.objects[id].fields.clear();
+    Ok(JValue::Null)
+}
 fn webview_class_loader(vm: &mut Vm, _args: &[JValue]) -> ResultValue {
     // Guest classes/resources only; never JNI or the native iOS class loader.
     vm.alloc_native("Ljava/lang/ClassLoader;", Native::Opaque)
@@ -475,6 +536,27 @@ macro_rules! entry {
     };
 }
 const TABLE: &[NativeEntry] = &[
+    entry!(
+        "Lkotlinx/coroutines/sync/Mutex;",
+        "tryLock",
+        "(Ljava/lang/Object;)Z",
+        true,
+        mutex_try_lock
+    ),
+    entry!(
+        "Lkotlinx/coroutines/sync/Mutex;",
+        "unlock",
+        "(Ljava/lang/Object;)V",
+        true,
+        mutex_unlock
+    ),
+    entry!(
+        "Lkotlinx/coroutines/sync/Mutex;",
+        "lock",
+        "(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        true,
+        mutex_lock
+    ),
     entry!(
         "Ljava/lang/Class;",
         "forName",
@@ -1083,6 +1165,22 @@ mod tests {
             .unwrap());
         let available = vm.alloc_string("java.lang.String");
         assert!(class_for_name(&mut vm, &[available]).is_ok());
+    }
+    #[test]
+    fn suspend_mutex_lock_runs_inline_without_claiming_reentrancy() {
+        let mut vm = vm();
+        let mutex = vm
+            .alloc_native(
+                "Lkotlinx/coroutines/sync/Mutex;",
+                Native::Mutex { locked: false },
+            )
+            .unwrap();
+        let result = mutex_lock(&mut vm, &[mutex, JValue::Null, JValue::Null]).unwrap();
+        assert!(matches!(result, JValue::Obj(_)));
+        assert!(mutex_lock(&mut vm, &[mutex, JValue::Null, JValue::Null]).is_err());
+        vm.invoke_virtual_args(mutex, "unlock", "(Ljava/lang/Object;)V", vec![JValue::Null])
+            .unwrap();
+        assert!(mutex_lock(&mut vm, &[mutex, JValue::Null, JValue::Null]).is_ok());
     }
     #[test]
     fn instance_of_preserves_the_full_16_bit_type_index() {
