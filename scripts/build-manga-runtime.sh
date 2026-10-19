@@ -13,6 +13,7 @@ if ! command -v rustup >/dev/null; then
 fi
 source "$HOME/.cargo/env"
 rustup toolchain install 1.99.1 --profile minimal
+python3 scripts/prepare-manga-interpreter.py
 python3 scripts/manga-licenses.py
 rustup target add --toolchain 1.99.1 aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 export IPHONEOS_DEPLOYMENT_TARGET=17.0

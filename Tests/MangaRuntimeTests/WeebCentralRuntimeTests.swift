@@ -4,7 +4,7 @@ import AnimeMangaRuntime
 
 final class WeebCentralRuntimeTests: XCTestCase {
     func testAlpineReaderSectionReturnsPagesWithoutUnrelatedImages() throws {
-        let host = try WeebCentralFixtureHTTP()
+        let host = try OwnedExtensionFixtureHTTP()
         let pages: [SourceMangaImage] = try host.execute([
             "op": "pages", "chapter": ["url": "/chapters/owned-2", "name": "Chapter 2"]
         ])
@@ -14,7 +14,7 @@ final class WeebCentralRuntimeTests: XCTestCase {
     }
 
     func testDatedChaptersAndLongStripRequestsThroughTheNativeBridge() throws {
-        let host = try WeebCentralFixtureHTTP()
+        let host = try OwnedExtensionFixtureHTTP()
         let book: MangaBook = try host.execute(bookCommand)
         XCTAssertEqual(book.manga.title, "Owned webtoon")
         XCTAssertEqual(book.manga.author, "Owned author")
@@ -39,7 +39,7 @@ final class WeebCentralRuntimeTests: XCTestCase {
     }
 
     func testFailedChapterTaskReturnsAnErrorInsteadOfAnEmptyBook() throws {
-        let host = try WeebCentralFixtureHTTP()
+        let host = try OwnedExtensionFixtureHTTP()
         host.failChapters = true
         XCTAssertThrowsError(try host.execute(bookCommand) as MangaBook) { error in
             XCTAssertTrue(error.localizedDescription.contains("503"), "The underlying task failure must survive await")
@@ -57,18 +57,20 @@ final class WeebCentralRuntimeTests: XCTestCase {
 
 /// Test-bundle-only networking: the real APK runs against the same owned HTML
 /// as the Rust regressions. No fixture response can reach a production request.
-private final class WeebCentralFixtureHTTP {
+final class OwnedExtensionFixtureHTTP {
     let apk: Data
     let responses: [String: Data]
     var failChapters = false
     var urls: [String] = []
+    var headersByURL: [String: [[String]]] = [:]
 
-    init() throws {
+    init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil) throws {
         let bundle = Bundle(for: WeebCentralRuntimeTests.self)
         let apks = try XCTUnwrap(bundle.url(forResource: "Fixtures", withExtension: nil))
-        apk = try Data(contentsOf: apks.appendingPathComponent("tachiyomi-en.weebcentral-v1.6.25.apk"))
+        apk = try Data(contentsOf: apks.appendingPathComponent(apkName))
+        if let responses { self.responses = responses; return }
         let html = try XCTUnwrap(bundle.url(forResource: "OwnedFixtures", withExtension: nil))
-        responses = try [
+        self.responses = try [
             "https://weebcentral.com/series/owned-id/owned-webtoon": Data(contentsOf: html.appendingPathComponent("weebcentral-details.html")),
             "https://weebcentral.com/series/owned-id/full-chapter-list": Data(contentsOf: html.appendingPathComponent("weebcentral-chapters.html")),
             "https://weebcentral.com/chapters/owned-2/images?is_prev=False&reading_style=long_strip": Data(contentsOf: html.appendingPathComponent("weebcentral-pages.html")),
@@ -97,19 +99,22 @@ private final class WeebCentralFixtureHTTP {
     func request(_ input: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
         guard let request = try? JSONDecoder().decode(Request.self, from: Data(bytes: input, count: strlen(input))) else { return nil }
         urls.append(request.url)
+        headersByURL[request.url] = request.headers
         let failure = failChapters && request.url.hasSuffix("full-chapter-list")
-        let body = failure ? Data("unavailable".utf8) : responses[request.url]
+        var components = URLComponents(string: request.url)
+        components?.query = nil
+        let body = failure ? Data("unavailable".utf8) : (responses[request.url] ?? responses[components?.string ?? ""])
         let code = failure ? 503 : (body == nil ? 404 : 200)
         let response: [String: Any] = ["code": code, "headers": [], "bodyBase64": (body ?? Data()).base64EncodedString()]
         guard let data = try? JSONSerialization.data(withJSONObject: response), let json = String(data: data, encoding: .utf8) else { return nil }
         return strdup(json)
     }
-    private struct Request: Decodable { let url: String }
+    private struct Request: Decodable { let url: String; let headers: [[String]] }
     private struct Envelope<T: Decodable>: Decodable { let ok: Bool; let data: T?; let error: String? }
 }
 
 private let weebCentralFixtureRequest: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? = { context, input in
     guard let context, let input else { return nil }
-    return Unmanaged<WeebCentralFixtureHTTP>.fromOpaque(context).takeUnretainedValue().request(input)
+    return Unmanaged<OwnedExtensionFixtureHTTP>.fromOpaque(context).takeUnretainedValue().request(input)
 }
 private let weebCentralFixtureRelease: @convention(c) (UnsafeMutablePointer<CChar>?) -> Void = { free($0) }

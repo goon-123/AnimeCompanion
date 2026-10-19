@@ -9,7 +9,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 # Pin the interpreter: updating installed sources must not silently change the host runtime.
-dexvm = { git = "https://github.com/tachibana-shin/dexvm", rev = "38d3438d7e36b5c2c17414029fd36b2d717eefcb", features = ["keiyoushi"] }
+dexvm = { path = "target/patched-dexvm", features = ["keiyoushi"] }
 base64 = "0.22"
 dom_query = "=0.28.0"
 fancy-regex = "=0.19.2"
