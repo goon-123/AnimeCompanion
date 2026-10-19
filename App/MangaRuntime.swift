@@ -94,6 +94,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
     private struct Request: Decodable { let url: String; let method: String; let headers: [[String]]; let body: String? }
     private let networking: Bool
     private let sourceKey: String
+    private let browser: MangaRuntimeBrowser
     private let deadline = Date().addingTimeInterval(60)
     private let lock = NSLock()
     private var stopped = false
@@ -102,7 +103,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
     private var transferred = 0
     private var ownedSession: URLSession?
     private var requests: [Int: MangaNetworkRequest] = [:]
-    init(networking: Bool, sourceKey: String) { self.networking = networking; self.sourceKey = sourceKey; super.init() }
+    init(networking: Bool, sourceKey: String) { self.networking = networking; self.sourceKey = sourceKey; self.browser = MangaRuntimeBrowser(sourceKey: sourceKey); super.init() }
     var failure: Error? { lock.lock(); defer { lock.unlock() }; return storedFailure }
     private var session: URLSession {
         lock.lock(); defer { lock.unlock() }
@@ -115,8 +116,8 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
         let value = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         ownedSession = value; return value
     }
-    func finish() { lock.lock(); let value = ownedSession; ownedSession = nil; lock.unlock(); value?.invalidateAndCancel() }
-    func cancel() { lock.lock(); stopped = true; let value = ownedSession; lock.unlock(); value?.invalidateAndCancel() }
+    func finish() { lock.lock(); let value = ownedSession; ownedSession = nil; lock.unlock(); value?.invalidateAndCancel(); browser.finish() }
+    func cancel() { lock.lock(); stopped = true; let value = ownedSession; lock.unlock(); value?.invalidateAndCancel(); browser.finish() }
     func checkCancellation() throws {
         lock.lock(); let cancelled = stopped; lock.unlock()
         if cancelled { throw CancellationError() }
@@ -177,6 +178,11 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
             try checkCancellation()
             guard networking else { throw MangaExtensionError.runtimeFailure }
             let request = try JSONDecoder().decode(Request.self, from: Data(bytes: input, count: strlen(input)))
+            if request.method == "AC_BROWSER", request.url == "ac-manga-browser://command", let body = request.body {
+                let data = try browser.request(Data(body.utf8), remaining: deadline.timeIntervalSinceNow)
+                let result = try JSONSerialization.data(withJSONObject: ["code": 200, "headers": [], "bodyBase64": data.base64EncodedString()])
+                return String(decoding: result, as: UTF8.self).withCString { strdup($0) }
+            }
             guard let url = validURL(request.url), ["GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"].contains(request.method),
                   (request.body?.utf8.count ?? 0) <= 1_000_000 else { throw MangaExtensionError.sourceUnavailable }
             lock.lock(); requestCount += 1; let count = requestCount; lock.unlock()

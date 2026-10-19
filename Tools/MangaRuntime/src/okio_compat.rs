@@ -15,6 +15,19 @@ const WRITE: usize = 5;
 const ORIGIN: usize = 6;
 const LIMIT: usize = 16_000_000;
 
+fn object_initialize(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let buffer = vm.intern("Lokio/Buffer;");
+    let object = &vm.arena.objects[args[0].as_obj() as usize];
+    // R8 can inline Buffer's empty constructor into Object.<init>.
+    if object.native.is_none() && vm.classes[object.class as usize].descriptor == buffer {
+        vm.arena.objects[args[0].as_obj() as usize].native = Some(Native::OkioBuf {
+            bytes: vec![],
+            pos: 0,
+        });
+    }
+    Ok(JValue::Null)
+}
+
 fn error(vm: &mut Vm, message: &str) -> NatErr {
     NatErr::Throw(vm.throwable_of("Ljava/lang/IllegalStateException;", message))
 }
@@ -221,6 +234,13 @@ fn buffered_source(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
 }
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Ljava/lang/Object;",
+        name: "<init>",
+        sig: "()V",
+        instance: true,
+        f: object_initialize,
+    })?;
     for class in ["Lokio/Source;", "Lokio/BufferedSource;", "Lokio/Buffer;"] {
         vm.register_native(NativeEntry {
             class,

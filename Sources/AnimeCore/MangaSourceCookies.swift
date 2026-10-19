@@ -17,7 +17,34 @@ public final class MangaSourceCookieJar: @unchecked Sendable {
     }
     public func replace(source: String, cookies: [HTTPCookie]) {
         lock.lock(); defer { lock.unlock() }
-        sessions[source] = Array(cookies.compactMap(normalized).filter {
+        sessions[source] = bounded(cookies)
+    }
+    /// Import browser changes without reverting a later native HTTP update or
+    /// deletion. `initial` must be the exact snapshot returned by `cookies` at
+    /// browser load; unchanged immutable cookie references identify conflicts.
+    public func reconcileBrowser(source: String, initial: [HTTPCookie], cookies: [HTTPCookie]) {
+        lock.lock(); defer { lock.unlock() }
+        let incoming = Dictionary(bounded(cookies).map { (CookieKey($0), $0) }, uniquingKeysWith: { _, value in value })
+        let previous = Dictionary(initial.map { (CookieKey($0), $0) }, uniquingKeysWith: { _, value in value })
+        var current = sessions[source] ?? []
+        for key in Set(previous.keys).union(incoming.keys) {
+            let existing = current.first { CookieKey($0) == key }
+            guard existing === previous[key] else { continue }
+            current.removeAll { CookieKey($0) == key }
+            if let value = incoming[key] { current.append(value) }
+        }
+        sessions[source] = Array(current.filter { $0.expiresDate.map { $0 > Date() } ?? true }.suffix(256))
+    }
+    private struct CookieKey: Hashable {
+        let name: String
+        let domain: String
+        let path: String
+        init(_ cookie: HTTPCookie) {
+            name = cookie.name; domain = cookie.domain.lowercased(); path = cookie.path
+        }
+    }
+    private func bounded(_ cookies: [HTTPCookie]) -> [HTTPCookie] {
+        Array(cookies.compactMap(normalized).filter {
             !$0.domain.isEmpty && $0.domain.utf8.count <= 253 && $0.value.utf8.count <= 16_384
         }.suffix(256))
     }

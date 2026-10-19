@@ -5,6 +5,30 @@ import FoundationNetworking
 #endif
 
 final class MangaSourceCookieTests: XCTestCase {
+    func testBrowserCompletionPreservesLaterNativeUpdatesAdditionsAndDeletions() throws {
+        let jar = MangaSourceCookieJar(), url = URL(string: "https://source.example/")!
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "session=old; Path=/; Secure"])
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "deleted=old; Path=/; Secure"])
+        let initial = jar.cookies(source: "one")
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "session=new; Path=/; Secure"])
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "native=added; Path=/; Secure"])
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "deleted=; Path=/; Max-Age=0"])
+        let browser = try XCTUnwrap(HTTPCookie(properties: [.name: "browser", .value: "added", .domain: "source.example", .path: "/", .secure: "TRUE"]))
+        jar.replace(source: "two", cookies: [browser])
+        jar.reconcileBrowser(source: "one", initial: initial, cookies: initial + [browser])
+        XCTAssertEqual(Dictionary(jar.cookies(source: "one").map { ($0.name, $0.value) }, uniquingKeysWith: { _, value in value }),
+            ["session": "new", "native": "added", "browser": "added"])
+        XCTAssertEqual(jar.header(source: "two", url: url), "browser=added")
+    }
+    func testBrowserChangesAndDeletionsAreImportedWhenNativeCookiesHaveNotChanged() throws {
+        let jar = MangaSourceCookieJar(), url = URL(string: "https://source.example/")!
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "session=old; Path=/; Secure"])
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "deleted=old; Path=/; Secure"])
+        let initial = jar.cookies(source: "one")
+        let changed = try XCTUnwrap(HTTPCookie(properties: [.name: "session", .value: "browser", .domain: "source.example", .path: "/", .secure: "TRUE"]))
+        jar.reconcileBrowser(source: "one", initial: initial, cookies: [changed])
+        XCTAssertEqual(jar.header(source: "one", url: url), "session=browser")
+    }
     func testExplicitCookiePrecedenceAndMalformedNamesCannotCrashMerging() {
         XCTAssertEqual(MangaSourceCookieJar.merging(explicit: "session=source", session: "session=browser; verification=owned"), "session=source; verification=owned")
         XCTAssertEqual(MangaSourceCookieJar.merging(explicit: "=; ;;", session: "verification=owned"), "=; ;;; verification=owned")

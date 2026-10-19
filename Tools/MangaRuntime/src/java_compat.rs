@@ -200,7 +200,7 @@ fn string_builder_append(vm: &mut Vm, args: &[JValue]) -> ResultValue {
     Ok(args[0])
 }
 fn app_version(vm: &mut Vm, _args: &[JValue]) -> ResultValue {
-    Ok(vm.alloc_string("0.21.0"))
+    Ok(vm.alloc_string("0.22.0"))
 }
 fn duration_infinite(_vm: &mut Vm, _args: &[JValue]) -> ResultValue {
     Ok(JValue::Long(i64::MAX))
