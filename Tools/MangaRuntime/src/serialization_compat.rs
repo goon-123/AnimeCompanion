@@ -1,6 +1,50 @@
 //! Shared kotlinx.serialization and buffered-source compatibility.
 use super::{abstract_function, JValue, NatErr, Vm};
 
+pub(super) fn json_decode_sequentially(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{JsonVal, Native};
+    let sequential = match vm.payload_of(args[0]) {
+        Some(Native::JsonDecoder { element, .. }) => matches!(
+            vm.payload_of(element),
+            Some(Native::Json(JsonVal::Array(_)))
+        ),
+        _ => false,
+    };
+    Ok(JValue::Int(i32::from(sequential)))
+}
+pub(super) fn json_element_index(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{JsonVal, Native};
+    let (element, index) = match vm.payload_of(args[0]) {
+        Some(Native::JsonDecoder { element, index, .. }) => (element, index),
+        _ => return Err(abstract_json_error(vm)),
+    };
+    let names = match vm.payload_of(args[1]) {
+        Some(Native::SerialDescriptor { elements, .. }) => elements,
+        _ => return Err(abstract_json_error(vm)),
+    };
+    let members = match vm.payload_of(element) {
+        Some(Native::Json(JsonVal::Object(members))) => members,
+        _ => return Err(abstract_json_error(vm)),
+    };
+    for (offset, (name, _)) in members.iter().enumerate().skip(index.max(0) as usize) {
+        if let Some(Native::JsonDecoder { index, .. }) =
+            &mut vm.arena.objects[args[0].as_obj() as usize].native
+        {
+            *index = (offset + 1) as i32;
+        }
+        if let Some(index) = names.iter().position(|n| n == name) {
+            return Ok(JValue::Int(index as i32));
+        }
+    }
+    Ok(JValue::Int(-1))
+}
+fn abstract_json_error(vm: &mut Vm) -> NatErr {
+    NatErr::Throw(vm.throwable_of(
+        "Ljava/lang/IllegalArgumentException;",
+        "Expected a JSON object and descriptor",
+    ))
+}
+
 pub(super) static ORIGINAL_LIST_DECODER: std::sync::OnceLock<dexvm::vm::NativeFn> =
     std::sync::OnceLock::new();
 

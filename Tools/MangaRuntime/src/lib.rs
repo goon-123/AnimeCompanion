@@ -13,6 +13,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
+mod browser_compat;
 mod java_compat;
 mod jsoup_compat;
 mod okio_compat;
@@ -994,9 +995,33 @@ where
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    for (name, sig, f) in [
+        (
+            "decodeSequentially",
+            "()Z",
+            json_decode_sequentially as dexvm::vm::NativeFn,
+        ),
+        (
+            "decodeElementIndex",
+            "(Lkotlinx/serialization/descriptors/SerialDescriptor;)I",
+            json_element_index as dexvm::vm::NativeFn,
+        ),
+    ] {
+        ext.ctx()
+            .vm()
+            .register_native(NativeEntry {
+                class: "Lkotlinx/serialization/json/internal/StreamingJsonDecoder;",
+                name,
+                sig,
+                instance: true,
+                f,
+            })
+            .map_err(|e| e.to_string())?;
+    }
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     okio_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    browser_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::seed(
         &mut ext,
         command.settings_source_id.as_deref(),

@@ -2,6 +2,93 @@
 use super::*;
 
 #[test]
+fn browser_sources_use_real_callbacks_to_decode_owned_catalogs() {
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::rc::Rc;
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    for name in [
+        "tachiyomi-all.cubari-v1.6.0.apk",
+        "tachiyomi-en.comix-v1.6.54.apk",
+        "tachiyomi-all.mangaup-v1.6.3.apk",
+    ] {
+        let apk = std::fs::read(format!("{dir}/{name}")).unwrap();
+        let command = serde_json::from_value(json!({"op":"popular","modern":true})).unwrap();
+        let events = Rc::new(RefCell::new(VecDeque::<Value>::new()));
+        let bridges = Rc::new(RefCell::new(Vec::<String>::new()));
+        let loaded = Rc::new(std::cell::Cell::new(false));
+        let count = loaded.clone();
+        let delivered = Rc::new(std::cell::Cell::new(false));
+        let result = execute(&apk, command, move |request| {
+            if request.method != "AC_BROWSER" {
+                assert!(name.contains("mangaup"));
+                assert!(request.url.contains("/api/search"));
+                let title = [
+                    proto_int(1, 1),
+                    proto(2, b"Owned story"),
+                    proto(3, b"/owned-cover.jpg"),
+                    proto_int(7, 1),
+                    proto(9, b"Oct 19, 2026"),
+                ]
+                .concat();
+                return HttpResp::ok_bytes(proto(2, &title));
+            }
+            let value: Value = serde_json::from_str(request.body.as_deref().unwrap()).unwrap();
+            let response = match value["op"].as_str().unwrap() {
+                "load" => {
+                    count.set(true);
+                    *bridges.borrow_mut() = value["bridges"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap().to_owned())
+                        .collect();
+                    events.borrow_mut().extend([json!({"type":"request","requestID":1,"url":value["url"],"method":"GET","headers":[["Accept","text/html"]],"mainFrame":true}),json!({"type":"started","url":value["url"]}),json!({"type":"finished","url":value["url"]})]);
+                    if name.contains("comix") {
+                        events.borrow_mut().push_front(json!({"type":"request","requestID":2,"url":"https://blocked.example/ad.js","method":"GET","headers":[],"mainFrame":false}));
+                    }
+                    json!({})
+                }
+                "close" | "stop" => json!({}),
+                "decision" => {
+                    assert_eq!(value["allow"], value["requestID"] != 2, "{name}: {value}");
+                    if value["requestID"] == 2 {
+                        assert_eq!(value["response"]["bodyBase64"], "");
+                    }
+                    json!({})
+                }
+                "next" => events
+                    .borrow_mut()
+                    .pop_front()
+                    .expect("Browser must resolve from owned data"),
+                "evaluate" => {
+                    let script = value["script"].as_str().unwrap();
+                    if script.contains("__comixBrowsePayload") && !delivered.replace(true) {
+                        events.borrow_mut().push_back(json!({"type":"message","name":bridges.borrow()[0],"method":"post","message":include_str!("../../../Tests/MangaRuntimeTests/OwnedFixtures/comix-catalog.json")}));
+                    } else if script.contains("globalHistoryHandler") && !delivered.replace(true) {
+                        events.borrow_mut().push_back(json!({"type":"message","name":"android","method":"post","message":include_str!("../../../Tests/MangaRuntimeTests/OwnedFixtures/cubari-history.json")}));
+                    }
+                    json!({"value":"null"})
+                }
+                _ => panic!("Unknown browser command for {name}: {value}"),
+            };
+            HttpResp::ok(response.to_string())
+        });
+        let page = result.unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(loaded.get(), "{name}");
+        assert_eq!(page["mangas"].as_array().unwrap().len(), 1, "{name}");
+        assert_eq!(page["mangas"][0]["title"], "Owned story", "{name}");
+        assert!(
+            !page["mangas"][0]["thumbnailURL"]
+                .as_str()
+                .unwrap()
+                .is_empty(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn shared_runtime_loads_owned_catalog_entries_from_independent_current_families() {
     let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
     let fixtures = [
