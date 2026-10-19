@@ -1,0 +1,28 @@
+diff --git a/src/vm/interpret.rs b/src/vm/interpret.rs
+--- a/src/vm/interpret.rs
++++ b/src/vm/interpret.rs
+@@ -879,7 +879,5 @@
+             Insn::NewInstance(d, type_idx) => {
+                 let class_id = self.ensure_class_by_type(f.dex, *type_idx)?;
+-                let fields = self.classes[class_id as usize].field_offsets.len();
+-                f.regs[*d as usize] =
+-                    JValue::Obj(self.arena.alloc(class_id, vec![JValue::Null; fields], None));
++                f.regs[*d as usize] = JValue::Obj(self.alloc_instance(class_id)?);
+                 Flow::Next(0)
+             }
+@@ -1544,12 +1544,12 @@
+         (Binop::And, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x & y)),
+         (Binop::Or, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x | y)),
+         (Binop::Xor, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x ^ y)),
+-        (Binop::Shl, JValue::Long(x), JValue::Long(y)) => {
++        (Binop::Shl, JValue::Long(x), JValue::Int(y)) => {
+             Ok(JValue::Long(x.wrapping_shl(y as u32 & 63)))
+         }
+-        (Binop::Shr, JValue::Long(x), JValue::Long(y)) => {
++        (Binop::Shr, JValue::Long(x), JValue::Int(y)) => {
+             Ok(JValue::Long(x.wrapping_shr(y as u32 & 63)))
+         }
+-        (Binop::Ushr, JValue::Long(x), JValue::Long(y)) => {
++        (Binop::Ushr, JValue::Long(x), JValue::Int(y)) => {
+             Ok(JValue::Long((x as u64).wrapping_shr(y as u32 & 63) as i64))
+         }

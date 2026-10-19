@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+python3 scripts/prepare-manga-interpreter.py
 fixture_dir="$PWD/Tools/MangaRuntime/target/fixtures"
 mkdir -p "$fixture_dir"
 revision=38d3438d7e36b5c2c17414029fd36b2d717eefcb
@@ -20,6 +21,11 @@ if [[ ! -f "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk" ]]; then
     https://github.com/keiyoushi/extensions/releases/download/8ef06cd-1/tachiyomi-en.weebcentral-v1.6.25.apk \
     -o "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk"
 fi
+if [[ ! -f "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk" ]]; then
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
+    https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk \
+    -o "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk"
+fi
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])
@@ -29,6 +35,7 @@ expected = {
     'tachiyomi-all.akuma-v1.4.10.apk': '9f5e744ee3066ccf0c785dc8f427af8b7854933997eee1fe349fea388d4ba39a',
     'tachiyomi-all.commitstrip-v1.6.0.apk': 'f843f2c7ded62a2da5762e6c68547c89c8e200ab26c4f3805b24b9223d046fb9',
     'tachiyomi-en.weebcentral-v1.6.25.apk': '04331a9b4bb878325dfca1079757c9152cdf66916f7859d0dddf41cf26553d30',
+    'tachiyomi-all.mangaplus-v1.6.67.apk': '1be92d6255eae1954c4deb525c96cd4933b37be85a927b1d5a3793b818ab8f98',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

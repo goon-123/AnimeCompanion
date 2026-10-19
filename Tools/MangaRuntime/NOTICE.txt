@@ -4,6 +4,9 @@ DEX interpreter: dexvm 0.2.1 by tachibana-shin and contributors
 https://github.com/tachibana-shin/dexvm
 Revision: 38d3438d7e36b5c2c17414029fd36b2d717eefcb
 Licensed under the Apache License, Version 2.0.
+AnimeCompanion applies support/dexvm-core.patch to this pinned revision to
+correct Java primitive defaults and Dalvik long-shift operand types.
+Reproduction: python3 scripts/prepare-manga-interpreter.py
 
 Bundled AbstractDecoder bytecode: kotlinx.serialization 1.9.0
 Copyright 2017-2025 JetBrains s.r.o. and Kotlin Programming Language contributors.

@@ -14,6 +14,11 @@ const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
 mod jsoup_compat;
+mod serialization_compat;
+use serialization_compat::*;
+
+#[cfg(test)]
+mod compatibility_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -342,6 +347,80 @@ fn image_url_request(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     .map_err(NatErr::Fatal)
 }
 static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry { class: "Lokio/BufferedSource;", name: "readUtf8", sig: "(J)Ljava/lang/String;", instance: true, f: buffered_read_utf8 },
+    NativeEntry { class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;", name: "isInline", sig: "()Z", instance: true, f: descriptor_not_nullable },
+    NativeEntry { class: "Lkotlinx/serialization/internal/ArrayListSerializer;", name: "getDescriptor", sig: "()Lkotlinx/serialization/descriptors/SerialDescriptor;", instance: true, f: list_descriptor },
+    NativeEntry { class: "Lkotlinx/serialization/internal/ArrayListSerializer;", name: "deserialize", sig: "(Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;", instance: true, f: list_deserialize },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/AbstractCollectionSerializer;",
+        name: "merge",
+        sig: "(Lkotlinx/serialization/encoding/Decoder;Ljava/lang/Object;)Ljava/lang/Object;",
+        instance: true,
+        f: unsupported_serialization,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/builtins/BuiltinSerializersKt;",
+        name: "ByteArraySerializer",
+        sig: "()Lkotlinx/serialization/KSerializer;",
+        instance: false,
+        f: byte_array_serializer,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/ByteArraySerializer;",
+        name: "deserialize",
+        sig: "(Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;",
+        instance: true,
+        f: unsupported_serialization,
+    },
+    NativeEntry {
+        class: "Lokio/BufferedSource;",
+        name: "readByte",
+        sig: "()B",
+        instance: true,
+        f: buffered_read_byte,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/encoding/AbstractDecoder;",
+        name: "decodeSequentially",
+        sig: "()Z",
+        instance: true,
+        f: descriptor_not_nullable,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/encoding/AbstractDecoder;",
+        name: "decodeSerializableValue",
+        sig: "(Lkotlinx/serialization/DeserializationStrategy;)Ljava/lang/Object;",
+        instance: true,
+        f: decode_serializable_value,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/modules/SerializersModuleBuildersKt;",
+        name: "EmptySerializersModule",
+        sig: "()Lkotlinx/serialization/modules/SerializersModule;",
+        instance: false,
+        f: empty_serializers_module,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        name: "isNullable",
+        sig: "()Z",
+        instance: true,
+        f: descriptor_not_nullable,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        name: "<init>",
+        sig: "(Ljava/lang/String;Lkotlinx/serialization/internal/GeneratedSerializer;I)V",
+        instance: true,
+        f: descriptor_init,
+    },
+    NativeEntry {
+        class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        name: "getElementDescriptor",
+        sig: "(I)Lkotlinx/serialization/descriptors/SerialDescriptor;",
+        instance: true,
+        f: element_descriptor,
+    },
     NativeEntry {
         class: "Lkotlinx/coroutines/BuildersKt;",
         name: "async$default",
@@ -858,9 +937,54 @@ where
     ext.ctx().grant(Permission::Network(NetworkPermission::Any));
     ext.ctx().vm().budget = 30_000_000;
     ext.ctx().vm().depth_limit = 256;
+    // Load the bundled boot class first so registration replaces its default
+    // method. The pinned VM cannot resolve its interface invoke-super path.
+    ext.ctx()
+        .vm()
+        .ensure_class_by_desc("Lkotlinx/serialization/encoding/AbstractDecoder;")
+        .map_err(|e| e.to_string())?;
+    let vm = ext.ctx().vm();
+    let list_key = (
+        vm.intern("Lkotlinx/serialization/internal/ArrayListSerializer;"),
+        vm.intern("deserialize"),
+        vm.intern("(Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;"),
+    );
+    let original = *vm
+        .natives
+        .get(&list_key)
+        .ok_or("Missing built-in list decoder")?;
+    let _ = ORIGINAL_LIST_DECODER.set(original);
     ext.ctx()
         .register_natives(&[FUNCTION_INTERFACES])
         .map_err(|e| e.to_string())?;
+    for class in [
+        "Lkotlinx/serialization/internal/StringSerializer;",
+        "Lkotlinx/serialization/internal/IntSerializer;",
+        "Lkotlinx/serialization/internal/LongSerializer;",
+        "Lkotlinx/serialization/internal/FloatSerializer;",
+        "Lkotlinx/serialization/internal/DoubleSerializer;",
+    ] {
+        ext.ctx()
+            .vm()
+            .register_native(NativeEntry {
+                class,
+                name: "getDescriptor",
+                sig: "()Lkotlinx/serialization/descriptors/SerialDescriptor;",
+                instance: true,
+                f: primitive_descriptor,
+            })
+            .map_err(|e| e.to_string())?;
+        ext.ctx()
+            .vm()
+            .register_native(NativeEntry {
+                class,
+                name: "deserialize",
+                sig: "(Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;",
+                instance: true,
+                f: primitive_deserialize,
+            })
+            .map_err(|e| e.to_string())?;
+    }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     ext.set_http(http);
