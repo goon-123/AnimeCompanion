@@ -2,6 +2,34 @@ import XCTest
 import AnimeCore
 
 final class ExtensionCompatibilityRuntimeTests: XCTestCase {
+    func testAPKSettingsDriveRequestsAndDoNotLeakIntoAFreshOperation() throws {
+        let response = proto(1, proto(10, proto(1, proto(1, proto(1, Data("https://images.example/owned.webp".utf8))))))
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-all.mangaplus-v1.6.67.apk", responses: [
+            "https://jumpg-webapi.tokyo-cdn.com/api/manga_viewer_v3": response
+        ])
+        let schema: MangaSourceSettingsSchema = try host.execute(["op": "settings"])
+        XCTAssertTrue(host.urls.isEmpty)
+        let quality = try XCTUnwrap(schema.settings.first { $0.control == .choice })
+        let choice = try XCTUnwrap(quality.choices.first { $0.value != quality.defaultValue?.text })
+        let split = try XCTUnwrap(schema.settings.first { $0.control == .toggle && $0.key.contains("split") })
+        let splitValue = !(split.defaultValue?.boolean ?? false)
+        let settings = MangaSourceSettings(values: [quality.key: .string(choice.value), split.key: .boolean(splitValue)])
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: settings.encoded()) as? [String: Any])
+        let pages: [SourceMangaImage] = try host.execute([
+            "op": "pages", "settingsSourceID": schema.sourceID, "settings": try XCTUnwrap(payload["values"]),
+            "chapter": ["url": "#/viewer/12345", "name": "Chapter 1"]
+        ])
+        XCTAssertEqual(pages.first?.imageURL, "https://images.example/owned.webp")
+        let request = try XCTUnwrap(host.urls.last.flatMap { URLComponents(string: $0) })
+        XCTAssertEqual(request.queryItems?.first { $0.name == "img_quality" }?.value, choice.value)
+        XCTAssertEqual(request.queryItems?.first { $0.name == "split" }?.value, splitValue ? "yes" : "no")
+        let fresh: MangaSourceSettingsSchema = try host.execute(["op": "settings"])
+        XCTAssertEqual(fresh, schema)
+        let requestCount = host.urls.count
+        XCTAssertThrowsError(try host.execute(["op": "pages", "settingsSourceID": "1"]) as [SourceMangaImage])
+        XCTAssertEqual(host.urls.count, requestCount)
+    }
+
     func testMangaPlusProtobufPagesAndSourceImageHeaders() throws {
         let firstImage = proto(1, Data("https://images.example/owned-2.webp".utf8)) + proto(5, Data("0f10aa".utf8))
         var viewer = proto(1, proto(1, firstImage))

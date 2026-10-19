@@ -1,3 +1,9 @@
+## Native source settings — build 42
+
+Version 0.20.0. Add extension-declared switches, single/multiple choices and text fields from each source catalog's gear. Save typed per-source settings in a separate device-only Keychain item and seed them before source construction in every on-device command. Include passwords, Cancel, restoring defaults, package-change checks and settings-aware image cache identities. Custom Android controls, preference change listeners, persistent source-written state and browser challenge/login handling remain unfinished.
+
+All 34 Rust regressions pass locally, including a real MANGA Plus APK whose quality/split requests change with selected settings, fresh-VM defaults, string-set fidelity and source namespace separation. Core verification covers typed encoding, malformed/future state, precision and bounds. Native coverage includes Keychain persistence/isolation, real-APK settings requests and iPhone/iPad save/cancel/reset/relaunch behavior, including retaining unsaved choices after returning from a choice screen. Current CI results and the unsigned IPA are recorded in [PR #22](https://github.com/goon-123/AnimeCompanion/pull/22). Build 41's older iPad anime-search keyboard-focus failure remains visible and unrelated. This does not establish compatibility with all live sources.
+
 ## Weeb Central page selection — build 40
 
 Version 0.19.2. The device report confirms build 39 loads chapters but the reader receives no pages. Reproduce that separate issue by replacing the overly simple `x-data="scroll"` fixture with an Alpine-style `x-data="{ scroll: true, currentPage: 1 }"` reader section and an unrelated image section. The real Weeb Central 1.6.25 APK then returns zero pages before this correction. Its `section[x-data~=scroll] > img` selector uses Jsoup's regex-attribute operator; the pinned host interpreted it as CSS whitespace-word matching.

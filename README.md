@@ -1,5 +1,9 @@
 # Anime Companion
 
+### Source settings (0.20.0 / build 42)
+
+Open a manga source and tap the gear to configure the options declared by its extension. Switches, single/multiple choices and text fields are supported, including source addresses and passwords. Save applies them to browsing, chapters, pages and images; Cancel leaves saved values intact. Restore defaults clears overrides when saved. Values are stored separately for each source in this device's Keychain. Browser login/challenge handling and custom Android preference controls still need further compatibility work.
+
 ### Webtoon reader and manga library (0.19.0 / build 38)
 
 Open **Manga** for a cover-based library, installed sources and reading history. Browse a source's popular/latest/search catalog, open a title for its description and chapters, and save it to your library. Extension setup is available from Manga → Extensions as well as Settings.

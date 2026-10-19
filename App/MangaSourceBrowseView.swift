@@ -41,6 +41,7 @@ struct MangaSourceBrowseView: View {
     @State private var mode = "popular"
     @State private var query = ""
     @State private var submitted = ""
+    @State private var showSettings = false
     private var key: String { mode + "\u{1f}" + submitted }
     private var latest: Bool { extensions.installed(source.extensionID)?.sources.first { $0.id == source.sourceID }?.supportsLatest == true }
     var body: some View {
@@ -56,6 +57,17 @@ struct MangaSourceBrowseView: View {
                 mode = submitted.isEmpty ? "popular" : "search"
             }
             .onChange(of: query) { _, value in if value.isEmpty && mode == "search" { submitted = ""; mode = "popular" } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                        .accessibilityLabel("Source settings").accessibilityIdentifier("manga-source-settings")
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                MangaSourceSettingsView(source: source) {
+                    Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: true) }
+                }
+            }
             .task(id: key) {
                 guard showMature || !source.adult else { return }
                 await reading.load()
