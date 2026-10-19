@@ -6,6 +6,26 @@ import AnimeMangaRuntime
 
 final class BrowserExtensionRuntimeTests: XCTestCase {
     @MainActor
+    func testBrowserCompletionImportsItsCookiesWithoutDroppingNewerNativeHTTPCookies() async throws {
+        let key = "owned-cookie-handoff-" + UUID().uuidString
+        let url = try XCTUnwrap(URL(string: "https://owned.example/"))
+        let jar = MangaSourceCookieJar.shared
+        jar.receive(source: key, url: url, headers: ["Set-Cookie": "session=old; Path=/; Secure"])
+        let command = MangaBrowserCommand(op: "load", id: 1, url: url.absoluteString, html: "<html></html>")
+        let session = try MangaBrowserSession(sourceKey: key, command: command, url: url)
+        _ = await session.next(); try await waitForFinish(session)
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [.name: "browser", .value: "added", .domain: "owned.example", .path: "/", .secure: "TRUE"]))
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            session.web.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { continuation.resume() }
+        }
+        jar.receive(source: key, url: url, headers: ["Set-Cookie": "session=new; Path=/; Secure"])
+        jar.receive(source: key, url: url, headers: ["Set-Cookie": "native=added; Path=/; Secure"])
+        await session.close()
+        XCTAssertEqual(Dictionary(jar.cookies(source: key).map { ($0.name, $0.value) }, uniquingKeysWith: { _, value in value }),
+            ["session": "new", "native": "added", "browser": "added"])
+        jar.clear(source: key); MangaWebsiteProfiles.stores[key] = nil
+    }
+    @MainActor
     func testResourceFiltersCompileWithWebKitWithoutAllowingPrivateURLs() async throws {
         for blockImages in [false, true] {
             let encoded = try MangaBrowserPolicy.contentRules(blockImages: blockImages)

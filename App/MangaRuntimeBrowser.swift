@@ -133,6 +133,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
     private var closed = false
     private var overflow = false
     private var eventBytes = 0
+    private var initialCookies: [HTTPCookie]?
     // Native tests may load an owned document while retaining the real source origin.
     var documentLoader: (@MainActor (WKWebView, URL) -> Void)?
     private var currentProfile: Bool { MangaWebsiteProfiles.stores[sourceKey] === web.configuration.websiteDataStore }
@@ -229,12 +230,14 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
                 }
                 web.configuration.userContentController.add(list)
             } catch { return ["type": "error"] }
-            for cookie in MangaSourceCookieJar.shared.cookies(source: sourceKey) {
+            let cookies = MangaSourceCookieJar.shared.cookies(source: sourceKey)
+            for cookie in cookies {
                 await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                     web.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { continuation.resume() }
                 }
             }
             guard !closed, currentProfile else { return ["type": "error"] }
+            initialCookies = cookies
             if let response = navigationResponse, let data = Data(base64Encoded: response.bodyBase64) {
                 var headers = Dictionary(response.headers.filter { $0.count == 2 }.map { ($0[0], $0[1]) }, uniquingKeysWith: { _, value in value })
                 headers["Content-Type"] = response.mimeType + "; charset=" + response.encoding
@@ -296,10 +299,11 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         web.configuration.userContentController.removeAllUserScripts()
         web.configuration.userContentController.removeAllContentRuleLists()
         events.removeAll(); eventBytes = 0
+        guard let initialCookies, currentProfile else { return }
         let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
             web.configuration.websiteDataStore.httpCookieStore.getAllCookies { continuation.resume(returning: $0) }
         }
-        if currentProfile { MangaSourceCookieJar.shared.replace(source: sourceKey, cookies: cookies) }
+        if currentProfile { MangaSourceCookieJar.shared.reconcileBrowser(source: sourceKey, initial: initialCookies, cookies: cookies) }
     }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == handlerName, let payload = message.body as? [String: Any],
