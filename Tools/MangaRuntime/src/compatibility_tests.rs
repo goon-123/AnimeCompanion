@@ -1,6 +1,66 @@
 //! Owned responses exercise installed extension bytecode, never host scrapers.
 use super::*;
 
+#[test]
+fn shared_runtime_loads_owned_catalog_entries_from_independent_current_families() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let fixtures = [
+        (
+            "tachiyomi-en.manhuaus-v1.6.60.apk",
+            0,
+            "/wp-admin/admin-ajax.php",
+            "POST",
+            include_bytes!("../../../Tests/MangaRuntimeTests/OwnedFixtures/madara-catalog.html")
+                .as_slice(),
+        ),
+        (
+            "tachiyomi-all.mangafire-v1.6.34.apk",
+            0,
+            "/api/titles?",
+            "GET",
+            include_bytes!("../../../Tests/MangaRuntimeTests/OwnedFixtures/mangafire-catalog.json")
+                .as_slice(),
+        ),
+        (
+            "tachiyomi-all.mangadex-v1.6.0.apk",
+            17,
+            "/manga?",
+            "GET",
+            include_bytes!("../../../Tests/MangaRuntimeTests/OwnedFixtures/mangadex-catalog.json")
+                .as_slice(),
+        ),
+    ];
+    for (file, source, path, method, body) in fixtures {
+        let apk = std::fs::read(format!("{dir}/{file}")).unwrap();
+        let command =
+            serde_json::from_value(json!({"op":"popular","source":source,"modern":true})).unwrap();
+        let requests = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counter = requests.clone();
+        let result = execute(&apk, command, move |request| {
+            counter.set(counter.get() + 1);
+            assert!(request.url.contains(path), "{file}: {}", request.url);
+            assert_eq!(request.method, method);
+            HttpResp {
+                code: 200,
+                message: "OK".into(),
+                headers: vec![],
+                body: Some(body.to_vec()),
+            }
+        })
+        .unwrap_or_else(|error| panic!("{file}: {error}"));
+        assert_eq!(requests.get(), 1, "{file}");
+        assert_eq!(result["mangas"].as_array().unwrap().len(), 1, "{file}");
+        assert_eq!(result["mangas"][0]["title"], "Owned story", "{file}");
+        assert!(
+            !result["mangas"][0]["thumbnailURL"]
+                .as_str()
+                .unwrap()
+                .is_empty(),
+            "{file}"
+        );
+    }
+}
+
 // Encode only owned protobuf strings/messages, including multi-byte field keys.
 fn proto(field: u32, body: &[u8]) -> Vec<u8> {
     fn varint(mut n: u32, out: &mut Vec<u8>) {
