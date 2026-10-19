@@ -9,6 +9,16 @@ enum MangaBrowserPolicy {
               parts.port == nil || parts.port == 443, let host = parts.host else { return false }
         return SeanimeNetworkPolicy.publicHost(host) != nil
     }
+    static func contentRules(blockImages: Bool) throws -> String {
+        // WebKit's URL-filter grammar does not support regex alternation.
+        // Keep each prohibited suffix in its own rule, rather than disabling
+        // filtering when compilation fails.
+        let filters = ["^http:", "^https://[0-9.]+(:[0-9]+)?/", "^https://\\[", "^https://[a-zA-Z0-9-]+(:[0-9]+)?/", "^https://[^/]*@", "^https://[^/]*:[0-9]+/"]
+            + ["local", "localhost", "internal", "test", "invalid"].map { "^https://[^/]*\\." + $0 + "(:[0-9]+)?/" }
+        var rules: [[String: Any]] = filters.map { ["trigger": ["url-filter": $0], "action": ["type": "block"]] }
+        if blockImages { rules.append(["trigger": ["url-filter": ".*", "resource-type": ["image"]], "action": ["type": "block"]]) }
+        return String(decoding: try JSONSerialization.data(withJSONObject: rules), as: UTF8.self)
+    }
 }
 
 /// Synchronous worker-side transport. WebKit and its delegates stay on MainActor;
@@ -209,13 +219,10 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         if prepared && navigationReady {
             prepared = false
             do {
-                let filters = ["^http:", "^https://[0-9.]+(:[0-9]+)?/", "^https://\\[", "^https://[a-zA-Z0-9-]+(:[0-9]+)?/", "^https://[^/]*\\.(local|localhost|internal|test|invalid)(:[0-9]+)?/", "^https://[^/]*@", "^https://[^/]*:[0-9]+/"]
-                var rules: [[String: Any]] = filters.map { ["trigger": ["url-filter": $0], "action": ["type": "block"]] }
-                if command.blockImages == true { rules.append(["trigger": ["url-filter": ".*", "resource-type": ["image"]], "action": ["type": "block"]]) }
-                let encoded = try JSONSerialization.data(withJSONObject: rules)
-                let ruleID = command.blockImages == true ? "ac-manga-public-no-images-v1" : "ac-manga-public-v1"
+                let encoded = try MangaBrowserPolicy.contentRules(blockImages: command.blockImages == true)
+                let ruleID = command.blockImages == true ? "ac-manga-public-no-images-v2" : "ac-manga-public-v2"
                 let list: WKContentRuleList = try await withCheckedThrowingContinuation { continuation in
-                    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: ruleID, encodedContentRuleList: String(decoding: encoded, as: UTF8.self)) { list, error in
+                    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: ruleID, encodedContentRuleList: encoded) { list, error in
                         if let list { continuation.resume(returning: list) }
                         else { continuation.resume(throwing: error ?? MangaExtensionError.sourceUnavailable) }
                     }

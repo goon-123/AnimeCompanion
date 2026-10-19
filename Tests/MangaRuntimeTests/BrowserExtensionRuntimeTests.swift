@@ -6,6 +6,40 @@ import AnimeMangaRuntime
 
 final class BrowserExtensionRuntimeTests: XCTestCase {
     @MainActor
+    func testResourceFiltersCompileWithWebKitWithoutAllowingPrivateURLs() async throws {
+        for blockImages in [false, true] {
+            let encoded = try MangaBrowserPolicy.contentRules(blockImages: blockImages)
+            let identifier = "owned-browser-policy-" + UUID().uuidString
+            let _: WKContentRuleList = try await withCheckedThrowingContinuation { continuation in
+                WKContentRuleListStore.default().compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: encoded) { list, error in
+                    if let list { continuation.resume(returning: list) }
+                    else { continuation.resume(throwing: error ?? URLError(.unknown)) }
+                }
+            }
+            let rules = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(encoded.utf8)) as? [[String: Any]])
+            let filters = try rules.compactMap { rule -> NSRegularExpression? in
+                let trigger = try XCTUnwrap(rule["trigger"] as? [String: Any])
+                if trigger["resource-type"] != nil { return nil }
+                return try NSRegularExpression(pattern: XCTUnwrap(trigger["url-filter"] as? String), options: [.caseInsensitive])
+            }
+            for (text, blocked) in [
+                ("http://owned.example/", true), ("https://127.0.0.1/", true),
+                ("https://[::1]/", true), ("https://localhost/", true),
+                ("https://printer.local/", true), ("https://a.localhost/", true),
+                ("https://a.internal/", true), ("https://a.test/", true),
+                ("https://a.invalid/", true), ("https://user@owned.example/", true),
+                ("https://owned.example:8443/", true), ("https://owned.example/", false),
+                ("https://cdn.owned.example/a.local/image.jpg", false)
+            ] {
+                let matches = filters.contains { $0.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil }
+                XCTAssertEqual(matches, blocked, text)
+            }
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                WKContentRuleListStore.default().removeContentRuleList(forIdentifier: identifier) { _ in continuation.resume() }
+            }
+        }
+    }
+    @MainActor
     func testClearingTheProfileStopsItsBrowserAndDoesNotRestoreOldCookies() async throws {
         let key = "owned-cleared-" + UUID().uuidString
         let url = try XCTUnwrap(URL(string: "https://owned.example"))
