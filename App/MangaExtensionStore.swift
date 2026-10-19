@@ -11,9 +11,13 @@ final class MangaExtensionStore: ObservableObject {
     @Published private(set) var installing: String?
     @Published private(set) var loading = true
     @Published private(set) var unreadableState = false
+    @Published private var settingsVersions: [String: String] = [:]
     @Published var error: String?
     private let client = MangaRepositoryClient()
     private let storage: MangaExtensionStorage
+    private let settingsVault = MangaSourceSettingsVault()
+    private var settingsCache: [String: MangaSourceSettings] = [:]
+    private var writingSettings = false
     private var loaded = false
     init() {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -25,7 +29,7 @@ final class MangaExtensionStore: ObservableObject {
         #endif
         storage = MangaExtensionStorage(directory: directory)
     }
-    var busy: Bool { loading || refreshing || installing != nil || unreadableState }
+    var busy: Bool { loading || refreshing || installing != nil || unreadableState || writingSettings }
     func installed(_ id: String) -> InstalledMangaExtension? { state.installations.first { $0.id == id } }
     func update(for entry: InstalledMangaExtension) -> MangaExtensionDescriptor? {
         catalog?.extensions.first { $0.id == entry.id && $0.versionCode > entry.descriptor.versionCode }
@@ -92,30 +96,85 @@ final class MangaExtensionStore: ObservableObject {
         let (entry, apk) = try await storage.package(extensionID)
         guard let source = entry.sources.first(where: { $0.id == sourceID }) else { throw MangaExtensionError.sourceUnavailable }
         try verify(apk, descriptor: entry.descriptor)
-        return try await MangaRuntime.browse(apk, source: source, modern: entry.descriptor.modernAPI, mode: mode, query: query, page: page)
+        let reference = MangaSourceReference(installation: entry, source: source)
+        let settings = try await sourceConfiguration(reference)
+        return try await MangaRuntime.browse(apk, source: source, modern: entry.descriptor.modernAPI, mode: mode, query: query, page: page, settings: settings)
     }
     func book(_ title: MangaTitleReference) async throws -> MangaBook {
         #if DEBUG
         if MangaReaderPreview.owns(title.source.extensionID) { return MangaReaderPreview.book(title.manga) }
         #endif
         let (entry, source, apk) = try await context(title.source)
-        return try await MangaRuntime.book(apk, source: source, modern: entry.descriptor.modernAPI, manga: title.manga)
+        let settings = try await sourceConfiguration(title.source)
+        return try await MangaRuntime.book(apk, source: source, modern: entry.descriptor.modernAPI, manga: title.manga, settings: settings)
     }
     func pages(_ source: MangaSourceReference, chapter: SourceMangaChapter) async throws -> [SourceMangaImage] {
         #if DEBUG
         if MangaReaderPreview.owns(source.extensionID) { return MangaReaderPreview.pages(chapter) }
         #endif
         let (entry, runtimeSource, apk) = try await context(source)
-        return try await MangaRuntime.pages(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, chapter: chapter)
+        let settings = try await sourceConfiguration(source)
+        return try await MangaRuntime.pages(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, chapter: chapter, settings: settings)
     }
     func imageData(_ source: MangaSourceReference, image: SourceMangaImage) async throws -> Data {
         #if DEBUG
         if MangaReaderPreview.owns(source.extensionID) { return try MangaReaderPreview.image(image) }
         #endif
         let (entry, runtimeSource, apk) = try await context(source)
-        return try await MangaRuntime.image(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, image: image)
+        let settings = try await sourceConfiguration(source)
+        return try await MangaRuntime.image(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, image: image, settings: settings)
     }
-    func imageVersion(_ source: MangaSourceReference) -> String { installed(source.extensionID)?.descriptor.sha256 ?? "unavailable" }
+    func imageVersion(_ source: MangaSourceReference) -> String {
+        (installed(source.extensionID)?.descriptor.sha256 ?? "unavailable") + ":" + (settingsVersions[source.id] ?? "unloaded")
+    }
+    func sourceConfiguration(_ source: MangaSourceReference) async throws -> MangaSourceSettings {
+        if let value = settingsCache[source.id] { return value }
+        #if DEBUG
+        if MangaReaderPreview.owns(source.extensionID) {
+            let value = try MangaReaderPreview.loadSourceSettings()
+            try cacheSettings(value, source: source)
+            return value
+        }
+        #endif
+        let value = try await settingsVault.load(source.id)
+        if let cached = settingsCache[source.id] { return cached }
+        try cacheSettings(value, source: source)
+        return value
+    }
+    func sourceSettings(_ source: MangaSourceReference) async throws -> MangaSourceSettingsSchema {
+        #if DEBUG
+        if MangaReaderPreview.owns(source.extensionID) { return MangaReaderPreview.sourceSettings }
+        #endif
+        let (entry, runtimeSource, apk) = try await context(source)
+        let settings = try await sourceConfiguration(source)
+        let schema = try await MangaRuntime.sourceSettings(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, settings: settings)
+        guard schema.sourceID == source.sourceID else { throw MangaExtensionError.invalidSourceSettings }
+        return schema
+    }
+    func saveSourceSettings(_ settings: MangaSourceSettings, source: MangaSourceReference, expectedVersion: String) async throws {
+        guard !busy else { throw ServiceError.message("This extension is busy. Try saving source settings again in a moment.") }
+        writingSettings = true
+        defer { writingSettings = false }
+        guard installed(source.extensionID)?.descriptor.sha256 == expectedVersion else {
+            throw ServiceError.message("This extension changed while settings were open. Reopen source settings and try again.")
+        }
+        _ = try await sourceConfiguration(source)
+        _ = try settings.encoded()
+        #if DEBUG
+        if MangaReaderPreview.owns(source.extensionID) {
+            try MangaReaderPreview.saveSourceSettings(settings)
+            try cacheSettings(settings, source: source)
+            return
+        }
+        #endif
+        try await settingsVault.save(settings, sourceID: source.id)
+        try cacheSettings(settings, source: source)
+    }
+    private func cacheSettings(_ settings: MangaSourceSettings, source: MangaSourceReference) throws {
+        let data = try settings.encoded()
+        settingsCache[source.id] = settings
+        settingsVersions[source.id] = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
     private func context(_ source: MangaSourceReference) async throws -> (InstalledMangaExtension, MangaRuntimeSource, Data) {
         let (entry, apk) = try await storage.package(source.extensionID)
         guard let runtimeSource = entry.sources.first(where: { $0.id == source.sourceID }) else { throw MangaExtensionError.sourceUnavailable }

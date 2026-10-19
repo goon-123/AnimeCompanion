@@ -12,29 +12,40 @@ enum MangaRuntime {
     static func inspect(_ apk: Data, modern: Bool) async throws -> MangaExtensionInspection {
         try await run(apk, command: ["op": "inspect", "modern": modern], networking: false)
     }
-    static func browse(_ apk: Data, source: MangaRuntimeSource, modern: Bool, mode: String, query: String, page: Int) async throws -> SourceMangaPage {
-        try await run(apk, command: ["op": mode, "source": source.index, "modern": modern, "query": query, "page": page], networking: true)
+    static func browse(_ apk: Data, source: MangaRuntimeSource, modern: Bool, mode: String, query: String, page: Int, settings: MangaSourceSettings = .init()) async throws -> SourceMangaPage {
+        try await run(apk, command: ["op": mode, "source": source.index, "modern": modern, "query": query, "page": page], networking: true, sourceID: source.id, settings: settings)
     }
-    static func details(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga) async throws -> SourceManga {
-        try await run(apk, command: ["op": "details", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true)
+    static func details(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> SourceManga {
+        try await run(apk, command: ["op": "details", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
     }
-    static func chapters(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga) async throws -> [SourceMangaChapter] {
-        try await run(apk, command: ["op": "chapters", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true)
+    static func chapters(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> [SourceMangaChapter] {
+        try await run(apk, command: ["op": "chapters", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
     }
-    static func pages(_ apk: Data, source: MangaRuntimeSource, modern: Bool, chapter: SourceMangaChapter) async throws -> [SourceMangaImage] {
-        try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": ["url": chapter.url, "name": chapter.name]], networking: true)
+    static func pages(_ apk: Data, source: MangaRuntimeSource, modern: Bool, chapter: SourceMangaChapter, settings: MangaSourceSettings = .init()) async throws -> [SourceMangaImage] {
+        try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": ["url": chapter.url, "name": chapter.name]], networking: true, sourceID: source.id, settings: settings)
     }
-    static func book(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga) async throws -> MangaBook {
+    static func book(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> MangaBook {
         try await run(apk, command: ["op": "book", "source": source.index, "modern": modern,
-                                    "manga": ["url": manga.url, "title": manga.title]], networking: true)
+                                    "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
     }
-    static func image(_ apk: Data, source: MangaRuntimeSource, modern: Bool, image: SourceMangaImage) async throws -> Data {
+    static func image(_ apk: Data, source: MangaRuntimeSource, modern: Bool, image: SourceMangaImage, settings: MangaSourceSettings = .init()) async throws -> Data {
         let response: MangaImageEnvelope = try await run(apk, command: ["op": "image", "source": source.index, "modern": modern,
-            "image": ["index": image.index, "url": image.url, "imageURL": image.imageURL]], networking: true)
+            "image": ["index": image.index, "url": image.url, "imageURL": image.imageURL]], networking: true, sourceID: source.id, settings: settings)
         guard let data = Data(base64Encoded: response.bodyBase64), !data.isEmpty, data.count <= 16_000_000 else { throw ArtworkError.invalidData }
         return data
     }
-    private static func run<T: Decodable>(_ apk: Data, command: [String: Any], networking: Bool) async throws -> T {
+    static func sourceSettings(_ apk: Data, source: MangaRuntimeSource, modern: Bool, settings: MangaSourceSettings) async throws -> MangaSourceSettingsSchema {
+        try await run(apk, command: ["op": "settings", "source": source.index, "modern": modern], networking: false, sourceID: source.id, settings: settings)
+    }
+    private static func run<T: Decodable>(_ apk: Data, command inputCommand: [String: Any], networking: Bool,
+                                         sourceID: String? = nil, settings: MangaSourceSettings = .init()) async throws -> T {
+        var command = inputCommand
+        if let sourceID {
+            let encoded = try settings.encoded()
+            guard let object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { throw MangaExtensionError.invalidSourceSettings }
+            command["settingsSourceID"] = sourceID
+            command["settings"] = object["values"]
+        }
         let input = try JSONSerialization.data(withJSONObject: command)
         guard let json = String(data: input, encoding: .utf8) else { throw MangaExtensionError.runtimeFailure }
         let host = MangaRuntimeHTTP(networking: networking)

@@ -16,6 +16,7 @@ const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 mod jsoup_compat;
 mod okio_compat;
 mod serialization_compat;
+mod source_settings;
 use serialization_compat::*;
 
 #[cfg(test)]
@@ -584,6 +585,10 @@ struct Command {
     chapter: ChapterInput,
     #[serde(default)]
     image: ImageInput,
+    #[serde(default, rename = "settingsSourceID")]
+    settings_source_id: Option<String>,
+    #[serde(default)]
+    settings: std::collections::HashMap<String, source_settings::SettingValue>,
 }
 fn first_page() -> i32 {
     1
@@ -989,6 +994,12 @@ where
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     okio_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    source_settings::seed(
+        &mut ext,
+        command.settings_source_id.as_deref(),
+        &command.settings,
+    )?;
     ext.set_http(move |request| {
         // A source may retain an image-decryption key in the URL fragment.
         // HTTP never transmits fragments; keep it in the VM for interceptors,
@@ -1024,6 +1035,18 @@ where
     let src = sources
         .get(command.source)
         .ok_or("This extension no longer contains the selected source.")?;
+    if let Some(expected) = &command.settings_source_id {
+        let actual = ext
+            .source_id(src)
+            .map_err(|e| ext.describe_error(&e))?
+            .to_string();
+        if &actual != expected {
+            return Err("Source settings identity does not match".into());
+        }
+    }
+    if command.op == "settings" {
+        return source_settings::definitions(&mut ext, src);
+    }
     let manga = Manga {
         url: command.manga.url,
         title: command.manga.title,

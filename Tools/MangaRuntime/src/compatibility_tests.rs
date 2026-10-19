@@ -164,6 +164,87 @@ fn mangaplus_truncated_protobuf_returns_an_error() {
 }
 
 #[test]
+fn source_preferences_are_declared_by_the_apk_and_change_its_requests() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-all.mangaplus-v1.6.67.apk")).unwrap();
+    let command = serde_json::from_value(json!({"op":"settings","modern":true})).unwrap();
+    let schema = execute(&apk, command, |_| {
+        panic!("Source settings must not use HTTP")
+    })
+    .unwrap();
+    let controls = schema["settings"].as_array().unwrap();
+    let quality = controls
+        .iter()
+        .find(|v| v["control"] == "choice")
+        .expect("Real image quality choice");
+    assert_eq!(quality["choices"].as_array().unwrap().len(), 3);
+    let value = quality["choices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["value"] != quality["defaultValue"]["value"])
+        .unwrap()["value"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let split = controls
+        .iter()
+        .find(|v| v["control"] == "toggle" && v["key"].as_str().unwrap().contains("split"))
+        .unwrap();
+    let split_value = !split["defaultValue"]["value"].as_bool().unwrap();
+    let mut settings = serde_json::Map::new();
+    settings.insert(
+        quality["key"].as_str().unwrap().to_owned(),
+        json!({"type":"string","value":value}),
+    );
+    settings.insert(
+        split["key"].as_str().unwrap().to_owned(),
+        json!({"type":"boolean","value":split_value}),
+    );
+    let response = proto(
+        1,
+        &proto(
+            10,
+            &proto(
+                1,
+                &proto(1, &proto(1, b"https://images.example/owned.webp")),
+            ),
+        ),
+    );
+    let command = serde_json::from_value(
+        json!({"op":"pages","modern":true,"settingsSourceID":schema["sourceID"],"settings":settings,
+        "chapter":{"url":"#/viewer/12345","name":"Chapter 1"}}),
+    )
+    .unwrap();
+    let result = execute(&apk, command, move |request| {
+        assert!(
+            request.url.contains(&format!("img_quality={value}")),
+            "Selected quality was ignored"
+        );
+        assert!(
+            request
+                .url
+                .contains(if split_value { "split=yes" } else { "split=no" }),
+            "Selected split setting was ignored"
+        );
+        HttpResp {
+            code: 200,
+            message: "OK".into(),
+            headers: vec![],
+            body: Some(response.clone()),
+        }
+    })
+    .unwrap();
+    assert_eq!(result[0]["imageURL"], "https://images.example/owned.webp");
+    // A fresh, unseeded operation continues to use the extension's defaults.
+    let command = serde_json::from_value(json!({"op":"settings","modern":true})).unwrap();
+    assert_eq!(
+        execute(&apk, command, |_| panic!("No settings network")).unwrap(),
+        schema
+    );
+}
+
+#[test]
 fn mangaplus_source_image_interceptor_decodes_owned_bytes() {
     let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
     let apk = std::fs::read(format!("{dir}/tachiyomi-all.mangaplus-v1.6.67.apk")).unwrap();
