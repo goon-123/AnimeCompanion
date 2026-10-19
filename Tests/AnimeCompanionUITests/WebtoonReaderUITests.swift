@@ -2,6 +2,41 @@ import XCTest
 
 final class WebtoonReaderUITests: XCTestCase {
     @MainActor
+    func testSourceSettingsSaveCancelResetAndRelaunch() {
+        let app = launch()
+        let source = app.buttons["manga-source-preview-en"]
+        XCTAssertTrue(source.waitForExistence(timeout: 15)); source.tap()
+        openSourceSettings(app)
+        app.buttons["source-setting-quality"].tap()
+        let high = app.buttons["source-choice-high"]
+        XCTAssertTrue(high.waitForExistence(timeout: 10)); high.tap()
+        XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("High"))
+        let split = app.switches["source-setting-split"]
+        XCTAssertTrue(split.waitForExistence(timeout: 10))
+        split.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(split.value as? String, "1")
+        capture("Source-Settings", app)
+        app.buttons["source-settings-save"].tap()
+        XCTAssertTrue(app.buttons["manga-title-0"].waitForExistence(timeout: 15))
+        openSourceSettings(app)
+        XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("High"))
+        XCTAssertEqual(app.switches["source-setting-split"].value as? String, "1")
+        resetSourceSettings(app)
+        app.buttons["source-settings-cancel"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
+        app.appTab("Manga").tap()
+        XCTAssertTrue(source.waitForExistence(timeout: 15)); source.tap()
+        openSourceSettings(app)
+        XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("High"))
+        XCTAssertEqual(app.switches["source-setting-split"].value as? String, "1")
+        resetSourceSettings(app)
+        app.buttons["source-settings-save"].tap()
+        openSourceSettings(app)
+        XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("Standard"))
+        XCTAssertEqual(app.switches["source-setting-split"].value as? String, "0")
+    }
+    @MainActor
     func testCoverLibraryAndLongStripPositionSurviveRelaunch() {
         let app = launch()
         openFirstTitle(app)
@@ -89,6 +124,16 @@ final class WebtoonReaderUITests: XCTestCase {
         capture("Cover-Catalog", app); title.tap()
         XCTAssertTrue(app.buttons["manga-read"].waitForExistence(timeout: 15))
         capture("Title-And-Chapters", app)
+    }
+    @MainActor private func openSourceSettings(_ app: XCUIApplication) {
+        let settings = app.buttons["manga-source-settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 15)); settings.tap()
+        XCTAssertTrue(app.buttons["source-setting-quality"].waitForExistence(timeout: 15))
+    }
+    @MainActor private func resetSourceSettings(_ app: XCUIApplication) {
+        let reset = app.buttons["source-settings-reset"]
+        for _ in 0..<3 where !reset.isHittable { app.swipeUp() }
+        XCTAssertTrue(reset.isHittable); reset.tap()
     }
     @MainActor private func showControls(_ app: XCUIApplication) {
         if !app.buttons["webtoon-close"].exists { app.scrollViews["webtoon-canvas"].tap() }

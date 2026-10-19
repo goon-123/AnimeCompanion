@@ -8,6 +8,27 @@ enum MangaReaderPreview {
     static var active: Bool { ProcessInfo.processInfo.arguments.contains("--ui-webtoon-preview") }
     static let package = "eu.kanade.tachiyomi.extension.en.webtoonpreview"
     static func owns(_ id: String) -> Bool { active && id == package }
+    static let sourceSettings = MangaSourceSettingsSchema(sourceID: "preview-en", settings: [
+        .init(id: "0", key: "quality", title: "Image quality", control: .choice,
+              choices: [.init(label: "Standard", value: "standard"), .init(label: "High", value: "high")], defaultValue: .string("standard")),
+        .init(id: "1", key: "split", title: "Split wide images", control: .toggle, defaultValue: .boolean(false)),
+        .init(id: "2", key: "mirror", title: "Source address", control: .text, defaultValue: .string("https://webtoon-preview.invalid")),
+        .init(id: "3", key: "website_password", title: "Website password", control: .text),
+        .init(id: "4", key: "genres", title: "Preferred genres", control: .multiChoice,
+              choices: [.init(label: "Adventure", value: "adventure"), .init(label: "Fantasy", value: "fantasy")], defaultValue: .stringSet([]))
+    ])
+    private static var settingsDefaults: UserDefaults {
+        let args = ProcessInfo.processInfo.arguments
+        let session = args.firstIndex(of: "--ui-webtoon-session").flatMap { args.indices.contains($0+1) ? args[$0+1] : nil } ?? "default"
+        return UserDefaults(suiteName: "com.animecompanion.source-settings-preview.\(session)")!
+    }
+    static func loadSourceSettings() throws -> MangaSourceSettings {
+        guard let data = settingsDefaults.data(forKey: "settings") else { return .init() }
+        return try MangaSourceSettings.decode(data)
+    }
+    static func saveSourceSettings(_ value: MangaSourceSettings) throws {
+        settingsDefaults.set(try value.encoded(), forKey: "settings")
+    }
     static let runtimeSource = MangaRuntimeSource(index: 0, id: "preview-en", name: "Glass House", language: "en",
         homeURL: "https://webtoon-preview.invalid", supportsLatest: true)
     static let descriptor: MangaExtensionDescriptor = {
