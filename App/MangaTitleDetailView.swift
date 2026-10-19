@@ -43,6 +43,7 @@ struct MangaTitleDetailView: View {
     @State private var chapterQuery = ""
     @State private var unreadOnly = false
     @State private var reader: MangaReaderRoute?
+    @State private var showWebsite = false
     init(title: MangaTitleReference) { self.title = title; _model = StateObject(wrappedValue: MangaBookModel(title)) }
     private var current: MangaTitleReference { MangaTitleReference(source: title.source, manga: model.manga) }
     private var record: MangaReadingRecord? { reading.record(title.id) }
@@ -64,6 +65,11 @@ struct MangaTitleDetailView: View {
                 await model.load(title, extensions: extensions, reading: reading)
             }
             .fullScreenCover(item: $reader) { WebtoonReaderView(route: $0) }
+            .sheet(isPresented: $showWebsite) {
+                MangaSourceSessionView(source: title.source) {
+                    Task { await model.load(title, extensions: extensions, reading: reading, force: true) }
+                }
+            }
     }
     private var content: some View {
         ScrollView {
@@ -126,6 +132,7 @@ struct MangaTitleDetailView: View {
             if model.loading { ProgressView("Loading chapters…").font(.subheadline) }
             if let error = model.error {
                 Text(error).font(.subheadline).foregroundStyle(.secondary)
+                Button("Open source website / verify") { showWebsite = true }
                 Button("Try again") { Task { await model.load(title, extensions: extensions, reading: reading, force: true) } }
             }
         }

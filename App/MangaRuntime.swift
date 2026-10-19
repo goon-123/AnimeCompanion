@@ -1,6 +1,7 @@
 import Foundation
 import AnimeCore
 import AnimeMangaRuntime
+import CryptoKit
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -8,6 +9,7 @@ import FoundationNetworking
 /// A fresh, bounded interpreter per call, always off the UI thread. The C
 /// boundary exchanges owned JSON; VM object pointers never escape a call.
 enum MangaRuntime {
+    static func sessionKey(apkSHA256: String, sourceID: String) -> String { apkSHA256 + ":" + sourceID }
     private static let queue = DispatchQueue(label: "com.animecompanion.manga-runtime", qos: .userInitiated)
     static func inspect(_ apk: Data, modern: Bool) async throws -> MangaExtensionInspection {
         try await run(apk, command: ["op": "inspect", "modern": modern], networking: false)
@@ -48,7 +50,8 @@ enum MangaRuntime {
         }
         let input = try JSONSerialization.data(withJSONObject: command)
         guard let json = String(data: input, encoding: .utf8) else { throw MangaExtensionError.runtimeFailure }
-        let host = MangaRuntimeHTTP(networking: networking)
+        let digest = SHA256.hash(data: apk).map { String(format: "%02x", $0) }.joined()
+        let host = MangaRuntimeHTTP(networking: networking, sourceKey: sessionKey(apkSHA256: digest, sourceID: sourceID ?? "inspection"))
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
@@ -90,6 +93,7 @@ private let mangaHTTPRelease: @convention(c) (UnsafeMutablePointer<CChar>?) -> V
 private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private struct Request: Decodable { let url: String; let method: String; let headers: [[String]]; let body: String? }
     private let networking: Bool
+    private let sourceKey: String
     private let deadline = Date().addingTimeInterval(60)
     private let lock = NSLock()
     private var stopped = false
@@ -98,7 +102,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
     private var transferred = 0
     private var ownedSession: URLSession?
     private var requests: [Int: MangaNetworkRequest] = [:]
-    init(networking: Bool) { self.networking = networking; super.init() }
+    init(networking: Bool, sourceKey: String) { self.networking = networking; self.sourceKey = sourceKey; super.init() }
     var failure: Error? { lock.lock(); defer { lock.unlock() }; return storedFailure }
     private var session: URLSession {
         lock.lock(); defer { lock.unlock() }
@@ -130,12 +134,15 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         guard let url = request.url, validURL(url.absoluteString) != nil else { completionHandler(nil); return }
         var redirected = request
+        saveCookies(response)
+        redirected.setValue(nil, forHTTPHeaderField: "Cookie")
         if request.url?.host?.lowercased() != response.url?.host?.lowercased() {
             // Never forward extension credentials across a redirect to another host.
             redirected.allHTTPHeaderFields = redirected.allHTTPHeaderFields?.filter { key, _ in
                 !["authorization", "proxy-authorization", "cookie", "x-api-key"].contains(key.lowercased())
             }
         }
+        applyCookies(to: &redirected)
         completionHandler(redirected)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
@@ -146,6 +153,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
         let oversized = response.expectedContentLength > 16_000_000
         if oversized { request?.error = MangaExtensionError.oversized }
         lock.unlock()
+        if let response = response as? HTTPURLResponse { saveCookies(response) }
         completionHandler(oversized ? .cancel : .allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
@@ -169,18 +177,19 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
             try checkCancellation()
             guard networking else { throw MangaExtensionError.runtimeFailure }
             let request = try JSONDecoder().decode(Request.self, from: Data(bytes: input, count: strlen(input)))
-            guard let url = validURL(request.url), ["GET", "POST"].contains(request.method),
+            guard let url = validURL(request.url), ["GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"].contains(request.method),
                   (request.body?.utf8.count ?? 0) <= 1_000_000 else { throw MangaExtensionError.sourceUnavailable }
             lock.lock(); requestCount += 1; let count = requestCount; lock.unlock()
             guard count <= 24 else { throw MangaExtensionError.oversized }
             var outbound = URLRequest(url: url); outbound.httpMethod = request.method
             outbound.httpBody = request.body.map { Data($0.utf8) }
             outbound.timeoutInterval = max(1, min(20, deadline.timeIntervalSinceNow))
-            outbound.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+            outbound.setValue(MangaSourceCookieJar.browserUserAgent, forHTTPHeaderField: "User-Agent")
             for pair in request.headers where pair.count == 2 {
                 guard !["host", "content-length", "connection", "accept-encoding"].contains(pair[0].lowercased()) else { continue }
                 outbound.setValue(pair[1], forHTTPHeaderField: pair[0])
             }
+            applyCookies(to: &outbound)
             let pending = MangaNetworkRequest()
             let task = session.dataTask(with: outbound)
             lock.lock(); requests[task.taskIdentifier] = pending; lock.unlock()
@@ -200,6 +209,29 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
             record(error)
             return strdup("{\"code\":599,\"headers\":[],\"bodyBase64\":\"\"}")
         }
+    }
+    private func applyCookies(to request: inout URLRequest) {
+        guard let url = request.url,
+              let header = MangaSourceCookieJar.shared.header(source: sourceKey, url: url) else { return }
+        // Explicit source cookies retain precedence. Session cookies otherwise
+        // follow the same domain/path rules on initial requests and redirects.
+        if let explicit = request.value(forHTTPHeaderField: "Cookie"), !explicit.isEmpty {
+            let names = Set(explicit.split(separator: ";").map { $0.split(separator: "=", maxSplits: 1)[0].trimmingCharacters(in: .whitespaces) })
+            let additions = header.split(separator: ";").filter {
+                !names.contains($0.split(separator: "=", maxSplits: 1)[0].trimmingCharacters(in: .whitespaces))
+            }.map { $0.trimmingCharacters(in: .whitespaces) }
+            request.setValue(([explicit] + additions).joined(separator: "; "), forHTTPHeaderField: "Cookie")
+        } else { request.setValue(header, forHTTPHeaderField: "Cookie") }
+        if header.split(separator: ";").contains(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("cf_clearance=") }) {
+            request.setValue(MangaSourceCookieJar.browserUserAgent, forHTTPHeaderField: "User-Agent")
+        }
+    }
+    private func saveCookies(_ response: HTTPURLResponse) {
+        guard let url = response.url else { return }
+        let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
+            if let key = pair.key as? String { result[key] = String(describing: pair.value) }
+        }
+        MangaSourceCookieJar.shared.receive(source: sourceKey, url: url, headers: headers)
     }
 }
 

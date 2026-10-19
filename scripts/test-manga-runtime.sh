@@ -26,6 +26,18 @@ if [[ ! -f "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk" ]]; then
     https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk \
     -o "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk"
 fi
+while read -r release file; do
+  if [[ ! -f "$fixture_dir/$file" ]]; then
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
+      "https://github.com/keiyoushi/extensions/releases/download/$release/$file" -o "$fixture_dir/$file"
+  fi
+done <<'PINS'
+8ef06cd-0 tachiyomi-all.mangadex-v1.6.0.apk
+7363e42 tachiyomi-all.mangafire-v1.6.34.apk
+4217666-0 tachiyomi-en.asurascans-v1.6.69.apk
+24bd7e6 tachiyomi-en.comix-v1.6.54.apk
+e97033f tachiyomi-en.manhuaus-v1.6.60.apk
+PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])
@@ -36,6 +48,11 @@ expected = {
     'tachiyomi-all.commitstrip-v1.6.0.apk': 'f843f2c7ded62a2da5762e6c68547c89c8e200ab26c4f3805b24b9223d046fb9',
     'tachiyomi-en.weebcentral-v1.6.25.apk': '04331a9b4bb878325dfca1079757c9152cdf66916f7859d0dddf41cf26553d30',
     'tachiyomi-all.mangaplus-v1.6.67.apk': '1be92d6255eae1954c4deb525c96cd4933b37be85a927b1d5a3793b818ab8f98',
+    'tachiyomi-all.mangadex-v1.6.0.apk': '12fde77601d48c8b231340694db8446fba5a555ced4109b231c9d2e3000915fb',
+    'tachiyomi-all.mangafire-v1.6.34.apk': '77abea779ed379388d79c6461b8910fae9e067dc017164b62df8fb323f15bebf',
+    'tachiyomi-en.asurascans-v1.6.69.apk': '559144ddf25bc7f348efa523318e45b7544727a55f3c5ddc4bd91b3a861295f3',
+    'tachiyomi-en.comix-v1.6.54.apk': '6053794beb3416e8bb04fd0f523c8a0dede2aa4543422f45ad41a7526324fd6e',
+    'tachiyomi-en.manhuaus-v1.6.60.apk': 'eed10bcba241ef0fa6549762c0de5d327c9e1f341419803ac5de645777e2ed46',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

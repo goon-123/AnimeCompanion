@@ -1,3 +1,9 @@
+## Shared extension runtime and private website sessions — build 43
+
+Version 0.21.0. Fix runtime-wide bytecode and Java/Kotlin gaps found by auditing current APKs: 16-bit instance-of type indexes, typed null native arguments, boxed character/range collections, string joins, reentry-depth accounting, reverse iterators, Closeable interfaces, time offsets/formatting, atomic longs, read/write locks, companion/static fields and catchable optional-class reflection failures. Current MangaDex, MangaFire and Madara/ManhuaUS now return owned catalog entries with covers through the real C ABI. Retain all existing reader/protobuf/image regressions and add integrity-pinned family fixtures.
+
+Keep source website cookies isolated by installed package hash and source ID, in memory only. Add a globe/verification sheet with a private WebKit profile, explicit Use session/retry and clearing; do not reuse Safari/app sessions. Preserve cookie domain/path/expiry and redirect boundaries. This is not an Android WebView implementation or an automatic challenge bypass. Comix 1.6.54 still requires unsupported Android display/browser APIs; all-source compatibility is unfinished. Native build/reader/session/core verification and the unsigned IPA are pending on this branch; do not treat earlier build-42 artifacts as build 43.
+
 ## Native source settings — build 42
 
 Version 0.20.0. Add extension-declared switches, single/multiple choices and text fields from each source catalog's gear. Save typed per-source settings in a separate device-only Keychain item and seed them before source construction in every on-device command. Include passwords, Cancel, restoring defaults, package-change checks and settings-aware image cache identities. Custom Android controls, preference change listeners, persistent source-written state and browser challenge/login handling remain unfinished.

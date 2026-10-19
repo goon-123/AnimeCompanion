@@ -83,7 +83,17 @@ final class MangaExtensionStore: ObservableObject {
     }
     func remove(_ id: String) async {
         guard !busy else { return }
-        do { state = try await storage.remove(id) } catch { self.error = error.localizedDescription }
+        let previous = installed(id)
+        do {
+            state = try await storage.remove(id)
+            if let previous, let digest = previous.descriptor.sha256 {
+                for source in previous.sources {
+                    let key = MangaRuntime.sessionKey(apkSHA256: digest, sourceID: source.id)
+                    MangaSourceCookieJar.shared.clear(source: key)
+                    MangaWebsiteProfiles.stores[key] = nil
+                }
+            }
+        } catch { self.error = error.localizedDescription }
     }
     func removeRepository() async {
         guard !busy else { return }

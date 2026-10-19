@@ -42,6 +42,7 @@ struct MangaSourceBrowseView: View {
     @State private var query = ""
     @State private var submitted = ""
     @State private var showSettings = false
+    @State private var showWebsite = false
     private var key: String { mode + "\u{1f}" + submitted }
     private var latest: Bool { extensions.installed(source.extensionID)?.sources.first { $0.id == source.sourceID }?.supportsLatest == true }
     var body: some View {
@@ -59,12 +60,22 @@ struct MangaSourceBrowseView: View {
             .onChange(of: query) { _, value in if value.isEmpty && mode == "search" { submitted = ""; mode = "popular" } }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button { showWebsite = true } label: { Image(systemName: "globe") }
+                        .accessibilityLabel("Source website session").accessibilityIdentifier("manga-source-website")
+                        .disabled(source.adult && !showMature)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("Source settings").accessibilityIdentifier("manga-source-settings")
                 }
             }
             .sheet(isPresented: $showSettings) {
                 MangaSourceSettingsView(source: source) {
+                    Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: true) }
+                }
+            }
+            .sheet(isPresented: $showWebsite) {
+                MangaSourceSessionView(source: source) {
                     Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: true) }
                 }
             }
@@ -89,6 +100,7 @@ struct MangaSourceBrowseView: View {
                         Text(error).font(.subheadline).foregroundStyle(.secondary)
                         Button("Try again") { Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: model.mangas.isEmpty) } }
                             .buttonStyle(.bordered)
+                        Button("Open website / verify") { showWebsite = true }.font(.subheadline)
                     }.padding().frame(maxWidth: .infinity, alignment: .leading).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 14))
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 12)], spacing: 12) {
