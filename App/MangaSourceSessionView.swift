@@ -53,6 +53,7 @@ struct MangaSourceSessionView: View {
                             guard let key else { return }
                             MangaSourceCookieJar.shared.clear(source: key)
                             MangaWebsiteProfiles.stores[key] = nil
+                            extensions.sourceSessionChanged(source)
                             browserID = UUID()
                         }.disabled(saving)
                     }
@@ -64,6 +65,7 @@ struct MangaSourceSessionView: View {
         saving = true
         MangaWebsiteProfiles.store(key).httpCookieStore.getAllCookies { cookies in
             MangaSourceCookieJar.shared.replace(source: key, cookies: cookies)
+            extensions.sourceSessionChanged(source)
             saving = false
             dismiss()
             onContinue()

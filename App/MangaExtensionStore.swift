@@ -12,6 +12,7 @@ final class MangaExtensionStore: ObservableObject {
     @Published private(set) var loading = true
     @Published private(set) var unreadableState = false
     @Published private var settingsVersions: [String: String] = [:]
+    @Published private var sessionVersions: [String: String] = [:]
     @Published var error: String?
     private let client = MangaRepositoryClient()
     private let storage: MangaExtensionStorage
@@ -136,7 +137,9 @@ final class MangaExtensionStore: ObservableObject {
     }
     func imageVersion(_ source: MangaSourceReference) -> String {
         (installed(source.extensionID)?.descriptor.sha256 ?? "unavailable") + ":" + (settingsVersions[source.id] ?? "unloaded")
+            + ":" + (sessionVersions[source.id] ?? "initial")
     }
+    func sourceSessionChanged(_ source: MangaSourceReference) { sessionVersions[source.id] = UUID().uuidString }
     func sourceConfiguration(_ source: MangaSourceReference) async throws -> MangaSourceSettings {
         if let value = settingsCache[source.id] { return value }
         #if DEBUG

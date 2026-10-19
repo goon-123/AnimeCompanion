@@ -215,13 +215,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
               let header = MangaSourceCookieJar.shared.header(source: sourceKey, url: url) else { return }
         // Explicit source cookies retain precedence. Session cookies otherwise
         // follow the same domain/path rules on initial requests and redirects.
-        if let explicit = request.value(forHTTPHeaderField: "Cookie"), !explicit.isEmpty {
-            let names = Set(explicit.split(separator: ";").map { $0.split(separator: "=", maxSplits: 1)[0].trimmingCharacters(in: .whitespaces) })
-            let additions = header.split(separator: ";").filter {
-                !names.contains($0.split(separator: "=", maxSplits: 1)[0].trimmingCharacters(in: .whitespaces))
-            }.map { $0.trimmingCharacters(in: .whitespaces) }
-            request.setValue(([explicit] + additions).joined(separator: "; "), forHTTPHeaderField: "Cookie")
-        } else { request.setValue(header, forHTTPHeaderField: "Cookie") }
+        request.setValue(MangaSourceCookieJar.merging(explicit: request.value(forHTTPHeaderField: "Cookie"), session: header), forHTTPHeaderField: "Cookie")
         if header.split(separator: ";").contains(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("cf_clearance=") }) {
             request.setValue(MangaSourceCookieJar.browserUserAgent, forHTTPHeaderField: "User-Agent")
         }

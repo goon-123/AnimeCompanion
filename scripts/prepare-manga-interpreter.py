@@ -48,6 +48,21 @@ def verify(directory):
 
 
 DESTINATION.parent.mkdir(parents=True, exist_ok=True)
+if DESTINATION.exists():
+    # CI may restore build 41's generated checkout via a cache prefix. Only
+    # migrate that exact known state, and preserve it instead of resetting a
+    # dirty directory. Unknown changes still stop verification unchanged.
+    legacy = (
+        git(DESTINATION, "rev-parse", "HEAD").decode().strip() == REVISION
+        and git(DESTINATION, "diff", "HEAD", "--name-only").decode().splitlines() == ["src/vm/interpret.rs"]
+        and hashlib.sha256((DESTINATION / "src/vm/interpret.rs").read_bytes()).hexdigest()
+            == "8227ecc575a7cfb085b5b908245389611d6937da33d7e371a5764bff3898482b"
+        and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
+    )
+    if legacy:
+        backup = Path(tempfile.mkdtemp(prefix="manga-legacy-interpreter-", dir=DESTINATION.parent)) / "source"
+        DESTINATION.rename(backup)
+        print(f"Preserved the known previous generated interpreter at {backup}")
 if not DESTINATION.exists():
     with tempfile.TemporaryDirectory(prefix="manga-interpreter-", dir=DESTINATION.parent) as temporary:
         directory = Path(temporary) / "source"

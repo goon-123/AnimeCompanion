@@ -17,7 +17,7 @@ public final class MangaSourceCookieJar: @unchecked Sendable {
     }
     public func replace(source: String, cookies: [HTTPCookie]) {
         lock.lock(); defer { lock.unlock() }
-        sessions[source] = Array(cookies.filter {
+        sessions[source] = Array(cookies.compactMap(normalized).filter {
             !$0.domain.isEmpty && $0.domain.utf8.count <= 253 && $0.value.utf8.count <= 16_384
         }.suffix(256))
     }
@@ -48,8 +48,31 @@ public final class MangaSourceCookieJar: @unchecked Sendable {
         var current = sessions[source] ?? []
         for cookie in incoming {
             current.removeAll { $0.name == cookie.name && $0.domain == cookie.domain && $0.path == cookie.path }
-            if cookie.expiresDate.map({ $0 > Date() }) ?? true { current.append(cookie) }
+            if let cookie = normalized(cookie) { current.append(cookie) }
         }
         sessions[source] = Array(current.suffix(256))
+    }
+    private func normalized(_ cookie: HTTPCookie) -> HTTPCookie? {
+        // swift-corelibs Foundation retains Max-Age without applying it to
+        // expiresDate. Normalize explicitly, including deletion and its RFC
+        // precedence over Expires; keep one absolute expiry in both transports.
+        if let value = cookie.properties?[.maximumAge], let seconds = TimeInterval(String(describing: value)) {
+            guard seconds.isFinite, seconds > 0, var properties = cookie.properties else { return nil }
+            properties[.expires] = Date().addingTimeInterval(min(seconds, 3_153_600_000))
+            properties.removeValue(forKey: .maximumAge)
+            return HTTPCookie(properties: properties)
+        }
+        return cookie.expiresDate.map({ $0 > Date() }) ?? true ? cookie : nil
+    }
+    public static func merging(explicit: String?, session: String) -> String {
+        guard let explicit, !explicit.isEmpty else { return session }
+        func name(_ part: Substring) -> String {
+            part.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).first?
+                .trimmingCharacters(in: .whitespaces) ?? ""
+        }
+        let names = Set(explicit.split(separator: ";").map(name))
+        let additions = session.split(separator: ";").filter { !names.contains(name($0)) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        return ([explicit] + additions).joined(separator: "; ")
     }
 }

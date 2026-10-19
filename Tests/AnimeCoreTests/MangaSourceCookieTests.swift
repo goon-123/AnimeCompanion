@@ -5,6 +5,11 @@ import FoundationNetworking
 #endif
 
 final class MangaSourceCookieTests: XCTestCase {
+    func testExplicitCookiePrecedenceAndMalformedNamesCannotCrashMerging() {
+        XCTAssertEqual(MangaSourceCookieJar.merging(explicit: "session=source", session: "session=browser; verification=owned"), "session=source; verification=owned")
+        XCTAssertEqual(MangaSourceCookieJar.merging(explicit: "=; ;;", session: "verification=owned"), "=; ;;; verification=owned")
+        XCTAssertEqual(MangaSourceCookieJar.merging(explicit: nil, session: "session=owned"), "session=owned")
+    }
     func testSessionsRespectSourceHostPathExpiryAndHTTPS() throws {
         let jar = MangaSourceCookieJar()
         let cookie = try XCTUnwrap(HTTPCookie(properties: [.name: "session", .value: "owned", .domain: ".source.example", .path: "/reader", .secure: "TRUE"]))
@@ -27,5 +32,7 @@ final class MangaSourceCookieTests: XCTestCase {
         XCTAssertNil(jar.header(source: "one", url: URL(string: "https://other.example/")!))
         jar.receive(source: "one", url: url, headers: ["Set-Cookie": "session=; Path=/; Max-Age=0"])
         XCTAssertNil(jar.header(source: "one", url: url))
+        jar.receive(source: "one", url: url, headers: ["Set-Cookie": "session=new; Path=/; Max-Age=3600; Expires=Thu, 01 Jan 1970 00:00:00 GMT"])
+        XCTAssertEqual(jar.header(source: "one", url: url), "session=new")
     }
 }
