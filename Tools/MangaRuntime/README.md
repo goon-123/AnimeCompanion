@@ -40,7 +40,7 @@ Main document and JavaScript fetch requests can invoke the APK's request interce
 
 Shared fixes also cover URI string values, WebView's ViewGroup ancestry, missing framework/functional types, empty R8-inlined Okio buffers, duration units and JSON object decoding. Object decoders visit fields by name and leave absent optional properties to the APK's generated defaults; they no longer assume every field is present in descriptor order.
 
-The current Comix 1.6.54, Cubari 1.6.0 and Manga UP! 1.6.3 APKs return owned catalog entries with covers through their real callbacks and JSON/protobuf parsers in Rust. Thirteen test-only APKs are checksum-pinned. Native tests additionally exercise actual WebKit through the C bridge, local-storage retention/isolation and a fetch interceptor response. Native CI results are recorded in the follow-up PR; controlled data is not certification of live websites, logins, purchased chapters or all-extension compatibility.
+The current Comix 1.6.54, Cubari 1.6.0 and Manga UP! 1.6.3 APKs return owned catalog entries with covers through their real callbacks and JSON/protobuf parsers in Rust. Thirteen test-only APKs are checksum-pinned. Native tests additionally exercise actual WebKit through the C bridge, local-storage retention/isolation, an intercepted fetch response and clearing an active profile without restoring old cookies. Supplied documents retain their source origin via WebKit's simulated-request API. Native CI results are recorded in the follow-up PR; controlled data is not certification of live websites, logins, purchased chapters or all-extension compatibility.
 
 ## Build and verification
 

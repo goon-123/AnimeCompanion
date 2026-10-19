@@ -6,6 +6,23 @@ import AnimeMangaRuntime
 
 final class BrowserExtensionRuntimeTests: XCTestCase {
     @MainActor
+    func testClearingTheProfileStopsItsBrowserAndDoesNotRestoreOldCookies() async throws {
+        let key = "owned-cleared-" + UUID().uuidString
+        let url = try XCTUnwrap(URL(string: "https://owned.example"))
+        let command = MangaBrowserCommand(op: "load", id: 1, url: url.absoluteString, html: "<html></html>")
+        let session = try MangaBrowserSession(sourceKey: key, command: command, url: url)
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [.name: "old_session", .value: "one", .domain: "owned.example", .path: "/", .secure: "TRUE"]))
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            session.web.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { continuation.resume() }
+        }
+        MangaWebsiteProfiles.stores[key] = nil
+        MangaSourceCookieJar.shared.clear(source: key)
+        let event = await session.next()
+        XCTAssertEqual(event["type"] as? String, "error")
+        await session.close()
+        XCTAssertTrue(MangaSourceCookieJar.shared.cookies(source: key).isEmpty)
+    }
+    @MainActor
     func testSourceCanInterceptFetchAndReceiveItsResponseWithoutAWebsiteRequest() async throws {
         let key = "owned-intercept-" + UUID().uuidString
         let url = try XCTUnwrap(URL(string: "https://owned.example"))
@@ -44,9 +61,9 @@ final class BrowserExtensionRuntimeTests: XCTestCase {
             let apk = try Data(contentsOf: apks.appendingPathComponent(name))
             let browser = MangaRuntimeBrowser(sourceKey: key) { web, url in
                 if name.contains("cubari") {
-                    web.loadHTMLString("<html><script>window.globalHistoryHandler = {getAllPinnedSeries: async () => \(history), getAllUnpinnedSeries: async () => []};</script></html>", baseURL: url)
+                    web.loadSimulatedRequest(URLRequest(url: url), responseHTML: "<html><script>window.globalHistoryHandler = {getAllPinnedSeries: async () => \(history), getAllUnpinnedSeries: async () => []};</script></html>")
                 } else if name.contains("comix") {
-                    web.loadHTMLString("<html><script id='initial-data' type='application/json'>{\"queries\":{\"owned\":\(catalog)}}</script></html>", baseURL: url)
+                    web.loadSimulatedRequest(URLRequest(url: url), responseHTML: "<html><script id='initial-data' type='application/json'>{\"queries\":{\"owned\":\(catalog)}}</script></html>")
                 } else {
                     XCTFail("Unexpected page navigation for Manga UP!'s local storage read")
                 }

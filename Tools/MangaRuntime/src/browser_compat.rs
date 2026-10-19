@@ -96,7 +96,10 @@ fn text(vm: &Vm, value: JValue) -> String {
 }
 fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue>) -> R {
     vm.invoke_virtual_args(receiver, name, sig, args)
-        .map_err(NatErr::Fatal)
+        .map_err(|error| match error {
+            JvmError::Uncaught(object) => NatErr::Throw(object),
+            other => NatErr::Fatal(other),
+        })
 }
 
 /// Internal messages use the existing owned C callback, never a socket or URLSession URL.
@@ -757,4 +760,101 @@ pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
 }
 fn abstract_property(vm: &mut Vm, _: &[JValue]) -> R {
     Err(err(vm, "Abstract delegated property"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn vm() -> Vm {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        vm
+    }
+    fn throws(vm: &mut Vm, _: &[JValue]) -> R {
+        Err(err(vm, "Owned callback failure"))
+    }
+    fn exceeds_budget(_: &mut Vm, _: &[JValue]) -> R {
+        Err(NatErr::Fatal(JvmError::BudgetExceeded))
+    }
+    #[test]
+    fn callbacks_keep_throwable_failures_catchable_and_vm_limits_fatal() {
+        for (f, throwable) in [
+            (throws as dexvm::vm::NativeFn, true),
+            (exceeds_budget as dexvm::vm::NativeFn, false),
+        ] {
+            let mut vm = vm();
+            vm.register_native(NativeEntry {
+                class: "Lcom/example/Callback;",
+                name: "invoke",
+                sig: "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                instance: true,
+                f,
+            })
+            .unwrap();
+            let callback = vm
+                .alloc_native("Lcom/example/Callback;", Native::Opaque)
+                .unwrap();
+            let context = vm
+                .alloc_native(
+                    "Lkotlinx/coroutines/MainCoroutineDispatcher;",
+                    Native::Opaque,
+                )
+                .unwrap();
+            let result = with_context(&mut vm, &[context, callback, JValue::Null]);
+            if throwable {
+                assert!(matches!(result, Err(NatErr::Throw(_))));
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(NatErr::Fatal(JvmError::BudgetExceeded))
+                ));
+            }
+            assert_ne!(
+                main_looper(&mut vm, &[]).unwrap(),
+                my_looper(&mut vm, &[]).unwrap()
+            );
+        }
+    }
+    #[test]
+    fn completed_null_is_distinct_from_a_pending_deferred_and_first_result_wins() {
+        let mut vm = vm();
+        let deferred = deferred_new(&mut vm, &[]).unwrap();
+        assert_eq!(
+            deferred_completed(&mut vm, &[deferred]).unwrap(),
+            JValue::Int(0)
+        );
+        assert_eq!(
+            deferred_complete(&mut vm, &[deferred, JValue::Null]).unwrap(),
+            JValue::Int(1)
+        );
+        let failure = vm.alloc_string("late failure");
+        assert_eq!(
+            deferred_fail(&mut vm, &[deferred, failure]).unwrap(),
+            JValue::Int(0)
+        );
+        assert_eq!(
+            deferred_await(&mut vm, &[deferred, JValue::Null]).unwrap(),
+            JValue::Null
+        );
+    }
+    #[test]
+    fn duration_units_do_not_turn_millisecond_polls_into_seconds() {
+        let mut vm = vm();
+        for (name, expected) in [
+            ("MILLISECONDS", 500),
+            ("SECONDS", 500_000),
+            ("MINUTES", 30_000_000),
+        ] {
+            let field = dexvm::vm::FieldRef {
+                class_desc: vm.intern("Lkotlin/time/DurationUnit;"),
+                name: vm.intern(name),
+                ty: vm.intern("Lkotlin/time/DurationUnit;"),
+            };
+            let unit = vm.static_field_get(field).unwrap();
+            assert_eq!(
+                duration_int(&mut vm, &[JValue::Int(500), unit]).unwrap(),
+                JValue::Long(expected)
+            );
+        }
+    }
 }

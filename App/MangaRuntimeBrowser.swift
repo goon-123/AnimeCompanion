@@ -124,7 +124,8 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
     private var overflow = false
     private var eventBytes = 0
     // Native tests may load an owned document while retaining the real source origin.
-    var documentLoader: ((WKWebView, URL) -> Void)?
+    var documentLoader: (@MainActor (WKWebView, URL) -> Void)?
+    private var currentProfile: Bool { MangaWebsiteProfiles.stores[sourceKey] === web.configuration.websiteDataStore }
 
     init(sourceKey: String, command: MangaBrowserCommand, url: URL) throws {
         guard (command.bridges?.count ?? 0) <= 64,
@@ -189,7 +190,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         enqueue(["type": "started", "url": url.absoluteString])
     }
     private func enqueue(_ event: [String: Any]) {
-        guard !closed else { return }
+        guard !closed, currentProfile else { return }
         let bytes = (try? JSONSerialization.data(withJSONObject: event).count) ?? 4_000_001
         guard events.count < 256, eventBytes + bytes <= 4_000_000 else { overflow = true; web.stopLoading(); return }
         eventBytes += bytes
@@ -202,7 +203,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         return event
     }
     func next() async -> [String: Any] {
-        guard !closed else { return ["type": "error"] }
+        guard !closed, currentProfile else { return ["type": "error"] }
         if overflow { return ["type": "error"] }
         if !events.isEmpty { return takeEvent() }
         if prepared && navigationReady {
@@ -226,10 +227,13 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
                     web.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { continuation.resume() }
                 }
             }
-            guard !closed else { return ["type": "error"] }
+            guard !closed, currentProfile else { return ["type": "error"] }
             if let response = navigationResponse, let data = Data(base64Encoded: response.bodyBase64) {
-                web.load(data, mimeType: response.mimeType, characterEncodingName: response.encoding, baseURL: home)
-            } else if let html = command.html { web.loadHTMLString(html, baseURL: home) }
+                var headers = Dictionary(response.headers.filter { $0.count == 2 }.map { ($0[0], $0[1]) }, uniquingKeysWith: { _, value in value })
+                headers["Content-Type"] = response.mimeType + "; charset=" + response.encoding
+                guard let supplied = HTTPURLResponse(url: home, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: headers) else { return ["type": "error"] }
+                web.loadSimulatedRequest(URLRequest(url: home), response: supplied, responseData: data)
+            } else if let html = command.html { web.loadSimulatedRequest(URLRequest(url: home), responseHTML: html) }
             else if let documentLoader { documentLoader(web, home) }
             else {
                 var request = URLRequest(url: home)
@@ -244,7 +248,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         return takeEvent()
     }
     func decide(_ decision: MangaBrowserCommand) async throws {
-        guard !closed, let requestID = decision.requestID, let allow = decision.allow else { throw MangaExtensionError.sourceUnavailable }
+        guard !closed, currentProfile, let requestID = decision.requestID, let allow = decision.allow else { throw MangaExtensionError.sourceUnavailable }
         if let response = decision.response {
             guard (200...599).contains(response.status), let data = Data(base64Encoded: response.bodyBase64), data.count <= 1_000_000 else { throw MangaExtensionError.oversized }
         }
@@ -265,7 +269,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         }
     }
     func evaluate(_ script: String) async throws -> [String: Any] {
-        guard !closed, script.utf8.count <= 1_000_000 else { throw MangaExtensionError.oversized }
+        guard !closed, currentProfile, script.utf8.count <= 1_000_000 else { throw MangaExtensionError.oversized }
         // Page-start hooks in Android's fallback inject before page code. Stage
         // those scripts before the first load so WebKit preserves that ordering.
         if prepared {
@@ -273,6 +277,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
             return ["value": "null"]
         }
         let value: Any? = try? await web.evaluateJavaScript(script)
+        guard !closed, currentProfile else { throw CancellationError() }
         let encoded = try JSONSerialization.data(withJSONObject: value ?? NSNull(), options: [.fragmentsAllowed])
         guard encoded.count <= 1_000_000 else { throw MangaExtensionError.oversized }
         return ["value": String(decoding: encoded, as: UTF8.self)]
@@ -287,7 +292,7 @@ final class MangaBrowserSession: NSObject, WKNavigationDelegate, WKScriptMessage
         let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
             web.configuration.websiteDataStore.httpCookieStore.getAllCookies { continuation.resume(returning: $0) }
         }
-        MangaSourceCookieJar.shared.replace(source: sourceKey, cookies: cookies)
+        if currentProfile { MangaSourceCookieJar.shared.replace(source: sourceKey, cookies: cookies) }
     }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == handlerName, let payload = message.body as? [String: Any],
