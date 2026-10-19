@@ -11,7 +11,9 @@ final class WebtoonReaderUITests: XCTestCase {
         let high = app.buttons["source-choice-high"]
         XCTAssertTrue(high.waitForExistence(timeout: 10)); high.tap()
         let split = app.switches["source-setting-split"]
-        XCTAssertTrue(split.waitForExistence(timeout: 10)); split.tap()
+        XCTAssertTrue(split.waitForExistence(timeout: 10))
+        split.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(split.value as? String, "1")
         capture("Source-Settings", app)
         app.buttons["source-settings-save"].tap()
         XCTAssertTrue(app.buttons["manga-title-0"].waitForExistence(timeout: 15))

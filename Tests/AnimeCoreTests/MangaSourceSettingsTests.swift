@@ -9,7 +9,7 @@ final class MangaSourceSettingsTests: XCTestCase {
         ]
         let settings = MangaSourceSettings(values: values)
         XCTAssertEqual(try MangaSourceSettings.decode(settings.encoded()), settings)
-        XCTAssertEqual(try settings.encoded(), settings.encoded())
+        XCTAssertEqual(try settings.encoded(), try settings.encoded())
     }
     func testUnknownSchemasMalformedValuesAndOversizedCredentialsAreRejected() throws {
         for json in [#"{"schema":2,"values":{}}"#, #"{"schema":1,"values":{"split":{"type":"boolean","value":"true"}}}"#] {
