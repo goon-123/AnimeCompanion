@@ -136,8 +136,10 @@ final class MangaExtensionStore: ObservableObject {
         return try await MangaRuntime.image(apk, source: runtimeSource, modern: entry.descriptor.modernAPI, image: image, settings: settings)
     }
     func imageVersion(_ source: MangaSourceReference) -> String {
-        (installed(source.extensionID)?.descriptor.sha256 ?? "unavailable") + ":" + (settingsVersions[source.id] ?? "unloaded")
-            + ":" + (sessionVersions[source.id] ?? "initial")
+        let package = installed(source.extensionID)?.descriptor.sha256 ?? "unavailable"
+        let settings = settingsVersions[source.id] ?? "unloaded"
+        let session = sessionVersions[source.id] ?? "initial"
+        return [package, settings, session].joined(separator: ":")
     }
     func sourceSessionChanged(_ source: MangaSourceReference) { sessionVersions[source.id] = UUID().uuidString }
     func sourceConfiguration(_ source: MangaSourceReference) async throws -> MangaSourceSettings {

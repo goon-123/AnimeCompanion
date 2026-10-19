@@ -5,6 +5,16 @@ import AnimeCore
 
 final class MangaWebsiteSessionTests: XCTestCase {
     @MainActor
+    func testChangingAWebsiteSessionInvalidatesOnlyThatSourcesImageIdentity() {
+        let store = MangaExtensionStore()
+        let one = MangaSourceReference(extensionID: "owned-one", sourceID: "1", name: "One", language: "en", homeURL: "https://owned.example", adult: false)
+        let two = MangaSourceReference(extensionID: "owned-two", sourceID: "2", name: "Two", language: "en", homeURL: "https://owned.example", adult: false)
+        let first = store.imageVersion(one), second = store.imageVersion(two)
+        store.sourceSessionChanged(one)
+        XCTAssertNotEqual(store.imageVersion(one), first)
+        XCTAssertEqual(store.imageVersion(two), second)
+    }
+    @MainActor
     func testSourceProfilesArePrivateAndCookiesDoNotCrossSources() async throws {
         let one = "owned-one-" + UUID().uuidString, two = "owned-two-" + UUID().uuidString
         let first = MangaWebsiteProfiles.store(one), second = MangaWebsiteProfiles.store(two)
