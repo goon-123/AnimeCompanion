@@ -1,5 +1,13 @@
 # Anime Companion
 
+### More manga readers and clearer errors (0.25.0 / build 47)
+
+Expand shared runtime compatibility for Comic Fury, Comics Kingdom, Project Suki and MangaBuddy/MangaK. Additional real-extension tests cover catalog covers, chapter/page parsing and image requests. Comic Fury and Comics Kingdom also have combined title/chapter checks; Project Suki and MangaK title-update coverage remains incomplete.
+
+The reader's error screen now identifies the source, distinguishes missing runtime APIs from unreadable website responses, and offers **Open source website**. Complete any website sign-in or verification there, then tap **Use session** to retry the chapter. Missing runtime APIs require an updated AnimeCompanion build; reinstalling an extension alone does not update the bundled runtime.
+
+All 80 offline runtime regressions pass. Native iPhone/iPad checks and the unsigned build-47 IPA run in GitHub Actions; see [build status](BUILD_STATUS.md). Owned responses verify the actual extension parsers, without certifying every live website or all extensions.
+
 ### Manga browsing, source icons and anime shortcuts (0.24.0 / build 46)
 
 Fix the next-page footer cancelling its own request when it switches to a loading indicator. Catalog pages now append without clearing existing covers. Empty or repeated pages pause automatic loading with an explicit **Try next page** action instead of looping; network failures retry the same page. Refresh and new searches start a fresh catalog.

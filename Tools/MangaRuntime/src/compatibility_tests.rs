@@ -2,6 +2,179 @@
 use super::*;
 
 #[test]
+fn dalvik_floating_unary_instructions_read_raw_constants() {
+    use std::sync::{Arc, OnceLock};
+    for (opcode, input, expected) in [
+        (
+            0x7f,
+            JValue::Int(2.5_f32.to_bits() as i32),
+            JValue::Float(-2.5),
+        ),
+        (
+            0x80,
+            JValue::Long(2.5_f64.to_bits() as i64),
+            JValue::Double(-2.5),
+        ),
+        (
+            0x89,
+            JValue::Int(2.5_f32.to_bits() as i32),
+            JValue::Double(2.5),
+        ),
+        (
+            0x8a,
+            JValue::Long(f64::NAN.to_bits() as i64),
+            JValue::Int(0),
+        ),
+        (
+            0x8b,
+            JValue::Long(f64::INFINITY.to_bits() as i64),
+            JValue::Long(i64::MAX),
+        ),
+    ] {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        vm.register_native(NativeEntry {
+            class: "LOwnedUnary;",
+            name: "calculate",
+            sig: "()D",
+            instance: false,
+            f: abstract_function,
+        })
+        .unwrap();
+        let class = vm.ensure_class_by_desc("LOwnedUnary;").unwrap();
+        let key = (vm.intern("calculate"), vm.intern("()D"));
+        let slot = vm.classes[class as usize].dispatch[&key];
+        let method = &mut vm.classes[class as usize].methods[slot as usize];
+        method.native_key = None;
+        method.insns = OnceLock::new();
+        method.code = Some(Arc::new(dexvm::dex::CodeItem {
+            registers_size: 5,
+            ins_size: 5,
+            outs_size: 0,
+            insns: vec![opcode | 0x0400, 0x040f].into(),
+            tries: vec![],
+        }));
+        assert_eq!(
+            dexvm::vm::interpret::run(
+                &mut vm,
+                class,
+                slot,
+                vec![
+                    input,
+                    JValue::Null,
+                    JValue::Null,
+                    JValue::Null,
+                    JValue::Null
+                ]
+            )
+            .unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn dalvik_float_and_double_arithmetic_keep_the_opcode_type_for_raw_constants() {
+    use std::sync::{Arc, OnceLock};
+    for (base, double, two_address) in [
+        (0xa6_u16, false, false),
+        (0xab, true, false),
+        (0xc6, false, true),
+        (0xcb, true, true),
+    ] {
+        for offset in 0..5 {
+            let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+            vm.register_native(NativeEntry {
+                class: "LOwnedArithmetic;",
+                name: "calculate",
+                sig: "()D",
+                instance: false,
+                f: abstract_function,
+            })
+            .unwrap();
+            let class = vm.ensure_class_by_desc("LOwnedArithmetic;").unwrap();
+            let key = (vm.intern("calculate"), vm.intern("()D"));
+            let slot = vm.classes[class as usize].dispatch[&key];
+            let method = &mut vm.classes[class as usize].methods[slot as usize];
+            method.native_key = None;
+            method.insns = OnceLock::new();
+            let opcode = base + offset;
+            let code = if two_address {
+                vec![opcode | 0x2000, 0x000f]
+            } else {
+                vec![opcode | 0x0400, 0x0200, 0x040f]
+            };
+            method.code = Some(Arc::new(dexvm::dex::CodeItem {
+                registers_size: 5,
+                ins_size: 5,
+                outs_size: 0,
+                insns: code.into(),
+                tries: vec![],
+            }));
+            for a in [-2.5_f64, -0.0, 0.0, 2.5, f64::INFINITY, f64::NAN] {
+                for b in [-3.0_f64, 0.0, 3.0, f64::NAN] {
+                    for raw_a in [false, true] {
+                        for raw_b in [false, true] {
+                            let value = |v: f64, raw| {
+                                if double {
+                                    if raw {
+                                        JValue::Long(v.to_bits() as i64)
+                                    } else {
+                                        JValue::Double(v)
+                                    }
+                                } else if raw {
+                                    JValue::Int((v as f32).to_bits() as i32)
+                                } else {
+                                    JValue::Float(v as f32)
+                                }
+                            };
+                            let result = dexvm::vm::interpret::run(
+                                &mut vm,
+                                class,
+                                slot,
+                                vec![
+                                    value(a, raw_a),
+                                    JValue::Null,
+                                    value(b, raw_b),
+                                    JValue::Null,
+                                    JValue::Int(0),
+                                ],
+                            )
+                            .unwrap();
+                            let expected = match offset {
+                                0 => a + b,
+                                1 => a - b,
+                                2 => a * b,
+                                3 => a / b,
+                                _ => a % b,
+                            };
+                            let expected = if double {
+                                expected
+                            } else {
+                                f64::from(expected as f32)
+                            };
+                            let actual = match result {
+                                JValue::Double(v) if double => v,
+                                JValue::Float(v) if !double => f64::from(v),
+                                _ => panic!("Wrong opcode result type: {result:?}"),
+                            };
+                            if expected.is_nan() {
+                                assert!(actual.is_nan());
+                            } else {
+                                assert_eq!(
+                                    actual.to_bits(),
+                                    expected.to_bits(),
+                                    "opcode {opcode:x}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn dalvik_float_comparisons_read_raw_constant_bits_and_preserve_nan_bias() {
     use std::sync::{Arc, OnceLock};
     for opcode in 0x2d_u16..=0x30 {

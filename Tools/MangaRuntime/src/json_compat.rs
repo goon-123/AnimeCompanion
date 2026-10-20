@@ -45,6 +45,31 @@ fn string(vm: &mut Vm, args: &[JValue]) -> R {
     };
     node(vm, value)
 }
+fn array_init(vm: &mut Vm, args: &[JValue]) -> R {
+    let values = match vm.payload_of(args[1]) {
+        Some(Native::Json(JsonVal::Array(values))) => values,
+        Some(Native::List(items)) => items
+            .into_iter()
+            .map(|value| match vm.payload_of(value) {
+                Some(Native::Json(value)) => Ok(value),
+                _ => Err(invalid(vm, "JsonArray items must be JsonElements")),
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => return Err(invalid(vm, "JsonArray requires a list")),
+    };
+    if values.len() > 100_000 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= values.len() as i64;
+    if vm.budget <= 0 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    let JValue::Obj(object) = args[0] else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    vm.arena.objects[object as usize].native = Some(Native::Json(JsonVal::Array(values)));
+    Ok(JValue::Null)
+}
 fn number(vm: &mut Vm, args: &[JValue]) -> R {
     let value = if args[0].is_null_ref() {
         JsonVal::Null
@@ -334,6 +359,23 @@ fn factory_default(vm: &mut Vm, args: &[JValue]) -> R {
 }
 
 pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Lkotlinx/serialization/json/JsonArray;",
+        name: "<init>",
+        sig: "(Ljava/util/List;)V",
+        instance: true,
+        f: array_init,
+    })?;
+    let object = vm.ensure_class_by_desc("Lkotlinx/serialization/json/JsonObject;")?;
+    let map = vm.ensure_class_by_desc("Ljava/util/Map;")?;
+    if !vm.classes[object as usize].interfaces.contains(&map) {
+        vm.classes[object as usize].interfaces.push(map);
+    }
+    let array = vm.ensure_class_by_desc("Lkotlinx/serialization/json/JsonArray;")?;
+    let list = vm.ensure_class_by_desc("Ljava/util/List;")?;
+    if !vm.classes[array as usize].interfaces.contains(&list) {
+        vm.classes[array as usize].interfaces.push(list);
+    }
     // invoke-interface must resolve the declared method before dispatching to
     // the generated serializer supplied by the extension.
     for class in [
@@ -420,6 +462,30 @@ pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn json_arrays_initialize_fresh_instances_and_keep_collection_interfaces() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let value = node(&mut vm, JsonVal::Str("owned".into())).unwrap();
+        let list = vm
+            .alloc_native("Ljava/util/ArrayList;", Native::List(vec![value]))
+            .unwrap();
+        let class = vm
+            .ensure_class_by_desc("Lkotlinx/serialization/json/JsonArray;")
+            .unwrap();
+        let fresh = JValue::Obj(vm.alloc_instance(class).unwrap());
+        array_init(&mut vm, &[fresh, list]).unwrap();
+        assert!(
+            matches!(vm.payload_of(fresh),Some(Native::Json(JsonVal::Array(v))) if v==vec![JsonVal::Str("owned".into())])
+        );
+        let iterable = vm.ensure_class_by_desc("Ljava/lang/Iterable;").unwrap();
+        assert!(vm.is_assignable(class, iterable).unwrap());
+        let object = vm
+            .ensure_class_by_desc("Lkotlinx/serialization/json/JsonObject;")
+            .unwrap();
+        let map = vm.ensure_class_by_desc("Ljava/util/Map;").unwrap();
+        assert!(vm.is_assignable(object, map).unwrap());
+    }
     fn vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();

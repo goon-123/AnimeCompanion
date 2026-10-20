@@ -1,8 +1,17 @@
 diff --git a/src/dex/insn.rs b/src/dex/insn.rs
-index 302ec6f..afe973a 100644
+index 302ec6f..df1bc47 100644
 --- a/src/dex/insn.rs
 +++ b/src/dex/insn.rs
-@@ -285,7 +285,7 @@ pub fn decode(insns: &[u16], pc: usize) -> Result<(Insn, usize), DexError> {
+@@ -203,6 +203,8 @@ pub enum Insn {
+     Invoke(InvokeKind, u32, Args),
+     Unop(Unop, u8, u8),
+     Binop(Binop, u8, u8, u8),
++    BinopFloat(Binop, u8, u8, u8),
++    BinopDouble(Binop, u8, u8, u8),
+     BinopLit(LitOp, u8, u8, i32),
+ }
+
+@@ -285,7 +287,7 @@ pub fn decode(insns: &[u16], pc: usize) -> Result<(Insn, usize), DexError> {
          0x1d => Ok((Insn::MonitorEnter(a8), pc + 1)),
          0x1e => Ok((Insn::MonitorExit(a8), pc + 1)),
          0x1f => Ok((Insn::CheckCast(a8, u32::from(w1()?)), pc + 2)),
@@ -11,8 +20,62 @@ index 302ec6f..afe973a 100644
          0x21 => Ok((Insn::ArrayLength(a4, b4), pc + 1)),
          0x22 => Ok((Insn::NewInstance(a8, u32::from(w1()?)), pc + 2)),
          0x23 => Ok((Insn::NewArray(a4, b4, u32::from(w1()?)), pc + 2)),
+@@ -616,10 +618,13 @@ pub fn decode(insns: &[u16], pc: usize) -> Result<(Insn, usize), DexError> {
+                 0x99 | 0xa4 => Binop::Shr,
+                 _ => Binop::Ushr,
+             };
+-            Ok((
+-                Insn::Binop(binop, a8, (w1()? & 0xff) as u8, (w1()? >> 8) as u8),
+-                pc + 2,
+-            ))
++            let (a, b) = ((w1()? & 0xff) as u8, (w1()? >> 8) as u8);
++            let insn = match op {
++                0xa6..=0xaa => Insn::BinopFloat(binop, a8, a, b),
++                0xab..=0xaf => Insn::BinopDouble(binop, a8, a, b),
++                _ => Insn::Binop(binop, a8, a, b),
++            };
++            Ok((insn, pc + 2))
+         }
+         // 2addr binops (12x): int 0xb0..0xba, long 0xbb..0xc5, float 0xc6..0xca, double 0xcb..0xcf
+         0xb0..=0xcf => {
+@@ -636,7 +641,12 @@ pub fn decode(insns: &[u16], pc: usize) -> Result<(Insn, usize), DexError> {
+                 0xb9 | 0xc4 => Binop::Shr,
+                 _ => Binop::Ushr,
+             };
+-            Ok((Insn::Binop(binop, a4, a4, b4), pc + 1))
++            let insn = match op {
++                0xc6..=0xca => Insn::BinopFloat(binop, a4, a4, b4),
++                0xcb..=0xcf => Insn::BinopDouble(binop, a4, a4, b4),
++                _ => Insn::Binop(binop, a4, a4, b4),
++            };
++            Ok((insn, pc + 1))
+         }
+         // lit16 (22s): vA = vA op#+CCCC, A=bits 8-11, B=bits 12-15, literal 16-bit
+         0xd0..=0xd7 => {
+@@ -1008,7 +1018,20 @@ mod tests {
+         // sub-double/2addr v3, v4
+         assert_eq!(
+             dec(&[0xcc | (3 << 8) | (4 << 12)], 0),
+-            Insn::Binop(Binop::Sub, 3, 3, 4)
++            Insn::BinopDouble(Binop::Sub, 3, 3, 4)
++        );
++        // Normal and two-address arithmetic retain the floating-point type.
++        assert_eq!(
++            dec(&[0xa6, 1 | (2 << 8)], 0),
++            Insn::BinopFloat(Binop::Add, 0, 1, 2)
++        );
++        assert_eq!(
++            dec(&[0xc6 | (3 << 8) | (4 << 12)], 0),
++            Insn::BinopFloat(Binop::Add, 3, 3, 4)
++        );
++        assert_eq!(
++            dec(&[0xab, 1 | (2 << 8)], 0),
++            Insn::BinopDouble(Binop::Add, 0, 1, 2)
+         );
+         // add-int/lit16 v0, v1, -1
+         assert_eq!(
 diff --git a/src/vm/interpret.rs b/src/vm/interpret.rs
-index 9111360..57bde37 100644
+index 9111360..37e21b4 100644
 --- a/src/vm/interpret.rs
 +++ b/src/vm/interpret.rs
 @@ -103,7 +103,9 @@ pub fn run(vm: &mut Vm, class: u32, slot: u32, args: Vec<JValue>) -> Result<JVal
@@ -82,7 +145,52 @@ index 9111360..57bde37 100644
                  let c = match (*kind, va, vb) {
                      (CmpOp::CmpLong, JValue::Long(x), JValue::Long(y)) => x.cmp(&y) as i32,
                      (CmpOp::CmpgFloat, JValue::Float(x), JValue::Float(y)) => fcmp(x, y, true),
-@@ -1546,13 +1575,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
+@@ -1291,7 +1320,21 @@ impl Vm {
+                 Flow::Call(*kind, mref, target, *args, next_pc)
+             }
+             Insn::Unop(op, d, s) => {
+-                let v = f.regs[*s as usize];
++                // DEX constants carry bits, not their eventual float type.
++                let v = match (*op, f.regs[*s as usize]) {
++                    (
++                        Unop::NegFloat | Unop::FloatToInt | Unop::FloatToLong | Unop::FloatToDouble,
++                        JValue::Int(bits),
++                    ) => JValue::Float(f32::from_bits(bits as u32)),
++                    (
++                        Unop::NegDouble
++                        | Unop::DoubleToInt
++                        | Unop::DoubleToLong
++                        | Unop::DoubleToFloat,
++                        JValue::Long(bits),
++                    ) => JValue::Double(f64::from_bits(bits as u64)),
++                    (_, value) => value,
++                };
+                 let r = match (*op, v) {
+                     (Unop::NegInt, JValue::Int(x)) => JValue::Int(x.wrapping_neg()),
+                     (Unop::NotInt, JValue::Int(x)) => JValue::Int(!x),
+@@ -1319,8 +1362,19 @@ impl Vm {
+                 f.regs[*d as usize] = r;
+                 Flow::Next(0)
+             }
+-            Insn::Binop(op, d, a, b) => {
+-                let (va, vb) = (f.regs[*a as usize], f.regs[*b as usize]);
++            Insn::Binop(op, d, a, b)
++            | Insn::BinopFloat(op, d, a, b)
++            | Insn::BinopDouble(op, d, a, b) => {
++                let typed = |value| match (insn, value) {
++                    (Insn::BinopFloat(..), JValue::Int(bits)) => {
++                        JValue::Float(f32::from_bits(bits as u32))
++                    }
++                    (Insn::BinopDouble(..), JValue::Long(bits)) => {
++                        JValue::Double(f64::from_bits(bits as u64))
++                    }
++                    (_, value) => value,
++                };
++                let (va, vb) = (typed(f.regs[*a as usize]), typed(f.regs[*b as usize]));
+                 match binop(self, *op, va, vb) {
+                     Ok(v) => {
+                         f.regs[*d as usize] = v;
+@@ -1546,13 +1600,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
          (Binop::And, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x & y)),
          (Binop::Or, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x | y)),
          (Binop::Xor, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x ^ y)),

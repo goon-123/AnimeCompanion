@@ -41,6 +41,10 @@ e97033f tachiyomi-en.manhuaus-v1.6.60.apk
 7363e42 tachiyomi-all.mangaup-v1.6.3.apk
 7363e42 tachiyomi-en.hiperdex-v1.6.89.apk
 7363e42 tachiyomi-all.namicomi-v1.6.0.apk
+24bc6c2 tachiyomi-all.comicfury-v1.6.0.apk
+24bc6c2 tachiyomi-all.comicskingdom-v1.6.0.apk
+bdcf84f tachiyomi-all.projectsuki-v1.6.0.apk
+4217666-0 tachiyomi-en.mangabuddy-v1.6.34.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -61,6 +65,10 @@ expected = {
     'tachiyomi-all.mangaup-v1.6.3.apk': '486e0cd864cc9eb5bceff566c9790737f508c1b35b50fa04538d30ad6036ac55',
     'tachiyomi-en.hiperdex-v1.6.89.apk': '7ac5566a04d6cb7105fcaf7570d7edca985366393f4589c067a2bc18e4772a8f',
     'tachiyomi-all.namicomi-v1.6.0.apk': 'f357ccaa47f197b55eb0223ed83d5ee1b835c895a8162593f59c9e8790391c22',
+    'tachiyomi-all.comicfury-v1.6.0.apk': '526500f49ba9a016675439e538fbbfd92cdf35047e806c0156c4d4ab24a4a92a',
+    'tachiyomi-all.comicskingdom-v1.6.0.apk': '3123f5c96374f7e6d8fa4cda3c9602b3897c646377d096627cf3e9b319f556d8',
+    'tachiyomi-all.projectsuki-v1.6.0.apk': 'ef32135fd2aec84d8b949a58de255272dfdb9668298eb351f9d3438032fde7a8',
+    'tachiyomi-en.mangabuddy-v1.6.34.apk': '6db9eb23ec4c065632de8ad425c3db6a7e5a373826190d14e2c25ac9b0ef5b25',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

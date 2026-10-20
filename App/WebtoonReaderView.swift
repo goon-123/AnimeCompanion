@@ -97,6 +97,7 @@ struct WebtoonReaderView: View {
     @State private var scrubPage = 0.0
     @State private var settings = false
     @State private var chapters = false
+    @State private var website = false
     @State private var closing = false
     @State private var originalIdleTimer = false
     @State private var capturedIdleTimer = false
@@ -109,8 +110,16 @@ struct WebtoonReaderView: View {
             else if let error = model.error {
                 ContentUnavailableView {
                     Label("Chapter unavailable", systemImage: "exclamationmark.circle")
-                } description: { Text(error) } actions: {
+                } description: {
+                    VStack(spacing: 8) {
+                        Text(model.title.source.name).font(.subheadline.bold())
+                            .accessibilityIdentifier("webtoon-error-source")
+                        Text(error).accessibilityIdentifier("webtoon-error-description")
+                    }
+                } actions: {
                     Button("Try again") { Task { await model.load(extensions: extensions, reading: reading) } }.buttonStyle(.bordered)
+                    Button("Open source website", systemImage: "globe") { website = true }
+                        .accessibilityIdentifier("webtoon-source-website")
                 }.foregroundStyle(.white)
             }
             if model.controls || model.pages.isEmpty { chrome }
@@ -143,6 +152,11 @@ struct WebtoonReaderView: View {
                     .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $chapters) { chapterPicker }
+            .sheet(isPresented: $website) {
+                MangaSourceSessionView(source: model.title.source) {
+                    Task { await model.load(extensions: extensions, reading: reading) }
+                }
+            }
     }
     private var canvas: some View {
         let store = extensions, source = model.title.source

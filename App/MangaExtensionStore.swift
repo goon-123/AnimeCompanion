@@ -123,7 +123,7 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     }
     func pages(_ source: MangaSourceReference, chapter: SourceMangaChapter) async throws -> [SourceMangaImage] {
         #if DEBUG
-        if MangaReaderPreview.owns(source.extensionID) { return MangaReaderPreview.pages(chapter) }
+        if MangaReaderPreview.owns(source.extensionID) { return try MangaReaderPreview.pages(chapter) }
         #endif
         let (entry, runtimeSource, apk) = try await context(source)
         let settings = try await sourceConfiguration(source)
