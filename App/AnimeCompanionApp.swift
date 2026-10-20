@@ -55,6 +55,10 @@ enum Theme {
 }
 
 struct AnimeRoute: Identifiable, Hashable { let id: Int }
+struct MangaSearchRoute: Hashable {
+    let id = UUID()
+    let titles: [String]
+}
 struct DiscoveryRoute: Hashable {
     let category: DiscoveryCategory
     var selection = SeasonSelection.current()
@@ -119,6 +123,13 @@ final class AppNavigationStore: ObservableObject {
         explore.visibility = .all
         selectedTab = .explore
     }
+
+    func openMangaSearch(for anime: Anime) {
+        var path = NavigationPath()
+        path.append(MangaSearchRoute(titles: MangaSearchTitles.suggestions(for: anime)))
+        manga.path = path
+        selectedTab = .manga
+    }
 }
 
 struct AppTabs: View {
@@ -156,7 +167,13 @@ struct AppTabs: View {
 
 private struct MangaTabPane: View {
     @ObservedObject var state: TabNavigationState
-    var body: some View { NavigationStack(path: $state.path) { MangaHubView() } }
+    var body: some View {
+        NavigationStack(path: $state.path) {
+            MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
+                MangaTitleSearchView(titles: route.titles).id(route.id)
+            }
+        }
+    }
 }
 
 /// The chosen topology stays stable through rotation. Full-width navigation is

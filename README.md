@@ -1,5 +1,13 @@
 # Anime Companion
 
+### Manga browsing, source icons and anime shortcuts (0.24.0 / build 46)
+
+Fix the next-page footer cancelling its own request when it switches to a loading indicator. Catalog pages now append without clearing existing covers. Empty or repeated pages pause automatic loading with an explicit **Try next page** action instead of looping; network failures retry the same page. Refresh and new searches start a fresh catalog.
+
+Extension install lists, extension details and installed sources now display the repository's actual icon using the shared public-artwork cache. Icons fall back to a book symbol when artwork is unavailable.
+
+Anime details in Explore and My Library have a **Find manga or manhwa** action separate from watching an episode. It opens an editable title search in Manga; select an installed source to search it and open a result in the reader. Original-title suggestions, language filtering and extension management are available. Only the source you select receives the search; anime IDs are never treated as manga IDs. Manga's toolbar also opens this search directly.
+
 ### Shared manga compatibility (0.23.0 / build 45)
 
 Fix shared JSON builders/serializers and URL query handling used by HiperDex and other extensions. Preserve extension chapter metadata and fractional numbers when opening the reader, including alternate releases with the same chapter number. HiperDex's catalog previously failed before making a network request, so website verification alone could not fix it. NamiComi additionally gains configured and sealed JSON serializer support. Everything still runs on the phone.

@@ -3,7 +3,7 @@ import CryptoKit
 import AnimeCore
 
 @MainActor
-final class MangaExtensionStore: ObservableObject {
+final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     @Published private(set) var state = MangaExtensionState()
     @Published private(set) var catalog: MangaExtensionCatalog?
     @Published private(set) var lastRefresh: Date?
@@ -38,7 +38,9 @@ final class MangaExtensionStore: ObservableObject {
     func load() async {
         guard !loaded else { return }; loaded = true
         #if DEBUG
-        if MangaReaderPreview.active { state = MangaReaderPreview.extensionState; loading = false; return }
+        if MangaReaderPreview.active {
+            state = MangaReaderPreview.extensionState; catalog = MangaReaderPreview.catalog; loading = false; return
+        }
         #endif
         do {
             state = try await storage.load()
@@ -102,7 +104,7 @@ final class MangaExtensionStore: ObservableObject {
     }
     func browse(extensionID: String, sourceID: String, mode: String, query: String, page: Int) async throws -> SourceMangaPage {
         #if DEBUG
-        if MangaReaderPreview.owns(extensionID) { return MangaReaderPreview.browse(query: query, page: page) }
+        if MangaReaderPreview.owns(extensionID) { return try await MangaReaderPreview.browse(query: query, page: page) }
         #endif
         let (entry, apk) = try await storage.package(extensionID)
         guard let source = entry.sources.first(where: { $0.id == sourceID }) else { throw MangaExtensionError.sourceUnavailable }

@@ -2,22 +2,32 @@ import SwiftUI
 import AnimeCore
 
 @MainActor
+protocol MangaCatalogLoading {
+    func browse(extensionID: String, sourceID: String, mode: String, query: String, page: Int) async throws -> SourceMangaPage
+}
+
+@MainActor
 final class MangaBrowseModel: ObservableObject {
-    @Published var mangas: [SourceManga] = []
-    @Published var loading = false
-    @Published var hasNext = false
-    @Published var error: String?
-    private var page = 0
+    @Published private(set) var pagination = MangaCatalogPagination()
+    @Published private(set) var loading = false
+    @Published private(set) var error: String?
+    var mangas: [SourceManga] { pagination.mangas }
+    var hasNext: Bool { pagination.continuation == .more }
+    var stalled: Bool { pagination.continuation == .stalled }
+    var paginationID: String { generation.uuidString + ":\(pagination.page)" }
     private var generation = UUID()
     private var selection = ""
-    func loadIfNeeded(_ source: MangaSourceReference, extensions: MangaExtensionStore, mode: String, query: String) async {
-        guard selection != mode + "\u{1f}" + query || (mangas.isEmpty && !loading && error == nil) else { return }
+    private func key(_ source: MangaSourceReference, _ mode: String, _ query: String) -> String {
+        source.id + "\u{1f}" + mode + "\u{1f}" + query
+    }
+    func loadIfNeeded(_ source: MangaSourceReference, extensions: any MangaCatalogLoading, mode: String, query: String) async {
+        guard selection != key(source, mode, query) || (pagination.page == 0 && !loading && error == nil) else { return }
         await load(source, extensions: extensions, mode: mode, query: query, reset: true)
     }
-    func load(_ source: MangaSourceReference, extensions: MangaExtensionStore, mode: String, query: String, reset: Bool) async {
-        if reset { generation = UUID(); selection = mode + "\u{1f}" + query; mangas = []; page = 0; hasNext = false }
-        else if loading || !hasNext { return }
-        let token = generation, next = page + 1
+    func load(_ source: MangaSourceReference, extensions: any MangaCatalogLoading, mode: String, query: String, reset: Bool, automatic: Bool = false) async {
+        if reset { generation = UUID(); selection = key(source, mode, query); pagination = MangaCatalogPagination() }
+        else if loading || selection != key(source, mode, query) || pagination.continuation == .end || (automatic && (stalled || error != nil)) { return }
+        let token = generation, next = pagination.page + 1
         loading = true; error = nil
         defer { if token == generation { loading = false } }
         do {
@@ -25,10 +35,10 @@ final class MangaBrowseModel: ObservableObject {
                 mode: mode, query: query, page: next)
             try Task.checkCancellation()
             guard token == generation else { return }
-            var seen = Set(mangas.map(\.url))
-            mangas += result.mangas.filter { !$0.url.isEmpty && seen.insert($0.url).inserted }
-            page = next; hasNext = result.hasNext
-        } catch is CancellationError {} catch { if token == generation { self.error = error.localizedDescription } }
+            pagination.append(result)
+        } catch is CancellationError {} catch {
+            if token == generation && !Task.isCancelled { self.error = error.localizedDescription }
+        }
     }
 }
 
@@ -43,6 +53,12 @@ struct MangaSourceBrowseView: View {
     @State private var submitted = ""
     @State private var showSettings = false
     @State private var showWebsite = false
+    init(source: MangaSourceReference, initialQuery: String = "") {
+        self.source = source
+        let text = initialQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        _query = State(initialValue: text); _submitted = State(initialValue: text)
+        _mode = State(initialValue: text.isEmpty ? "popular" : "search")
+    }
     private var key: String { mode + "\u{1f}" + submitted }
     private var latest: Bool { extensions.installed(source.extensionID)?.sources.first { $0.id == source.sourceID }?.supportsLatest == true }
     var body: some View {
@@ -95,14 +111,6 @@ struct MangaSourceBrowseView: View {
                     if !submitted.isEmpty { modeButton("Search", icon: "magnifyingglass", value: "search") }
                     Spacer(minLength: 0)
                 }
-                if let error = model.error {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(error).font(.subheadline).foregroundStyle(.secondary)
-                        Button("Try again") { Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: model.mangas.isEmpty) } }
-                            .buttonStyle(.bordered)
-                        Button("Open website / verify") { showWebsite = true }.font(.subheadline)
-                    }.padding().frame(maxWidth: .infinity, alignment: .leading).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 14))
-                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 12)], spacing: 12) {
                     ForEach(Array(model.mangas.enumerated()), id: \.element.id) { index, manga in
                         let title = MangaTitleReference(source: source, manga: manga)
@@ -111,16 +119,40 @@ struct MangaSourceBrowseView: View {
                         }.buttonStyle(.plain).accessibilityIdentifier("manga-title-\(index)")
                     }
                 }
-                if model.loading { ProgressView("Loading titles…").frame(maxWidth: .infinity).padding() }
-                else if model.mangas.isEmpty && model.error == nil {
-                    ContentUnavailableView("No titles found", systemImage: "magnifyingglass", description: Text("Try another search or browse Popular."))
-                } else if model.hasNext && model.error == nil {
-                    Button("Load more") { Task { await more() } }.frame(maxWidth: .infinity).padding()
-                        .task { await more() }
-                }
+                paginationFooter
             }.padding(16)
         }.accessibilityIdentifier("manga-source-catalog")
             .refreshable { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: true) }
+    }
+    /// The task belongs to a stable footer, not to the button that disappears
+    /// when loading becomes true (which used to cancel every next-page request).
+    private var paginationFooter: some View {
+        VStack(spacing: 12) {
+            if model.loading {
+                ProgressView(model.mangas.isEmpty ? "Loading titles…" : "Loading more titles…")
+                    .accessibilityIdentifier("manga-catalog-loading")
+            } else if let error = model.error {
+                Text(error).font(.subheadline).foregroundStyle(.secondary)
+                Button("Try again") { Task { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: model.pagination.page == 0) } }
+                    .buttonStyle(.bordered).accessibilityIdentifier("manga-catalog-retry")
+                Button("Open website / verify") { showWebsite = true }.font(.subheadline)
+            } else if model.stalled {
+                Text("This source returned no new titles. Automatic loading is paused.")
+                    .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("manga-catalog-stalled")
+                Button("Try next page") { Task { await more() } }.buttonStyle(.bordered)
+                    .accessibilityIdentifier("manga-catalog-next-page")
+            } else if model.mangas.isEmpty && model.pagination.page > 0 {
+                ContentUnavailableView("No titles found", systemImage: "magnifyingglass", description: Text("Try another search or browse Popular."))
+            } else if model.hasNext && model.pagination.page > 0 {
+                Button("Load more") { Task { await more() } }.accessibilityIdentifier("manga-catalog-load-more")
+            } else if !model.mangas.isEmpty {
+                Text("You’re all caught up").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("manga-catalog-end")
+            }
+        }.frame(maxWidth: .infinity).padding(.vertical, 20)
+            .task(id: model.paginationID) {
+                guard model.pagination.page > 0 else { return }
+                await more(automatic: true)
+            }
     }
     private func modeButton(_ label: String, icon: String, value: String) -> some View {
         Button { mode = value } label: {
@@ -129,5 +161,7 @@ struct MangaSourceBrowseView: View {
                 .foregroundStyle(mode == value ? MangaStyle.accent : .white)
         }.buttonStyle(.plain)
     }
-    private func more() async { await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: false) }
+    private func more(automatic: Bool = false) async {
+        await model.load(source, extensions: extensions, mode: mode, query: submitted, reset: false, automatic: automatic)
+    }
 }
