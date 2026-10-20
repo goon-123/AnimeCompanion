@@ -264,6 +264,18 @@ fn hiper_catalog_401_follows_the_guest_homepage_refresh_and_retry() {
 }
 
 #[test]
+fn hiper_fractional_reader_request_does_not_expand_float_rounding_error() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").unwrap();
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    let result = execute(&apk, serde_json::from_value(json!({"op":"pages","modern":true,"chapter":{"url":"/manga/owned/1.1","name":"Chapter 1.1","chapterNumber":1.1}})).unwrap(), |request| {
+        let input: Value = serde_json::from_str(&http_query_compat::decode(request.url.split("&input=").nth(1).unwrap())).unwrap();
+        assert_eq!(input["2"]["json"]["chapterNumber"],1.1);
+        HttpResp::ok(include_str!("../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-pages.json"))
+    }).unwrap();
+    assert_eq!(result.as_array().unwrap().len(), 2);
+}
+
+#[test]
 fn malformed_or_oversized_chapter_metadata_is_rejected_before_networking() {
     let dir = std::env::var("MANGA_TEST_APK_DIR").unwrap();
     let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();

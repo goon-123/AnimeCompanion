@@ -4,6 +4,20 @@ import AnimeMangaRuntime
 @testable import AnimeCompanion
 
 final class HiperRuntimeTests: XCTestCase {
+    func testFractionalChapterRPCDoesNotExpandFloatRoundingError() throws {
+        let root = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "OwnedFixtures", withExtension: nil))
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-en.hiperdex-v1.6.89.apk", responses: [
+            "https://hiperdex.tv/api/trpc/auth.me,series.bySlug,reader.chapterPages": Data(contentsOf: root.appendingPathComponent("hiper-pages.json"))
+        ])
+        let chapter = SourceMangaChapter(url: "/manga/owned/1.1", name: "Chapter 1.1", chapterNumber: 1.1)
+        let pages: [SourceMangaImage] = try host.execute(["op": "pages", "chapter": MangaRuntime.chapterInput(chapter)])
+        XCTAssertEqual(pages.count, 2)
+        let request = try XCTUnwrap(host.urls.last.flatMap { URLComponents(string: $0) })
+        let input = try XCTUnwrap(request.queryItems?.first { $0.name == "input" }?.value)
+        let rpc = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: [String: Any]])
+        let json = try XCTUnwrap(rpc["2"]?["json"] as? [String: Any])
+        XCTAssertEqual(json["chapterNumber"] as? Double, 1.1)
+    }
     func testHiperCatalogBookAndDuplicateChapterSurviveTheNativeBridge() throws {
         let bundle = Bundle(for: Self.self)
         let root = try XCTUnwrap(bundle.url(forResource: "OwnedFixtures", withExtension: nil))

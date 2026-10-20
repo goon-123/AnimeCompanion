@@ -52,7 +52,14 @@ fn number(vm: &mut Vm, args: &[JValue]) -> R {
         match vm.payload_of(args[0]) {
             Some(Native::IntBox(n)) => JsonVal::Int(i64::from(n)),
             Some(Native::LongBox(n)) => JsonVal::Int(n),
-            Some(Native::FloatBox(n)) => JsonVal::Double(f64::from(n)),
+            // Kotlin JsonPrimitive(Number) uses Number.toString(). Widening
+            // the binary float directly changes 1.1 into 1.100000023841858,
+            // which can select a different chapter in an exact-match API.
+            Some(Native::FloatBox(n)) => JsonVal::Double(
+                n.to_string()
+                    .parse()
+                    .map_err(|_| invalid(vm, "Invalid JSON float"))?,
+            ),
             Some(Native::DoubleBox(n)) => JsonVal::Double(n),
             _ => return Err(invalid(vm, "Unsupported JSON number")),
         }
@@ -503,6 +510,18 @@ mod tests {
         assert_eq!(parsed["id"], 9_000_000_000_002_i64);
         let nan = node(&mut vm, JsonVal::Double(f64::NAN)).unwrap();
         assert!(matches!(stringify(&mut vm, &[nan]), Err(NatErr::Throw(_))));
+    }
+    #[test]
+    fn float_json_numbers_keep_their_shortest_round_trip_value() {
+        let mut vm = vm();
+        let boxed = vm
+            .alloc_native("Ljava/lang/Float;", Native::FloatBox(1.1))
+            .unwrap();
+        let value = number(&mut vm, &[boxed]).unwrap();
+        let text = stringify(&mut vm, &[value]).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&vm.str_of_jvalue(text).unwrap()).unwrap();
+        assert_eq!(parsed, serde_json::json!(1.1));
     }
     fn configure(vm: &mut Vm, args: &[JValue]) -> R {
         let Some(Native::SerializersModule { mut polys }) = vm.payload_of(args[1]) else {
