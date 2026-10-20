@@ -1,0 +1,46 @@
+name: Manga runtime offline regressions
+on:
+  pull_request:
+    paths:
+      - 'Tools/MangaRuntime/**'
+      - 'scripts/test-manga-runtime.sh'
+      - 'scripts/prepare-manga-interpreter.py'
+      - 'Tests/MangaRuntimeTests/**'
+      - '.github/workflows/manga-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Tools/MangaRuntime/**'
+      - 'scripts/test-manga-runtime.sh'
+      - 'scripts/prepare-manga-interpreter.py'
+      - 'Tests/MangaRuntimeTests/**'
+      - '.github/workflows/manga-runtime.yml'
+permissions:
+  contents: read
+concurrency:
+  group: manga-offline-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  offline:
+    name: Pinned APKs with owned responses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RUST_FONTCONFIG_DLOPEN: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Tools/MangaRuntime/target
+          key: manga-linux-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-${{ hashFiles('Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/support/**', 'scripts/prepare-manga-interpreter.py') }}
+          restore-keys: |
+            manga-linux-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-
+      - name: Run all runtime and published APK regressions
+        run: bash scripts/test-manga-runtime.sh
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path Tools/MangaRuntime/Cargo.toml -- --check
+      - name: Check Rust warnings
+        run: cargo clippy --locked --manifest-path Tools/MangaRuntime/Cargo.toml --all-targets -- -D warnings

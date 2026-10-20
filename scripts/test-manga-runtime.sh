@@ -45,6 +45,7 @@ e97033f tachiyomi-en.manhuaus-v1.6.60.apk
 24bc6c2 tachiyomi-all.comicskingdom-v1.6.0.apk
 bdcf84f tachiyomi-all.projectsuki-v1.6.0.apk
 4217666-0 tachiyomi-en.mangabuddy-v1.6.34.apk
+4217666-0 tachiyomi-en.hentainexus-v1.6.20.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -69,6 +70,7 @@ expected = {
     'tachiyomi-all.comicskingdom-v1.6.0.apk': '3123f5c96374f7e6d8fa4cda3c9602b3897c646377d096627cf3e9b319f556d8',
     'tachiyomi-all.projectsuki-v1.6.0.apk': 'ef32135fd2aec84d8b949a58de255272dfdb9668298eb351f9d3438032fde7a8',
     'tachiyomi-en.mangabuddy-v1.6.34.apk': '6db9eb23ec4c065632de8ad425c3db6a7e5a373826190d14e2c25ac9b0ef5b25',
+    'tachiyomi-en.hentainexus-v1.6.20.apk': '3cbfbbdd6e4bd1cac8116df8d86ad0d6dc07cedf2197b15a99a51910f3d7cc56',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

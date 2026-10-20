@@ -33,6 +33,8 @@ use serialization_compat::*;
 mod compatibility_tests;
 #[cfg(test)]
 mod extension_reader_tests;
+#[cfg(test)]
+mod hentainexus_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
