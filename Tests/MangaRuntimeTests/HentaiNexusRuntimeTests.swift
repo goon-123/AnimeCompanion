@@ -7,7 +7,7 @@ final class HentaiNexusRuntimeTests: XCTestCase {
         let folder = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "OwnedFixtures", withExtension: nil))
         return try Data(contentsOf: folder.appendingPathComponent(name))
     }
-    private func host(reader: String = "hentainexus-pages.html") throws -> OwnedExtensionFixtureHTTP {
+    private func makeHost(reader: String = "hentainexus-pages.html") throws -> OwnedExtensionFixtureHTTP {
         try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-en.hentainexus-v1.6.20.apk", responses: [
             "https://hentainexus.com/explore/hot": try fixture("hentainexus-catalog.html"),
             "https://hentainexus.com/page/2": try fixture("hentainexus-catalog.html"),
@@ -17,7 +17,7 @@ final class HentaiNexusRuntimeTests: XCTestCase {
         ])
     }
     func testCatalogDatedChapterDecoderAndImageThroughTheNativeBridge() throws {
-        let host = try host()
+        let host = try makeHost()
         let catalog: SourceMangaPage = try host.execute(["op": "popular"])
         XCTAssertEqual(catalog.mangas.count, 2)
         XCTAssertEqual(catalog.mangas.first?.title, "Owned story")
@@ -46,7 +46,7 @@ final class HentaiNexusRuntimeTests: XCTestCase {
         XCTAssertEqual(Data(base64Encoded: image.bodyBase64), Data([0, 255, 23, 128]))
     }
     func testQualityPreferencesAndUnavailableQuality() throws {
-        let host = try host()
+        let host = try makeHost()
         let inspection: MangaExtensionInspection = try host.execute(["op": "inspect"])
         let source = try XCTUnwrap(inspection.sources.first)
         for (quality, suffix) in [("webp", "webp"), ("source", "png"), ("avif", "avif")] {
@@ -56,7 +56,7 @@ final class HentaiNexusRuntimeTests: XCTestCase {
             ])
             XCTAssertEqual(pages.first?.imageURL, "https://images.example/owned-page-2.\(suffix)")
         }
-        let fallback = try self.host(reader: "hentainexus-fallback.html")
+        let fallback = try makeHost(reader: "hentainexus-fallback.html")
         let command: [String: Any] = [
             "op": "pages", "chapter": ["url": "/read/42"], "settingsSourceID": source.id,
             "settings": ["pref_image_format": ["type": "string", "value": "source"]]

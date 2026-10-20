@@ -6,7 +6,7 @@ Implement shared raw-data selectors and `Element.data()` for scripts/styles/comm
 
 Add the twentieth test-only pinned APK, three complete extension replay cases, five host contract regressions and two native bridge cases. No production APK, source content or image fixture is included. The catalog spinner's live cause is not established by offline replay.
 
-Baseline CI: **81 passed, 2 reader failures** before the selector fix; **83 passed, 2 reader failures** before the byte-slice adapter. Final runtime, formatting/Clippy, native iPhone/iPad and unsigned IPA results are pending [PR #29](https://github.com/goon-123/AnimeCompanion/pull/29). No local executor is available for this follow-up; validation runs in hosted CI.
+Baseline CI: **81 passed, 2 reader failures** before the selector fix; **83 passed, 2 reader failures** before the byte-slice adapter. The fixed runtime passes all **88 Rust regressions** in [run 39463097814](https://github.com/goon-123/AnimeCompanion/actions/runs/39463097814); its formatting corrections are applied in the following commit. Final formatting/Clippy, native iPhone/iPad and unsigned IPA results are pending [PR #29](https://github.com/goon-123/AnimeCompanion/pull/29). No local executor is available for this follow-up; validation runs in hosted CI.
 
 ## Additional manga readers and actionable chapter errors — build 47
 
