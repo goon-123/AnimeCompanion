@@ -13,6 +13,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
+mod array_compat;
 mod browser_compat;
 mod chapter_wire;
 mod date_compat;
@@ -1029,6 +1030,7 @@ where
             .map_err(|e| e.to_string())?;
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

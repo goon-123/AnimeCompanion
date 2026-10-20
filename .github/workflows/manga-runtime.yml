@@ -41,6 +41,8 @@ jobs:
       - name: Run all runtime and published APK regressions
         run: bash scripts/test-manga-runtime.sh
       - name: Check Rust formatting
+        if: always()
         run: cargo fmt --manifest-path Tools/MangaRuntime/Cargo.toml -- --check
       - name: Check Rust warnings
+        if: always()
         run: cargo clippy --locked --manifest-path Tools/MangaRuntime/Cargo.toml --all-targets -- -D warnings

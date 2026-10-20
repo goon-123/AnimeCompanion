@@ -62,6 +62,14 @@ Nineteen APKs are checksum-pinned for tests only. Comic Fury's real catalog/cove
 
 All 80 project Rust tests pass locally. Three native Swift/C/Rust tests reuse these responses, and the retained iPhone/iPad reader suite includes source-name/error/retry coverage. Host-generated diagnostics contain only a known category and sanitized standard-library class name; raw VM exceptions stay private. The reader can open its source's existing private website session and retry after **Use session**. Native results and IPA status are tracked in `BUILD_STATUS.md`. These offline tests do not certify live website access or universal extension compatibility.
 
+## HentaiNexus decoder compatibility (build 48)
+
+Version 0.25.1. HentaiNexus 1.6.20's actual reader fails first because Jsoup string selectors do not understand :containsData(...), then because Kotlin `ByteArray.slice(IntRange)` is missing. Support raw script/style/comment data, case-insensitive data matching, combinators/receiver scope and `Element.data()` without treating ordinary visible text as raw data. Retain temporary-marker cleanup and node/text/instruction bounds. Byte slices return boxed signed bytes, preserve the input, accept empty ranges, reject invalid nonempty indices and bound expansion before allocation.
+
+Twenty APKs are checksum-pinned for tests only. New owned fixtures exercise the extension's popular/latest/search, details and dated chapter, encoded page metadata, image order/transport, image-quality preferences, empty readers and malformed/missing-quality failures. The APK performs its own decoding; production gains standard host APIs, with no source-specific decoder. Two native Swift/C/Rust tests replay the same fixtures. A Linux CI job provides faster feedback alongside the retained iPhone/iPad and IPA workflows.
+
+The catalog replay already passed on build 47's runtime; this change does not establish the cause of the device's loading spinner or certify live website availability. Authentication, website changes and other unimplemented extension APIs remain possible separate failures. Validation status is tracked in `BUILD_STATUS.md`.
+
 ## Build and verification
 
 ```bash
