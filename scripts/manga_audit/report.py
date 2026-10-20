@@ -1,5 +1,6 @@
 """Evidence-aware matrix and shared-gap ranking."""
 from collections import Counter, defaultdict
+import html
 import json
 from pathlib import Path
 import re
@@ -72,7 +73,7 @@ def group_gaps(rows):
 
 
 def cell(text):
-    return str(text).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ").replace("`", "'")
+    return html.escape(str(text), quote=False).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ").replace("\r", " ").replace("`", "'")
 
 
 def render(report):

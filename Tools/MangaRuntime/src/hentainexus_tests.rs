@@ -139,5 +139,7 @@ fn hentainexus_settings_schema_executes_the_real_typed_set_array_path() {
     let controls = settings["settings"].as_array().unwrap();
     assert!(!controls.is_empty());
     assert!(controls.iter().any(|item| item["control"] == "choice"));
-    assert!(controls.iter().any(|item| item["key"] == "pref_image_format"));
+    assert!(controls
+        .iter()
+        .any(|item| item["key"] == "pref_image_format"));
 }

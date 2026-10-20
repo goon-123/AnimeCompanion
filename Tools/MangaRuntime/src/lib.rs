@@ -1240,10 +1240,7 @@ pub unsafe extern "C" fn ac_manga_execute(
             let (Some(callback), Some(release)) = (http, release_http) else {
                 return fallback();
             };
-            let Ok(input) = CString::new(
-                http_wire::request_json(request)
-                .to_string(),
-            ) else {
+            let Ok(input) = CString::new(http_wire::request_json(request).to_string()) else {
                 return fallback();
             };
             let result = callback(context, input.as_ptr());

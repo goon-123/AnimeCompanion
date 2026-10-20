@@ -11,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from manga_audit.dex import Dex, DexError, apk_inventory, unmatched_references
-from manga_audit.report import fixture_evidence, passing_tests, group_gaps
+from manga_audit.report import cell, fixture_evidence, passing_tests, group_gaps
 from manga_audit.runtime import classify
 
 spec = importlib.util.spec_from_file_location("audit_cli", ROOT / "scripts/audit-manga-compatibility.py")
@@ -93,6 +93,9 @@ class DexInventoryTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_report_cells_escape_identifiers_and_table_delimiters(self):
+        self.assertEqual(cell('<init>|owned\n'), '&lt;init&gt;\\|owned ')
+
     def test_only_passing_tests_at_exact_checksum_and_source_index_count(self):
         entry = {"package": "owned", "sha256": "a" * 64}
         fixture = {**entry, "name": "owned.apk", "cases": [

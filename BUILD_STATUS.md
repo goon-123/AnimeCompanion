@@ -1,3 +1,17 @@
+## Catalog-wide manga compatibility — build 49
+
+Version 0.25.2. Focus only on the shared manga runtime and its verification; no anime/provider or reader-layout redesign.
+
+The first complete [catalog audit](https://github.com/goon-123/AnimeCompanion/actions/runs/39471358711) inventories all **1,444 APKs**, enumerates **2,221 source instances** and runs **15,190 offline operation probes** against owned responses. All inventories and child processes complete. The baseline passes **89 Rust** and **9 Python** tests; separate Linux formatting/Clippy checks pass in [run 39471358673](https://github.com/goon-123/AnimeCompanion/actions/runs/39471358673). Only **5 current-catalog source instances** have complete owned-flow evidence; this is not live or universal support.
+
+Prioritize observed shared failures rather than counting downloads as supported sources. The initial scan reports DateTimeFormatter's one-argument ofPattern on 75 packages, an optional Android settings listener on 119, IndexedValue components on 17 and typed HashSet arrays on 7. Counts overlap and removing a first failure may reveal another.
+
+Add those shared contracts and a dedicated actual-APK HentaiNexus settings-schema regression. The prior quality test only injected settings into page decoding; it did not verify schema extraction. Correct the evidence manifest accordingly. Android EditText binding remains explicitly unsupported; the interface allows the APK's schema classes to load, not Android UI execution.
+
+Fix a separately confirmed binary-body transport bug: the previous HTTP bridge converted raw bytes using lossy UTF-8. Preserve raw bytes through both interpreter request paths and the C/Swift callback, keep text compatibility, execute custom RequestBody serialization, enforce the body limit and retain errors. No source-specific HTTP builder, parser or decoder is added.
+
+The new batch is under verification in [PR #30](https://github.com/goon-123/AnimeCompanion/pull/30). First-run regressions pass 96/97; the custom-body test exposes a MediaType stringification issue, corrected before re-running. Native Swift/C and iPhone/iPad checks plus the unsigned IPA are pending. Final post-fix catalog measurements will be recorded here; no live website or physical-device certification is implied.
+
 ## HentaiNexus reader decoder — build 48
 
 Version 0.25.1. Replay the published, SHA-256-pinned HentaiNexus 1.6.20 APK with neutral owned HTML and encoded page metadata. The original runtime passes popular/latest/search and the details/dated-chapter fixture, but cannot find the reader script because Jsoup :containsData(...) is unsupported. After adding that selector, the same APK exposes missing Kotlin `ByteArray.slice(IntRange)`.

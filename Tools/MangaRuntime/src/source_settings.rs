@@ -328,9 +328,8 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         instance: true,
         f: android_edit_text_binding,
     })?;
-    let listener = vm.ensure_class_by_desc(
-        "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
-    )?;
+    let listener =
+        vm.ensure_class_by_desc("Landroidx/preference/EditTextPreference$OnBindEditTextListener;")?;
     vm.classes[listener as usize].is_interface = true;
     let key = (
         vm.intern("Landroid/content/SharedPreferences;"),

@@ -26,7 +26,9 @@ fn of_pattern(vm: &mut Vm, args: &[JValue]) -> R {
         .str_of_jvalue(args[0])
         .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
     if pattern.len() > 256 {
-        return Err(NatErr::Throw(vm.err_iae("Date pattern exceeds the host limit")));
+        return Err(NatErr::Throw(
+            vm.err_iae("Date pattern exceeds the host limit"),
+        ));
     }
     vm.alloc_native(
         "Ljava/time/format/DateTimeFormatter;",
@@ -287,12 +289,14 @@ mod tests {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();
         let pattern = vm.alloc_string("yyyy-MM-dd");
-        let formatter = vm.invoke_static(
-            "Ljava/time/format/DateTimeFormatter;",
-            "ofPattern",
-            "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;",
-            vec![pattern],
-        ).unwrap();
+        let formatter = vm
+            .invoke_static(
+                "Ljava/time/format/DateTimeFormatter;",
+                "ofPattern",
+                "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;",
+                vec![pattern],
+            )
+            .unwrap();
         let text = vm.alloc_string("2026-10-20");
         let date = vm.invoke_static(
             "Ljava/time/LocalDate;",
