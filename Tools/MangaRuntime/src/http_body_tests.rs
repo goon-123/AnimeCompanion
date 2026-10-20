@@ -140,9 +140,7 @@ fn custom_throw(vm: &mut Vm, _: &[JValue]) -> Result<JValue, NatErr> {
 }
 
 fn custom_fatal(_: &mut Vm, _: &[JValue]) -> Result<JValue, NatErr> {
-    Err(NatErr::Fatal(JvmError::Resolution(
-        "Owned execution limit".into(),
-    )))
+    Err(NatErr::Fatal(JvmError::BudgetExceeded))
 }
 
 fn custom(vm: &mut Vm, write: dexvm::vm::NativeFn) -> JValue {
@@ -189,9 +187,17 @@ fn custom_request_body_dispatches_write_to_and_keeps_failures() {
             .unwrap()
             .headers
             .contains(&("Content-Type".into(), "application/owned".into())));
-        for write in [custom_throw as dexvm::vm::NativeFn, custom_fatal] {
+        for (fatal, write) in [
+            (false, custom_throw as dexvm::vm::NativeFn),
+            (true, custom_fatal),
+        ] {
             let body = custom(&mut vm, write);
-            assert!(send(&mut vm, Some(body), legacy, vec![]).is_err());
+            let error = send(&mut vm, Some(body), legacy, vec![]).unwrap_err();
+            if fatal {
+                assert!(matches!(error, JvmError::BudgetExceeded));
+            } else {
+                assert!(matches!(error, JvmError::Uncaught(_)));
+            }
             assert_eq!(seen.borrow().len(), 1);
         }
     }

@@ -80,7 +80,28 @@ fn component_value(vm: &mut Vm, args: &[JValue]) -> R {
     }
 }
 
+fn array_store_init(vm: &mut Vm, args: &[JValue]) -> R {
+    let message = args.get(1).and_then(|value| vm.str_of_jvalue(*value));
+    vm.arena.objects[args[0].as_obj() as usize].native = Some(Native::Throwable {
+        message,
+        cause: JValue::Null,
+    });
+    Ok(JValue::Null)
+}
+
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for sig in ["()V", "(Ljava/lang/String;)V"] {
+        vm.register_native(NativeEntry {
+            class: "Ljava/lang/ArrayStoreException;",
+            name: "<init>",
+            sig,
+            instance: true,
+            f: array_store_init,
+        })?;
+    }
+    let exception = vm.ensure_class_by_desc("Ljava/lang/ArrayStoreException;")?;
+    vm.classes[exception as usize].superclass =
+        Some(vm.ensure_class_by_desc("Ljava/lang/RuntimeException;")?);
     for class in [
         "Ljava/util/Collection;",
         "Ljava/util/List;",
@@ -162,7 +183,15 @@ mod tests {
         let mixed = vm
             .alloc_native("Ljava/util/ArrayList;", Native::List(vec![number]))
             .unwrap();
-        assert!(typed_array(&mut vm, &[mixed, empty]).is_err());
+        let Err(NatErr::Throw(error)) = typed_array(&mut vm, &[mixed, empty]) else {
+            panic!("Incompatible elements must throw ArrayStoreException");
+        };
+        let actual = vm.arena.objects[error as usize].class;
+        assert_eq!(vm.class_desc_str(actual), "java.lang.ArrayStoreException");
+        let parent = vm
+            .ensure_class_by_desc("Ljava/lang/RuntimeException;")
+            .unwrap();
+        assert!(vm.is_assignable(actual, parent).unwrap());
         assert!(typed_array(&mut vm, &[set, JValue::Null]).is_err());
     }
 
