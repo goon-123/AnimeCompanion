@@ -229,6 +229,16 @@ fn zoned_now(vm: &mut Vm, args: &[JValue]) -> R {
     zone_id(vm, zone)?;
     zoned(vm, now_millis()?, zone)
 }
+fn datetime_now(vm: &mut Vm, args: &[JValue]) -> R {
+    let zone = if args.is_empty() {
+        system_default(vm, &[])?
+    } else {
+        args[0]
+    };
+    let wall = local_millis(vm, zone, now_millis()?)?;
+    vm.alloc_native("Ljava/time/LocalDateTime;", Native::EpochMillis(wall))
+        .map_err(NatErr::Fatal)
+}
 fn at_zone(vm: &mut Vm, args: &[JValue]) -> R {
     let Some(Native::EpochMillis(wall)) = vm.payload_of(args[0]) else {
         return Err(error(vm, "Expected local date-time"));
@@ -373,6 +383,20 @@ pub(super) fn install(vm: &mut Vm, default_id: &str) -> Result<(), JvmError> {
             "()Ljava/time/ZonedDateTime;",
             false,
             zoned_now,
+        ),
+        (
+            "Ljava/time/LocalDateTime;",
+            "now",
+            "()Ljava/time/LocalDateTime;",
+            false,
+            datetime_now,
+        ),
+        (
+            "Ljava/time/LocalDateTime;",
+            "now",
+            "(Ljava/time/ZoneId;)Ljava/time/LocalDateTime;",
+            false,
+            datetime_now,
         ),
         (
             ZONED,
@@ -567,6 +591,13 @@ mod tests {
         assert_eq!(
             offset_at(&mut vm, zone, millis("2024-07-01T00:00:00Z")).unwrap(),
             -25_200
+        );
+        let fixed = of_id(&mut vm, "+18:00").unwrap();
+        let before = now_millis().unwrap() + 64_800_000;
+        let local = datetime_now(&mut vm, &[fixed]).unwrap();
+        let after = now_millis().unwrap() + 64_800_000;
+        assert!(
+            matches!(vm.payload_of(local), Some(Native::EpochMillis(m)) if (before..=after).contains(&m))
         );
     }
 }

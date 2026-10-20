@@ -787,6 +787,8 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         ("Ljava/time/format/DateTimeFormatter;", "withZone", "(Ljava/time/ZoneId;)Ljava/time/format/DateTimeFormatter;", true, with_zone),
         ("Ljava/time/format/DateTimeFormatter;", "format", "(Ljava/time/temporal/TemporalAccessor;)Ljava/lang/String;", true, format_date),
         ("Ljava/time/LocalDate;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
+        ("Ljava/time/LocalDateTime;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
+        ("Ljava/time/ZonedDateTime;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;", true, append_pattern),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "parseDefaulting", "(Ljava/time/temporal/TemporalField;J)Ljava/time/format/DateTimeFormatterBuilder;", true, defaulting),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;", true, case_insensitive as dexvm::vm::NativeFn),
