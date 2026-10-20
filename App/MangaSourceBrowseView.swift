@@ -146,7 +146,7 @@ struct MangaSourceBrowseView: View {
             } else if model.hasNext && model.pagination.page > 0 {
                 Button("Load more") { Task { await more() } }.accessibilityIdentifier("manga-catalog-load-more")
             } else if !model.mangas.isEmpty {
-                Text("You’re all caught up").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("manga-catalog-end")
+                Text("End of results").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("manga-catalog-end")
             }
         }.frame(maxWidth: .infinity).padding(.vertical, 20)
             .task(id: model.paginationID) {

@@ -4,7 +4,7 @@ Version 0.24.0. Keep the pagination task attached to a stable footer while its l
 
 Render repository-supplied source icons in available/installed extension lists, extension details, source rows and the new manga source chooser with the public artwork cache. Anime details expose a separate Find manga or manhwa action (including matched LiveChart details). Route into a fresh Manga title search with editable English/original title suggestions, source/language selection and extension setup. Retain the originating anime tab's navigation; only the chosen source receives a search. No source-specific scraper, ID mapping, external server or account/library mutation is added.
 
-Core pagination/title tests, native model cancellation/stale-request/retry tests, PNG icon decode/cache checks and iPhone/iPad UI scenarios cover these paths with owned data. Final CI, screenshots and unsigned IPA verification are pending on this branch; build 45 artifacts are not build 46. Broader extension-runtime compatibility and website-access limitations remain unchanged.
+Core pagination/title tests, native model cancellation/stale-request/retry tests, PNG icon decode/cache checks and iPhone/iPad UI scenarios cover these paths with owned data. Give the new title field a 44-point tap target, explicit focus and a clear-title control; the original iPhone edit test exposed a keyboard-focus failure. Current CI results, screenshots and the final unsigned IPA are tracked in [PR #27](https://github.com/goon-123/AnimeCompanion/pull/27). Broader extension-runtime compatibility and website-access limitations remain unchanged.
 
 ## HiperDex and shared JSON compatibility — build 45
 

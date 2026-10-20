@@ -25,10 +25,19 @@ struct MangaTitleSearchView: View {
     var body: some View {
         List {
             Section {
-                Label("Find the story behind the anime", systemImage: "books.vertical").font(.headline)
-                TextField("Series title", text: $query).submitLabel(.search).autocorrectionDisabled()
-                    .focused($editing).onSubmit { editing = false }
-                    .accessibilityIdentifier("manga-search-title")
+                Label(titles.isEmpty ? "Search manga and manhwa" : "Find the story behind the anime", systemImage: "books.vertical").font(.headline)
+                HStack(spacing: 8) {
+                    TextField("Series title", text: $query).submitLabel(.search).autocorrectionDisabled()
+                        .focused($editing).onSubmit { editing = false }
+                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                        .simultaneousGesture(TapGesture().onEnded { _ in editing = true })
+                        .accessibilityIdentifier("manga-search-title")
+                    Button { query = ""; editing = true } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    }.buttonStyle(.borderless).opacity(query.isEmpty ? 0 : 1).disabled(query.isEmpty)
+                        .accessibilityHidden(query.isEmpty).accessibilityLabel("Clear series title")
+                        .accessibilityIdentifier("manga-search-clear")
+                }
                 if titles.count > 1 {
                     ForEach(titles, id: \.self) { title in
                         Button { query = title } label: {

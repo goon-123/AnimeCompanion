@@ -37,8 +37,9 @@ final class MangaBrowsingUITests: XCTestCase {
         app.revealInContent(entry); entry.tap()
         openMangaShortcut(app, expected: "Phase 2 tracked title")
         let field = app.textFields["manga-search-title"]
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Phase 2 tracked title".count))
+        let clear = app.buttons["manga-search-clear"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 10)); clear.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         field.typeText("The Glass Harbor\n")
         XCTAssertEqual(field.value as? String, "The Glass Harbor")
         let source = app.buttons["manga-search-source-preview-en"]

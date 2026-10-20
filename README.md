@@ -6,7 +6,7 @@ Fix the next-page footer cancelling its own request when it switches to a loadin
 
 Extension install lists, extension details and installed sources now display the repository's actual icon using the shared public-artwork cache. Icons fall back to a book symbol when artwork is unavailable.
 
-Anime details in Explore and My Library have a **Find manga or manhwa** action separate from watching an episode. It opens an editable title search in Manga; select an installed source to search it and open a result in the reader. Original-title suggestions, language filtering and extension management are available. Only the source you select receives the search; anime IDs are never treated as manga IDs. Manga's toolbar also opens this search directly.
+Anime details in Explore and My Library have a **Find manga or manhwa** action separate from watching an episode. It opens an editable title search in Manga; select an installed source to search it and open a result in the reader. Clear the prefilled title with the × button to enter another name. Original-title suggestions, language filtering and extension management are available. Only the source you select receives the search; anime IDs are never treated as manga IDs. Manga's toolbar also opens this search directly.
 
 ### Shared manga compatibility (0.23.0 / build 45)
 
