@@ -23,7 +23,9 @@ mod http_query_compat;
 mod http_wire;
 mod java_compat;
 mod json_compat;
+mod json_serializer_compat;
 mod jsoup_compat;
+mod kotlin_type_compat;
 mod okio_compat;
 mod reflection_compat;
 mod regex_compat;
@@ -42,6 +44,8 @@ mod extension_reader_tests;
 mod hentainexus_tests;
 #[cfg(test)]
 mod http_body_tests;
+#[cfg(test)]
+mod json_extension_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -146,17 +150,29 @@ fn descriptor_kind(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
         .map_err(NatErr::Fatal)?;
     let name = vm.str_of_jvalue(name).unwrap_or_default();
     let class = match name.as_str() {
-        "kotlin.String" => "Lkotlinx/serialization/descriptors/PrimitiveKind$STRING;",
+        "kotlin.String"
+        | "kotlinx.serialization.json.JsonPrimitive"
+        | "kotlinx.serialization.json.JsonLiteral" => {
+            "Lkotlinx/serialization/descriptors/PrimitiveKind$STRING;"
+        }
         "kotlin.Int" => "Lkotlinx/serialization/descriptors/PrimitiveKind$INT;",
         "kotlin.Long" => "Lkotlinx/serialization/descriptors/PrimitiveKind$LONG;",
         "kotlin.Boolean" => "Lkotlinx/serialization/descriptors/PrimitiveKind$BOOLEAN;",
         "kotlin.Float" => "Lkotlinx/serialization/descriptors/PrimitiveKind$FLOAT;",
         "kotlin.Double" => "Lkotlinx/serialization/descriptors/PrimitiveKind$DOUBLE;",
-        "kotlin.collections.ArrayList" | "kotlin.collections.LinkedHashSet" => {
+        "kotlin.collections.ArrayList"
+        | "kotlin.collections.LinkedHashSet"
+        | "kotlinx.serialization.json.JsonArray" => {
             "Lkotlinx/serialization/descriptors/StructureKind$LIST;"
         }
-        "kotlin.collections.LinkedHashMap" => {
+        "kotlin.collections.LinkedHashMap" | "kotlinx.serialization.json.JsonObject" => {
             "Lkotlinx/serialization/descriptors/StructureKind$MAP;"
+        }
+        "kotlinx.serialization.json.JsonElement" => {
+            "Lkotlinx/serialization/descriptors/PolymorphicKind$SEALED;"
+        }
+        "kotlinx.serialization.json.JsonNull" => {
+            "Lkotlinx/serialization/descriptors/SerialKind$ENUM;"
         }
         _ => "Lkotlinx/serialization/descriptors/StructureKind$CLASS;",
     };
@@ -370,6 +386,8 @@ fn image_url_request(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     .map_err(NatErr::Fatal)
 }
 static FUNCTION_INTERFACES: &[NativeEntry] = &[
+    NativeEntry { class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;", name: "addElement", sig: "(Ljava/lang/String;Z)V", instance: true, f: descriptor_add_element },
+    NativeEntry { class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;", name: "isElementOptional", sig: "(I)Z", instance: true, f: descriptor_element_optional },
     NativeEntry { class: "Lokio/BufferedSource;", name: "readUtf8", sig: "(J)Ljava/lang/String;", instance: true, f: buffered_read_utf8 },
     NativeEntry { class: "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;", name: "isInline", sig: "()Z", instance: true, f: descriptor_not_nullable },
     NativeEntry { class: "Lkotlinx/serialization/internal/ArrayListSerializer;", name: "getDescriptor", sig: "()Lkotlinx/serialization/descriptors/SerialDescriptor;", instance: true, f: list_descriptor },
@@ -1040,9 +1058,11 @@ where
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     uri_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    json_serializer_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     http_query_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     for (name, sig, f) in [
         (

@@ -1,3 +1,15 @@
+## Shared JSON and Kotlin type compatibility — build 50
+
+Version 0.25.3. Keep this batch confined to manga extension compatibility and verification; app/Safari version metadata is advanced together.
+
+Reproduce the build-49 failures using the published, SHA-256-pinned FlameComics 1.6.1 and AllManga/AllAnime 1.6.29 APKs. The former initially fails `getClassifier` on a Java Class stand-in; the latter cannot load `JsonElementSerializer`. Add shared JSON serializers, map encoding, genuine Kotlin type tokens/projections and generated descriptor optional flags. Keep serializer/argument references GC-traced and KClass wrappers canonical for polymorphic module lookup. Bound native map reentry and preserve catchable guest errors/fatal VM limits. Do not introduce source-specific production parsers.
+
+FlameComics now passes owned popular/latest/search, details, dated fractional chapters, ordered pages and image transport. AllManga source 0 passes popular and combined details/dated chapters, including its generated nested Boolean-map GraphQL request. Its browser reader remains unverified. Its real client additionally exposes boxed predicate handling in `removeAll` and uninitialized non-null source-model memo defaults; both shared contracts are covered. Title metadata persistence across host operations is not expanded by this batch.
+
+Local checks pass **107 Rust tests**, **10 Python audit tests**, Rust formatting/Clippy, shell syntax, Safari resource/version and whitespace checks. Two new Swift/C/Rust tests reuse the owned responses. Native iPhone/iPad execution, unsigned IPA packaging and the full frozen-catalog audit are pending hosted CI.
+
+The targeted audit inventories all **60 packages** associated with those three original gap groups, enumerates **170 source instances** and executes **658 bounded offline operation probes**. None of the three original gaps appears in the executed probes. Deadlines leave **583 operation cells unexecuted**, and many empty responses are rejected, so this is not 60 newly working sources. Remaining observed groups in this subset concern LocalDate day-of-week/format, ObjectSerializer encoding and a Json.Default API. Full owned-flow evidence is added only for FlameComics; AllManga remains partial.
+
 ## Catalog-wide manga compatibility — build 49
 
 Version 0.25.2. Focus only on the shared manga runtime and its verification; no anime/provider or reader-layout redesign.

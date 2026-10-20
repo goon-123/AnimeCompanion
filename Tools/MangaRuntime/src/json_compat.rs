@@ -18,7 +18,7 @@ fn thrown(error: JvmError) -> NatErr {
 fn invalid(vm: &mut Vm, message: &str) -> NatErr {
     NatErr::Throw(vm.throwable_of("Ljava/lang/IllegalArgumentException;", message))
 }
-fn node(vm: &mut Vm, value: JsonVal) -> R {
+pub(super) fn node(vm: &mut Vm, value: JsonVal) -> R {
     if matches!(value, JsonVal::Null) {
         let field = dexvm::vm::FieldRef {
             class_desc: vm.intern(NULL),
@@ -171,6 +171,24 @@ fn element_deserialize(vm: &mut Vm, args: &[JValue]) -> R {
         Some(Native::JsonDecoder { element, .. }) => Ok(element),
         _ => Err(invalid(vm, "JsonElement requires a JSON decoder")),
     }
+}
+
+// Model constructors in the pinned core leave these non-null Kotlin properties
+// unset. Initialize on first access, including models reconstructed by the host.
+fn model_memo(vm: &mut Vm, args: &[JValue]) -> R {
+    let memo = match vm.payload_of(args[0]) {
+        Some(Native::SManga { memo, .. } | Native::SChapter { memo, .. }) => memo,
+        _ => return Err(invalid(vm, "Expected a source model")),
+    };
+    if !memo.is_null_ref() {
+        return Ok(memo);
+    }
+    let value = node(vm, JsonVal::Object(Vec::new()))?;
+    match &mut vm.arena.objects[args[0].as_obj() as usize].native {
+        Some(Native::SManga { memo, .. } | Native::SChapter { memo, .. }) => *memo = value,
+        _ => return Err(invalid(vm, "Expected a source model")),
+    }
+    Ok(value)
 }
 
 fn sealed_init(vm: &mut Vm, args: &[JValue]) -> R {
@@ -359,6 +377,18 @@ fn factory_default(vm: &mut Vm, args: &[JValue]) -> R {
 }
 
 pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for class in [
+        "Leu/kanade/tachiyomi/source/model/SManga;",
+        "Leu/kanade/tachiyomi/source/model/SChapter;",
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name: "getMemo",
+            sig: "()Lkotlinx/serialization/json/JsonObject;",
+            instance: true,
+            f: model_memo,
+        })?;
+    }
     vm.register_native(NativeEntry {
         class: "Lkotlinx/serialization/json/JsonArray;",
         name: "<init>",

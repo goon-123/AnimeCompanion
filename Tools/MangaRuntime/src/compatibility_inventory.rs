@@ -15,7 +15,15 @@ pub(super) fn inventory(vm: &mut Vm) -> Value {
         })
         .collect();
     methods.sort();
-    let descriptors: BTreeSet<String> = methods.iter().map(|m| m.0.clone()).collect();
+    let descriptors: BTreeSet<String> = methods
+        .iter()
+        .map(|m| m.0.clone())
+        .chain(
+            vm.classes
+                .iter()
+                .map(|class| vm.str_of(class.descriptor).to_owned()),
+        )
+        .collect();
     let mut parents = BTreeMap::new();
     let mut unresolved = Vec::new();
     for descriptor in descriptors {

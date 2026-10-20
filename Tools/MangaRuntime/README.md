@@ -100,6 +100,23 @@ python3 scripts/audit-manga-compatibility.py --packages en.hentainexus all.manga
 
 The Manga compatibility audit workflow publishes `compatibility.md`, its machine-readable matrix and the actual host API inventory for each run. Reports retain frozen catalog/index/release-manifest hashes, runtime revision, test-log hash, incomplete cells and version-specific evidence. Production carries no audit-only command, APK corpus or source fixture. See [BUILD_STATUS.md](../../BUILD_STATUS.md) and PR #30 for measured post-fix results.
 
+## JSON and Kotlin type compatibility (build 50)
+
+Version 0.25.3 targets three shared gaps in the build-49 audit: the canonical `JsonElementSerializer` class (30 packages), `KType.getClassifier` on the old Java Class stand-in (25), and JSON map encoding (23). These groups overlap across 60 packages. Removing their first observed missing API is not evidence that all 60 sources work.
+
+Supply canonical, rooted JSON tree serializers with element-shape checks, typed/erased dispatch and descriptor children/kinds. Retain MapSerializer's key/value serializers, invoke real child/DTO serializers, preserve map insertion order and 64-bit JSON integers, and reject structured object keys and non-finite values. Bound map native reentry, tree depth and work; guest errors stay catchable while VM limits remain fatal. Preserve bundled descriptor-kind implementations and constructors. Generated descriptor optional flags now come from the serializer's actual `addElement` calls.
+
+Replace the lossy Kotlin type-token stand-ins with GC-traced classifier/argument/nullability/projection objects. Cache KClass wrappers on the VM's rooted Java Class objects so existing polymorphic-module registrations still match. Type/projection equality, variance, JVM class mapping and nullable generic arguments have host regressions. This is lightweight JVM type-token support, not arbitrary Kotlin reflection. A boxed-Boolean predicate regression fixes a separate `removeAll` panic exposed by the real AllManga client. Source-model JSON memo getters initialize their non-null empty defaults without overwriting existing values; this does not add title-memo persistence across host operations.
+
+Two additional published APKs are checksum-pinned in test-only storage:
+
+| Extension | Exact-version owned-fixture evidence |
+| --- | --- |
+| FlameComics 1.6.1 | Popular/latest/search, details, dated fractional chapters, map-ordered pages, image transport |
+| AllManga/AllAnime 1.6.29, source 0 | Popular catalog, generated GraphQL request encoding including a nested Boolean map, details and dated chapters; reader/browser flow not established |
+
+Rust and native Swift/C tests reuse neutral owned responses, never real chapter content. All 107 Rust tests and 10 audit parser/evidence/privacy tests pass locally. A selected audit inventories all 60 associated packages and executes 658 probes over 170 enumerated source instances; none of the three original gaps appears in exercised paths. Deadlines leave 583 operation cells unexecuted, and empty-response failures remain explicit. Native iPhone/iPad, full-catalog and IPA results remain pending hosted CI. Further date/time, Kotlin/Android and serializer APIs remain incomplete; no live-source or universal compatibility claim is made.
+
 ## Build and verification
 
 ```bash
