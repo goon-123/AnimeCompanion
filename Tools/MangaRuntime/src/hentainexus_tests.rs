@@ -9,11 +9,9 @@ fn apk() -> Vec<u8> {
     .unwrap()
 }
 fn run(apk: &[u8], command: Value, html: &'static str) -> Value {
-    execute(
-        apk,
-        serde_json::from_value(command).unwrap(),
-        move |_| HttpResp::ok(html),
-    )
+    execute(apk, serde_json::from_value(command).unwrap(), move |_| {
+        HttpResp::ok(html)
+    })
     .unwrap()
 }
 const CATALOG: &str =
@@ -63,8 +61,14 @@ fn hentainexus_decodes_owned_pages_in_source_order_and_transports_images() {
         READER,
     );
     assert_eq!(pages.as_array().unwrap().len(), 2);
-    assert_eq!(pages[0]["imageURL"], "https://images.example/owned-page-2.webp");
-    assert_eq!(pages[1]["imageURL"], "https://images.example/owned-page-1.webp");
+    assert_eq!(
+        pages[0]["imageURL"],
+        "https://images.example/owned-page-2.webp"
+    );
+    assert_eq!(
+        pages[1]["imageURL"],
+        "https://images.example/owned-page-1.webp"
+    );
     let image = execute(
         &apk,
         serde_json::from_value(json!({"op":"image","modern":true,"image":pages[0]})).unwrap(),
@@ -79,7 +83,12 @@ fn hentainexus_decodes_owned_pages_in_source_order_and_transports_images() {
         },
     )
     .unwrap();
-    assert_eq!(STANDARD.decode(image["bodyBase64"].as_str().unwrap()).unwrap(), [0, 255, 23, 128]);
+    assert_eq!(
+        STANDARD
+            .decode(image["bodyBase64"].as_str().unwrap())
+            .unwrap(),
+        [0, 255, 23, 128]
+    );
 }
 
 #[test]
@@ -94,7 +103,10 @@ fn hentainexus_image_quality_preferences_and_invalid_readers() {
                 "settingsSourceID":id,"settings":{"pref_image_format":{"type":"string","value":quality}}}),
             READER,
         );
-        assert_eq!(pages[0]["imageURL"], format!("https://images.example/owned-page-2.{extension}"));
+        assert_eq!(
+            pages[0]["imageURL"],
+            format!("https://images.example/owned-page-2.{extension}")
+        );
     }
     let empty = run(
         &apk,
@@ -113,6 +125,9 @@ fn hentainexus_image_quality_preferences_and_invalid_readers() {
                 "settingsSourceID":id,"settings":{"pref_image_format":{"type":"string","value":"source"}}})).unwrap(),
             move |_| HttpResp::ok(html),
         );
-        assert!(result.is_err(), "Unavailable reader quality or malformed input must not return pages");
+        assert!(
+            result.is_err(),
+            "Unavailable reader quality or malformed input must not return pages"
+        );
     }
 }

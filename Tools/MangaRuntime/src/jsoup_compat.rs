@@ -118,12 +118,16 @@ fn raw_data(vm: &mut Vm, node: NodeRef, inspected: &mut usize) -> Result<String,
         let raw_text = child
             .parent()
             .and_then(|parent| parent.node_name())
-            .is_some_and(|name| name.eq_ignore_ascii_case("script") || name.eq_ignore_ascii_case("style"));
-        let data = child.query(|item| match &item.data {
-            NodeData::Comment { contents } => Some(contents.to_string()),
-            NodeData::Text { contents } if raw_text => Some(contents.to_string()),
-            _ => None,
-        }).flatten();
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("script") || name.eq_ignore_ascii_case("style")
+            });
+        let data = child
+            .query(|item| match &item.data {
+                NodeData::Comment { contents } => Some(contents.to_string()),
+                NodeData::Text { contents } if raw_text => Some(contents.to_string()),
+                _ => None,
+            })
+            .flatten();
         if let Some(data) = data {
             *inspected += data.len();
             if *inspected > 2_000_000 {
@@ -225,8 +229,9 @@ fn select(vm: &mut Vm, args: &[JValue], entry: usize) -> Result<JValue, NatErr> 
                         return Err(invalid(vm, "Jsoup selection exceeds text limit"));
                     }
                     consume_budget(vm, value.len())?;
-                    pattern.is_match(value.as_ref())
-                        .map_err(|_| invalid(vm, "Jsoup attribute regex exceeded its execution limit"))?
+                    pattern.is_match(value.as_ref()).map_err(|_| {
+                        invalid(vm, "Jsoup attribute regex exceeded its execution limit")
+                    })?
                 }
                 Test::Data(needle) => raw_data(vm, *node, &mut inspected)?
                     .to_lowercase()
@@ -559,24 +564,39 @@ mod tests {
             r#"<html><body><section id="data"><script id="reader">initReader("owned", 0);
   keepWhitespace();</script><style id="style">.owned { color: red; }</style><!--Owned comment--><p>Visible words</p></section><section id="plain"><p>initReader("visible")</p></section></body></html>"#,
         ));
-        let root = vm.alloc_native("Lorg/jsoup/nodes/Document;", Native::JsoupDoc(doc.clone())).unwrap();
+        let root = vm
+            .alloc_native("Lorg/jsoup/nodes/Document;", Native::JsoupDoc(doc.clone()))
+            .unwrap();
         let before = doc.doc.html();
         for (selector, expected) in [
             ("script:containsData(INITreader)", vec!["reader"]),
             ("section:has(script:containsData(initReader))", vec!["data"]),
-            ("section:containsData(Owned comment):not(#plain)", vec!["data"]),
+            (
+                "section:containsData(Owned comment):not(#plain)",
+                vec!["data"],
+            ),
             ("section:containsData(Visible words)", vec![]),
             ("style:containsData(color: red)", vec!["style"]),
-            (r#"script:containsData(initReader\("owned", 0\))"#, vec!["reader"]),
+            (
+                r#"script:containsData(initReader\("owned", 0\))"#,
+                vec!["reader"],
+            ),
         ] {
             let selected = query(&mut vm, root, selector, false);
             assert_eq!(ids(&vm, selected), expected, "{selector}");
         }
         let script = query(&mut vm, root, "script:containsData(initReader)", true);
-        let data = vm.invoke_virtual(script, "data", "()Ljava/lang/String;").unwrap();
-        assert_eq!(vm.str_of_jvalue(data).unwrap(), "initReader(\"owned\", 0);\n  keepWhitespace();");
+        let data = vm
+            .invoke_virtual(script, "data", "()Ljava/lang/String;")
+            .unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(data).unwrap(),
+            "initReader(\"owned\", 0);\n  keepWhitespace();"
+        );
         let section = query(&mut vm, root, "#data", true);
-        let data = vm.invoke_virtual(section, "data", "()Ljava/lang/String;").unwrap();
+        let data = vm
+            .invoke_virtual(section, "data", "()Ljava/lang/String;")
+            .unwrap();
         let data = vm.str_of_jvalue(data).unwrap();
         assert!(data.contains("Owned comment"));
         assert!(data.contains(".owned { color: red; }"));
@@ -598,8 +618,10 @@ mod tests {
         let before = doc.doc.html();
         let selector = vm.alloc_string("section:containsData(owned)");
         vm.budget = 20;
-        assert!(matches!(select(&mut vm, &[root, selector], 0), Err(NatErr::Fatal(JvmError::BudgetExceeded))));
+        assert!(matches!(
+            select(&mut vm, &[root, selector], 0),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
         assert_eq!(doc.doc.html(), before);
     }
-
 }

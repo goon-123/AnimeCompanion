@@ -11,15 +11,15 @@ fn slice_bytes(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     let Some(Native::IntRange(first, last)) = vm.payload_of(args[1]) else {
         return Err(NatErr::Throw(vm.err_npe()));
     };
-    let Some(Native::Array(ArrayData::Byte(values))) =
-        &vm.arena.objects[array as usize].native
+    let Some(Native::Array(ArrayData::Byte(values))) = &vm.arena.objects[array as usize].native
     else {
         return Err(NatErr::Throw(vm.err_npe()));
     };
     // Kotlin accepts empty ranges before checking their endpoints. Nonempty
     // slices must reject bad indices rather than clipping/padding their data.
     if first > last {
-        return vm.alloc_native("Ljava/util/ArrayList;", Native::List(vec![]))
+        return vm
+            .alloc_native("Ljava/util/ArrayList;", Native::List(vec![]))
             .map_err(NatErr::Fatal);
     }
     if first < 0 || last as usize >= values.len() {
@@ -42,8 +42,10 @@ fn slice_bytes(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     let values = values[first as usize..=last as usize].to_vec();
     let mut boxed = Vec::with_capacity(length);
     for value in values {
-        boxed.push(vm.alloc_native("Ljava/lang/Byte;", Native::ByteBox(value))
-            .map_err(NatErr::Fatal)?);
+        boxed.push(
+            vm.alloc_native("Ljava/lang/Byte;", Native::ByteBox(value))
+                .map_err(NatErr::Fatal)?,
+        );
     }
     vm.alloc_native("Ljava/util/ArrayList;", Native::List(boxed))
         .map_err(NatErr::Fatal)
@@ -66,36 +68,47 @@ mod tests {
     fn fixture() -> (Vm, JValue) {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();
-        let array = vm.alloc_native(
-            "[B",
-            Native::Array(ArrayData::Byte(vec![-1, -128, 0, 127])),
-        ).unwrap();
+        let array = vm
+            .alloc_native("[B", Native::Array(ArrayData::Byte(vec![-1, -128, 0, 127])))
+            .unwrap();
         (vm, array)
     }
     fn range(vm: &mut Vm, first: i32, last: i32) -> JValue {
-        vm.alloc_native("Lkotlin/ranges/IntRange;", Native::IntRange(first, last)).unwrap()
+        vm.alloc_native("Lkotlin/ranges/IntRange;", Native::IntRange(first, last))
+            .unwrap()
     }
 
     #[test]
     fn byte_slices_box_signed_values_without_changing_the_original() {
         let (mut vm, array) = fixture();
         let indices = range(&mut vm, 1, 3);
-        let result = vm.invoke_static(
-            "Lkotlin/collections/ArraysKt;",
-            "slice",
-            "([BLkotlin/ranges/IntRange;)Ljava/util/List;",
-            vec![array, indices],
-        ).unwrap();
+        let result = vm
+            .invoke_static(
+                "Lkotlin/collections/ArraysKt;",
+                "slice",
+                "([BLkotlin/ranges/IntRange;)Ljava/util/List;",
+                vec![array, indices],
+            )
+            .unwrap();
         let Some(Native::List(values)) = vm.payload_of(result) else {
             panic!("Expected boxed byte list");
         };
         let mut bytes = Vec::new();
         for value in values {
-            assert_eq!(vm.class_desc_str(vm.arena.objects[value.as_obj() as usize].class), "java.lang.Byte");
-            bytes.push(vm.invoke_virtual(value, "byteValue", "()B").unwrap().as_int());
+            assert_eq!(
+                vm.class_desc_str(vm.arena.objects[value.as_obj() as usize].class),
+                "java.lang.Byte"
+            );
+            bytes.push(
+                vm.invoke_virtual(value, "byteValue", "()B")
+                    .unwrap()
+                    .as_int(),
+            );
         }
         assert_eq!(bytes, [-128, 0, 127]);
-        assert!(matches!(vm.payload_of(array), Some(Native::Array(ArrayData::Byte(values))) if values == [-1, -128, 0, 127]));
+        assert!(
+            matches!(vm.payload_of(array), Some(Native::Array(ArrayData::Byte(values))) if values == [-1, -128, 0, 127])
+        );
     }
 
     #[test]
@@ -104,13 +117,20 @@ mod tests {
         for (first, last) in [(0, -1), (4, 3), (100, 99)] {
             let indices = range(&mut vm, first, last);
             let result = slice_bytes(&mut vm, &[array, indices]).unwrap();
-            assert!(matches!(vm.payload_of(result), Some(Native::List(values)) if values.is_empty()));
+            assert!(
+                matches!(vm.payload_of(result), Some(Native::List(values)) if values.is_empty())
+            );
         }
         for (first, last) in [(-1, 1), (0, 4), (i32::MAX, i32::MAX)] {
             let indices = range(&mut vm, first, last);
-            assert!(matches!(slice_bytes(&mut vm, &[array, indices]), Err(NatErr::Throw(_))));
+            assert!(matches!(
+                slice_bytes(&mut vm, &[array, indices]),
+                Err(NatErr::Throw(_))
+            ));
         }
-        assert!(matches!(vm.payload_of(array), Some(Native::Array(ArrayData::Byte(values))) if values == [-1, -128, 0, 127]));
+        assert!(
+            matches!(vm.payload_of(array), Some(Native::Array(ArrayData::Byte(values))) if values == [-1, -128, 0, 127])
+        );
     }
 
     #[test]
@@ -118,6 +138,9 @@ mod tests {
         let (mut vm, array) = fixture();
         let indices = range(&mut vm, 0, 3);
         vm.budget = 1;
-        assert!(matches!(slice_bytes(&mut vm, &[array, indices]), Err(NatErr::Fatal(JvmError::BudgetExceeded))));
+        assert!(matches!(
+            slice_bytes(&mut vm, &[array, indices]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
     }
 }
