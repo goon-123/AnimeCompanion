@@ -39,6 +39,10 @@ struct MangaHubView: View {
             .searchable(text: $query, prompt: section == "Sources" ? "Find a source" : "Find a title")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: MangaSearchRoute(titles: [])) { Image(systemName: "magnifyingglass") }
+                        .accessibilityLabel("Search manga in installed sources").accessibilityIdentifier("manga-search-sources")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { manage = true } label: { Image(systemName: "puzzlepiece.extension") }
                         .accessibilityLabel("Manage manga extensions").accessibilityIdentifier("manga-manage-extensions")
                 }
@@ -163,11 +167,7 @@ struct MangaHubView: View {
         HStack(spacing: 12) {
             NavigationLink { MangaSourceBrowseView(source: source) } label: {
                 HStack(spacing: 13) {
-                    ArtworkImage(url: extensions.installed(source.extensionID)?.descriptor.iconURL, pointSize: 48) {
-                        $0.resizable().scaledToFit()
-                    } placeholder: {
-                        Image(systemName: "book.closed.fill").font(.title2).foregroundStyle(MangaStyle.accent)
-                    }.frame(width: 44, height: 44).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+                    if let entry = extensions.installed(source.extensionID)?.descriptor { MangaExtensionIcon(entry: entry) }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(source.name).font(.headline)
                         Text(source.language == "all" ? "Multilingual" : Locale.current.localizedString(forLanguageCode: source.language) ?? source.language)

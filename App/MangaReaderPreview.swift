@@ -35,6 +35,7 @@ enum MangaReaderPreview {
         let value: [String: Any] = [
             "name": "Glass House", "packageName": package, "apiVersion": "1.6", "versionCode": 1, "versionName": "1.6.0",
             "apkURL": "https://webtoon-preview.invalid/source.apk", "contentWarning": 0, "sha256": String(repeating: "a", count: 64),
+            "iconURL": "https://webtoon-preview.invalid/icon.png",
             "sources": [["id": "preview-en", "name": "Glass House", "language": "en", "homeURL": "https://webtoon-preview.invalid"]]
         ]
         return try! JSONDecoder().decode(MangaExtensionDescriptor.self, from: JSONSerialization.data(withJSONObject: value))
@@ -42,17 +43,49 @@ enum MangaReaderPreview {
     static var extensionState: MangaExtensionState {
         let inspection = MangaExtensionInspectionPreview.make(package: package, source: runtimeSource)
         var value = MangaExtensionState()
+        value.repositoryAdded = true
         value.installations = [try! InstalledMangaExtension(descriptor: descriptor, inspection: inspection)]
         return value
     }
+    static var catalog: MangaExtensionCatalog {
+        let entry = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(descriptor))
+        return try! JSONDecoder().decode(MangaExtensionCatalog.self, from: JSONSerialization.data(withJSONObject: [
+            "name": "Owned preview", "signingKey": "owned", "extensions": [entry]
+        ]))
+    }
+    static let iconPipeline: ArtworkPipeline = {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let data = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).pngData { context in
+            UIColor(red: 0.25, green: 0.65, blue: 0.67, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
+            ("G" as NSString).draw(at: CGPoint(x: 24, y: 14), withAttributes: [
+                .font: UIFont.systemFont(ofSize: 56, weight: .bold), .foregroundColor: UIColor.black
+            ])
+        }
+        return ArtworkPipeline(data: ArtworkDataClient(transport: MangaPreviewIconTransport(data: data)))
+    }()
     static let titles = ["The Glass Harbor", "Orbit Runner", "Lanterns After Rain", "A Map of Tomorrow", "Silent Tide", "Blue Hour"]
         .enumerated().map { index, title in
             SourceManga(url: "/series/\(index)", title: title, author: "AnimeCompanion Preview", description:
                 "An original preview story about a quiet harbor, a missing map, and the lights that appear after the last ferry. Artwork in this preview is drawn by the app for testing.",
                 genre: "Adventure, Fantasy, Webtoon", status: 2, thumbnailURL: "https://webtoon-preview.invalid/cover/\(index)")
         }
-    static func browse(query: String, page: Int) -> SourceMangaPage {
-        SourceMangaPage(mangas: page == 1 ? titles.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) } : [], hasNext: false)
+    private static var failedCatalog = false
+    static func browse(query: String, page: Int) async throws -> SourceMangaPage {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--ui-manga-pagination"), query.isEmpty {
+            // Slow enough to catch a footer cancelling its own next-page task.
+            try await Task.sleep(for: .milliseconds(450))
+            if args.contains("--ui-manga-pagination-error"), page == 2, !failedCatalog {
+                failedCatalog = true; throw URLError(.notConnectedToInternet)
+            }
+            let batch = page == 3 ? 2 : page
+            let entries = titles.enumerated().map { index, manga in
+                SourceManga(url: "/catalog/\(batch)/\(index)", title: manga.title + " · \(batch)", thumbnailURL: manga.thumbnailURL)
+            }
+            return SourceMangaPage(mangas: entries, hasNext: args.contains("--ui-manga-pagination-error") ? page < 2 : page < 4)
+        }
+        return SourceMangaPage(mangas: page == 1 ? titles.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) } : [], hasNext: false)
     }
     static func book(_ manga: SourceManga) -> MangaBook {
         MangaBook(manga: manga, chapters: (1...4).reversed().map {
@@ -97,6 +130,17 @@ enum MangaReaderPreview {
                     withAttributes: [.font: UIFont.systemFont(ofSize: cover ? 42 : 28, weight: .bold), .foregroundColor: UIColor.white])
             }
         }
+    }
+}
+
+private struct MangaPreviewIconTransport: HTTPTransport {
+    let data: Data
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        guard request.url?.absoluteString == "https://webtoon-preview.invalid/icon.png", let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"]) else {
+            throw ArtworkError.invalidURL
+        }
+        return (data, response)
     }
 }
 

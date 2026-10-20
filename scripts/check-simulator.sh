@@ -172,6 +172,7 @@ fi
 if [[ "$test_scope" == reader ]]; then
   test_arguments=(
     -only-testing:AnimeCompanionUITests/WebtoonReaderUITests
+    -only-testing:AnimeCompanionUITests/MangaBrowsingUITests
     -only-testing:MangaRuntimeTests
   )
 fi

@@ -85,7 +85,10 @@ struct LiveChartBrowserView: View {
         }.background(Theme.background)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let selectedAnime, matchedURL == session.url, store.isVisible(selectedAnime) {
-                    CompactTrackingBar(anime: selectedAnime)
+                    VStack(spacing: 0) {
+                        CompactTrackingBar(anime: selectedAnime)
+                        FindMangaButton(anime: selectedAnime).padding(.horizontal, 12).padding(.bottom, 8)
+                    }
                 } else if LiveChartURL.animeID(session.url) != nil {
                     VStack(alignment: .leading, spacing: 5) {
                         if matching { ProgressView("Matching this anime to AniList…").font(.caption) }

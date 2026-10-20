@@ -42,6 +42,7 @@ struct AnimeDetailView: View {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
                     VStack(alignment: .leading, spacing: 20) {
                         watchButton(anime)
+                        FindMangaButton(anime: anime)
                         if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         progress(anime)
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
@@ -298,6 +299,24 @@ struct AnimeDetailView: View {
             anime = media
             await dubs.load(using: store.dubs, refresh: refresh)
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
+    }
+}
+
+struct FindMangaButton: View {
+    @EnvironmentObject private var navigation: AppNavigationStore
+    let anime: Anime
+    var body: some View {
+        Button { navigation.openMangaSearch(for: anime) } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "book.closed").font(.title3)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Find manga or manhwa").font(.subheadline.weight(.semibold))
+                    Text("Search your installed manga sources").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right").font(.subheadline)
+            }.padding(16).foregroundStyle(MangaStyle.accent).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        }.buttonStyle(.plain).accessibilityIdentifier("detail-find-manga")
     }
 }
 

@@ -5,6 +5,16 @@ import AnimeCore
 
 final class WebtoonImageTests: XCTestCase {
     @MainActor
+    func testRepositoryPNGIconDecodesAndReusesThePublicImageCache() async throws {
+        let pipeline = MangaReaderPreview.iconPipeline
+        let url = try XCTUnwrap(MangaReaderPreview.descriptor.iconURL)
+        let first = try await pipeline.image(at: url, pixels: 128)
+        let second = try await pipeline.image(at: url, pixels: 128)
+        XCTAssertEqual(first.image.width, 96)
+        XCTAssertEqual(first.image.height, 96)
+        XCTAssertTrue(first.image === second.image)
+    }
+    @MainActor
     func testLongStripKeepsItsAspectRatioWithinDecodedMemoryBudget() async throws {
         let data = drawing(width: 1000, height: 12000)
         let key = MangaImageKey(source: "owned", version: "one", page: SourceMangaImage(index: 0, imageURL: "https://example.invalid/strip"))

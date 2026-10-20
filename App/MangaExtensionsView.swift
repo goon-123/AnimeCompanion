@@ -109,8 +109,7 @@ private struct MangaExtensionLabel: View {
     let status: String?
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "puzzlepiece.extension.fill").font(.title3).foregroundStyle(.teal)
-                .frame(width: 38, height: 44).accessibilityHidden(true)
+            MangaExtensionIcon(entry: entry)
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.name).foregroundStyle(.primary)
                 Text("\(entry.languages.prefix(4).map { $0 == "all" ? "Multilingual" : $0.uppercased() }.joined(separator: " · ")) · \(entry.versionName)")
@@ -134,6 +133,14 @@ private struct MangaExtensionDetailView: View {
     var body: some View {
         List {
             Section {
+                HStack(spacing: 14) {
+                    MangaExtensionIcon(entry: entry, size: 60)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.name).font(.headline)
+                        Text(entry.languages.map { $0 == "all" ? "Multilingual" : $0.uppercased() }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }.padding(.vertical, 4)
                 LabeledContent("Version", value: entry.versionName)
                 LabeledContent("Sources", value: "\(installation?.sources.count ?? entry.sources.count)")
                 if let installed = installation {
@@ -163,9 +170,12 @@ private struct MangaExtensionDetailView: View {
                     }
                     ForEach(installed.sources.filter { sourceLanguage.isEmpty || $0.language == sourceLanguage || $0.language == "all" }, id: \.index) { source in
                             NavigationLink { MangaSourceBrowseView(source: MangaSourceReference(installation: installed, source: source)) } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(source.name)
-                                Text(source.language == "all" ? "Multilingual" : source.language.uppercased()).font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 12) {
+                                MangaExtensionIcon(entry: entry)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(source.name)
+                                    Text(source.language == "all" ? "Multilingual" : source.language.uppercased()).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }.disabled(!installed.enabled || store.installing != nil)
                     }

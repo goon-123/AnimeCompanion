@@ -26,6 +26,9 @@ final class MangaExtensionTests: XCTestCase {
             XCTAssertEqual(entry.apiVersion, "1.6")
             XCTAssertEqual(entry.versionCode, 106001)
             XCTAssertEqual(entry.apkURL.absoluteString, "https://github.com/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk")
+            XCTAssertEqual(entry.iconURL?.absoluteString, "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main/src/en/fixture/res/mipmap-xhdpi/ic_launcher.png")
+            let restored = try JSONDecoder().decode(MangaExtensionDescriptor.self, from: JSONEncoder().encode(entry))
+            XCTAssertEqual(restored.iconURL, entry.iconURL, "Installing/restarting must retain the repository icon")
             XCTAssertTrue(entry.supportsRuntime)
             XCTAssertNil(entry.sha256, "Digest comes from the separate published release inventory")
         }
@@ -172,6 +175,7 @@ private func integerField(_ number: UInt64, _ value: UInt64) -> Data { varint(nu
 private func fixtureIndex(signingKey: String = MangaRepository.fingerprint, duplicate: Bool = false, api: String = "1.6", warning: UInt64 = 1, extra: Data = Data()) -> Data {
     let source = integerField(1, 918273645546372819) + stringField(2, "Fixture") + stringField(3, "en") + stringField(4, "https://example.com")
     let resources = stringField(1, "https://github.com/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk")
+        + stringField(2, "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main/src/en/fixture/res/mipmap-xhdpi/ic_launcher.png")
     var entry = stringField(1, "Fixture") + stringField(2, "eu.kanade.tachiyomi.extension.en.fixture") + bytesField(3, resources)
     entry += stringField(4, api) + integerField(5, 106001) + stringField(6, "1.6.1") + integerField(7, warning) + bytesField(8, source)
     var list = bytesField(1, entry); if duplicate { list += bytesField(1, entry) }
