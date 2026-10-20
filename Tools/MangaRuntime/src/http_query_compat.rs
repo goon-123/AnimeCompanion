@@ -1,9 +1,43 @@
-//! OkHttp query components are data, not preassembled URL delimiters.
+//! OkHttp query components are data, not preassembled URL delimiters. A bare
+//! builder retains empty scheme/authority components until they are supplied.
 use dexvm::vm::error::JvmError;
 use dexvm::vm::object::Native;
 use dexvm::vm::{NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
+
+fn builder_init(vm: &mut Vm, args: &[JValue]) -> R {
+    // The core mutators operate on serialized components. Both required
+    // components are empty here; build must never expose this as an HttpUrl.
+    vm.arena.objects[args[0].as_obj() as usize].native = Some(Native::HttpUrl(":///".into()));
+    Ok(JValue::Null)
+}
+fn builder_build(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::HttpUrl(url)) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IllegalStateException;",
+            "scheme == null",
+        )));
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if !matches!(scheme, "http" | "https") || authority.is_empty() || authority.starts_with(':') {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IllegalStateException;",
+            "Missing URL scheme or host",
+        )));
+    }
+    vm.alloc_native("Lokhttp3/HttpUrl;", Native::HttpUrl(url))
+        .map_err(NatErr::Fatal)
+}
+fn builder_string(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::HttpUrl(url)) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    Ok(vm.alloc_string(url.strip_prefix(':').unwrap_or(&url)))
+}
 
 fn invalid(vm: &mut Vm) -> NatErr {
     NatErr::Throw(vm.throwable_of("Ljava/lang/IllegalArgumentException;", "Invalid URL query"))
@@ -157,6 +191,19 @@ fn names(vm: &mut Vm, args: &[JValue]) -> R {
         .map_err(NatErr::Fatal)
 }
 pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (name, sig, f) in [
+        ("<init>", "()V", builder_init as dexvm::vm::NativeFn),
+        ("build", "()Lokhttp3/HttpUrl;", builder_build),
+        ("toString", "()Ljava/lang/String;", builder_string),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lokhttp3/HttpUrl$Builder;",
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
     for (name, f) in [
         ("addQueryParameter", add as dexvm::vm::NativeFn),
         ("addEncodedQueryParameter", add_encoded),
@@ -210,6 +257,55 @@ pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fresh_builders_require_both_components_and_build_immutable_urls() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        for host_first in [false, true] {
+            let class = vm
+                .ensure_class_by_desc("Lokhttp3/HttpUrl$Builder;")
+                .unwrap();
+            let builder = JValue::Obj(vm.alloc_instance(class).unwrap());
+            vm.invoke_virtual(builder, "<init>", "()V").unwrap();
+            assert!(matches!(
+                builder_build(&mut vm, &[builder]),
+                Err(NatErr::Throw(_))
+            ));
+            let scheme = vm.alloc_string("https");
+            let host = vm.alloc_string("owned.example");
+            let steps = if host_first {
+                [("host", host), ("scheme", scheme)]
+            } else {
+                [("scheme", scheme), ("host", host)]
+            };
+            for (i, (name, arg)) in steps.into_iter().enumerate() {
+                vm.invoke_virtual_args(
+                    builder,
+                    name,
+                    "(Ljava/lang/String;)Lokhttp3/HttpUrl$Builder;",
+                    vec![arg],
+                )
+                .unwrap();
+                if i == 0 {
+                    assert!(matches!(
+                        builder_build(&mut vm, &[builder]),
+                        Err(NatErr::Throw(_))
+                    ));
+                }
+            }
+            let snapshot = builder_build(&mut vm, &[builder]).unwrap();
+            let key = vm.alloc_string("q");
+            let value = vm.alloc_string("a&b");
+            add(&mut vm, &[builder, key, value]).unwrap();
+            assert!(
+                matches!(vm.payload_of(snapshot), Some(Native::HttpUrl(url)) if url == "https://owned.example/")
+            );
+            let built = builder_build(&mut vm, &[builder]).unwrap();
+            assert!(
+                matches!(vm.payload_of(built), Some(Native::HttpUrl(url)) if url == "https://owned.example/?q=a%26b")
+            );
+        }
+    }
     #[test]
     fn queries_round_trip_reserved_unicode_nullable_and_repeated_values() {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();

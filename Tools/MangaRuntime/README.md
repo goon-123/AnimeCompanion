@@ -117,6 +117,22 @@ Two additional published APKs are checksum-pinned in test-only storage:
 
 Rust and native Swift/C tests reuse neutral owned responses, never real chapter content. All 107 Rust tests and 10 audit parser/evidence/privacy tests pass locally. A selected audit inventories all 60 associated packages and executes 658 probes over 170 enumerated source instances; none of the three original gaps appears in exercised paths. Deadlines leave 583 operation cells unexecuted, and empty-response failures remain explicit. Native iPhone/iPad, full-catalog and IPA results remain pending hosted CI. Further date/time, Kotlin/Android and serializer APIs remain incomplete; no live-source or universal compatibility claim is made.
 
+## Calendar and time-zone compatibility (build 51)
+
+Version 0.25.4 addresses the shared ChronoField, formatter-zone and weekday gaps found in the build-50 audit, plus the related LocalDate formatting and legacy TimeZone conversion APIs. The six observed groups overlap across 54 packages. Registered APIs and generic empty-response probes remain discovery evidence; only the exact APK/source fixtures below establish the stated flows.
+
+Formatter builders retain bounded defaults at their actual parse positions, and toFormatter/withZone copy their state and GC-traced zone references. ChronoField and DayOfWeek are canonical enum objects. Supported numeric/English date patterns include optional groups, quoted literals, month/weekday names, fractional seconds and offset formatting. Invalid calendar dates and incomplete parses fail explicitly. LocalDate/LocalDateTime retain local fields; formatter zones apply to instants and zoned values. Zoned parsing requires a supported pattern and an explicit formatter zone.
+
+The Swift host supplies `timeZoneID` on every command; older/offline callers default to UTC. Pinned chrono 0.4.45 and chrono-tz 0.10.4 provide compiled-in TZDB 2025b rules without guest filesystem/environment access. Zone IDs and fixed offsets are validated. Local midnights, skipped dates, DST gaps, overlaps and calendar-day arithmetic use real rules, retaining preferred overlap offsets when available. Duration arithmetic and truncation preserve the zone and check overflow. Dependency license notices enter the existing generated app notices. Additional java.time methods, resolver styles, non-English text, sub-millisecond precision and pre-1970 LocalDate remain incomplete.
+
+| Extension | Exact-version owned-fixture evidence |
+| --- | --- |
+| Death Toll Scans 1.6.6 (FoolSlide), source 0 | Popular, details, current-year defaults and leap-day chapters in UTC/Los Angeles, ordered pages and image transport |
+| Dynasty 1.6.1, source 0 | Popular, details, UTC chapter date on a Los Angeles host, ordered JSON reader pages and image transport |
+| Hiveworks 1.6.2, source 0 | Latest URL derived from the actual calendar weekday, parsed owned title; full reader unverified |
+
+The complete flows also verify shared Jsoup Element/Document.toString outer-HTML behavior and fresh OkHttp URL builder initialization/required-component checks. All 118 Rust regressions and 10 audit parser/evidence/privacy tests pass locally. The final targeted audit inventories 54 packages, enumerates 56 sources and runs 434 bounded offline probes with no unexecuted operation cells. None of the six original API gaps appears in exercised paths; further clock, formatter, TLS and serializer APIs remain. Three native Swift/C/Rust tests share the same neutral fixtures. Native iPhone/iPad execution, full-catalog scanning and unsigned IPA packaging remain pending build-51 CI; no real chapter content or source-specific production parser is included.
+
 ## Build and verification
 
 ```bash
