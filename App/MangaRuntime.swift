@@ -98,7 +98,7 @@ private let mangaHTTPCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafeP
 private let mangaHTTPRelease: @convention(c) (UnsafeMutablePointer<CChar>?) -> Void = { free($0) }
 
 private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    private struct Request: Decodable { let url: String; let method: String; let headers: [[String]]; let body: String? }
+    private struct Request: Decodable { let url: String; let method: String; let headers: [[String]]; let body: String?; let bodyBase64: String? }
     private let networking: Bool
     private let sourceKey: String
     private let browser: MangaRuntimeBrowser
@@ -185,17 +185,17 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
             try checkCancellation()
             guard networking else { throw MangaExtensionError.runtimeFailure }
             let request = try JSONDecoder().decode(Request.self, from: Data(bytes: input, count: strlen(input)))
-            if request.method == "AC_BROWSER", request.url == "ac-manga-browser://command", let body = request.body {
-                let data = try browser.request(Data(body.utf8), remaining: deadline.timeIntervalSinceNow)
+            let body = try MangaRuntimeRequestBody.decode(text: request.body, base64: request.bodyBase64)
+            if request.method == "AC_BROWSER", request.url == "ac-manga-browser://command", let body {
+                let data = try browser.request(body, remaining: deadline.timeIntervalSinceNow)
                 let result = try JSONSerialization.data(withJSONObject: ["code": 200, "headers": [], "bodyBase64": data.base64EncodedString()])
                 return String(decoding: result, as: UTF8.self).withCString { strdup($0) }
             }
-            guard let url = validURL(request.url), ["GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"].contains(request.method),
-                  (request.body?.utf8.count ?? 0) <= 1_000_000 else { throw MangaExtensionError.sourceUnavailable }
+            guard let url = validURL(request.url), ["GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"].contains(request.method) else { throw MangaExtensionError.sourceUnavailable }
             lock.lock(); requestCount += 1; let count = requestCount; lock.unlock()
             guard count <= 24 else { throw MangaExtensionError.oversized }
             var outbound = URLRequest(url: url); outbound.httpMethod = request.method
-            outbound.httpBody = request.body.map { Data($0.utf8) }
+            outbound.httpBody = body
             outbound.timeoutInterval = max(1, min(20, deadline.timeIntervalSinceNow))
             outbound.setValue(MangaSourceCookieJar.browserUserAgent, forHTTPHeaderField: "User-Agent")
             for pair in request.headers where pair.count == 2 {
@@ -260,5 +260,24 @@ private final class MangaHTTPResult: @unchecked Sendable {
         if let error { throw error }
         guard let data, let response = response as? HTTPURLResponse else { throw ServiceError.invalidResponse }
         return (data, response)
+    }
+}
+
+// Shared by normal HTTPS and internal browser messages. Raw bytes take
+// precedence, and invalid raw payloads must never fall back to altered text.
+enum MangaRuntimeRequestBody {
+    static let limit = 1_000_000
+
+    static func decode(text: String?, base64: String?) throws -> Data? {
+        if let base64 {
+            guard base64.utf8.count <= ((limit + 2) / 3) * 4,
+                  let bytes = Data(base64Encoded: base64), bytes.count <= limit else {
+                throw MangaExtensionError.oversized
+            }
+            return bytes
+        }
+        guard let text else { return nil }
+        guard text.utf8.count <= limit else { throw MangaExtensionError.oversized }
+        return Data(text.utf8)
     }
 }

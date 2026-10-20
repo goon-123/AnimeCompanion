@@ -21,6 +21,22 @@ const MONTHS: [&str; 12] = [
     "December",
 ];
 
+fn of_pattern(vm: &mut Vm, args: &[JValue]) -> R {
+    let pattern = vm
+        .str_of_jvalue(args[0])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    if pattern.len() > 256 {
+        return Err(NatErr::Throw(vm.err_iae("Date pattern exceeds the host limit")));
+    }
+    vm.alloc_native(
+        "Ljava/time/format/DateTimeFormatter;",
+        Native::DateFormatter {
+            pattern,
+            zone: String::new(),
+        },
+    )
+    .map_err(NatErr::Fatal)
+}
 fn case_insensitive(vm: &mut Vm, args: &[JValue]) -> R {
     let Some(Native::DateFormatter { zone, .. }) =
         vm.arena.objects[args[0].as_obj() as usize].native.as_mut()
@@ -244,6 +260,7 @@ fn exception_init(vm: &mut Vm, args: &[JValue]) -> R {
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     for (class, name, sig, instance, f) in [
+        ("Ljava/time/format/DateTimeFormatter;", "ofPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;", false, of_pattern as dexvm::vm::NativeFn),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;", true, case_insensitive as dexvm::vm::NativeFn),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;", true, to_formatter),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "toFormatter", "()Ljava/time/format/DateTimeFormatter;", true, to_formatter),
@@ -265,6 +282,31 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn default_locale_pattern_overload_parses_owned_dates_and_keeps_errors() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let pattern = vm.alloc_string("yyyy-MM-dd");
+        let formatter = vm.invoke_static(
+            "Ljava/time/format/DateTimeFormatter;",
+            "ofPattern",
+            "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;",
+            vec![pattern],
+        ).unwrap();
+        let text = vm.alloc_string("2026-10-20");
+        let date = vm.invoke_static(
+            "Ljava/time/LocalDate;",
+            "parse",
+            "(Ljava/lang/CharSequence;Ljava/time/format/DateTimeFormatter;)Ljava/time/LocalDate;",
+            vec![text, formatter],
+        ).unwrap();
+        assert!(matches!(vm.payload_of(date), Some(Native::LocalDay(day)) if day == 20_746));
+        let text = vm.alloc_string("2026-02-30");
+        assert!(local_date(&mut vm, &[text, formatter]).is_err());
+        assert!(of_pattern(&mut vm, &[JValue::Null]).is_err());
+        let huge = vm.alloc_string(&"y".repeat(257));
+        assert!(of_pattern(&mut vm, &[huge]).is_err());
+    }
     #[test]
     fn builders_retain_case_rules_and_midnight_respects_fixed_offsets() {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();

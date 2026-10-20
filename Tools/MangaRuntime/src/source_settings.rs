@@ -311,7 +311,27 @@ fn put_set(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     Ok(args[0])
 }
 
+fn android_edit_text_binding(vm: &mut Vm, _: &[JValue]) -> Result<JValue, NatErr> {
+    Err(NatErr::Throw(vm.throwable_of(
+        "Ljava/lang/UnsupportedOperationException;",
+        "Android EditText binding is unavailable in the native settings schema",
+    )))
+}
+
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    // Schema extraction must be able to load an APK's optional Android UI
+    // listener. No EditText is created and this callback is never fabricated.
+    vm.register_native(NativeEntry {
+        class: "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
+        name: "onBindEditText",
+        sig: "(Landroid/widget/EditText;)V",
+        instance: true,
+        f: android_edit_text_binding,
+    })?;
+    let listener = vm.ensure_class_by_desc(
+        "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
+    )?;
+    vm.classes[listener as usize].is_interface = true;
     let key = (
         vm.intern("Landroid/content/SharedPreferences;"),
         vm.intern("getStringSet"),
