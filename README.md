@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Shared manga compatibility (0.23.0 / build 45)
+
+Fix shared JSON builders/serializers and URL query handling used by HiperDex and other extensions. Preserve extension chapter metadata and fractional numbers when opening the reader, including alternate releases with the same chapter number. HiperDex's catalog previously failed before making a network request, so website verification alone could not fix it. NamiComi additionally gains configured and sealed JSON serializer support. Everything still runs on the phone.
+
+Real, integrity-pinned APKs are tested with owned catalog, chapter and page responses; native browser-session recovery and final build validation are tracked in [build status](BUILD_STATUS.md). This does not certify every live website or remove login, payment or website restrictions.
+
 ### Source settings (0.20.0 / build 42)
 
 Open a manga source and tap the gear to configure the options declared by its extension. Switches, single/multiple choices and text fields are supported, including source addresses and passwords. Save applies them to browsing, chapters, pages and images; Cancel leaves saved values intact. Restore defaults clears overrides when saved. Values are stored separately for each source in this device's Keychain. Browser login/challenge handling and custom Android preference controls still need further compatibility work.

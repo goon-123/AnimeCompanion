@@ -39,6 +39,8 @@ done <<'PINS'
 e97033f tachiyomi-en.manhuaus-v1.6.60.apk
 7363e42 tachiyomi-all.cubari-v1.6.0.apk
 7363e42 tachiyomi-all.mangaup-v1.6.3.apk
+7363e42 tachiyomi-en.hiperdex-v1.6.89.apk
+7363e42 tachiyomi-all.namicomi-v1.6.0.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -57,6 +59,8 @@ expected = {
     'tachiyomi-en.manhuaus-v1.6.60.apk': 'eed10bcba241ef0fa6549762c0de5d327c9e1f341419803ac5de645777e2ed46',
     'tachiyomi-all.cubari-v1.6.0.apk': 'd5289a0a94376a6aea232119c39b28cd8362c6b6de95d053ad0e6b460bc8fbb2',
     'tachiyomi-all.mangaup-v1.6.3.apk': '486e0cd864cc9eb5bceff566c9790737f508c1b35b50fa04538d30ad6036ac55',
+    'tachiyomi-en.hiperdex-v1.6.89.apk': '7ac5566a04d6cb7105fcaf7570d7edca985366393f4589c067a2bc18e4772a8f',
+    'tachiyomi-all.namicomi-v1.6.0.apk': 'f357ccaa47f197b55eb0223ed83d5ee1b835c895a8162593f59c9e8790391c22',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

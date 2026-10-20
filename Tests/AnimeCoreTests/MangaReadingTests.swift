@@ -2,6 +2,13 @@ import XCTest
 @testable import AnimeCore
 
 final class MangaReadingTests: XCTestCase {
+    func testChapterMetadataRoundTripsAndOlderSavedChaptersRemainReadable() throws {
+        let chapter = SourceMangaChapter(url: "/owned/9000000000002", name: "Alternate", chapterNumber: 2.5, memo: "{\"chapterId\":9000000000002}")
+        XCTAssertEqual(try JSONDecoder().decode(SourceMangaChapter.self, from: JSONEncoder().encode(chapter)), chapter)
+        let legacy = Data("{\"url\":\"/owned/1\",\"name\":\"One\",\"uploadedAt\":0,\"scanlator\":\"\"}".utf8)
+        let restored = try JSONDecoder().decode(SourceMangaChapter.self, from: legacy)
+        XCTAssertNil(restored.memo); XCTAssertNil(restored.chapterNumber)
+    }
     private func title(source: String = "en", url: String = "/story", package: String = "example") -> MangaTitleReference {
         MangaTitleReference(source: MangaSourceReference(extensionID: package, sourceID: source, name: "Source",
             language: source, homeURL: "https://example.com"), manga: SourceManga(url: url, title: "Story"))

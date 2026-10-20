@@ -42,6 +42,16 @@ Shared fixes also cover URI string values, WebView's ViewGroup ancestry, missing
 
 The current Comix 1.6.54, Cubari 1.6.0 and Manga UP! 1.6.3 APKs return owned catalog entries with covers through their real callbacks and JSON/protobuf parsers in Rust. Thirteen test-only APKs are checksum-pinned. Native tests additionally exercise actual WebKit through the C bridge, local-storage retention/isolation, an intercepted fetch response and clearing an active profile without restoring old cookies. Resource-filter tests compile both image-policy variants with WebKit; its restricted URL-filter grammar requires separate suffix rules rather than regex alternation. Supplied documents retain their source origin via WebKit's simulated-request API. Native CI results are recorded in the follow-up PR; controlled data is not certification of live websites, logins, purchased chapters or all-extension compatibility.
 
+## JSON, chapter metadata and HiperDex (build 45)
+
+Version 0.23.0 fixes nullable JSON primitive/builder overloads, the JsonNull singleton and content contract, JSON element string output, JsonElement serializer dispatch, configured Json factories, and sealed JSON subtype selection/default deserializers. These are stable runtime APIs; no obfuscated APK class names or website parsers are patched. OkHttp query components encode reserved/Unicode data, distinguish encoded input, preserve fragments and support replacement/removal and decoded lookup.
+
+HiperDex 1.6.89 now executes popular/latest/search and its real DTO details/chapter/page serializers against owned responses. Tests verify IDs, fractional/duplicate-number chapters, dates, ordered image URLs, null filters, source-selected content ratings, its 401/homepage retry and its browser request-header recovery callback. NamiComi 1.6.0 returns an owned entry/cover/author with a custom Json instance and sealed relationships, including its own unknown-subtype fallback. Fifteen test-only APKs are integrity-pinned.
+
+Chapter metadata stays opaque to the host. Source-provided memo JSON and chapter numbers survive Swift encoding and are restored to a fresh SChapter before invoking the source's reader. Memo size/depth and integer fidelity are checked; malformed data fails without HTTP. Dalvik float/double comparison instructions read raw constant register bits correctly (including NaN bias), preventing a positive chapter number being ignored in favor of a numeric URL ID. The exact core patch and generated source hashes are verified; only known old generated versions are migrated, with their directories preserved.
+
+Native regressions exercise HiperDex's actual APK and real WebKit with an owned HTML request, then verify the source retries with its captured headers. Controlled data is not certification of live access, physical-device behavior, paid content or all sources. Remaining audited gaps include Comic Fury's date formatter builder, Comics Kingdom reflection, Project Suki property delegates, other serialization configurations and full XHR/resource interception.
+
 ## Build and verification
 
 ```bash

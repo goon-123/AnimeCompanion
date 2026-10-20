@@ -14,7 +14,10 @@ const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
 mod browser_compat;
+mod chapter_wire;
+mod http_query_compat;
 mod java_compat;
+mod json_compat;
 mod jsoup_compat;
 mod okio_compat;
 mod serialization_compat;
@@ -603,10 +606,14 @@ struct MangaInput {
     title: String,
 }
 #[derive(Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 struct ChapterInput {
     url: String,
     name: String,
+    uploaded_at: i64,
+    scanlator: String,
+    chapter_number: Option<f32>,
+    memo: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -640,15 +647,33 @@ fn chapter_numbers(ext: &mut Keiyoushi) -> std::collections::HashMap<String, f32
         .collect()
 }
 
-fn chapters_json(ext: &mut Keiyoushi, list: Vec<Chapter>) -> Value {
+fn chapters_json(ext: &mut Keiyoushi, list: Vec<Chapter>) -> Result<Value, String> {
     let numbers = chapter_numbers(ext);
-    json!(list
+    let rows: Vec<_> = ext
+        .ctx()
+        .vm()
+        .arena
+        .objects
+        .iter()
+        .filter_map(|object| {
+            if let Some(dexvm::vm::object::Native::SChapter { url, memo, .. }) = &object.native {
+                Some((url.clone(), *memo))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut memos = std::collections::HashMap::new();
+    for (url, value) in rows {
+        memos.insert(url, chapter_wire::memo(ext.ctx().vm(), value)?);
+    }
+    Ok(json!(list
         .into_iter()
         .map(
             |c| json!({"url":c.url,"name":c.name,"uploadedAt":c.date_upload,
-        "scanlator":c.scanlator,"chapterNumber":numbers.get(&c.url)})
+        "scanlator":c.scanlator,"chapterNumber":numbers.get(&c.url),"memo":memos.get(&c.url).cloned().flatten()})
         )
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>()))
 }
 
 fn modern_book(ext: &mut Keiyoushi, src: &Source, manga: &Manga) -> Result<Value, String> {
@@ -700,14 +725,15 @@ fn modern_book(ext: &mut Keiyoushi, src: &Source, manga: &Manga) -> Result<Value
     if items.len() > 10000 {
         return Err("This title has too many chapters.".into());
     }
-    let chapters: Vec<Value> = items.into_iter().filter_map(|item| {
+    let chapters: Vec<Value> = items.into_iter().map(|item| {
         match ext.ctx().vm().payload_of(item) {
-            Some(Native::SChapter { name, url, date_upload, scanlator, chapter_number, .. }) =>
-                Some(json!({"name":name,"url":url,"uploadedAt":date_upload,"scanlator":scanlator,
+            Some(Native::SChapter { name, url, date_upload, scanlator, chapter_number, memo }) =>
+                Ok(json!({"name":name,"url":url,"uploadedAt":date_upload,"scanlator":scanlator,
+                    "memo":chapter_wire::memo(ext.ctx().vm(), memo)?,
                     "chapterNumber":if chapter_number.is_finite() && chapter_number >= 0.0 {Some(chapter_number)}else{None}})),
-            _ => None,
+            _ => Err("The source returned an invalid chapter.".to_owned()),
         }
-    }).collect();
+    }).collect::<Result<_, String>>()?;
     Ok(json!({"manga":data,"chapters":chapters}))
 }
 
@@ -995,6 +1021,8 @@ where
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    http_query_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     for (name, sig, f) in [
         (
             "decodeSequentially",
@@ -1080,8 +1108,8 @@ where
         ..Default::default()
     };
     let chapter = Chapter {
-        url: command.chapter.url,
-        name: command.chapter.name,
+        url: command.chapter.url.clone(),
+        name: command.chapter.name.clone(),
         ..Default::default()
     };
     match command.op.as_str() {
@@ -1102,7 +1130,7 @@ where
                 if chapters.len() > 10000 {
                     return Err("This title has too many chapters.".into());
                 }
-                let chapters = chapters_json(&mut ext, chapters);
+                let chapters = chapters_json(&mut ext, chapters)?;
                 Ok(json!({"manga":manga_json(details),"chapters":chapters}))
             }
         }
@@ -1136,15 +1164,15 @@ where
                 ext.chapters(src, &manga)
             }
             .map_err(|e| ext.describe_error(&e))?;
-            Ok(chapters_json(&mut ext, list))
+            chapters_json(&mut ext, list)
         }
         "pages" => {
-            let list = if command.modern {
-                ext.pages_coro(src, &chapter)
-            } else {
-                ext.pages(src, &chapter)
+            if command.modern {
+                return chapter_wire::pages(&mut ext, src, &command.chapter);
             }
-            .map_err(|e| ext.describe_error(&e))?;
+            let list = ext
+                .pages(src, &chapter)
+                .map_err(|e| ext.describe_error(&e))?;
             if list.len() > 5000 {
                 return Err("This chapter has too many pages.".into());
             }

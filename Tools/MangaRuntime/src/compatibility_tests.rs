@@ -2,6 +2,290 @@
 use super::*;
 
 #[test]
+fn dalvik_float_comparisons_read_raw_constant_bits_and_preserve_nan_bias() {
+    use std::sync::{Arc, OnceLock};
+    for opcode in 0x2d_u16..=0x30 {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        vm.register_native(NativeEntry {
+            class: "LOwnedCompare;",
+            name: "compare",
+            sig: "()I",
+            instance: false,
+            f: abstract_function,
+        })
+        .unwrap();
+        let class = vm.ensure_class_by_desc("LOwnedCompare;").unwrap();
+        let key = (vm.intern("compare"), vm.intern("()I"));
+        let slot = vm.classes[class as usize].dispatch[&key];
+        let method = &mut vm.classes[class as usize].methods[slot as usize];
+        method.native_key = None;
+        method.insns = OnceLock::new();
+        method.code = Some(Arc::new(dexvm::dex::CodeItem {
+            registers_size: 5,
+            ins_size: 5,
+            outs_size: 0,
+            insns: vec![opcode | 0x0400, 0x0200, 0x040f].into(),
+            tries: vec![],
+        }));
+        for a in [-2.5_f64, -0.0, 0.0, 2.5, f64::INFINITY, f64::NAN] {
+            for b in [-0.0_f64, 0.0, 3.0, f64::NAN] {
+                for raw_a in [false, true] {
+                    for raw_b in [false, true] {
+                        let value = |x: f64, raw: bool| {
+                            if opcode <= 0x2e {
+                                if raw {
+                                    JValue::Int((x as f32).to_bits() as i32)
+                                } else {
+                                    JValue::Float(x as f32)
+                                }
+                            } else if raw {
+                                JValue::Long(x.to_bits() as i64)
+                            } else {
+                                JValue::Double(x)
+                            }
+                        };
+                        let expected = if a.is_nan() || b.is_nan() {
+                            if opcode == 0x2e || opcode == 0x30 {
+                                1
+                            } else {
+                                -1
+                            }
+                        } else if a < b {
+                            -1
+                        } else if a > b {
+                            1
+                        } else {
+                            0
+                        };
+                        let result = dexvm::vm::interpret::run(
+                            &mut vm,
+                            class,
+                            slot,
+                            vec![
+                                value(a, raw_a),
+                                JValue::Null,
+                                value(b, raw_b),
+                                JValue::Null,
+                                JValue::Int(0),
+                            ],
+                        )
+                        .unwrap();
+                        assert_eq!(result, JValue::Int(expected), "{opcode:x}: {a:?}, {b:?}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn namicomi_catalog_uses_configured_serializers_and_unknown_relationships() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-all.namicomi-v1.6.0.apk")).unwrap();
+    let catalog = execute(
+        &apk,
+        serde_json::from_value(json!({"op":"popular","modern":true})).unwrap(),
+        |request| {
+            assert!(request.url.contains("/title/search?"));
+            HttpResp::ok(include_str!(
+                "../../../Tests/MangaRuntimeTests/OwnedFixtures/namicomi-catalog.json"
+            ))
+        },
+    )
+    .unwrap();
+    assert_eq!(catalog["mangas"][0]["title"], "Owned story");
+    assert_eq!(catalog["mangas"][0]["author"], "Owned author");
+    assert!(catalog["mangas"][0]["thumbnailURL"]
+        .as_str()
+        .unwrap()
+        .contains("owned.webp"));
+    assert_eq!(catalog["hasNext"], false);
+}
+
+#[test]
+fn hiper_catalog_uses_nullable_filters_and_guest_serializers() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    for op in ["popular", "latest", "search"] {
+        let command = serde_json::from_value(json!({"op":op,"modern":true,"query":"Owned", "settingsSourceID":"3064755045370217842", "settings":{"MAX_RATING":{"type":"string","value":"safe"}}})).unwrap();
+        let result = execute(&apk, command, move |request| {
+            assert!(request.url.contains("/api/trpc/search.query?"));
+            assert_eq!(request.method, "GET");
+            let input: Value = serde_json::from_str(&http_query_compat::decode(
+                request.url.split("&input=").nth(1).unwrap(),
+            ))
+            .unwrap();
+            assert_eq!(input["0"]["json"]["maxRating"], "safe");
+            assert_eq!(input["0"]["json"]["filters"]["type"], Value::Null);
+            HttpResp::ok(include_str!(
+                "../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-catalog.json"
+            ))
+        })
+        .unwrap();
+        assert_eq!(result["mangas"][0]["title"], "Owned story");
+        assert_eq!(
+            result["mangas"][0]["thumbnailURL"],
+            "https://images.example/owned-cover.webp"
+        );
+        assert_eq!(result["mangas"][0]["url"], "/manga/owned");
+    }
+}
+
+#[test]
+fn hiper_book_and_pages_use_real_dto_serializers() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").expect("Run test-manga-runtime.sh");
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    let book = execute(
+        &apk,
+        serde_json::from_value(
+            json!({"op":"book","modern":true,"manga":{"url":"/manga/owned","title":"Owned story"}}),
+        )
+        .unwrap(),
+        |request| {
+            if request.url.contains("series.bySlugWithGenres?") {
+                HttpResp::ok(include_str!(
+                    "../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-details.json"
+                ))
+            } else {
+                assert!(request.url.contains("series.chapters?"), "{}", request.url);
+                let input: Value = serde_json::from_str(&http_query_compat::decode(
+                    request.url.split("&input=").nth(1).unwrap(),
+                ))
+                .unwrap();
+                assert_eq!(input["1"]["json"]["seriesId"], 1234567890123_i64);
+                HttpResp::ok(include_str!(
+                    "../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-chapters.json"
+                ))
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(book["manga"]["author"], "Owned author");
+    assert_eq!(book["chapters"][0]["chapterNumber"], 2.5);
+    assert_eq!(book["chapters"][0]["uploadedAt"], 1_790_856_000_000_i64);
+    assert_eq!(book["chapters"][1]["url"], "/manga/owned/9000000000002");
+    assert_eq!(book["chapters"][1]["memo"], "{\"chapterId\":9000000000002}");
+    let pages = execute(
+        &apk,
+        serde_json::from_value(json!({"op":"pages","modern":true,"chapter":book["chapters"][1]}))
+            .unwrap(),
+        |request| {
+            assert!(request.url.contains("reader.chapterPages?"));
+            let input: Value = serde_json::from_str(&http_query_compat::decode(
+                request.url.split("&input=").nth(1).unwrap(),
+            ))
+            .unwrap();
+            assert_eq!(input["2"]["json"]["chapterNumber"], 2.5);
+            assert_eq!(input["2"]["json"]["chapterId"], 9000000000002_i64);
+            HttpResp::ok(include_str!(
+                "../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-pages.json"
+            ))
+        },
+    )
+    .unwrap();
+    assert_eq!(pages[0]["imageURL"], "https://images.example/owned-1.webp");
+    assert_eq!(pages[1]["imageURL"], "https://images.example/owned-2.avif");
+}
+
+#[test]
+fn hiper_reader_retries_with_headers_captured_by_its_browser_callback() {
+    use std::cell::{Cell, RefCell};
+    use std::collections::VecDeque;
+    use std::rc::Rc;
+    let dir = std::env::var("MANGA_TEST_APK_DIR").unwrap();
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    let count = Rc::new(Cell::new(0));
+    let calls = count.clone();
+    let events = RefCell::new(VecDeque::new());
+    let result = execute(&apk, serde_json::from_value(json!({"op":"pages","modern":true,"chapter":{"url":"/manga/owned/2.5","name":"Chapter 2.5","chapterNumber":2.5}})).unwrap(), move |request| {
+        if request.method == "AC_BROWSER" {
+            let body: Value = serde_json::from_str(request.body.as_deref().unwrap()).unwrap();
+            let response = match body["op"].as_str().unwrap() {
+                "load" => {
+                    assert!(body["html"].as_str().unwrap().contains("X-Owned-Session"));
+                    events.borrow_mut().extend([json!({"type":"started","url":body["url"]}),json!({"type":"finished","url":body["url"]}),json!({"type":"request","requestID":10,"url":"https://hiperdex.tv/api/owned-session","method":"GET","headers":[["X-Owned-Session","owned-session"]],"mainFrame":false})]);
+                    json!({})
+                },
+                "next" => events.borrow_mut().pop_front().expect("The guest must resolve its header callback"),
+                "evaluate" => json!({"value":"null"}),
+                "decision" | "stop" | "close" => json!({}),
+                _ => panic!("Unexpected browser operation"),
+            };
+            return HttpResp::ok(response.to_string());
+        }
+        if request.url.contains("reader.chapterPages?") {
+            calls.set(calls.get() + 1);
+            if calls.get() == 1 { return HttpResp::ok(r#"[{"error":{"message":"Owned session refresh required"}}]"#); }
+            assert!(request.headers.iter().any(|(k,v)| k.eq_ignore_ascii_case("X-Owned-Session") && v == "owned-session"));
+            return HttpResp::ok(include_str!("../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-pages.json"));
+        }
+        assert_eq!(request.url,"https://hiperdex.tv/manga/owned/2.5");
+        HttpResp::ok(include_str!("../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-session.html"))
+    }).unwrap();
+    assert_eq!(result.as_array().unwrap().len(), 2);
+    assert_eq!(count.get(), 2);
+}
+
+#[test]
+fn hiper_catalog_401_follows_the_guest_homepage_refresh_and_retry() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let dir = std::env::var("MANGA_TEST_APK_DIR").unwrap();
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    let count = Rc::new(Cell::new(0));
+    let calls = count.clone();
+    let result = execute(
+        &apk,
+        serde_json::from_value(json!({"op":"popular","modern":true})).unwrap(),
+        move |request| {
+            let n = calls.get();
+            calls.set(n + 1);
+            match n {
+                0 => HttpResp {
+                    code: 401,
+                    message: "Unauthorized".into(),
+                    headers: vec![],
+                    body: Some(vec![]),
+                },
+                1 => {
+                    assert!(request.url.trim_end_matches('/') == "https://hiperdex.tv");
+                    HttpResp::ok("<html></html>")
+                }
+                2 => HttpResp::ok(include_str!(
+                    "../../../Tests/MangaRuntimeTests/OwnedFixtures/hiper-catalog.json"
+                )),
+                _ => panic!("Unexpected retry"),
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(count.get(), 3);
+    assert_eq!(result["mangas"][0]["title"], "Owned story");
+}
+
+#[test]
+fn malformed_or_oversized_chapter_metadata_is_rejected_before_networking() {
+    let dir = std::env::var("MANGA_TEST_APK_DIR").unwrap();
+    let apk = std::fs::read(format!("{dir}/tachiyomi-en.hiperdex-v1.6.89.apk")).unwrap();
+    for memo in [
+        "[]".into(),
+        "{bad}".into(),
+        " ".repeat(65_537),
+        format!("{{\"v\":{}0{}}}", "[".repeat(40), "]".repeat(40)),
+    ] {
+        assert!(execute(
+            &apk,
+            serde_json::from_value(
+                json!({"op":"pages","modern":true,"chapter":{"url":"/manga/owned/1","memo":memo}})
+            )
+            .unwrap(),
+            |_| panic!("Invalid metadata cannot trigger a request")
+        )
+        .is_err());
+    }
+}
+
+#[test]
 fn browser_sources_use_real_callbacks_to_decode_owned_catalogs() {
     use std::cell::RefCell;
     use std::collections::VecDeque;
