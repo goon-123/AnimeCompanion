@@ -37,9 +37,10 @@ final class MangaBrowsingUITests: XCTestCase {
         app.revealInContent(entry); entry.tap()
         openMangaShortcut(app, expected: "Phase 2 tracked title")
         let field = app.textFields["manga-search-title"]
-        field.tap()
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Phase 2 tracked title".count))
         field.typeText("The Glass Harbor\n")
+        XCTAssertEqual(field.value as? String, "The Glass Harbor")
         let source = app.buttons["manga-search-source-preview-en"]
         XCTAssertTrue(source.waitForExistence(timeout: 10)); source.tap()
         let result = app.buttons["manga-title-0"]
@@ -48,9 +49,9 @@ final class MangaBrowsingUITests: XCTestCase {
 
         // A second shortcut must replace the retained manga detail stack.
         app.appTab("Explore").tap()
-        let explore = app.buttons["explore-shelf-entry-5"].firstMatch
+        let explore = app.buttons["explore-shelf-entry-2"].firstMatch
         app.revealInContent(explore); explore.tap()
-        openMangaShortcut(app, expected: "Phase 2 title 5")
+        openMangaShortcut(app, expected: "Phase 2 title 2")
         XCTAssertFalse(app.buttons["manga-read"].exists)
         capture("Anime-To-Manga-Search", app)
     }
@@ -62,7 +63,7 @@ final class MangaBrowsingUITests: XCTestCase {
         capture("Source-Icon", app)
         app.buttons["manga-manage-extensions"].tap()
         let icon = app.images[iconID].firstMatch
-        for _ in 0..<5 where !icon.exists { app.swipeUp() }
+        for _ in 0..<5 where !icon.isHittable { app.swipeUp() }
         XCTAssertTrue(icon.waitForExistence(timeout: 10))
         capture("Extension-Install-Icon", app)
     }
