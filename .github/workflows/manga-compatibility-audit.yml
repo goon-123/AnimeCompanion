@@ -1,0 +1,60 @@
+name: Manga compatibility audit
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Tools/MangaRuntime/**'
+      - 'scripts/manga_audit/**'
+      - 'scripts/tests/test_manga_audit.py'
+      - 'scripts/audit-manga-compatibility.py'
+      - 'scripts/test-manga-runtime.sh'
+      - 'scripts/prepare-manga-interpreter.py'
+      - '.github/workflows/manga-compatibility-audit.yml'
+permissions:
+  contents: read
+concurrency:
+  group: manga-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  audit:
+    name: Frozen catalog API inventory and reading preflights
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUST_FONTCONFIG_DLOPEN: '1'
+      MANGA_RUNTIME_INVENTORY: ${{ github.workspace }}/build/manga-audit/runtime-inventory.json
+      MANGA_TEST_APK_DIR: Tools/MangaRuntime/target/fixtures
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Tools/MangaRuntime/target
+          key: manga-audit-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-${{ hashFiles('Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/support/**', 'scripts/prepare-manga-interpreter.py') }}
+          restore-keys: |
+            manga-audit-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-
+            manga-linux-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-
+      - name: Verify real APK regressions and export actual host inventory
+        run: |
+          mkdir -p build/manga-audit
+          bash scripts/test-manga-runtime.sh 2>&1 | tee build/manga-audit/tests.log
+      - name: Verify audit parser, evidence and privacy boundaries
+        run: python3 -m unittest discover -s scripts/tests -p test_manga_audit.py -v
+      - name: Audit every APK in the frozen catalog without website requests
+        run: python3 scripts/audit-manga-compatibility.py --workers 4 --deadline-seconds 1200
+      - name: Upload reproducible compatibility matrix and API inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-manga-compatibility-audit
+          path: |
+            build/manga-audit/compatibility.json
+            build/manga-audit/compatibility.md
+            build/manga-audit/runtime-inventory.json
+          if-no-files-found: ignore
+          retention-days: 30

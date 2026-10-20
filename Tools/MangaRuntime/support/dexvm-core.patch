@@ -328,3 +328,337 @@ index d3c0c2d..01bed0d 100644
          };
          out.push_str(&s);
      }
+diff --git a/src/vm/native/keiyoushi.rs b/src/vm/native/keiyoushi.rs
+--- a/src/vm/native/keiyoushi.rs
++++ b/src/vm/native/keiyoushi.rs
+@@ -23,88 +23,103 @@
+     pub url: String,
+     pub method: String,
+     pub headers: Vec<(String, String)>,
+-    pub body: Option<String>,
+-}
+-
+-/// The host HTTP callback output; becomes an `okhttp3.Response` object.
+-#[derive(Debug, Clone)]
+-pub struct HttpResp {
+-    pub code: i32,
+-    pub message: String,
+-    pub headers: Vec<(String, String)>,
+-    /// Raw response payload; text bodies arrive as UTF-8 bytes.
+-    pub body: Option<Vec<u8>>,
+-}
+-
+-impl HttpResp {
+-    pub fn ok(body: impl Into<String>) -> Self {
+-        HttpResp {
+-            code: 200,
+-            message: "OK".into(),
+-            headers: Vec::new(),
+-            body: Some(body.into().into_bytes()),
+-        }
+-    }
+-    pub fn ok_bytes(bytes: Vec<u8>) -> Self {
+-        HttpResp {
+-            code: 200,
+-            message: "OK".into(),
+-            headers: Vec::new(),
+-            body: Some(bytes),
+-        }
+-    }
+-    pub fn header(&self, name: &str) -> Option<&str> {
+-        self.headers
+-            .iter()
+-            .rev()
+-            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+-            .map(|(_, v)| v.as_str())
+-    }
+-}
+-
+-// ---------------------------------------------------------------------------
+-// lazies for shim class statics
+-// ---------------------------------------------------------------------------
+-
+-pub(crate) fn lazy_smanga_companion(vm: &mut Vm) -> JValue {
+-    opaque_inst(vm, "Leu/kanade/tachiyomi/source/model/SManga$Companion;")
+-}
+-
+-pub(crate) fn lazy_schapter_companion(vm: &mut Vm) -> JValue {
+-    opaque_inst(vm, "Leu/kanade/tachiyomi/source/model/SChapter$Companion;")
+-}
+-
+-pub(crate) fn lazy_update_strategy_once(vm: &mut Vm) -> JValue {
+-    alloc(
+-        vm,
+-        "Leu/kanade/tachiyomi/source/model/UpdateStrategy;",
+-        Native::Enum {
+-            name: "ONLY_FETCH_ONCE".into(),
+-            ordinal: 0,
+-        },
+-    )
+-    .unwrap_or(JValue::Null)
+-}
+-
+-// ---------------------------------------------------------------------------
+-// HTTP bridge
+-// ---------------------------------------------------------------------------
+-
+-pub(crate) fn keiyoushi_execute(vm: &mut Vm, args: &[JValue]) -> R {
+-    let (url, method, headers, body) = request_parts(vm, args[0])?;
+-    check_network_url(vm, &url)?;
+-    if std::env::var("DEXVM_TRACE").is_ok() {
+-        eprintln!("DEXVM_TRACE http-req {method} {url}");
+-    }
+-    let body_str = form_body_to_string(vm, &body);
+-    let Some(http) = vm.http.clone() else {
+-        return Err(uoe(vm, "no HTTP client registered for this SourceEngine"));
+-    };
+-    let resp = http(&HttpData {
+-        url,
+-        method,
+-        headers,
+-        body: body_str,
++    /// UTF-8 view for text-only embedders; absent for non-UTF-8 bodies.
++    pub body: Option<String>,
++    /// Authoritative raw payload, including an explicitly empty body.
++    pub body_bytes: Option<Vec<u8>>,
++}
++
++/// The host HTTP callback output; becomes an `okhttp3.Response` object.
++#[derive(Debug, Clone)]
++pub struct HttpResp {
++    pub code: i32,
++    pub message: String,
++    pub headers: Vec<(String, String)>,
++    /// Raw response payload; text bodies arrive as UTF-8 bytes.
++    pub body: Option<Vec<u8>>,
++}
++
++impl HttpResp {
++    pub fn ok(body: impl Into<String>) -> Self {
++        HttpResp {
++            code: 200,
++            message: "OK".into(),
++            headers: Vec::new(),
++            body: Some(body.into().into_bytes()),
++        }
++    }
++    pub fn ok_bytes(bytes: Vec<u8>) -> Self {
++        HttpResp {
++            code: 200,
++            message: "OK".into(),
++            headers: Vec::new(),
++            body: Some(bytes),
++        }
++    }
++    pub fn header(&self, name: &str) -> Option<&str> {
++        self.headers
++            .iter()
++            .rev()
++            .find(|(k, _)| k.eq_ignore_ascii_case(name))
++            .map(|(_, v)| v.as_str())
++    }
++}
++
++// ---------------------------------------------------------------------------
++// lazies for shim class statics
++// ---------------------------------------------------------------------------
++
++pub(crate) fn lazy_smanga_companion(vm: &mut Vm) -> JValue {
++    opaque_inst(vm, "Leu/kanade/tachiyomi/source/model/SManga$Companion;")
++}
++
++pub(crate) fn lazy_schapter_companion(vm: &mut Vm) -> JValue {
++    opaque_inst(vm, "Leu/kanade/tachiyomi/source/model/SChapter$Companion;")
++}
++
++pub(crate) fn lazy_update_strategy_once(vm: &mut Vm) -> JValue {
++    alloc(
++        vm,
++        "Leu/kanade/tachiyomi/source/model/UpdateStrategy;",
++        Native::Enum {
++            name: "ONLY_FETCH_ONCE".into(),
++            ordinal: 0,
++        },
++    )
++    .unwrap_or(JValue::Null)
++}
++
++// ---------------------------------------------------------------------------
++// HTTP bridge
++// ---------------------------------------------------------------------------
++
++pub(crate) fn keiyoushi_execute(vm: &mut Vm, args: &[JValue]) -> R {
++    let (url, method, mut headers, body) = request_parts(vm, args[0])?;
++    check_network_url(vm, &url)?;
++    if std::env::var("DEXVM_TRACE").is_ok() {
++        eprintln!("DEXVM_TRACE http-req {method} {url}");
++    }
++    let (body_bytes, content_type) = request_body_bytes(vm, &body)?;
++    if let Some(content_type) = content_type {
++        if !headers
++            .iter()
++            .any(|(key, _)| key.eq_ignore_ascii_case("Content-Type"))
++        {
++            headers.push(("Content-Type".to_owned(), content_type));
++        }
++    }
++    let body_str = body_bytes
++        .as_ref()
++        .and_then(|bytes| String::from_utf8(bytes.clone()).ok());
++    let Some(http) = vm.http.clone() else {
++        return Err(uoe(vm, "no HTTP client registered for this SourceEngine"));
++    };
++    let resp = http(&HttpData {
++        url,
++        method,
++        headers,
++        body: body_str,
++        body_bytes,
+     });
+     if std::env::var("DEXVM_TRACE").is_ok() {
+         let preview: String = resp
+diff --git a/src/vm/native/mod.rs b/src/vm/native/mod.rs
+--- a/src/vm/native/mod.rs
++++ b/src/vm/native/mod.rs
+@@ -138,25 +138,58 @@
+ // ---------------------------------------------------------------------------
+
+ #[cfg(any(feature = "okhttp", feature = "tachiyomi"))]
+-#[cfg_attr(not(feature = "tachiyomi"), allow(dead_code))]
+-pub(crate) fn form_body_to_string(vm: &mut Vm, body: &Option<JValue>) -> Option<String> {
+-    let Some(JValue::Obj(id)) = body.as_ref() else {
+-        return None;
+-    };
+-    let o = vm.arena.get(*id)?;
+-    match o.native.as_ref()? {
+-        Native::FormBody(fields) => Some(
+-            fields
+-                .iter()
+-                .map(|(k, v)| format!("{k}={v}"))
+-                .collect::<Vec<_>>()
+-                .join("&"),
+-        ),
+-        Native::Str(s) => Some(s.clone()),
+-        Native::RespBody(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
+-        Native::RequestBody { data, .. } => Some(String::from_utf8_lossy(data).into_owned()),
+-        _ => None,
+-    }
++pub(crate) type RequestPayload = (Option<Vec<u8>>, Option<String>);
++
++#[cfg(any(feature = "okhttp", feature = "tachiyomi"))]
++#[cfg_attr(not(feature = "tachiyomi"), allow(dead_code))]
++pub(crate) fn request_body_bytes(
++    vm: &mut Vm,
++    body: &Option<JValue>,
++) -> Result<RequestPayload, NatErr> {
++    let Some(body) = body.filter(|value| !value.is_null()) else {
++        return Ok((None, None));
++    };
++    let (bytes, content_type) = match payload(vm, body) {
++        Some(Native::FormBody(fields)) => (
++            fields
++                .iter()
++                .map(|(key, value)| format!("{key}={value}"))
++                .collect::<Vec<_>>()
++                .join("&")
++                .into_bytes(),
++            Some("application/x-www-form-urlencoded".to_owned()),
++        ),
++        Some(Native::Str(text)) => (text.as_bytes().to_vec(), None),
++        Some(Native::RespBody(bytes)) => (bytes.clone(), None),
++        Some(Native::RequestBody { data, content_type }) => (data.clone(), content_type.clone()),
++        _ => {
++            // A guest-defined RequestBody owns its serialization. Do not drop
++            // an unknown body or treat its data as a lossy UTF-8 string.
++            let media = inv_virt(vm, body, "contentType", "()Lokhttp3/MediaType;", &[])?;
++            let content_type = if media.is_null() {
++                None
++            } else {
++                Some(jstr(vm, media)?)
++            };
++            let sink = alloc(
++                vm,
++                "Lokio/Buffer;",
++                Native::OkioBuf {
++                    bytes: Vec::new(),
++                    pos: 0,
++                },
++            )?;
++            inv_virt(vm, body, "writeTo", "(Lokio/BufferedSink;)V", &[sink])?;
++            let Some(Native::OkioBuf { bytes, .. }) = payload(vm, sink) else {
++                return Err(ioe(vm, "Invalid request body buffer"));
++            };
++            (bytes.clone(), content_type)
++        }
++    };
++    if bytes.len() > 1_000_000 {
++        return Err(ioe(vm, "Request body exceeds the host limit"));
++    }
++    Ok((Some(bytes), content_type))
+ }
+
+ #[cfg(any(feature = "okhttp", feature = "tachiyomi"))]
+diff --git a/src/vm/native/okhttp/mod.rs b/src/vm/native/okhttp/mod.rs
+--- a/src/vm/native/okhttp/mod.rs
++++ b/src/vm/native/okhttp/mod.rs
+@@ -2493,34 +2493,32 @@
+         }
+     }
+     debug!("DBG HOST fetch {method} {url} hdrs={}", headers.len());
+-    let body_str = form_body_to_string(vm, &body);
+-    if let Some(JValue::Obj(id)) = body.as_ref() {
+-        if let Some(Native::RequestBody {
+-            content_type: Some(mt),
+-            ..
+-        }) = vm.arena.get(*id).and_then(|o| o.native.as_ref())
+-        {
+-            if !headers
+-                .iter()
+-                .any(|(k, _)| k.eq_ignore_ascii_case("Content-Type"))
+-            {
+-                headers.push(("Content-Type".to_string(), mt.clone()));
+-            }
+-        }
+-    }
+-    if std::env::var("DEXVM_TRACE").is_ok() {
+-        eprintln!(
+-            "DEXVM_TRACE host_execute {method} {url}\n  hdrs={headers:?}\n  body={body_str:?}"
+-        );
+-    }
+-    let Some(http) = vm.http.clone() else {
+-        return Err(uoe(vm, "no HTTP client registered for this SourceEngine"));
+-    };
+-    let resp = http(&crate::vm::native::keiyoushi::HttpData {
+-        url,
+-        method,
+-        headers,
+-        body: body_str,
++    let (body_bytes, content_type) = request_body_bytes(vm, &body)?;
++    if let Some(content_type) = content_type {
++        if !headers
++            .iter()
++            .any(|(key, _)| key.eq_ignore_ascii_case("Content-Type"))
++        {
++            headers.push(("Content-Type".to_owned(), content_type));
++        }
++    }
++    let body_str = body_bytes
++        .as_ref()
++        .and_then(|bytes| String::from_utf8(bytes.clone()).ok());
++    if std::env::var("DEXVM_TRACE").is_ok() {
++        eprintln!(
++            "DEXVM_TRACE host_execute {method} {url}\n  hdrs={headers:?}\n  body={body_str:?}"
++        );
++    }
++    let Some(http) = vm.http.clone() else {
++        return Err(uoe(vm, "no HTTP client registered for this SourceEngine"));
++    };
++    let resp = http(&crate::vm::native::keiyoushi::HttpData {
++        url,
++        method,
++        headers,
++        body: body_str,
++        body_bytes,
+     });
+     if std::env::var("DEXVM_TRACE").is_ok() {
+         let preview: String = resp

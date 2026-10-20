@@ -116,6 +116,7 @@ fn host(vm: &mut Vm, input: Value) -> Result<Value, NatErr> {
         method: "AC_BROWSER".into(),
         headers: vec![],
         body: Some(input),
+        body_bytes: None,
     });
     let bytes = response.body.unwrap_or_default();
     if response.code != 200 || bytes.len() > 2_000_000 {

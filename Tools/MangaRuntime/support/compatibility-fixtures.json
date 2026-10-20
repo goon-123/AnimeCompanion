@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 1,
+  "catalogRef": "b00de1d361ab08eb38567ecacfd267c154130592",
+  "meaning": "Exact APK/version and source-index evidence from passing owned-fixture tests. No live verification is implied.",
+  "fixtures": [
+    {
+      "name": "tachiyomi-en.mangapill-v1.4.9.apk",
+      "sha256": "a89cedebe600d4545625b59022b4f241d8416c245916cb451476aaa954451b5c",
+      "url": "https://raw.githubusercontent.com/tachibana-shin/dexvm/38d3438d7e36b5c2c17414029fd36b2d717eefcb/fixtures/tachiyomi-en.mangapill-v1.4.9.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.mangapill",
+      "cases": [
+        {
+          "test": "tests::loads_both_extension_generations_without_network",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "inspect"
+          ]
+        },
+        {
+          "test": "compatibility_tests::mangapill_classic_reader_parses_lazy_images_in_document_order",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "pages"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-vi.cuutruyenmoe-v1.6.3.apk",
+      "sha256": "508a81325727bbf2ec7151265dcf24a294d0d0dab5b639c7ffbb902809814340",
+      "url": "https://raw.githubusercontent.com/tachibana-shin/dexvm/38d3438d7e36b5c2c17414029fd36b2d717eefcb/fixtures/tachiyomi-vi.cuutruyenmoe-v1.6.3.apk",
+      "package": "eu.kanade.tachiyomi.extension.vi.cuutruyenmoe",
+      "cases": [
+        {
+          "test": "tests::loads_both_extension_generations_without_network",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "inspect"
+          ]
+        },
+        {
+          "test": "compatibility_tests::cuutruyen_modern_reader_parses_lazy_images_in_document_order",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "pages"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.akuma-v1.4.10.apk",
+      "sha256": "9f5e744ee3066ccf0c785dc8f427af8b7854933997eee1fe349fea388d4ba39a",
+      "url": "https://raw.githubusercontent.com/tachibana-shin/dexvm/38d3438d7e36b5c2c17414029fd36b2d717eefcb/fixtures/tachiyomi-all.akuma-v1.4.10.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.akuma",
+      "cases": [
+        {
+          "test": "tests::classic_extension_builds_requests_and_parses_host_responses",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        },
+        {
+          "test": "tests::classic_book_pages_and_lazy_images_execute_real_extension_parsers",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        },
+        {
+          "test": "tests::image_bytes_follow_the_real_source_client_and_headers_for_both_apis",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.commitstrip-v1.6.0.apk",
+      "sha256": "f843f2c7ded62a2da5762e6c68547c89c8e200ab26c4f3805b24b9223d046fb9",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.commitstrip-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.commitstrip",
+      "cases": [
+        {
+          "test": "tests::modern_extension_executes_its_real_catalog_and_detail_code",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details"
+          ]
+        },
+        {
+          "test": "tests::modern_book_and_pages_execute_real_extension_parsers",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "details",
+            "chapters",
+            "pages"
+          ]
+        },
+        {
+          "test": "tests::image_bytes_follow_the_real_source_client_and_headers_for_both_apis",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.weebcentral-v1.6.25.apk",
+      "sha256": "04331a9b4bb878325dfca1079757c9152cdf66916f7859d0dddf41cf26553d30",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/8ef06cd-1/tachiyomi-en.weebcentral-v1.6.25.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.weebcentral",
+      "cases": [
+        {
+          "test": "weebcentral_tests::weebcentral_details_chapters_pages_and_source_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.mangaplus-v1.6.67.apk",
+      "sha256": "1be92d6255eae1954c4deb525c96cd4933b37be85a927b1d5a3793b818ab8f98",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.mangaplus",
+      "cases": [
+        {
+          "test": "compatibility_tests::mangaplus_catalog_details_and_dated_chapters_use_real_serializers",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters"
+          ]
+        },
+        {
+          "test": "compatibility_tests::mangaplus_protobuf_reader_preserves_pages_and_view_token",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "pages",
+            "images"
+          ]
+        },
+        {
+          "test": "compatibility_tests::source_preferences_are_declared_by_the_apk_and_change_its_requests",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "settings"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.mangadex-v1.6.0.apk",
+      "sha256": "12fde77601d48c8b231340694db8446fba5a555ced4109b231c9d2e3000915fb",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/8ef06cd-0/tachiyomi-all.mangadex-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.mangadex",
+      "cases": [
+        {
+          "test": "compatibility_tests::shared_runtime_loads_owned_catalog_entries_from_independent_current_families",
+          "sources": [
+            17
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.mangafire-v1.6.34.apk",
+      "sha256": "77abea779ed379388d79c6461b8910fae9e067dc017164b62df8fb323f15bebf",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-all.mangafire-v1.6.34.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.mangafire",
+      "cases": [
+        {
+          "test": "compatibility_tests::shared_runtime_loads_owned_catalog_entries_from_independent_current_families",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.asurascans-v1.6.69.apk",
+      "sha256": "559144ddf25bc7f348efa523318e45b7544727a55f3c5ddc4bd91b3a861295f3",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-en.asurascans-v1.6.69.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.asurascans",
+      "cases": []
+    },
+    {
+      "name": "tachiyomi-en.comix-v1.6.54.apk",
+      "sha256": "6053794beb3416e8bb04fd0f523c8a0dede2aa4543422f45ad41a7526324fd6e",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bd7e6/tachiyomi-en.comix-v1.6.54.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.comix",
+      "cases": [
+        {
+          "test": "compatibility_tests::browser_sources_use_real_callbacks_to_decode_owned_catalogs",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.manhuaus-v1.6.60.apk",
+      "sha256": "eed10bcba241ef0fa6549762c0de5d327c9e1f341419803ac5de645777e2ed46",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/e97033f/tachiyomi-en.manhuaus-v1.6.60.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.manhuaus",
+      "cases": [
+        {
+          "test": "compatibility_tests::shared_runtime_loads_owned_catalog_entries_from_independent_current_families",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.cubari-v1.6.0.apk",
+      "sha256": "d5289a0a94376a6aea232119c39b28cd8362c6b6de95d053ad0e6b460bc8fbb2",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-all.cubari-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.cubari",
+      "cases": [
+        {
+          "test": "compatibility_tests::browser_sources_use_real_callbacks_to_decode_owned_catalogs",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.mangaup-v1.6.3.apk",
+      "sha256": "486e0cd864cc9eb5bceff566c9790737f508c1b35b50fa04538d30ad6036ac55",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-all.mangaup-v1.6.3.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.mangaup",
+      "cases": [
+        {
+          "test": "compatibility_tests::browser_sources_use_real_callbacks_to_decode_owned_catalogs",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.hiperdex-v1.6.89.apk",
+      "sha256": "7ac5566a04d6cb7105fcaf7570d7edca985366393f4589c067a2bc18e4772a8f",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-en.hiperdex-v1.6.89.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.hiperdex",
+      "cases": [
+        {
+          "test": "compatibility_tests::hiper_catalog_uses_nullable_filters_and_guest_serializers",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "latest",
+            "search"
+          ]
+        },
+        {
+          "test": "compatibility_tests::hiper_book_and_pages_use_real_dto_serializers",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "details",
+            "chapters",
+            "pages"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.namicomi-v1.6.0.apk",
+      "sha256": "f357ccaa47f197b55eb0223ed83d5ee1b835c895a8162593f59c9e8790391c22",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-all.namicomi-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.namicomi",
+      "cases": [
+        {
+          "test": "compatibility_tests::namicomi_catalog_uses_configured_serializers_and_unknown_relationships",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.comicfury-v1.6.0.apk",
+      "sha256": "526500f49ba9a016675439e538fbbfd92cdf35047e806c0156c4d4ab24a4a92a",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.comicfury-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.comicfury",
+      "cases": [
+        {
+          "test": "extension_reader_tests::comicfury_catalog_dated_chapters_ordered_pages_and_images",
+          "sources": [
+            1
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.comicskingdom-v1.6.0.apk",
+      "sha256": "3123f5c96374f7e6d8fa4cda3c9602b3897c646377d096627cf3e9b319f556d8",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.comicskingdom-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.comicskingdom",
+      "cases": [
+        {
+          "test": "extension_reader_tests::comicskingdom_catalog_compact_and_individual_chapters_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.projectsuki-v1.6.0.apk",
+      "sha256": "ef32135fd2aec84d8b949a58de255272dfdb9668298eb351f9d3438032fde7a8",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-all.projectsuki-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.projectsuki",
+      "cases": [
+        {
+          "test": "extension_reader_tests::projectsuki_delegates_catalog_and_sorted_posted_chapter_pages",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.mangabuddy-v1.6.34.apk",
+      "sha256": "6db9eb23ec4c065632de8ad425c3db6a7e5a373826190d14e2c25ac9b0ef5b25",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-en.mangabuddy-v1.6.34.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.mangabuddy",
+      "cases": [
+        {
+          "test": "extension_reader_tests::mangabuddy_catalog_and_nextjs_chapter_pages_keep_source_order",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.hentainexus-v1.6.20.apk",
+      "sha256": "3cbfbbdd6e4bd1cac8116df8d86ad0d6dc07cedf2197b15a99a51910f3d7cc56",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-en.hentainexus-v1.6.20.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.hentainexus",
+      "cases": [
+        {
+          "test": "hentainexus_tests::hentainexus_popular_latest_search_and_dated_chapter",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "latest",
+            "search",
+            "details",
+            "chapters"
+          ]
+        },
+        {
+          "test": "hentainexus_tests::hentainexus_decodes_owned_pages_in_source_order_and_transports_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "pages",
+            "images"
+          ]
+        },
+        {
+          "test": "hentainexus_tests::hentainexus_image_quality_preferences_and_invalid_readers",
+          "sources": [
+            0
+          ],
+          "stages": []
+        },
+        {
+          "test": "hentainexus_tests::hentainexus_settings_schema_executes_the_real_typed_set_array_path",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "settings"
+          ]
+        }
+      ]
+    }
+  ]
+}

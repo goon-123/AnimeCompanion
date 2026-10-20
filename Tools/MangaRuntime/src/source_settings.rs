@@ -311,7 +311,98 @@ fn put_set(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     Ok(args[0])
 }
 
+// Android-only presentation/callback setters do not alter the preference's
+// default value. The native schema has no Android dialog or listener lifecycle.
+fn schema_presentation(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    match vm.payload_of(args[0]) {
+        Some(Native::Preference { .. } | Native::PreferenceScreen { .. }) => Ok(JValue::Null),
+        _ => Err(NatErr::Throw(vm.err_npe())),
+    }
+}
+
+fn preference_enabled(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let Some(Native::Preference { enabled, .. }) =
+        vm.arena.objects[args[0].as_obj() as usize].native.as_mut()
+    else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    *enabled = !args[1].is_zero();
+    Ok(JValue::Null)
+}
+
+fn android_ui_callback(vm: &mut Vm, _: &[JValue]) -> Result<JValue, NatErr> {
+    Err(NatErr::Throw(vm.throwable_of(
+        "Ljava/lang/UnsupportedOperationException;",
+        "Android UI callbacks are unavailable in the native settings schema",
+    )))
+}
+
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (class, name, sig) in [
+        (
+            "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
+            "onBindEditText",
+            "(Landroid/widget/EditText;)V",
+        ),
+        (
+            "Landroidx/preference/Preference$OnPreferenceChangeListener;",
+            "onPreferenceChange",
+            "(Landroidx/preference/Preference;Ljava/lang/Object;)Z",
+        ),
+        (
+            "Landroidx/preference/Preference$OnPreferenceClickListener;",
+            "onPreferenceClick",
+            "(Landroidx/preference/Preference;)Z",
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name,
+            sig,
+            instance: true,
+            f: android_ui_callback,
+        })?;
+        let listener = vm.ensure_class_by_desc(class)?;
+        vm.classes[listener as usize].is_interface = true;
+    }
+    let presentation: Vec<((u32, u32, u32), bool)> = vm
+        .natives
+        .keys()
+        .filter_map(|key @ (class, name, sig)| {
+            let (class, name, sig) = (vm.str_of(*class), vm.str_of(*name), vm.str_of(*sig));
+            if !class.starts_with("Landroidx/preference/") {
+                return None;
+            }
+            let presentation = matches!(
+                (name, sig),
+                (
+                    "setOnBindEditTextListener",
+                    "(Landroidx/preference/EditTextPreference$OnBindEditTextListener;)V"
+                ) | (
+                    "setOnPreferenceChangeListener",
+                    "(Landroidx/preference/Preference$OnPreferenceChangeListener;)V"
+                ) | (
+                    "setOnPreferenceClickListener",
+                    "(Landroidx/preference/Preference$OnPreferenceClickListener;)V"
+                ) | (
+                    "setDialogMessage" | "setDialogTitle" | "setSummaryOn" | "setSummaryOff",
+                    "(Ljava/lang/CharSequence;)V"
+                )
+            );
+            (presentation || (name == "setEnabled" && sig == "(Z)V"))
+                .then_some((*key, name == "setEnabled"))
+        })
+        .collect();
+    for (key, enabled) in presentation {
+        vm.natives.insert(
+            key,
+            if enabled {
+                preference_enabled
+            } else {
+                schema_presentation
+            },
+        );
+    }
     let key = (
         vm.intern("Landroid/content/SharedPreferences;"),
         vm.intern("getStringSet"),
@@ -342,6 +433,95 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn android_ui_setters_preserve_defaults_and_enabled_state() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let text = vm.alloc_string("Owned default");
+        let listener = vm
+            .alloc_native(
+                "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
+                Native::Opaque,
+            )
+            .unwrap();
+        let value = vm
+            .alloc_native(
+                "Landroidx/preference/EditTextPreference;",
+                Native::Preference {
+                    key: None,
+                    title: None,
+                    summary: None,
+                    default_value: text,
+                    enabled: true,
+                    visible: true,
+                    entries: vec![],
+                    entry_values: vec![],
+                },
+            )
+            .unwrap();
+        vm.invoke_virtual_args(
+            value,
+            "setOnBindEditTextListener",
+            "(Landroidx/preference/EditTextPreference$OnBindEditTextListener;)V",
+            vec![listener],
+        )
+        .unwrap();
+        for method in ["setDialogTitle", "setDialogMessage"] {
+            vm.invoke_virtual_args(
+                value,
+                method,
+                "(Ljava/lang/CharSequence;)V",
+                vec![JValue::Null],
+            )
+            .unwrap();
+        }
+        vm.invoke_virtual_args(value, "setEnabled", "(Z)V", vec![JValue::Int(0)])
+            .unwrap();
+        assert!(matches!(
+            vm.payload_of(value),
+            Some(Native::Preference { default_value, enabled: false, .. }) if default_value == text
+        ));
+        let interface = vm.arena.objects[listener.as_obj() as usize].class;
+        assert!(vm.classes[interface as usize].is_interface);
+        assert!(matches!(
+            android_ui_callback(&mut vm, &[listener]),
+            Err(NatErr::Throw(_))
+        ));
+        let choice = vm
+            .alloc_native(
+                "Landroidx/preference/SwitchPreferenceCompat;",
+                Native::Preference {
+                    key: None,
+                    title: None,
+                    summary: None,
+                    default_value: JValue::Int(1),
+                    enabled: true,
+                    visible: true,
+                    entries: vec![],
+                    entry_values: vec![],
+                },
+            )
+            .unwrap();
+        for method in ["setSummaryOn", "setSummaryOff"] {
+            vm.invoke_virtual_args(choice, method, "(Ljava/lang/CharSequence;)V", vec![text])
+                .unwrap();
+        }
+        vm.invoke_virtual_args(
+            choice,
+            "setOnPreferenceChangeListener",
+            "(Landroidx/preference/Preference$OnPreferenceChangeListener;)V",
+            vec![JValue::Null],
+        )
+        .unwrap();
+        assert!(matches!(
+            vm.payload_of(choice),
+            Some(Native::Preference {
+                default_value: JValue::Int(1),
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn string_sets_preserve_newlines_empty_values_and_source_namespaces() {

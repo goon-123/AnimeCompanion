@@ -16,9 +16,11 @@ const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 mod array_compat;
 mod browser_compat;
 mod chapter_wire;
+mod collection_compat;
 mod date_compat;
 mod diagnostics;
 mod http_query_compat;
+mod http_wire;
 mod java_compat;
 mod json_compat;
 mod jsoup_compat;
@@ -31,11 +33,15 @@ mod uri_compat;
 use serialization_compat::*;
 
 #[cfg(test)]
+mod compatibility_inventory;
+#[cfg(test)]
 mod compatibility_tests;
 #[cfg(test)]
 mod extension_reader_tests;
 #[cfg(test)]
 mod hentainexus_tests;
+#[cfg(test)]
+mod http_body_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -1063,6 +1069,7 @@ where
     }
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     okio_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    collection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     browser_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::seed(
@@ -1082,6 +1089,10 @@ where
             http(request)
         }
     });
+    #[cfg(test)]
+    if command.op == "auditRuntimeInventory" {
+        return Ok(compatibility_inventory::inventory(ext.ctx().vm()));
+    }
     let manifest = ext.manifest().map_err(|e| e.to_string())?;
     if !manifest
         .package_id
@@ -1229,11 +1240,7 @@ pub unsafe extern "C" fn ac_manga_execute(
             let (Some(callback), Some(release)) = (http, release_http) else {
                 return fallback();
             };
-            let Ok(input) = CString::new(
-                json!({"url":request.url,"method":request.method,
-                "headers":request.headers,"body":request.body})
-                .to_string(),
-            ) else {
+            let Ok(input) = CString::new(http_wire::request_json(request).to_string()) else {
                 return fallback();
             };
             let result = callback(context, input.as_ptr());

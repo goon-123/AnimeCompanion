@@ -65,5 +65,11 @@ final class HentaiNexusRuntimeTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("Selected quality"))
         }
     }
+    func testSettingsSchemaIncludesTheActualImageQualityChoice() throws {
+        let host = try makeHost()
+        let schema: MangaSourceSettingsSchema = try host.execute(["op": "settings"])
+        XCTAssertTrue(schema.settings.contains { $0.key == "pref_image_format" && $0.control == .choice })
+    }
+
     private struct ImageResponse: Decodable { let bodyBase64: String }
 }

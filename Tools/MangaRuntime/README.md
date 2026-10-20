@@ -70,6 +70,36 @@ Twenty APKs are checksum-pinned for tests only. New owned fixtures exercise the 
 
 The catalog replay already passed on build 47's runtime; this change does not establish the cause of the device's loading spinner or certify live website availability. Authentication, website changes and other unimplemented extension APIs remain possible separate failures. Validation status is tracked in `BUILD_STATUS.md`.
 
+## Catalog-wide compatibility audit (build 49)
+
+Version 0.25.2 adds a separate, reproducible development audit. The frozen v2 catalog at `b00de1d361ab08eb38567ecacfd267c154130592` contains **1,444 APKs**. The build-48 baseline inventories every APK and executes **15,190 offline operation probes**, enumerating **2,221 source instances**. This is broader failure discovery, **not** 1,444 working sources.
+
+The audit exports the actual runtime's registered APIs and parent relationships, reads bounded DEX method declarations/references, verifies published release SHA-256 values, and isolates each APK's metadata/settings/popular/latest/search/book/pages/image preflights. HTTP receives only owned empty HTML; browser calls are marked as requiring the WebKit harness. Guest filesystem/process/environment access remains denied. Processes have memory/CPU/wall-clock limits. Reports never retain request URLs, tokens, cookies, guest response strings or raw exception text.
+
+Static unmatched references are candidates, not confirmed missing implementations: abstract methods may dispatch to guest code and shim constructors can be implicit. A successful empty-response probe only means that exercised path accepted its owned response. An unclassified failure can be a fixture limitation. None of these outcomes is live certification.
+
+`support/compatibility-fixtures.json` links exact APK hashes and source indexes to named passing Rust tests. The report marks complete owned flow only when popular catalog, details, chapters, ordered pages and image transport all have evidence. Other stages remain partial or untested; results are never transferred across APK updates or across source languages. Settings evidence requires actual schema extraction, not merely supplying preference values to a reader. Five current-catalog source instances have complete owned-flow evidence at the baseline; older pinned APK results are retained separately as historical evidence.
+
+The first audit identifies missing `DateTimeFormatter.ofPattern(String)` on 75 packages, an optional Android settings binding type on 119, indexed-value components on 17 and typed set arrays on 7 (overlapping packages). Build 49 adds the shared overload/type/collection contracts. Typed arrays preserve the requested component type, reuse sufficiently large arrays, null-terminate reused buffers and reject incompatible elements. Android EditText callbacks remain explicitly unsupported; loading their interface does not create Android UI. HentaiNexus now has a separate real-APK schema regression, exposing its previously untested typed-set-array path. Schema-only Android listeners/dialog labels/on-off summaries no longer overwrite default values, and EditText enabled state is preserved. These setters do not run Android UI callbacks.
+
+HTTP request bodies now cross Rust/C/Swift as optional base64-encoded **raw bytes**, preserving binary, NUL, empty and absent bodies. UTF-8 text remains available for existing text-only fixtures and internal browser messages. Custom RequestBody serialization invokes its own content-type/writeTo methods; failures stop before HTTP. Both legacy and normal call paths, content-type precedence, malformed base64 and the existing one-megabyte body limit have dedicated regressions. This is a transport correction, not evidence that every binary-API website works.
+
+Run the audit in Linux after exporting inventory during the real regression suite:
+
+```bash
+set -o pipefail
+mkdir -p build/manga-audit
+MANGA_RUNTIME_INVENTORY="$PWD/build/manga-audit/runtime-inventory.json" \
+  bash scripts/test-manga-runtime.sh 2>&1 | tee build/manga-audit/tests.log
+MANGA_TEST_APK_DIR=Tools/MangaRuntime/target/fixtures \
+  python3 -m unittest discover -s scripts/tests -p test_manga_audit.py -v
+python3 scripts/audit-manga-compatibility.py --workers 4
+# Optional bounded investigation of selected current packages:
+python3 scripts/audit-manga-compatibility.py --packages en.hentainexus all.mangadex
+```
+
+The Manga compatibility audit workflow publishes `compatibility.md`, its machine-readable matrix and the actual host API inventory for each run. Reports retain frozen catalog/index/release-manifest hashes, runtime revision, test-log hash, incomplete cells and version-specific evidence. Production carries no audit-only command, APK corpus or source fixture. See [BUILD_STATUS.md](../../BUILD_STATUS.md) and PR #30 for measured post-fix results.
+
 ## Build and verification
 
 ```bash

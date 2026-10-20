@@ -1,3 +1,21 @@
+## Catalog-wide manga compatibility — build 49
+
+Version 0.25.2. Focus only on the shared manga runtime and its verification; no anime/provider or reader-layout redesign.
+
+The [baseline audit](https://github.com/goon-123/AnimeCompanion/actions/runs/39471358711) inventories **1,444/1,444 APKs**, enumerates **2,221 source instances** and runs **15,190 offline operation probes**. The [first post-fix audit](https://github.com/goon-123/AnimeCompanion/actions/runs/39474438832) also inventories all 1,444 APKs, enumerates **2,273 source instances** and runs **15,002 probes**. All child processes exit normally, but their per-package deadlines leave **1,516 baseline / 2,060 post-fix operation cells unexecuted**. Counts are bounded discovery results, not an exhaustive like-for-like comparison or live certification.
+
+The four targeted observed gaps no longer appear in that post-fix run: DateTimeFormatter.ofPattern(String) (75 baseline packages), optional Android EditText listener type (119), IndexedValue.component1 (17), and typed HashSet.toArray (7). Counts overlap. Packages with at least one observed runtime API error change from 378 to 201; differing unexecuted cells mean this must not be reported as 177 newly working sources. Five current-catalog source instances still have complete owned catalog/details/chapters/pages/image evidence.
+
+Add genuine shared collection/date contracts, a catchable ArrayStoreException, and actual HentaiNexus settings-schema regressions in Rust and Swift/C. Correct the earlier evidence tag that confused injecting reader preferences with schema extraction. Android listener interfaces permit schema loading; Android callback execution remains explicitly unsupported.
+
+A subsequent review finds that upstream UI listener/dialog/on-off-summary setters overwrite preference defaults, and EditText.setEnabled overwrites a value instead of enabled state. The schema projection now preserves defaults and enabled state without executing Android UI callbacks. A regression exercises the real virtual setter dispatch.
+
+Fix a separately confirmed binary-body transport bug: the old HTTP bridge converted raw bytes through lossy UTF-8. Preserve bytes through both interpreter request paths and Rust/C/Swift, keep text compatibility and nil/empty distinctions, execute custom RequestBody serialization, preserve errors, honor explicit content types and enforce size limits. No per-source host parser, request builder or decoder is added.
+
+The final settings batch passes **98 Rust tests** and Clippy in [run 39475626798](https://github.com/goon-123/AnimeCompanion/actions/runs/39475626798); its three formatting corrections are applied in the next commit. Audit parser/evidence/privacy checks pass **10 Python tests** in the earlier completed post-fix run. The iOS runtime builds for device/universal simulator and its macOS Rust regressions pass on the pre-settings-correction commit in [run 39474438787](https://github.com/goon-123/AnimeCompanion/actions/runs/39474438787). Latest full scan, native Swift/C iPhone/iPad checks and unsigned IPA remain under verification in [PR #30](https://github.com/goon-123/AnimeCompanion/pull/30).
+
+Remaining high-impact observed blockers include JsonElementSerializer, reflective KClassifier lookup, ChronoField and additional JSON map encoding/date-zone APIs. Removing one barrier can expose another. Reports and exact-version coverage live in the Manga compatibility audit workflow artifacts; production carries neither the audit-only command nor APK corpus.
+
 ## HentaiNexus reader decoder — build 48
 
 Version 0.25.1. Replay the published, SHA-256-pinned HentaiNexus 1.6.20 APK with neutral owned HTML and encoded page metadata. The original runtime passes popular/latest/search and the details/dated-chapter fixture, but cannot find the reader script because Jsoup :containsData(...) is unsupported. After adding that selector, the same APK exposes missing Kotlin `ByteArray.slice(IntRange)`.
