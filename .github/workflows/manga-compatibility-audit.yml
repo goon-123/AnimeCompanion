@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
     env:
       RUST_FONTCONFIG_DLOPEN: '1'
-      MANGA_RUNTIME_INVENTORY: build/manga-audit/runtime-inventory.json
+      MANGA_RUNTIME_INVENTORY: ${{ github.workspace }}/build/manga-audit/runtime-inventory.json
       MANGA_TEST_APK_DIR: Tools/MangaRuntime/target/fixtures
     steps:
       - uses: actions/checkout@v4
