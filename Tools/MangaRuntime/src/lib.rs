@@ -13,6 +13,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
+mod array_compat;
 mod browser_compat;
 mod chapter_wire;
 mod date_compat;
@@ -33,6 +34,8 @@ use serialization_compat::*;
 mod compatibility_tests;
 #[cfg(test)]
 mod extension_reader_tests;
+#[cfg(test)]
+mod hentainexus_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -1027,6 +1030,7 @@ where
             .map_err(|e| e.to_string())?;
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

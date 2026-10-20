@@ -1,9 +1,9 @@
-//! Jsoup's [attribute~=regex] is not CSS's whitespace-token ~= operator.
+//! Jsoup selectors and raw data contracts used by HTML source extensions.
 use dexvm::vm::error::JvmError;
 use dexvm::vm::object::{JsoupDocRef, Native};
 use dexvm::vm::{NatErr, NativeEntry, NativeFn, Vm};
 use dexvm::JValue;
-use dom_query::{NodeId, NodeRef};
+use dom_query::{NodeData, NodeId, NodeRef};
 use fancy_regex::{Regex, RegexBuilder};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
@@ -89,13 +89,67 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     for entry in ENTRIES {
         vm.register_native(*entry)?;
     }
+    vm.register_native(NativeEntry {
+        class: "Lorg/jsoup/nodes/Element;",
+        name: "data",
+        sig: "()Ljava/lang/String;",
+        instance: true,
+        f: element_data,
+    })?;
     Ok(())
 }
 
+enum Test {
+    Attribute { attribute: String, pattern: Regex },
+    Data(String),
+}
 struct Predicate {
-    attribute: String,
-    pattern: Regex,
+    test: Test,
     marker: String,
+}
+
+// dom_query represents script/style data as text nodes. Ordinary visible text
+// must not participate in Jsoup data(), while comments do. Keep traversal
+// iterative and charge both visited nodes and copied bytes against VM limits.
+fn raw_data(vm: &mut Vm, node: NodeRef, inspected: &mut usize) -> Result<String, NatErr> {
+    let mut result = String::new();
+    for child in std::iter::once(node).chain(node.descendants_it()) {
+        consume_budget(vm, 1)?;
+        let raw_text = child
+            .parent()
+            .and_then(|parent| parent.node_name())
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("script") || name.eq_ignore_ascii_case("style")
+            });
+        let data = child
+            .query(|item| match &item.data {
+                NodeData::Comment { contents } => Some(contents.to_string()),
+                NodeData::Text { contents } if raw_text => Some(contents.to_string()),
+                _ => None,
+            })
+            .flatten();
+        if let Some(data) = data {
+            *inspected += data.len();
+            if *inspected > 2_000_000 {
+                return Err(invalid(vm, "Jsoup data exceeds text limit"));
+            }
+            consume_budget(vm, data.len())?;
+            result.push_str(&data);
+        }
+    }
+    Ok(result)
+}
+fn element_data(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let (doc, id) = match vm.payload_of(args[0]) {
+        Some(Native::JsoupDoc(doc)) => {
+            let id = doc.doc.root().id;
+            (doc, id)
+        }
+        Some(Native::JsoupElement { doc, id }) => (doc, id),
+        _ => return Err(invalid(vm, "Invalid Jsoup data receiver")),
+    };
+    let data = raw_data(vm, NodeRef::new(id, &doc.doc.tree), &mut 0)?;
+    Ok(vm.alloc_string(&data))
 }
 
 fn invalid(vm: &mut Vm, reason: &str) -> NatErr {
@@ -134,7 +188,7 @@ fn select(vm: &mut Vm, args: &[JValue], entry: usize) -> Result<JValue, NatErr> 
     let selector = vm
         .str_of_jvalue(args[1])
         .ok_or_else(|| invalid(vm, "Invalid Jsoup selector"))?;
-    if !selector.contains("~=") {
+    if !selector.contains("~=") && !selector.contains(":containsData(") {
         return original(vm, args);
     }
     if selector.len() > 16_384 {
@@ -165,19 +219,25 @@ fn select(vm: &mut Vm, args: &[JValue], entry: usize) -> Result<JValue, NatErr> 
             if node.has_attr(&predicate.marker) {
                 return Err(invalid(vm, "Jsoup selector marker collision"));
             }
-            let Some(value) = node.attr(&predicate.attribute) else {
-                continue;
+            let matched = match &predicate.test {
+                Test::Attribute { attribute, pattern } => {
+                    let Some(value) = node.attr(attribute) else {
+                        continue;
+                    };
+                    inspected += value.len();
+                    if inspected > 2_000_000 {
+                        return Err(invalid(vm, "Jsoup selection exceeds text limit"));
+                    }
+                    consume_budget(vm, value.len())?;
+                    pattern.is_match(value.as_ref()).map_err(|_| {
+                        invalid(vm, "Jsoup attribute regex exceeded its execution limit")
+                    })?
+                }
+                Test::Data(needle) => raw_data(vm, *node, &mut inspected)?
+                    .to_lowercase()
+                    .contains(needle),
             };
-            inspected += value.len();
-            if inspected > 2_000_000 {
-                return Err(invalid(vm, "Jsoup regex selection exceeds text limit"));
-            }
-            consume_budget(vm, value.len())?;
-            if predicate
-                .pattern
-                .is_match(value.as_ref())
-                .map_err(|_| invalid(vm, "Jsoup attribute regex exceeded its execution limit"))?
-            {
+            if matched {
                 if markers.changed.len() >= 50_000 {
                     return Err(invalid(vm, "Jsoup regex selection exceeds match limit"));
                 }
@@ -193,7 +253,7 @@ fn select(vm: &mut Vm, args: &[JValue], entry: usize) -> Result<JValue, NatErr> 
 }
 
 /// Keep the original selector's combinators, lists, :has/:not and root scope.
-/// Replace only regex attribute tests with temporary per-predicate markers.
+/// Replace non-CSS data/regex tests with temporary per-predicate markers.
 fn rewrite(selector: &str) -> Result<(String, Vec<Predicate>), String> {
     let chars: Vec<char> = selector.chars().collect();
     let mut out = String::new();
@@ -220,6 +280,46 @@ fn rewrite(selector: &str) -> Result<(String, Vec<Predicate>), String> {
             quote = Some(c);
             out.push(c);
             i += 1;
+            continue;
+        }
+        if chars[i..].starts_with(&":containsData(".chars().collect::<Vec<_>>()) {
+            i += 14;
+            let mut depth = 1;
+            let mut quoted = None;
+            let mut needle = String::new();
+            while i < chars.len() {
+                let ch = chars[i];
+                i += 1;
+                if ch == '\\' && i < chars.len() {
+                    needle.push(chars[i]);
+                    i += 1;
+                    continue;
+                }
+                if let Some(q) = quoted {
+                    if ch == q {
+                        quoted = None;
+                    }
+                } else if ch == '\'' || ch == '"' {
+                    quoted = Some(ch);
+                } else if ch == '(' {
+                    depth += 1;
+                } else if ch == ')' {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                needle.push(ch);
+            }
+            if depth != 0 || needle.is_empty() || predicates.len() >= 32 {
+                return Err("Invalid Jsoup containsData selector".into());
+            }
+            let marker = format!("data-animecompanion-regex-{nonce}-{}", predicates.len());
+            out.push_str(&format!("[{marker}]"));
+            predicates.push(Predicate {
+                test: Test::Data(needle.to_lowercase()),
+                marker,
+            });
             continue;
         }
         if c != '[' {
@@ -305,8 +405,7 @@ fn rewrite(selector: &str) -> Result<(String, Vec<Predicate>), String> {
         let marker = format!("data-animecompanion-regex-{nonce}-{}", predicates.len());
         out.push_str(&format!("[{marker}]"));
         predicates.push(Predicate {
-            attribute,
-            pattern,
+            test: Test::Attribute { attribute, pattern },
             marker,
         });
     }
@@ -457,5 +556,72 @@ mod tests {
         assert_eq!(doc.doc.html(), before);
         assert!(rewrite("img[src~=[a-z]").is_err());
         assert!(rewrite(&format!("img[src~={}]", "a".repeat(4097))).is_err());
+    }
+    #[test]
+    fn data_selectors_find_raw_scripts_styles_and_comments_without_visible_text() {
+        let (mut vm, _, _) = fixture();
+        let doc = JsoupDocRef::new(Document::from(
+            r#"<html><body><section id="data"><script id="reader">initReader("owned", 0);
+  keepWhitespace();</script><style id="style">.owned { color: red; }</style><!--Owned comment--><p>Visible words</p></section><section id="plain"><p>initReader("visible")</p></section></body></html>"#,
+        ));
+        let root = vm
+            .alloc_native("Lorg/jsoup/nodes/Document;", Native::JsoupDoc(doc.clone()))
+            .unwrap();
+        let before = doc.doc.html();
+        for (selector, expected) in [
+            ("script:containsData(INITreader)", vec!["reader"]),
+            ("section:has(script:containsData(initReader))", vec!["data"]),
+            (
+                "section:containsData(Owned comment):not(#plain)",
+                vec!["data"],
+            ),
+            ("section:containsData(Visible words)", vec![]),
+            ("style:containsData(color: red)", vec!["style"]),
+            (
+                r#"script:containsData(initReader\("owned", 0\))"#,
+                vec!["reader"],
+            ),
+        ] {
+            let selected = query(&mut vm, root, selector, false);
+            assert_eq!(ids(&vm, selected), expected, "{selector}");
+        }
+        let script = query(&mut vm, root, "script:containsData(initReader)", true);
+        let data = vm
+            .invoke_virtual(script, "data", "()Ljava/lang/String;")
+            .unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(data).unwrap(),
+            "initReader(\"owned\", 0);\n  keepWhitespace();"
+        );
+        let section = query(&mut vm, root, "#data", true);
+        let data = vm
+            .invoke_virtual(section, "data", "()Ljava/lang/String;")
+            .unwrap();
+        let data = vm.str_of_jvalue(data).unwrap();
+        assert!(data.contains("Owned comment"));
+        assert!(data.contains(".owned { color: red; }"));
+        assert!(!data.contains("Visible words"));
+        let selected = query(&mut vm, section, "script:containsData(initReader)", false);
+        assert_eq!(ids(&vm, selected), ["reader"]);
+        assert_eq!(doc.doc.html(), before);
+    }
+
+    #[test]
+    fn data_selectors_reject_malformed_queries_and_leave_no_markers_on_budget_failure() {
+        let (mut vm, root, doc) = fixture();
+        assert!(rewrite("script:containsData(").is_err());
+        assert!(rewrite("script:containsData()").is_err());
+        let literal = r#"p[title=":containsData(owned)"]"#;
+        let (rewritten, predicates) = rewrite(literal).unwrap();
+        assert_eq!(rewritten, literal);
+        assert!(predicates.is_empty());
+        let before = doc.doc.html();
+        let selector = vm.alloc_string("section:containsData(owned)");
+        vm.budget = 20;
+        assert!(matches!(
+            select(&mut vm, &[root, selector], 0),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+        assert_eq!(doc.doc.html(), before);
     }
 }

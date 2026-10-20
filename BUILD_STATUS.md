@@ -1,3 +1,13 @@
+## HentaiNexus reader decoder — build 48
+
+Version 0.25.1. Replay the published, SHA-256-pinned HentaiNexus 1.6.20 APK with neutral owned HTML and encoded page metadata. The original runtime passes popular/latest/search and the details/dated-chapter fixture, but cannot find the reader script because Jsoup :containsData(...) is unsupported. After adding that selector, the same APK exposes missing Kotlin `ByteArray.slice(IntRange)`.
+
+Implement shared raw-data selectors and `Element.data()` for scripts/styles/comments, with case-insensitive matching, receiver/combinator preservation, temporary-marker cleanup and bounded traversal. Add boxed signed byte slices with empty-range/bounds semantics and budgeted allocation. The extension retains its own decoder and request logic.
+
+Add the twentieth test-only pinned APK, three complete extension replay cases, five host contract regressions and two native bridge cases. No production APK, source content or image fixture is included. The catalog spinner's live cause is not established by offline replay.
+
+Baseline CI: **81 passed, 2 reader failures** before the selector fix; **83 passed, 2 reader failures** before the byte-slice adapter. The fixed runtime passes all **88 Rust regressions** in [run 39463097814](https://github.com/goon-123/AnimeCompanion/actions/runs/39463097814); its formatting corrections are applied in the following commit. Final formatting/Clippy, native iPhone/iPad and unsigned IPA results are pending [PR #29](https://github.com/goon-123/AnimeCompanion/pull/29). No local executor is available for this follow-up; validation runs in hosted CI.
+
 ## Additional manga readers and actionable chapter errors — build 47
 
 Version 0.25.0. Extend shared Java/Kotlin, Jsoup, URI and JSON APIs; continue interpreting the installed extension entirely on the device. Preserve float/double arithmetic opcode types for raw DEX constants, including two-address operations and unary conversions. The previous decoder discarded those types, causing Comics Kingdom's compact chapter arithmetic to throw. Keep the exact pinned interpreter, reviewable four-file patch, source hashes and verified cache migration; preserve known old generated checkouts and reject unknown edits.
