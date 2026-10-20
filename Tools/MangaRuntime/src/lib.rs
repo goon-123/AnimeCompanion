@@ -31,6 +31,8 @@ mod uri_compat;
 use serialization_compat::*;
 
 #[cfg(test)]
+mod compatibility_inventory;
+#[cfg(test)]
 mod compatibility_tests;
 #[cfg(test)]
 mod extension_reader_tests;
@@ -1082,6 +1084,10 @@ where
             http(request)
         }
     });
+    #[cfg(test)]
+    if command.op == "auditRuntimeInventory" {
+        return Ok(compatibility_inventory::inventory(ext.ctx().vm()));
+    }
     let manifest = ext.manifest().map_err(|e| e.to_string())?;
     if !manifest
         .package_id
