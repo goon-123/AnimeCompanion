@@ -375,10 +375,19 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
             }
             let presentation = matches!(
                 (name, sig),
-                ("setOnBindEditTextListener", "(Landroidx/preference/EditTextPreference$OnBindEditTextListener;)V")
-                    | ("setOnPreferenceChangeListener", "(Landroidx/preference/Preference$OnPreferenceChangeListener;)V")
-                    | ("setOnPreferenceClickListener", "(Landroidx/preference/Preference$OnPreferenceClickListener;)V")
-                    | ("setDialogMessage" | "setDialogTitle" | "setSummaryOn" | "setSummaryOff", "(Ljava/lang/CharSequence;)V")
+                (
+                    "setOnBindEditTextListener",
+                    "(Landroidx/preference/EditTextPreference$OnBindEditTextListener;)V"
+                ) | (
+                    "setOnPreferenceChangeListener",
+                    "(Landroidx/preference/Preference$OnPreferenceChangeListener;)V"
+                ) | (
+                    "setOnPreferenceClickListener",
+                    "(Landroidx/preference/Preference$OnPreferenceClickListener;)V"
+                ) | (
+                    "setDialogMessage" | "setDialogTitle" | "setSummaryOn" | "setSummaryOff",
+                    "(Ljava/lang/CharSequence;)V"
+                )
             );
             (presentation || (name == "setEnabled" && sig == "(Z)V"))
                 .then_some((*key, name == "setEnabled"))
@@ -495,13 +504,8 @@ mod tests {
             )
             .unwrap();
         for method in ["setSummaryOn", "setSummaryOff"] {
-            vm.invoke_virtual_args(
-                choice,
-                method,
-                "(Ljava/lang/CharSequence;)V",
-                vec![text],
-            )
-            .unwrap();
+            vm.invoke_virtual_args(choice, method, "(Ljava/lang/CharSequence;)V", vec![text])
+                .unwrap();
         }
         vm.invoke_virtual_args(
             choice,
@@ -512,7 +516,10 @@ mod tests {
         .unwrap();
         assert!(matches!(
             vm.payload_of(choice),
-            Some(Native::Preference { default_value: JValue::Int(1), .. })
+            Some(Native::Preference {
+                default_value: JValue::Int(1),
+                ..
+            })
         ));
     }
 
