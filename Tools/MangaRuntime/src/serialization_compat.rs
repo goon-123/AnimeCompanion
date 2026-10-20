@@ -57,6 +57,10 @@ pub(super) fn unsupported_serialization(_vm: &mut Vm, _args: &[JValue]) -> Resul
 // Preserve the generated serializer as a GC-traced object field: protobuf
 // asks the descriptor for nested types before it invokes their decoders.
 pub(super) fn descriptor_init(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{ArrayData, Native};
+    let flags = vm
+        .alloc_native("[Z", Native::Array(ArrayData::Bool(Vec::new())))
+        .map_err(NatErr::Fatal)?;
     let name = vm.str_of_jvalue(args[1]).unwrap_or_default();
     let object = &mut vm.arena.objects[args[0].as_obj() as usize];
     object.native = Some(dexvm::vm::object::Native::SerialDescriptor {
@@ -65,7 +69,83 @@ pub(super) fn descriptor_init(vm: &mut Vm, args: &[JValue]) -> Result<JValue, Na
         element_annotations: Vec::new(),
     });
     object.fields.push(args[2]);
+    object.fields.push(flags);
     Ok(JValue::Null)
+}
+pub(super) fn descriptor_add_element(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{ArrayData, Native};
+    let name = vm
+        .str_of_jvalue(args[1])
+        .ok_or_else(|| abstract_json_error(vm))?;
+    let flags = vm.arena.objects[args[0].as_obj() as usize]
+        .fields
+        .get(1)
+        .copied()
+        .ok_or_else(|| abstract_json_error(vm))?;
+    let Some(Native::Array(ArrayData::Bool(flags))) =
+        &mut vm.arena.objects[flags.as_obj() as usize].native
+    else {
+        return Err(abstract_json_error(vm));
+    };
+    if flags.len() >= 10_000 || vm.budget <= 0 {
+        return Err(NatErr::Fatal(dexvm::vm::error::JvmError::BudgetExceeded));
+    }
+    flags.push(args[2].as_int() != 0);
+    vm.budget -= 1;
+    let Some(Native::SerialDescriptor {
+        elements,
+        element_annotations,
+        ..
+    }) = &mut vm.arena.objects[args[0].as_obj() as usize].native
+    else {
+        return Err(abstract_json_error(vm));
+    };
+    elements.push(name);
+    element_annotations.push(Vec::new());
+    Ok(JValue::Null)
+}
+pub(super) fn descriptor_element_optional(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::object::{ArrayData, Native};
+    let (name, elements) = match vm.payload_of(args[0]) {
+        Some(Native::SerialDescriptor { name, elements, .. }) => (name, elements),
+        _ => return Err(abstract_json_error(vm)),
+    };
+    if name.starts_with("kotlinx.serialization.json.")
+        || name == "kotlin.collections.LinkedHashMap"
+        || name == "kotlin.collections.ArrayList"
+    {
+        let index = args[1].as_int();
+        if index >= 0
+            && ((name.ends_with("JsonArray")
+                || name.ends_with("JsonObject")
+                || name.starts_with("kotlin.collections."))
+                || (index as usize) < elements.len())
+        {
+            return Ok(JValue::Int(0));
+        }
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IndexOutOfBoundsException;",
+            "Invalid descriptor index",
+        )));
+    }
+    let flags = vm.arena.objects[args[0].as_obj() as usize]
+        .fields
+        .get(1)
+        .copied()
+        .ok_or_else(|| abstract_json_error(vm))?;
+    let optional = match vm.payload_of(flags) {
+        Some(Native::Array(ArrayData::Bool(flags))) => {
+            flags.get(args[1].as_int() as usize).copied()
+        }
+        _ => None,
+    }
+    .ok_or_else(|| {
+        NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IndexOutOfBoundsException;",
+            "Invalid descriptor index",
+        ))
+    })?;
+    Ok(JValue::Int(i32::from(optional)))
 }
 pub(super) fn element_descriptor(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     use dexvm::vm::object::{ArrayData, Native};
@@ -74,9 +154,10 @@ pub(super) fn element_descriptor(vm: &mut Vm, args: &[JValue]) -> Result<JValue,
             "Invalid descriptor index".into(),
         )));
     };
-    let list = matches!(vm.payload_of(args[0]), Some(Native::SerialDescriptor { name, .. }) if name == "kotlin.collections.ArrayList");
+    let list = matches!(vm.payload_of(args[0]), Some(Native::SerialDescriptor { name, .. }) if name == "kotlin.collections.ArrayList" || name == "kotlinx.serialization.json.JsonArray");
+    let map = matches!(vm.payload_of(args[0]), Some(Native::SerialDescriptor { name, .. }) if name == "kotlin.collections.LinkedHashMap" || name == "kotlinx.serialization.json.JsonObject");
     let valid = matches!(vm.payload_of(args[0]), Some(Native::SerialDescriptor { elements, .. })
-        if index >= 0 && (list || (index as usize) < elements.len()));
+        if index >= 0 && (list || map || (index as usize) < elements.len()));
     if !valid {
         return Err(NatErr::Throw(vm.throwable_of(
             "Ljava/lang/IndexOutOfBoundsException;",
@@ -85,9 +166,29 @@ pub(super) fn element_descriptor(vm: &mut Vm, args: &[JValue]) -> Result<JValue,
     }
     let serializer = vm.arena.objects[args[0].as_obj() as usize]
         .fields
-        .last()
+        .first()
         .copied()
         .unwrap_or(JValue::Null);
+    if let Some(Native::Array(ArrayData::Obj(children))) = vm.payload_of(serializer) {
+        let offset = if list {
+            0
+        } else if map {
+            index as usize % 2
+        } else {
+            index as usize
+        };
+        let child = children
+            .get(offset)
+            .copied()
+            .ok_or_else(|| abstract_json_error(vm))?;
+        return vm
+            .invoke_virtual(
+                child,
+                "getDescriptor",
+                "()Lkotlinx/serialization/descriptors/SerialDescriptor;",
+            )
+            .map_err(NatErr::Fatal);
+    }
     if list {
         return vm
             .invoke_virtual(
@@ -425,5 +526,35 @@ mod tests {
         );
         assert!(element_descriptor(&mut vm, &[descriptor, JValue::Int(-1)]).is_err());
         assert!(element_descriptor(&mut vm, &[descriptor, JValue::Int(0)]).is_err());
+    }
+
+    #[test]
+    fn generated_descriptor_retains_required_and_optional_flags_across_gc() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        let descriptor = vm
+            .alloc_native(
+                "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+                Native::Opaque,
+            )
+            .unwrap();
+        let name = vm.alloc_string("Owned.model");
+        descriptor_init(&mut vm, &[descriptor, name, JValue::Null, JValue::Int(2)]).unwrap();
+        for (name, flag) in [("required", 0), ("optional", 1)] {
+            let name = vm.alloc_string(name);
+            descriptor_add_element(&mut vm, &[descriptor, name, JValue::Int(flag)]).unwrap();
+        }
+        vm.gc(&[descriptor.as_obj()]);
+        for (index, flag) in [(0, 0), (1, 1)] {
+            assert_eq!(
+                descriptor_element_optional(&mut vm, &[descriptor, JValue::Int(index)]).unwrap(),
+                JValue::Int(flag)
+            );
+        }
+        for index in [-1, 2] {
+            assert!(matches!(
+                descriptor_element_optional(&mut vm, &[descriptor, JValue::Int(index)]),
+                Err(NatErr::Throw(_))
+            ));
+        }
     }
 }

@@ -80,6 +80,61 @@ fn component_value(vm: &mut Vm, args: &[JValue]) -> R {
     }
 }
 
+fn remove_all(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::List(values)) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_iae("Expected a mutable list")));
+    };
+    if args[1].is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    if values.len() > 100_000 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    let mut kept = Vec::with_capacity(values.len());
+    let mut changed = false;
+    for value in values {
+        if vm.budget <= 0 {
+            return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+        }
+        vm.budget -= 1;
+        let result = vm
+            .invoke_virtual_args(
+                args[1],
+                "invoke",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                vec![value],
+            )
+            .map_err(|e| match e {
+                JvmError::Uncaught(o) => NatErr::Throw(o),
+                other => NatErr::Fatal(other),
+            })?;
+        let payload = if matches!(result, JValue::Obj(_)) {
+            vm.payload_of(result)
+        } else {
+            None
+        };
+        let remove = match payload {
+            Some(Native::BoolBox(value)) => value,
+            _ if result.is_null_ref() => return Err(NatErr::Throw(vm.err_npe())),
+            _ => {
+                return Err(NatErr::Throw(vm.throwable_of(
+                    "Ljava/lang/ClassCastException;",
+                    "Predicate must return Boolean",
+                )))
+            }
+        };
+        if remove {
+            changed = true;
+        } else {
+            kept.push(value);
+        }
+    }
+    if let Some(Native::List(values)) = &mut vm.arena.objects[args[0].as_obj() as usize].native {
+        *values = kept;
+    }
+    Ok(JValue::Int(i32::from(changed)))
+}
+
 fn array_store_init(vm: &mut Vm, args: &[JValue]) -> R {
     let message = args.get(1).and_then(|value| vm.str_of_jvalue(*value));
     vm.arena.objects[args[0].as_obj() as usize].native = Some(Native::Throwable {
@@ -90,6 +145,13 @@ fn array_store_init(vm: &mut Vm, args: &[JValue]) -> R {
 }
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Lkotlin/collections/CollectionsKt;",
+        name: "removeAll",
+        sig: "(Ljava/util/List;Lkotlin/jvm/functions/Function1;)Z",
+        instance: false,
+        f: remove_all,
+    })?;
     for sig in ["()V", "(Ljava/lang/String;)V"] {
         vm.register_native(NativeEntry {
             class: "Ljava/lang/ArrayStoreException;",
@@ -137,6 +199,45 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn predicate(vm: &mut Vm, args: &[JValue]) -> R {
+        vm.alloc_native(
+            "Ljava/lang/Boolean;",
+            Native::BoolBox(args[1] == JValue::Int(2)),
+        )
+        .map_err(NatErr::Fatal)
+    }
+    #[test]
+    fn remove_all_unboxes_guest_predicate_booleans_and_mutates_the_list() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        vm.register_native(NativeEntry {
+            class: "LOwnedPredicate;",
+            name: "invoke",
+            sig: "(Ljava/lang/Object;)Ljava/lang/Object;",
+            instance: true,
+            f: predicate,
+        })
+        .unwrap();
+        let predicate = vm.alloc_native("LOwnedPredicate;", Native::Opaque).unwrap();
+        let list = vm
+            .alloc_native(
+                "Ljava/util/ArrayList;",
+                Native::List(vec![JValue::Int(1), JValue::Int(2), JValue::Int(3)]),
+            )
+            .unwrap();
+        assert_eq!(
+            remove_all(&mut vm, &[list, predicate]).unwrap(),
+            JValue::Int(1)
+        );
+        assert!(
+            matches!(vm.payload_of(list),Some(Native::List(v)) if v == vec![JValue::Int(1),JValue::Int(3)])
+        );
+        assert_eq!(
+            remove_all(&mut vm, &[list, predicate]).unwrap(),
+            JValue::Int(0)
+        );
+    }
 
     #[test]
     fn typed_collection_arrays_reuse_or_allocate_and_check_component_types() {

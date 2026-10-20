@@ -471,6 +471,28 @@
           ]
         }
       ]
+    },
+    {
+      "name": "tachiyomi-en.flamecomics-v1.6.1.apk",
+      "sha256": "83199410013398b1552887b43b30355d575ce32493d394c1b62f5ded2d1092d9",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/cfc0199/tachiyomi-en.flamecomics-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.flamecomics",
+      "cases": [{
+        "test": "json_extension_tests::flame_generic_dtos_catalog_book_ordered_pages_and_image_transport",
+        "sources": [0],
+        "stages": ["popular", "latest", "search", "details", "chapters", "pages", "images"]
+      }]
+    },
+    {
+      "name": "tachiyomi-en.allanime-v1.6.29.apk",
+      "sha256": "88f751348962664bab7b74ede9aa209583968f6ed8508e08cb1e9f8bcc62cee4",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-en.allanime-v1.6.29.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.allanime",
+      "cases": [{
+        "test": "json_extension_tests::allmanga_encodes_graphql_variables_and_decodes_generic_json_elements",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters"]
+      }]
     }
   ]
 }
