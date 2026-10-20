@@ -15,17 +15,24 @@ const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
 mod browser_compat;
 mod chapter_wire;
+mod date_compat;
+mod diagnostics;
 mod http_query_compat;
 mod java_compat;
 mod json_compat;
 mod jsoup_compat;
 mod okio_compat;
+mod reflection_compat;
+mod regex_compat;
 mod serialization_compat;
 mod source_settings;
+mod uri_compat;
 use serialization_compat::*;
 
 #[cfg(test)]
 mod compatibility_tests;
+#[cfg(test)]
+mod extension_reader_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -1021,6 +1028,10 @@ where
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    uri_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     http_query_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     for (name, sig, f) in [
@@ -1243,7 +1254,9 @@ pub unsafe extern "C" fn ac_manga_execute(
     }));
     let response = match outcome {
         Ok(Ok(value)) => json!({"ok":true,"data":value}),
-        Ok(Err(error)) => json!({"ok":false,"error":error}),
+        Ok(Err(error)) => {
+            json!({"ok":false,"diagnostic":diagnostics::diagnostic(&error),"error":error})
+        }
         Err(_) => {
             json!({"ok":false,"error":"This extension could not be executed by the on-device runtime."})
         }

@@ -60,11 +60,13 @@ final class WeebCentralRuntimeTests: XCTestCase {
 final class OwnedExtensionFixtureHTTP {
     let apk: Data
     let responses: [String: Data]
+    let responseHeaders: [[String]]
     var failChapters = false
     var urls: [String] = []
     var headersByURL: [String: [[String]]] = [:]
 
-    init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil) throws {
+    init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil, responseHeaders: [[String]] = []) throws {
+        self.responseHeaders = responseHeaders
         let bundle = Bundle(for: WeebCentralRuntimeTests.self)
         let apks = try XCTUnwrap(bundle.url(forResource: "Fixtures", withExtension: nil))
         apk = try Data(contentsOf: apks.appendingPathComponent(apkName))
@@ -105,7 +107,7 @@ final class OwnedExtensionFixtureHTTP {
         components?.query = nil
         let body = failure ? Data("unavailable".utf8) : (responses[request.url] ?? responses[components?.string ?? ""])
         let code = failure ? 503 : (body == nil ? 404 : 200)
-        let response: [String: Any] = ["code": code, "headers": [], "bodyBase64": (body ?? Data()).base64EncodedString()]
+        let response: [String: Any] = ["code": code, "headers": responseHeaders, "bodyBase64": (body ?? Data()).base64EncodedString()]
         guard let data = try? JSONSerialization.data(withJSONObject: response), let json = String(data: data, encoding: .utf8) else { return nil }
         return strdup(json)
     }

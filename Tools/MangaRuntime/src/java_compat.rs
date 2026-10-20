@@ -7,6 +7,35 @@ use dexvm::JValue;
 
 type ResultValue = Result<JValue, NatErr>;
 
+fn uint_box(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    vm.alloc_native("Lkotlin/UInt;", Native::IntBox(args[0].as_int()))
+        .map_err(NatErr::Fatal)
+}
+fn uint_unbox(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    if let JValue::Obj(object) = args[0] {
+        if vm.class_desc_str(vm.arena.objects[object as usize].class) != "kotlin.UInt" {
+            return Err(exception(
+                vm,
+                "Ljava/lang/ClassCastException;",
+                "Expected UInt",
+            ));
+        }
+    }
+    match vm.payload_of(args[0]) {
+        Some(Native::IntBox(value)) => Ok(JValue::Int(value)),
+        _ => Err(NatErr::Throw(vm.err_npe())),
+    }
+}
+fn uint_compare(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let a = uint_unbox(vm, &args[..1])?.as_int() as u32;
+    let b = uint_unbox(vm, &args[1..])?.as_int() as u32;
+    Ok(JValue::Int(a.cmp(&b) as i32))
+}
+fn uint_string(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let value = uint_unbox(vm, args)?.as_int() as u32;
+    Ok(vm.alloc_string(&value.to_string()))
+}
+
 fn exception(vm: &mut Vm, class: &str, message: &str) -> NatErr {
     NatErr::Throw(vm.throwable_of(class, message))
 }
@@ -26,6 +55,41 @@ fn has_previous(vm: &mut Vm, args: &[JValue]) -> ResultValue {
     Ok(JValue::Int(i32::from(
         iterator_position(vm, args[0])?.1 > 0,
     )))
+}
+fn sequence_iterator(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    if !matches!(vm.payload_of(args[0]), Some(Native::List(_))) {
+        return Err(exception(
+            vm,
+            "Ljava/lang/IllegalStateException;",
+            "Unsupported sequence storage",
+        ));
+    }
+    vm.alloc_native(
+        "Ljava/util/Iterator;",
+        Native::Iter(IterKind::List {
+            list: args[0].as_obj(),
+            idx: 0,
+        }),
+    )
+    .map_err(NatErr::Fatal)
+}
+fn collection_size_or_default(vm: &mut Vm, args: &[JValue]) -> ResultValue {
+    let JValue::Obj(object) = args[0] else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    let class = vm.arena.objects[object as usize].class;
+    let collection = vm
+        .ensure_class_by_desc("Ljava/util/Collection;")
+        .map_err(NatErr::Fatal)?;
+    if vm.is_assignable(class, collection).map_err(NatErr::Fatal)? {
+        vm.invoke_virtual_args(args[0], "size", "()I", vec![])
+            .map_err(|error| match error {
+                JvmError::Uncaught(id) => NatErr::Throw(id),
+                other => NatErr::Fatal(other),
+            })
+    } else {
+        Ok(args[1])
+    }
 }
 
 fn previous(vm: &mut Vm, args: &[JValue]) -> ResultValue {
@@ -537,6 +601,49 @@ macro_rules! entry {
 }
 const TABLE: &[NativeEntry] = &[
     entry!(
+        "Lkotlin/UInt;",
+        "box-impl",
+        "(I)Lkotlin/UInt;",
+        false,
+        uint_box
+    ),
+    entry!("Lkotlin/UInt;", "unbox-impl", "()I", true, uint_unbox),
+    entry!(
+        "Lkotlin/UInt;",
+        "compareTo",
+        "(Ljava/lang/Object;)I",
+        true,
+        uint_compare
+    ),
+    entry!(
+        "Lkotlin/UInt;",
+        "toString",
+        "()Ljava/lang/String;",
+        true,
+        uint_string
+    ),
+    entry!(
+        "Lorg/jsoup/nodes/Attributes;",
+        "iterator",
+        "()Ljava/util/Iterator;",
+        true,
+        sequence_iterator
+    ),
+    entry!(
+        "Lkotlin/collections/CollectionsKt;",
+        "collectionSizeOrDefault",
+        "(Ljava/lang/Iterable;I)I",
+        false,
+        collection_size_or_default
+    ),
+    entry!(
+        "Lkotlin/sequences/Sequence;",
+        "iterator",
+        "()Ljava/util/Iterator;",
+        true,
+        sequence_iterator
+    ),
+    entry!(
         "Lkotlinx/coroutines/sync/Mutex;",
         "tryLock",
         "(Ljava/lang/Object;)Z",
@@ -899,6 +1006,11 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     for &entry in TABLE {
         vm.register_native(entry)?;
     }
+    let uint = vm.ensure_class_by_desc("Lkotlin/UInt;")?;
+    let comparable = vm.ensure_class_by_desc("Ljava/lang/Comparable;")?;
+    if !vm.classes[uint as usize].interfaces.contains(&comparable) {
+        vm.classes[uint as usize].interfaces.push(comparable);
+    }
     let build = vm.ensure_class_by_desc("Landroid/os/Build$VERSION;")?;
     let key = (vm.intern("SDK_INT"), vm.intern("I"));
     vm.classes[build as usize]
@@ -972,6 +1084,26 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unsigned_boxes_keep_primitive_bits_and_generic_unsigned_order() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let max = uint_box(&mut vm, &[JValue::Int(-1)]).unwrap();
+        let zero = uint_box(&mut vm, &[JValue::Int(0)]).unwrap();
+        assert!(matches!(max, JValue::Obj(_)));
+        assert_eq!(uint_unbox(&mut vm, &[max]).unwrap(), JValue::Int(-1));
+        assert_eq!(
+            vm.invoke_virtual_args(max, "compareTo", "(Ljava/lang/Object;)I", vec![zero])
+                .unwrap(),
+            JValue::Int(1)
+        );
+        let text = uint_string(&mut vm, &[max]).unwrap();
+        assert_eq!(vm.str_of_jvalue(text).unwrap(), "4294967295");
+        let integer = vm
+            .alloc_native("Ljava/lang/Integer;", Native::IntBox(1))
+            .unwrap();
+        assert!(uint_compare(&mut vm, &[max, integer]).is_err());
+    }
     fn vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();

@@ -2,6 +2,21 @@ import XCTest
 
 final class WebtoonReaderUITests: XCTestCase {
     @MainActor
+    func testChapterRuntimeErrorIdentifiesSourceAndCanRetry() {
+        let app = launch(chapterFailure: true)
+        openFirstTitle(app)
+        app.buttons["manga-read"].tap()
+        let source = app.staticTexts["webtoon-error-source"]
+        XCTAssertTrue(source.waitForExistence(timeout: 15))
+        XCTAssertEqual(source.label, "Glass House")
+        let detail = app.staticTexts["webtoon-error-description"]
+        XCTAssertTrue(detail.label.contains("kotlin.text.MatchGroupCollection"))
+        XCTAssertTrue(app.buttons["webtoon-source-website"].exists)
+        capture("Reader-Runtime-Error", app)
+        app.buttons["Try again"].tap()
+        XCTAssertTrue(app.images["webtoon-page-image-0"].waitForExistence(timeout: 20))
+    }
+    @MainActor
     func testSourceSettingsSaveCancelResetAndRelaunch() {
         let app = launch()
         let source = app.buttons["manga-source-preview-en"]
@@ -106,11 +121,12 @@ final class WebtoonReaderUITests: XCTestCase {
         XCTAssertTrue(position.waitForExistence(timeout: 10))
         XCTAssertTrue(position.label.contains("Page 1 of 8"))
     }
-    @MainActor private func launch(failure: Bool = false) -> XCUIApplication {
+    @MainActor private func launch(failure: Bool = false, chapterFailure: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--ui-phase2-preview", "--ui-webtoon-preview", "--ui-webtoon-session", UUID().uuidString]
         if failure { app.launchArguments.append("--ui-webtoon-failed-page") }
+        if chapterFailure { app.launchArguments.append("--ui-webtoon-chapter-runtime-error") }
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
         app.appTab("Manga").tap()

@@ -1,3 +1,24 @@
+## Additional manga readers and actionable chapter errors — build 47
+
+Version 0.25.0. Extend shared Java/Kotlin, Jsoup, URI and JSON APIs; continue interpreting the installed extension entirely on the device. Preserve float/double arithmetic opcode types for raw DEX constants, including two-address operations and unary conversions. The previous decoder discarded those types, causing Comics Kingdom's compact chapter arithmetic to throw. Keep the exact pinned interpreter, reviewable four-file patch, source hashes and verified cache migration; preserve known old generated checkouts and reject unknown edits.
+
+Add case-insensitive date builders, optional patterns/English month names, formatter-zone lookup and correct fixed-offset midnight conversion; actual guest-field reflection; Kotlin property-delegate types, capture groups with nullable/empty and UTF-16-range semantics, sequence/attribute iterators and UInt boxing/unsigned comparison; JSON collection interfaces and construction of fresh JsonArrays. Reuse the already locked `time` version for calendar validation. Date coverage is a bounded pattern subset; general regional time zones/DST, pre-epoch LocalDate and arbitrary Java date formatting remain gaps.
+
+The nineteen test-only, integrity-pinned APKs include these newly covered flows:
+
+| Extension | Validated with owned data |
+| --- | --- |
+| Comic Fury 1.6.0 | Catalog/cover, combined details and dated chapters, ordered page selection and image requests |
+| Comics Kingdom 1.6.0 | Catalog/cover/details, compact and individual chapter modes, individual dates, page order and image requests |
+| Project Suki 1.6.0 | Catalog/cover, direct chapter POST/JSON/HTML parsing, numeric page sorting and image requests |
+| MangaBuddy/MangaK 1.6.34 | Catalog/cover, Next.js chapter extraction, page order and image requests |
+
+Project Suki and MangaK combined title/chapter updates are not established by these tests. Live availability, website accounts and paid chapters are not certified. No source-specific production scraper or website-access bypass is added.
+
+The native reader identifies the failing source and shows a bounded host-generated diagnostic for missing runtime APIs, execution limits and unreadable JSON responses. Guest exception text, URLs and credentials remain absent from user-facing errors. **Open source website** opens the existing private source session; **Use session** retries the same chapter. Retry and source identification have a new iPhone/iPad UI regression. Add three Swift/C/Rust source-reader tests and two core diagnostic tests while retaining all earlier suites.
+
+Local verification: all **80 Rust regressions** pass; project Clippy with warnings denied, formatting, patch preparation, Safari resource/version checks and shell/whitespace checks pass. A known build-45/46 cache is migrated with its original source retained; an unknown cache edit is rejected unchanged. This Linux workspace cannot run SwiftUI/Xcode. Native compilation, the new core/bridge/UI tests, iPhone/iPad screenshots and unsigned IPA packaging are pending hosted CI, and are not claimed as passes here.
+
 ## Manga catalog pagination, icons and anime search — build 46
 
 Version 0.24.0. Keep the pagination task attached to a stable footer while its loading indicator changes, rather than cancelling the source request by removing its own task-bearing button. Append/deduplicate successful pages; pause automatic requests if an extension reports more pages but returns no new URLs. Retain loaded entries on failure, retry the same failed page, reject stale search completions and reset pagination on a fresh search/refresh. A manual next-page action can continue past an empty/repeated page without an automatic request loop.

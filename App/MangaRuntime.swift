@@ -76,8 +76,9 @@ enum MangaRuntime {
                         try host.checkCancellation()
                         let envelope = try JSONDecoder().decode(MangaRuntimeEnvelope<T>.self, from: response)
                         guard envelope.ok, let value = envelope.data else {
-                            // Runtime diagnostics can contain private request URLs.
-                            // Show only host-generated errors, never raw VM traces.
+                            // Raw VM errors can contain credentials. The diagnostic
+                            // contains only a bounded host API identifier and kind.
+                            if let diagnostic = envelope.diagnostic { throw diagnostic }
                             throw host.failure ?? MangaExtensionError.runtimeFailure
                         }
                         continuation.resume(returning: value)
@@ -89,7 +90,7 @@ enum MangaRuntime {
 }
 
 private struct MangaImageEnvelope: Decodable { let bodyBase64: String }
-private struct MangaRuntimeEnvelope<T: Decodable>: Decodable { let ok: Bool; let data: T? }
+private struct MangaRuntimeEnvelope<T: Decodable>: Decodable { let ok: Bool; let data: T?; let diagnostic: MangaRuntimeIssue? }
 private let mangaHTTPCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? = { context, input in
     guard let context, let input else { return nil }
     return Unmanaged<MangaRuntimeHTTP>.fromOpaque(context).takeUnretainedValue().request(input)

@@ -93,8 +93,13 @@ enum MangaReaderPreview {
                               scanlator: "Owned preview", chapterNumber: Double($0))
         })
     }
-    static func pages(_ chapter: SourceMangaChapter) -> [SourceMangaImage] {
-        (0..<8).map { SourceMangaImage(index: 30 - $0, url: chapter.url,
+    private static var failedChapter = false
+    static func pages(_ chapter: SourceMangaChapter) throws -> [SourceMangaImage] {
+        if ProcessInfo.processInfo.arguments.contains("--ui-webtoon-chapter-runtime-error"), !failedChapter {
+            failedChapter = true
+            throw MangaRuntimeIssue(kind: "unsupportedAPI", api: "kotlin.text.MatchGroupCollection")
+        }
+        return (0..<8).map { SourceMangaImage(index: 30 - $0, url: chapter.url,
             imageURL: "https://webtoon-preview.invalid\(chapter.url)/page/\($0)") }
     }
     private static var failed = Set<String>()
