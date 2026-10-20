@@ -164,8 +164,11 @@ public struct SourceMangaChapter: Codable, Hashable, Identifiable, Sendable {
     public let uploadedAt: Int64
     public let scanlator: String
     public let chapterNumber: Double?
-    public init(url: String, name: String, uploadedAt: Int64 = 0, scanlator: String = "", chapterNumber: Double? = nil) {
+    /// Opaque JSON provided by the extension; retains duplicate-chapter IDs.
+    public let memo: String?
+    public init(url: String, name: String, uploadedAt: Int64 = 0, scanlator: String = "", chapterNumber: Double? = nil, memo: String? = nil) {
         self.url = url; self.name = name; self.uploadedAt = uploadedAt; self.scanlator = scanlator; self.chapterNumber = chapterNumber
+        self.memo = memo
     }
 }
 public struct SourceMangaImage: Codable, Hashable, Sendable {

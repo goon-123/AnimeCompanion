@@ -24,7 +24,13 @@ enum MangaRuntime {
         try await run(apk, command: ["op": "chapters", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
     }
     static func pages(_ apk: Data, source: MangaRuntimeSource, modern: Bool, chapter: SourceMangaChapter, settings: MangaSourceSettings = .init()) async throws -> [SourceMangaImage] {
-        try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": ["url": chapter.url, "name": chapter.name]], networking: true, sourceID: source.id, settings: settings)
+        try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": chapterInput(chapter)], networking: true, sourceID: source.id, settings: settings)
+    }
+    static func chapterInput(_ chapter: SourceMangaChapter) -> [String: Any] {
+        var input: [String: Any] = ["url": chapter.url, "name": chapter.name, "uploadedAt": chapter.uploadedAt, "scanlator": chapter.scanlator]
+        if let number = chapter.chapterNumber { input["chapterNumber"] = number }
+        if let memo = chapter.memo { input["memo"] = memo }
+        return input
     }
     static func book(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> MangaBook {
         try await run(apk, command: ["op": "book", "source": source.index, "modern": modern,

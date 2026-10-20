@@ -12,7 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = "38d3438d7e36b5c2c17414029fd36b2d717eefcb"
 PATCH = ROOT / "Tools/MangaRuntime/support/dexvm-core.patch"
-PATCHED_SOURCE_SHA256 = "5e867280ff79c12f4c79bce01ff1a677c50f2a842ebf4c6a04256c562321e05b"
+PATCHED_SOURCE_SHA256 = "a9acb463bc1af9b0c65b86fccb075ac545fb9c4be5f39975c231340662afbb95"
 PATCHED_COLLECTIONS_SHA256 = "377a6ac4a1af671c067ebbcbfa25b7d7536d3e59a76792904544c9a7a33797e4"
 PATCHED_JOIN_SHA256 = "dce8e171a42e6aa57fdda334f5eeec78f164515a3ed453d3bc8c5e6b0ade345f"
 PATCHED_DECODER_SHA256 = "657fb30464c446dd6f1ed218772abda7df484f76045ea5d00787d1f73f118a69"
@@ -59,7 +59,20 @@ if DESTINATION.exists():
             == "8227ecc575a7cfb085b5b908245389611d6937da33d7e371a5764bff3898482b"
         and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
     )
-    if legacy:
+    legacy_44 = (
+        git(DESTINATION, "rev-parse", "HEAD").decode().strip() == REVISION
+        and git(DESTINATION, "diff", "HEAD", "--name-only").decode().splitlines()
+            == ["src/dex/insn.rs", "src/vm/interpret.rs", "src/vm/native/java/util/mod.rs", "src/vm/native/kotlin/collections.rs"]
+        and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
+                for path, digest in {
+                    "src/vm/interpret.rs": "5e867280ff79c12f4c79bce01ff1a677c50f2a842ebf4c6a04256c562321e05b",
+                    "src/dex/insn.rs": PATCHED_DECODER_SHA256,
+                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
+                }.items())
+        and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
+    )
+    if legacy or legacy_44:
         backup = Path(tempfile.mkdtemp(prefix="manga-legacy-interpreter-", dir=DESTINATION.parent)) / "source"
         DESTINATION.rename(backup)
         print(f"Preserved the known previous generated interpreter at {backup}")

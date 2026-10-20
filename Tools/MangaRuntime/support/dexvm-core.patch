@@ -12,7 +12,7 @@ index 302ec6f..afe973a 100644
          0x22 => Ok((Insn::NewInstance(a8, u32::from(w1()?)), pc + 2)),
          0x23 => Ok((Insn::NewArray(a4, b4, u32::from(w1()?)), pc + 2)),
 diff --git a/src/vm/interpret.rs b/src/vm/interpret.rs
-index 9111360..5fb4b27 100644
+index 9111360..57bde37 100644
 --- a/src/vm/interpret.rs
 +++ b/src/vm/interpret.rs
 @@ -103,7 +103,9 @@ pub fn run(vm: &mut Vm, class: u32, slot: u32, args: Vec<JValue>) -> Result<JVal
@@ -59,7 +59,30 @@ index 9111360..5fb4b27 100644
                  Flow::Next(0)
              }
              Insn::NewArray(d, size_reg, type_idx) => {
-@@ -1546,13 +1559,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
+@@ -985,6 +998,22 @@ impl Vm {
+             }
+             Insn::Cmp(kind, d, a, b) => {
+                 let (va, vb) = (f.regs[*a as usize], f.regs[*b as usize]);
++                // DEX constants have raw register bits, not a float tag.
++                // A comparison against const/4 0 must not become equality
++                // just because the other operand came from a float getter.
++                let float = |v| match v {
++                    JValue::Int(bits) => JValue::Float(f32::from_bits(bits as u32)),
++                    v => v,
++                };
++                let double = |v| match v {
++                    JValue::Long(bits) => JValue::Double(f64::from_bits(bits as u64)),
++                    v => v,
++                };
++                let (va, vb) = match kind {
++                    CmpOp::CmpgFloat | CmpOp::CmplFloat => (float(va), float(vb)),
++                    CmpOp::CmpgDouble | CmpOp::CmplDouble => (double(va), double(vb)),
++                    CmpOp::CmpLong => (va, vb),
++                };
+                 let c = match (*kind, va, vb) {
+                     (CmpOp::CmpLong, JValue::Long(x), JValue::Long(y)) => x.cmp(&y) as i32,
+                     (CmpOp::CmpgFloat, JValue::Float(x), JValue::Float(y)) => fcmp(x, y, true),
+@@ -1546,13 +1575,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
          (Binop::And, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x & y)),
          (Binop::Or, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x | y)),
          (Binop::Xor, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x ^ y)),
