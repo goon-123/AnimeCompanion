@@ -94,8 +94,13 @@ def source_rows(report):
 
 def make_matrix(report):
     rows = source_rows(report)
+    probes = [package.get("probe", {}) for package in report["packages"]]
+    summary = {**report["summary"],
+               "incompleteProbePackages": sum(probe.get("processStatus") != "completed" or probe.get("unexecutedOperationCells", 0) > 0 for probe in probes),
+               "unprobedPackages": sum(not probe.get("operations") for probe in probes),
+               "unexecutedOperationCells": sum(probe.get("unexecutedOperationCells", 0) for probe in probes)}
     return {"schemaVersion": 1, "catalogRef": report["catalogRef"], "runtimeRevision": report["runtimeRevision"],
-            "scope": report.get("scope", "unknown"), "summary": report["summary"],
+            "scope": report.get("scope", "unknown"), "summary": summary,
             "sourceStatuses": dict(Counter(row["status"] for row in rows)),
             "packageOnlyRows": sum(row["sourceIndex"] is None for row in rows),
             "dependencyInventoryPackages": sum("dependencyFamilies" in row for row in report["packages"]),
@@ -114,7 +119,7 @@ def render_html(matrix):
 
 def render_csv(matrix):
     stream = io.StringIO(newline="")
-    writer = csv.writer(stream)
+    writer = csv.writer(stream, lineterminator="\n")
     writer.writerow(["Source", "Extension", "Language", "Source index", "Status", "Catalog", "Details", "Chapters", "Pages", "Images", "APK", "SHA-256", "Runtime gaps", "Evidence tests", "Incomplete probes"])
     def safe(value):
         text = str(value)
