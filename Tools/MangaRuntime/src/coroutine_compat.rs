@@ -620,7 +620,10 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         ("Lkotlinx/coroutines/BuildersKt;","launch$default","(Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/CoroutineContext;Lkotlinx/coroutines/CoroutineStart;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lkotlinx/coroutines/Job;",false,launch),
     ] {vm.register_native(NativeEntry {class,name,sig,instance,f})?;}
     let class = "Lkotlinx/coroutines/CoroutineStart;";
-    super::kotlin_type_compat::marker(vm, class);
+    let owner = super::kotlin_type_compat::marker(vm, class);
+    vm.classes[owner as usize].is_interface = false;
+    vm.classes[owner as usize].is_abstract = false;
+    vm.classes[owner as usize].superclass = Some(vm.ensure_class_by_desc("Ljava/lang/Enum;")?);
     for (ordinal, name) in ["DEFAULT", "LAZY", "ATOMIC", "UNDISPATCHED"]
         .into_iter()
         .enumerate()
@@ -682,6 +685,10 @@ mod tests {
             "Lkotlinx/coroutines/CoroutineStart;",
         )
         .unwrap();
+        let owner = vm.object_class(lazy).unwrap();
+        let enum_class = vm.ensure_class_by_desc("Ljava/lang/Enum;").unwrap();
+        assert!(!vm.classes[owner as usize].is_interface);
+        assert!(vm.is_assignable(owner, enum_class).unwrap());
         let parent = new_job(&mut vm, JValue::Null).unwrap();
         let s = scope(&mut vm, parent).unwrap();
         let args = [s, JValue::Null, lazy, block, JValue::Int(1), JValue::Null];
