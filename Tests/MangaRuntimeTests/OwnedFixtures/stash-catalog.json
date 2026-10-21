@@ -1,0 +1,1 @@
+{"data":{"findGalleries":{"count":1,"galleries":[{"id":"1","title":"Owned story","cover":{"id":"cover","paths":{"thumbnail":"https://images.example/owned-cover.webp"},"visual_files":[{"__typename":"ImageFile"}]}}]}}}

@@ -171,6 +171,14 @@ All 139 Rust regressions and 16 audit parser/evidence/privacy checks pass locall
 
 ## Build and verification
 
+Build 54 continues the catalog audit with source-framework and preference contracts. UnmeteredSource resolves as a Source marker without changing host network/execution limits. UpdateStrategy constants have stable enum identity and declaration order. Dns.SYSTEM is the default resolver token; Swift retains DNS and HTTPS transport ownership.
+
+SharedPreferences.getAll returns bounded, typed snapshots, including the runtime's lossless string sets. Preference title getters retain the source's schema. Generated Keiyoushi default-URL tracking no longer discards a custom URL explicitly saved in the native settings screen during each fresh command. Other guest migrations remain intact; arbitrary source-written state is still not persisted across commands.
+
+The exact LANraragi 1.6.1, Mango 1.6.0 and StashApp 1.6.0 APKs now have complete owned catalog/details/dated chapters/ordered pages/image-transport fixtures. They use a configured public HTTPS server, not local/private HTTP. Mango's own login form and session-cookie interceptor run again in fresh command VMs. StashApp's generated GraphQL DTOs use corrected simple/annotated enum factories and encoder dispatch; invalid enum values and indexes remain errors. Native Swift/C/Rust cases reuse the same fixtures.
+
+Kotlin monotonic readings use a steady clock and the pinned runtime's millisecond Duration ABI; cancellation exceptions are catchable Java exceptions. This does not establish full Kotlin Duration precision or complete PAM browser readers. Komga's coroutine-context construction, JinmanTiantang's typed-array settings, other browser/TLS/crypto/serialization gaps and live availability remain unverified or unsupported as recorded by the audit.
+
 ```bash
 # macOS/Xcode: device arm64 plus universal arm64/x86_64 simulator XCFramework
 bash scripts/build-manga-runtime.sh

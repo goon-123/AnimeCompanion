@@ -35,7 +35,9 @@ mod okio_compat;
 mod reflection_compat;
 mod regex_compat;
 mod serialization_compat;
+mod source_framework_compat;
 mod source_settings;
+mod time_source_compat;
 mod uri_compat;
 use serialization_compat::*;
 
@@ -47,6 +49,8 @@ mod compatibility_tests;
 mod date_extension_tests;
 #[cfg(test)]
 mod extension_reader_tests;
+#[cfg(test)]
+mod framework_extension_tests;
 #[cfg(test)]
 mod hentainexus_tests;
 #[cfg(test)]
@@ -1075,6 +1079,7 @@ where
             .map_err(|e| e.to_string())?;
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    source_framework_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     locale_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
@@ -1083,6 +1088,7 @@ where
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_runtime_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    time_source_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     multipart_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     headers_compat::install(ext.ctx().vm(), &command.http_user_agent).map_err(|e| e.to_string())?;
     regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
@@ -1175,6 +1181,17 @@ where
         if &actual != expected {
             return Err("Source settings identity does not match".into());
         }
+    }
+    // Generated URL tracking is initialized lazily. Retain the explicit
+    // native override after that first-run migration in every fresh VM.
+    if command.settings.contains_key("overrideBaseUrl") {
+        ext.source_base_url(src)
+            .map_err(|e| ext.describe_error(&e))?;
+        source_settings::retain_explicit_base_url(
+            &mut ext,
+            command.settings_source_id.as_deref(),
+            &command.settings,
+        );
     }
     if command.op == "settings" {
         return source_settings::definitions(&mut ext, src);

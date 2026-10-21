@@ -1,7 +1,7 @@
 //! Shared JSON tree serializers and Map encoding. Guest DTO serializers still
 //! execute normally; no source IDs, DTO names or website rules are substituted.
 use dexvm::vm::error::JvmError;
-use dexvm::vm::object::{JsonVal, Native};
+use dexvm::vm::object::{ArrayData, JsonVal, Native};
 use dexvm::vm::{NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 
@@ -139,6 +139,129 @@ fn write(vm: &mut Vm, encoder: JValue, value: JsonVal) -> R {
 fn serialize(vm: &mut Vm, args: &[JValue]) -> R {
     let value = check(vm, args[0], args[2])?;
     write(vm, args[1], value)
+}
+fn enum_factory(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::Array(ArrayData::Obj(values))) = vm.payload_of(args[1]) else {
+        return Err(invalid(vm, "Expected enum values"));
+    };
+    if values.len() > 4096 || vm.budget <= values.len() as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= values.len() as i64 + 1;
+    let aliases = if let Some(value) = args.get(2) {
+        match vm.payload_of(*value) {
+            Some(Native::Array(ArrayData::Obj(names))) if names.len() == values.len() => {
+                Some(names)
+            }
+            _ => return Err(invalid(vm, "Expected enum serial names")),
+        }
+    } else {
+        None
+    };
+    let mut names = Vec::with_capacity(values.len());
+    for (i, value) in values.iter().enumerate() {
+        let alias = aliases.as_ref().map(|v| v[i]).unwrap_or(JValue::Null);
+        let name = if alias.is_null_ref() {
+            match vm.payload_of(*value) {
+                Some(Native::Enum { name, .. }) => name,
+                _ => return Err(invalid(vm, "Expected enum constant")),
+            }
+        } else {
+            vm.str_of_jvalue(alias)
+                .ok_or_else(|| invalid(vm, "Expected enum serial name"))?
+        };
+        if name.len() > 4096 || vm.budget <= name.len() as i64 {
+            return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+        }
+        vm.budget -= name.len() as i64 + 1;
+        names.push(name);
+    }
+    let name = vm
+        .str_of_jvalue(args[0])
+        .ok_or_else(|| invalid(vm, "Expected enum name"))?;
+    if name.len() > 4096 || vm.budget <= name.len() as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= name.len() as i64 + 1;
+    let result = vm
+        .alloc_native(
+            "Lkotlinx/serialization/internal/EnumSerializer;",
+            Native::EnumSerializer { values, names },
+        )
+        .map_err(thrown)?;
+    vm.arena.objects[result.as_obj() as usize].fields = vec![args[0]];
+    Ok(result)
+}
+fn enum_descriptor(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::EnumSerializer { names, .. }) = vm.payload_of(args[0]) else {
+        return Err(invalid(vm, "Expected enum serializer"));
+    };
+    let name = vm.arena.objects[args[0].as_obj() as usize]
+        .fields
+        .first()
+        .and_then(|v| vm.str_of_jvalue(*v))
+        .unwrap_or_default();
+    let cost = names
+        .iter()
+        .fold(name.len() + 1, |n, s| n.saturating_add(s.len() + 1));
+    if vm.budget <= cost as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= cost as i64;
+    vm.alloc_native(
+        "Lkotlinx/serialization/internal/EnumDescriptor;",
+        Native::SerialDescriptor {
+            name,
+            elements: names,
+            element_annotations: vec![],
+        },
+    )
+    .map_err(thrown)
+}
+fn enum_kind(vm: &mut Vm, _: &[JValue]) -> R {
+    let class = "Lkotlinx/serialization/descriptors/SerialKind$ENUM;";
+    let field = dexvm::vm::FieldRef {
+        class_desc: vm.intern(class),
+        name: vm.intern("INSTANCE"),
+        ty: vm.intern(class),
+    };
+    vm.static_field_get(field).map_err(thrown)
+}
+fn enum_serialize(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::EnumSerializer { values, .. }) = vm.payload_of(args[0]) else {
+        return Err(invalid(vm, "Expected enum serializer"));
+    };
+    if vm.budget <= values.len() as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= values.len() as i64 + 1;
+    let index = values
+        .iter()
+        .position(|v| *v == args[2])
+        .ok_or_else(|| invalid(vm, "Enum value is not declared"))?;
+    if vm.recursion_depth >= vm.depth_limit {
+        return Err(NatErr::Fatal(JvmError::StackOverflow));
+    }
+    let descriptor = enum_descriptor(vm, &args[..1])?;
+    vm.recursion_depth += 1;
+    let result = vm.invoke_virtual_args(
+        args[1],
+        "encodeEnum",
+        "(Lkotlinx/serialization/descriptors/SerialDescriptor;I)V",
+        vec![descriptor, JValue::Int(index as i32)],
+    );
+    vm.recursion_depth -= 1;
+    result.map_err(thrown)
+}
+fn json_encode_enum(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::SerialDescriptor { elements, .. }) = vm.payload_of(args[1]) else {
+        return Err(invalid(vm, "Expected enum descriptor"));
+    };
+    let name = usize::try_from(args[2].as_int())
+        .ok()
+        .and_then(|i| elements.get(i))
+        .ok_or_else(|| invalid(vm, "Invalid enum index"))?;
+    write(vm, args[0], JsonVal::Str(name.clone()))
 }
 fn singleton(vm: &mut Vm, class: &'static str) -> R {
     let field = dexvm::vm::FieldRef {
@@ -486,6 +609,59 @@ fn install_kinds(vm: &mut Vm) -> Result<(), JvmError> {
     Ok(())
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    let enum_type = vm.intern("Lkotlinx/serialization/internal/EnumDescriptor;");
+    if !vm.class_by_desc.contains_key(&enum_type) {
+        let parent = vm.ensure_class_by_desc(
+            "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+        )?;
+        let id = vm.classes.len() as u32;
+        vm.classes.push(dexvm::vm::class::Class {
+            id,
+            descriptor: enum_type,
+            superclass: Some(parent),
+            access_flags: dexvm::vm::class::ACC_PUBLIC,
+            ..Default::default()
+        });
+        vm.class_by_desc.insert(enum_type, id);
+    }
+    for (name,sig) in [
+        ("createSimpleEnumSerializer","(Ljava/lang/String;[Ljava/lang/Enum;)Lkotlinx/serialization/KSerializer;"),
+        ("createAnnotatedEnumSerializer","(Ljava/lang/String;[Ljava/lang/Enum;[Ljava/lang/String;[[Ljava/lang/annotation/Annotation;[Ljava/lang/annotation/Annotation;)Lkotlinx/serialization/KSerializer;"),
+    ]{vm.register_native(NativeEntry{class:"Lkotlinx/serialization/internal/EnumsKt;",name,sig,instance:false,f:enum_factory})?;}
+    for (class, name, sig, f) in [
+        (
+            "Lkotlinx/serialization/internal/EnumDescriptor;",
+            "getKind",
+            "()Lkotlinx/serialization/descriptors/SerialKind;",
+            enum_kind as dexvm::vm::NativeFn,
+        ),
+        (
+            "Lkotlinx/serialization/internal/EnumSerializer;",
+            "serialize",
+            "(Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V",
+            enum_serialize as dexvm::vm::NativeFn,
+        ),
+        (
+            "Lkotlinx/serialization/internal/EnumSerializer;",
+            "getDescriptor",
+            "()Lkotlinx/serialization/descriptors/SerialDescriptor;",
+            enum_descriptor,
+        ),
+        (
+            "Lkotlinx/serialization/json/internal/StreamingJsonEncoder;",
+            "encodeEnum",
+            "(Lkotlinx/serialization/descriptors/SerialDescriptor;I)V",
+            json_encode_enum,
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
     install_kinds(vm)?;
     for &(class, _, companion) in SERIALIZERS {
         for (name, sig, f) in [
@@ -575,6 +751,73 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn enum_factories_keep_aliases_descriptors_gc_json_and_bounds() {
+        let mut vm = vm();
+        let name = vm.alloc_string("owned.Direction");
+        let first = vm
+            .alloc_native(
+                "Ljava/lang/Enum;",
+                Native::Enum {
+                    name: "FIRST".into(),
+                    ordinal: 0,
+                },
+            )
+            .unwrap();
+        let second = vm
+            .alloc_native(
+                "Ljava/lang/Enum;",
+                Native::Enum {
+                    name: "SECOND".into(),
+                    ordinal: 1,
+                },
+            )
+            .unwrap();
+        let values = vm
+            .alloc_native(
+                "[Ljava/lang/Enum;",
+                Native::Array(ArrayData::Obj(vec![first, second])),
+            )
+            .unwrap();
+        let simple = enum_factory(&mut vm, &[name, values]).unwrap();
+        let alias = vm.alloc_string("second-alias");
+        let aliases = vm
+            .alloc_native(
+                "[Ljava/lang/String;",
+                Native::Array(ArrayData::Obj(vec![JValue::Null, alias])),
+            )
+            .unwrap();
+        let annotated = enum_factory(
+            &mut vm,
+            &[name, values, aliases, JValue::Null, JValue::Null],
+        )
+        .unwrap();
+        vm.gc(&[simple.as_obj(), annotated.as_obj(), values.as_obj()]);
+        let descriptor = enum_descriptor(&mut vm, &[annotated]).unwrap();
+        assert!(
+            matches!(vm.payload_of(descriptor),Some(Native::SerialDescriptor{name,elements,..}) if name=="owned.Direction"&&elements==["FIRST","second-alias"])
+        );
+        let kind = enum_kind(&mut vm, &[descriptor]).unwrap();
+        assert_eq!(vm.str_of_jvalue(kind).as_deref(), Some("ENUM"));
+        let encoder = encoder(&mut vm);
+        enum_serialize(&mut vm, &[annotated, encoder, second]).unwrap();
+        assert!(
+            matches!(vm.payload_of(encoder),Some(Native::JsonEncoder{value:Some(JsonVal::Str(v)),..}) if v=="second-alias")
+        );
+        assert!(matches!(
+            enum_serialize(&mut vm, &[simple, encoder, JValue::Null]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(
+            json_encode_enum(&mut vm, &[encoder, descriptor, JValue::Int(2)]),
+            Err(NatErr::Throw(_))
+        ));
+        vm.budget = 0;
+        assert!(matches!(
+            enum_factory(&mut vm, &[name, values]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+    }
     fn vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         for &entry in crate::FUNCTION_INTERFACES {
