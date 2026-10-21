@@ -57,6 +57,12 @@ bdcf84f tachiyomi-en.assortedscans-v1.6.0.apk
 bdcf84f tachiyomi-en.digitalcomicmuseum-v1.6.0.apk
 4217666-2 tachiyomi-ja.rawkuma-v1.6.41.apk
 bdcf84f tachiyomi-zh.manhuawu-v1.6.0.apk
+d0c0864 tachiyomi-all.lanraragi-v1.6.1.apk
+bdcf84f tachiyomi-all.mango-v1.6.0.apk
+bdcf84f tachiyomi-all.stashapp-v1.6.0.apk
+1319949 tachiyomi-en.mangadotnet-v1.6.25.apk
+58fd63f tachiyomi-zh.favcomic-v1.6.4.apk
+4217666-2 tachiyomi-zh.noyacg-v1.6.7.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -93,6 +99,12 @@ expected = {
     'tachiyomi-en.digitalcomicmuseum-v1.6.0.apk': '167187db99558eb918115dabbb33320f81968437565771385872a27391b6b468',
     'tachiyomi-ja.rawkuma-v1.6.41.apk': '4ac058403b9fd7ec2b5c9913c2dafa6022e06eb3ac8a306e297795f58cf9fc49',
     'tachiyomi-zh.manhuawu-v1.6.0.apk': 'a025a564c91368037728ad35da7975b3adbbbee88a1a7370e9e7e7c0f63c2257',
+    'tachiyomi-all.lanraragi-v1.6.1.apk': '152a626bd08a1c92c3be2bbfc587cb8ece73aedca27a994d0f6fc5753fa14da6',
+    'tachiyomi-all.mango-v1.6.0.apk': 'd78adac40c9db6d853508776250adcd648b7f61c0d0c8e11b912788db06e85e8',
+    'tachiyomi-all.stashapp-v1.6.0.apk': '27f9fb02ad20982947d6abacb18fc9034e84d9c67d8b92d603ebd0b8b50ed78e',
+    'tachiyomi-en.mangadotnet-v1.6.25.apk': 'df1987dc6f89b5111a0004b605a3422b50f1afa8b1ed2f2bcc3eda3b854fbdf9',
+    'tachiyomi-zh.favcomic-v1.6.4.apk': '5b582b534d6f37850480d4ab0b74013b7020415337fff155f4fe1a0bf946933e',
+    'tachiyomi-zh.noyacg-v1.6.7.apk': '119100c7bba5b7158644e0dd75ad0a8aa051b234fab268fe85ed0e1595b1971d',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

@@ -1,3 +1,17 @@
+## Source framework, preferences and configured readers — build 54
+
+Version 0.25.7. Continue manga compatibility from the merged build-53 matrix. Add UnmeteredSource/Source inheritance, stable UpdateStrategy constants, the default DNS token, typed SharedPreferences.getAll snapshots, preference title getters and monotonic timing/catchable cancellation exceptions. Keep transport, source identity, VM limits and credential boundaries.
+
+Complete reading replays expose a shared fresh-VM settings bug: generated sources reset the saved custom base URL when their default-URL tracking is absent. Initialize that migration and retain the explicit native override without suppressing other migrations. This is not general persistence of source-written state.
+
+LANraragi 1.6.1, Mango 1.6.0 and StashApp 1.6.0 execute complete owned catalog/details/dated chapters/ordered pages/image flows against a configured public HTTPS host. Mango runs its own login and cookie interceptor; StashApp runs its generated enum/GraphQL serializers. Add shared bounded enum factories, descriptors/serial aliases and real encoder dispatch, removing a simple-factory out-of-bounds panic. Three native bridge cases share these fixtures. MangaDot's 108 source identities enumerate and FavComic/NoyACG settings schemas load; these narrower checks do not certify their reading flows.
+
+Local verification passes 148 Rust regressions, 16 audit/evidence/privacy tests, warnings-denied Clippy, formatting, production-library compilation, license notices, shell syntax and Safari bundle/version checks. The [build-54 focused matrix](docs/manga-compatibility/build54/compatibility.html) inventories 11/11 targeted packages, enumerates 118 sources and records 88 offline preflights. It shows three verified owned flows, one runtime-blocked row and 115 unverified rows. MangaDot's large factory leaves 748 generic operation cells unexecuted. The full-catalog baseline remains build 53; the focused report is not a catalog-wide success rate.
+
+Native iPhone/iPad execution and a build-54 unsigned IPA await publishing the branch and running hosted CI. The local browser regression could not run because the Chromium download failed; no matrix UI implementation changed. Full compatibility and live availability are not established. Komga coroutine-context construction, JinmanTiantang typed-array settings and PAM browser paths remain incomplete. No production APK or source content is bundled.
+
+Build 53's hosted catalog audit and runtime regressions passed. Its device/simulator libraries, iPhone/iPad readers, iPhone layout and unsigned IPA packaging passed; the existing iPad split-layout job failed, leaving dependent broader suites skipped.
+
 ## Evidence-based matrix and shared HTTP compatibility — build 53
 
 Version 0.25.6. Add a searchable, offline per-source matrix with exact APK/version/source evidence for catalog, details, chapters, ordered pages and image transport. Named passing owned fixtures determine verified/partial coverage; generic accepted responses say probe-only, while runtime blockers, browser requirements, limits and unexecuted cells remain distinct. Package-load failures produce package rows, not guessed language/source indices. Public catalog metadata supplies names/languages; reports never store guest exception strings, HTTP URLs, cookies or tokens. HTML, CSV, JSON and Markdown are rebuilt by the catalog-audit workflow, with a real browser regression and screenshots.

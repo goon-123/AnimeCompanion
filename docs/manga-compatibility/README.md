@@ -1,5 +1,9 @@
 # Manga compatibility matrix
 
+Build 54's [focused matrix](build54/compatibility.html) and [CSV](build54/compatibility.csv) cover the eleven packages targeted in this batch. It inventories all eleven, enumerates 118 source instances and records 88 offline preflights. LANraragi (1), Mango and StashApp have complete owned reading-flow evidence; one row has a confirmed runtime blocker and 115 rows remain unverified. MangaDot's large source factory leaves 748 generic operation cells unexecuted. This is a selected-package snapshot against runtime code `adc98e3803731ab3d31733eb620b8a8e24f17d61`, not a new full-catalog success rate. The complete catalog baseline below remains explicitly build 53.
+
+The new flows use source-configured public HTTPS servers. They verify saved custom URLs, source-owned login/API-key requests, dated chapters, ordered pages and image transport. Source-written state across commands, local/private HTTP servers, complete browser readers and live availability remain separate gaps. Komga still encounters coroutine-context construction; JinmanTiantang's settings encounter a typed-array cast error.
+
 [Open or download the matrix](compatibility.html). Save the HTML file and open it in a browser for search, language/status filters, per-source reading stages, evidence details and CSV export. The file works offline and makes no website requests.
 
 The matrix tracks the exact frozen catalog, APK checksums, source indexes and runtime code revision shown in the report. It is a development compatibility snapshot, not live website certification.
@@ -19,7 +23,7 @@ The **Shared dependencies** tab groups actual external DEX references, distingui
 
 Build 53 fixes the largest remaining HTTP groups: multipart request serialization and Headers factories/companion initialization. Complete owned flows are added for Digital Comic Museum 1.6.0, Rawkuma 1.6.41 and Manhuawu 1.6.0. Their full replays also require correct Jsoup evaluator class/ID behavior and the host's explicit default HTTP user-agent property.
 
-The next batches should address source-framework markers, Kotlin monotonic time, cryptography/TLS contracts, additional serializers and remaining date APIs. Every batch should reproduce a real APK failure, add the shared contract, replay a complete owned flow and refresh this matrix. Website sign-in, server configuration, optional encrypted readers and live availability need separate evidence.
+Build 54 adds the source marker, monotonic clock, typed preference snapshots/title getters, generated custom-URL migration fix and enum serializer contracts. The next batches should address coroutine-context construction, remaining browser behavior, typed arrays, cryptography/TLS, additional serializers and remaining date APIs. Every batch should reproduce a real APK failure, add the shared contract, replay a complete owned flow and refresh the relevant matrix. Website sign-in, server configuration, optional encrypted readers and live availability need separate evidence.
 
 ## Reproduce and refresh
 

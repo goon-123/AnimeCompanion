@@ -94,6 +94,10 @@ fn static_map(vm: &mut Vm, args: &[JValue]) -> R {
     map(vm, &[JValue::Null, args[0]])
 }
 pub(super) fn install(vm: &mut Vm, user_agent: &str) -> Result<(), JvmError> {
+    // Default DNS is a configuration token. Swift still resolves and connects.
+    super::kotlin_type_compat::marker(vm, "Lokhttp3/Dns;");
+    let dns = vm.alloc_native("Lokhttp3/Dns;", Native::Opaque)?;
+    super::multipart_compat::static_value(vm, "Lokhttp3/Dns;", "SYSTEM", "Lokhttp3/Dns;", dns)?;
     if user_agent.is_empty()
         || user_agent.len() > 2048
         || !user_agent.bytes().all(|b| (32..127).contains(&b))

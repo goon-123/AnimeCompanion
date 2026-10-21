@@ -105,6 +105,93 @@ pub(super) fn definitions(ext: &mut Keiyoushi, source: &Source) -> Result<Value,
     Ok(json!({"sourceID":source_id,"settings":layout.settings}))
 }
 
+pub(super) fn retain_explicit_base_url(
+    ext: &mut Keiyoushi,
+    source_id: Option<&str>,
+    settings: &HashMap<String, SettingValue>,
+) {
+    // Generated constructors reset the custom URL when defaultBaseUrl is
+    // absent. That tracking value is not retained between fresh command VMs.
+    // Preserve the native user's explicit URL, leaving other migrations alone.
+    let (Some(id), Some(SettingValue::String(value))) =
+        (source_id, settings.get("overrideBaseUrl"))
+    else {
+        return;
+    };
+    if let Some(prefs) = ext
+        .ctx()
+        .vm()
+        .shared_preferences
+        .get_mut(&format!("source_{id}"))
+    {
+        if matches!(
+            prefs.get("defaultBaseUrl"),
+            Some(PreferenceValue::String(_))
+        ) {
+            prefs.insert(
+                "overrideBaseUrl".into(),
+                PreferenceValue::String(value.clone()),
+            );
+        }
+    }
+}
+fn preference_title(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    match vm.payload_of(args[0]) {
+        Some(Native::Preference { title, .. } | Native::PreferenceScreen { title, .. }) => {
+            Ok(title.unwrap_or(JValue::Null))
+        }
+        _ => Err(NatErr::Throw(vm.err_npe())),
+    }
+}
+fn get_all(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let Some(Native::SharedPreferences(name)) = vm.payload_of(args[0]) else {
+        return Err(invalid(vm));
+    };
+    let values = vm.shared_preferences.get(&name);
+    let empty = HashMap::new();
+    if values.is_some_and(|v| v.len() > 4096) {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    let values = values.unwrap_or(&empty);
+    let bytes = values.iter().fold(0_usize, |n, (key, v)| {
+        n.saturating_add(key.len()).saturating_add(match v {
+            PreferenceValue::String(s) => s.len(),
+            _ => 8,
+        })
+    });
+    let cost = bytes.saturating_add(values.len()).saturating_add(1);
+    if bytes > 1_000_000 || vm.budget <= cost as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= cost as i64;
+    let values = values.clone();
+    let mut entries = Vec::with_capacity(values.len());
+    for (key, value) in values {
+        let key = vm.alloc_string(&key);
+        let value = match value {
+            PreferenceValue::String(s) if s.starts_with(SET_PREFIX) => {
+                get_set(vm, &[args[0], key, JValue::Null])?
+            }
+            PreferenceValue::String(s) => vm.alloc_string(&s),
+            PreferenceValue::Bool(v) => vm
+                .alloc_native("Ljava/lang/Boolean;", Native::BoolBox(v))
+                .map_err(NatErr::Fatal)?,
+            PreferenceValue::Int(v) => vm
+                .alloc_native("Ljava/lang/Integer;", Native::IntBox(v))
+                .map_err(NatErr::Fatal)?,
+            PreferenceValue::Long(v) => vm
+                .alloc_native("Ljava/lang/Long;", Native::LongBox(v))
+                .map_err(NatErr::Fatal)?,
+            PreferenceValue::Float(v) => vm
+                .alloc_native("Ljava/lang/Float;", Native::FloatBox(v))
+                .map_err(NatErr::Fatal)?,
+        };
+        entries.push((key, value));
+    }
+    vm.alloc_native("Ljava/util/HashMap;", Native::Map(entries))
+        .map_err(NatErr::Fatal)
+}
+
 #[derive(Default)]
 struct Layout {
     keys: HashSet<String>,
@@ -338,6 +425,20 @@ fn android_ui_callback(vm: &mut Vm, _: &[JValue]) -> Result<JValue, NatErr> {
 }
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Landroidx/preference/Preference;",
+        name: "getTitle",
+        sig: "()Ljava/lang/CharSequence;",
+        instance: true,
+        f: preference_title,
+    })?;
+    vm.register_native(NativeEntry {
+        class: "Landroid/content/SharedPreferences;",
+        name: "getAll",
+        sig: "()Ljava/util/Map;",
+        instance: true,
+        f: get_all,
+    })?;
     for (class, name, sig) in [
         (
             "Landroidx/preference/EditTextPreference$OnBindEditTextListener;",
@@ -433,6 +534,71 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn get_all_retains_typed_isolated_snapshots_and_lossless_sets() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        vm.shared_preferences.insert(
+            "source_1".into(),
+            HashMap::from([
+                ("text".into(), PreferenceValue::String("owned".into())),
+                ("bool".into(), PreferenceValue::Bool(true)),
+                ("int".into(), PreferenceValue::Int(2)),
+                ("long".into(), PreferenceValue::Long(9_007_199_254_740_993)),
+                ("float".into(), PreferenceValue::Float(1.5)),
+                (
+                    "set".into(),
+                    PreferenceValue::String(format!(
+                        "{SET_PREFIX}{}",
+                        serde_json::to_string(&["", "a\nb"]).unwrap()
+                    )),
+                ),
+            ]),
+        );
+        let prefs = vm
+            .alloc_native(
+                "Landroid/content/SharedPreferences;",
+                Native::SharedPreferences("source_1".into()),
+            )
+            .unwrap();
+        let other = vm
+            .alloc_native(
+                "Landroid/content/SharedPreferences;",
+                Native::SharedPreferences("source_2".into()),
+            )
+            .unwrap();
+        let snapshot = get_all(&mut vm, &[prefs]).unwrap();
+        let Some(Native::Map(entries)) = vm.payload_of(snapshot) else {
+            panic!()
+        };
+        assert_eq!(entries.len(), 6);
+        for (k, v) in entries {
+            match vm.str_of_jvalue(k).unwrap().as_str() {
+                "text" => assert_eq!(vm.str_of_jvalue(v).as_deref(), Some("owned")),
+                "bool" => assert!(matches!(vm.payload_of(v), Some(Native::BoolBox(true)))),
+                "int" => assert!(matches!(vm.payload_of(v), Some(Native::IntBox(2)))),
+                "long" => assert!(matches!(
+                    vm.payload_of(v),
+                    Some(Native::LongBox(9_007_199_254_740_993))
+                )),
+                "float" => assert!(matches!(vm.payload_of(v), Some(Native::FloatBox(1.5)))),
+                "set" => assert!(
+                    matches!(vm.payload_of(v),Some(Native::Set(v)) if v.iter().map(|v|vm.str_of_jvalue(*v).unwrap()).collect::<Vec<_>>()==["","a\nb"])
+                ),
+                _ => panic!(),
+            }
+        }
+        vm.shared_preferences.get_mut("source_1").unwrap().clear();
+        vm.gc(&[snapshot.as_obj(), other.as_obj()]);
+        assert!(matches!(vm.payload_of(snapshot),Some(Native::Map(v)) if v.len()==6));
+        let empty = get_all(&mut vm, &[other]).unwrap();
+        assert!(matches!(vm.payload_of(empty),Some(Native::Map(v)) if v.is_empty()));
+        vm.budget = 0;
+        assert!(matches!(
+            get_all(&mut vm, &[other]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+    }
 
     #[test]
     fn android_ui_setters_preserve_defaults_and_enabled_state() {
