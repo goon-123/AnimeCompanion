@@ -66,6 +66,19 @@ static ENTRIES: &[NativeEntry] = &[
 ];
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for class in [
+        "Lorg/jsoup/select/Evaluator$Class;",
+        "Lorg/jsoup/select/Evaluator$Id;",
+        "Lorg/jsoup/select/Evaluator$Tag;",
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name: "<init>",
+            sig: "(Ljava/lang/String;)V",
+            instance: true,
+            f: evaluator_init,
+        })?;
+    }
     vm.register_native(NativeEntry {
         class: "Lorg/jsoup/nodes/Element;",
         name: "toString",
@@ -104,6 +117,53 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         f: element_data,
     })?;
     Ok(())
+}
+fn css_identifier(text: &str) -> String {
+    use std::fmt::Write;
+    let mut escaped = String::new();
+    for (index, c) in text.chars().enumerate() {
+        if c == '\0' {
+            escaped.push('\u{fffd}');
+        } else if c.is_control()
+            || (c.is_ascii_digit() && (index == 0 || (index == 1 && text.starts_with('-'))))
+        {
+            write!(escaped, "\\{:x} ", c as u32).unwrap();
+        } else if c.is_ascii_alphanumeric()
+            || c == '_'
+            || (c == '-' && text != "-")
+            || !c.is_ascii()
+        {
+            escaped.push(c);
+        } else {
+            escaped.push('\\');
+            escaped.push(c);
+        }
+    }
+    escaped
+}
+fn evaluator_init(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    let text = vm
+        .str_of_jvalue(args[1])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    if text.len() > 4096 || vm.budget <= text.len() as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= text.len() as i64;
+    let class = vm.arena.objects[args[0].as_obj() as usize].class;
+    let descriptor = vm.str_of(vm.classes[class as usize].descriptor);
+    // The pinned evaluator consumer tests suffixes without the final ';',
+    // treating raw class/ID values as tag selectors. Store literal canonical
+    // selectors, shared by select, selectFirst and Collector.findFirst.
+    let selector = match descriptor {
+        "Lorg/jsoup/select/Evaluator$Class;" if text.is_empty() => ":not(*)".into(),
+        "Lorg/jsoup/select/Evaluator$Id;" if text.is_empty() => ":not([id]),[id=\"\"]".into(),
+        "Lorg/jsoup/select/Evaluator$Class;" => format!(".{}", css_identifier(&text)),
+        "Lorg/jsoup/select/Evaluator$Id;" => format!("#{}", css_identifier(&text)),
+        _ if text.is_empty() => ":not(*)".into(),
+        _ => css_identifier(&text.to_ascii_lowercase()),
+    };
+    vm.arena.objects[args[0].as_obj() as usize].native = Some(Native::Str(selector));
+    Ok(JValue::Null)
 }
 fn outer_string(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     vm.invoke_virtual(args[0], "outerHtml", "()Ljava/lang/String;")
@@ -474,6 +534,57 @@ mod tests {
                     .to_string()
             })
             .collect()
+    }
+
+    #[test]
+    fn evaluator_classes_ids_and_tags_keep_literal_names_and_receiver_scope() {
+        let (mut vm, _, _) = fixture();
+        let document=JsoupDocRef::new(Document::from("<section id='scope'><p id='owned:1' class='title.with.dot'>Owned</p><p id='other' class='title'>Other</p></section><p id='outside' class='title.with.dot'>Outside</p>"));
+        let root = vm
+            .alloc_native("Lorg/jsoup/nodes/Document;", Native::JsoupDoc(document))
+            .unwrap();
+        let scope = query(&mut vm, root, "#scope", true);
+        for (kind, name, expected) in [
+            ("Class", "title.with.dot", vec!["owned:1"]),
+            ("Id", "owned:1", vec!["owned:1"]),
+            ("Tag", "P", vec!["owned:1", "other"]),
+        ] {
+            let evaluator = vm
+                .alloc_native(
+                    &format!("Lorg/jsoup/select/Evaluator${kind};"),
+                    Native::Opaque,
+                )
+                .unwrap();
+            let value = vm.alloc_string(name);
+            evaluator_init(&mut vm, &[evaluator, value]).unwrap();
+            let result = vm
+                .invoke_virtual_args(
+                    scope,
+                    "select",
+                    "(Lorg/jsoup/select/Evaluator;)Lorg/jsoup/select/Elements;",
+                    vec![evaluator],
+                )
+                .unwrap();
+            assert_eq!(ids(&vm, result), expected);
+            let result = vm
+                .invoke_virtual_args(
+                    scope,
+                    "selectFirst",
+                    "(Lorg/jsoup/select/Evaluator;)Lorg/jsoup/nodes/Element;",
+                    vec![evaluator],
+                )
+                .unwrap();
+            assert_eq!(ids(&vm, result), [expected[0]]);
+        }
+        let evaluator = vm
+            .alloc_native("Lorg/jsoup/select/Evaluator$Class;", Native::Opaque)
+            .unwrap();
+        let value = vm.alloc_string("title");
+        vm.budget = 0;
+        assert!(matches!(
+            evaluator_init(&mut vm, &[evaluator, value]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
     }
 
     #[test]

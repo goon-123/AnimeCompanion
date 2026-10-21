@@ -4,6 +4,8 @@ import html
 import json
 from pathlib import Path
 import re
+from .dependencies import dependency_summary
+from .matrix import write_matrix
 
 READING_FLOW = {"popular", "details", "chapters", "pages", "images"}
 
@@ -102,6 +104,18 @@ def render(report):
         "- Browser probes are marked as needing the WebKit harness, not as website/runtime failures.",
         "- Source constructors and operations are isolated and bounded; timeouts and unexecuted cells remain explicit.",
         "- No source is marked live verified by this report.",
+        "- Open compatibility.html for the searchable per-source matrix, or compatibility.csv for a spreadsheet.",
+        "",
+        "## Shared library families",
+        "",
+        "References show dependency use, not implementation conformance. Counts overlap across families.",
+        "",
+        "| Family | Referencing packages | Packages with observed gaps |",
+        "| --- | ---: | ---: |",
+    ]
+    for family in report.get("dependencySummary", []):
+        lines.append(f"| {cell(family['family'])} | {family['referencingPackages']} | {family['blockedPackages']} |")
+    lines += [
         "",
         "## Observed shared runtime gaps",
         "",
@@ -153,7 +167,9 @@ def write_report(output, rows, metadata):
                 for row in rows for data in row["evidence"]["sources"].values()),
         },
         "observedGaps": observed, "potentialGaps": potential, "packages": rows,
+        "dependencySummary": dependency_summary(rows, observed),
     }
     (output / "compatibility.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     (output / "compatibility.md").write_text(render(report))
+    write_matrix(output, report)
     return report

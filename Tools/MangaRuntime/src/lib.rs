@@ -20,6 +20,7 @@ mod collection_compat;
 mod date_compat;
 mod date_zone_compat;
 mod diagnostics;
+mod headers_compat;
 mod http_query_compat;
 mod http_wire;
 mod java_compat;
@@ -29,6 +30,7 @@ mod jsoup_compat;
 mod kotlin_runtime_compat;
 mod kotlin_type_compat;
 mod locale_compat;
+mod multipart_compat;
 mod okio_compat;
 mod reflection_compat;
 mod regex_compat;
@@ -53,6 +55,8 @@ mod http_body_tests;
 mod json_extension_tests;
 #[cfg(test)]
 mod kotlin_extension_tests;
+#[cfg(test)]
+mod network_extension_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -627,6 +631,8 @@ struct Command {
     modern: bool,
     #[serde(default = "default_time_zone", rename = "timeZoneID")]
     time_zone_id: String,
+    #[serde(default = "default_http_agent")]
+    http_user_agent: String,
     #[serde(default)]
     manga: MangaInput,
     #[serde(default)]
@@ -643,6 +649,9 @@ fn first_page() -> i32 {
 }
 fn default_time_zone() -> String {
     "UTC".into()
+}
+fn default_http_agent() -> String {
+    "AnimeCompanion/MangaRuntime".into()
 }
 
 #[derive(Default, Deserialize)]
@@ -1074,6 +1083,8 @@ where
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_runtime_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    multipart_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    headers_compat::install(ext.ctx().vm(), &command.http_user_agent).map_err(|e| e.to_string())?;
     regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     uri_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

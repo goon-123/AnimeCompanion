@@ -151,6 +151,24 @@ Complete real-APK replays additionally require correct Kotlin hex default masks,
 
 All 131 Rust regressions and 10 audit parser/evidence/privacy checks pass locally, along with formatting, warnings-denied Clippy, production-library compilation and generated dependency notices. The selected audit inventories all 34 packages, enumerates 49 sources and executes 357 bounded offline probes, with no unexecuted cells and no observed runtime API gaps in these exercised paths. Complete owned-flow evidence in this subset is limited to the three fixtures; empty-response acceptance is not reader success. Three Swift/C/Rust cases reuse the same neutral owned response files and pinned APKs; native execution awaits hosted Xcode CI. MangaHub's AES-GCM branch, live website availability and cookie persistence from guest CookieJar.saveFromResponse remain unverified or incomplete. Test-only APKs/content are absent from the production bundle. See [BUILD_STATUS.md](../../BUILD_STATUS.md) for hosted build results.
 
+## Searchable matrix and shared HTTP compatibility (build 53)
+
+Version 0.25.6 adds a [per-source compatibility matrix](../../docs/manga-compatibility/README.md), generated from the same actual-runtime audit. HTML works offline, with search, language/status filters, named-test/checksum details, stage columns, a shared-dependency inventory, a ranked API backlog and CSV export. The workflow verifies browser interactions and publishes HTML/CSV/JSON/Markdown with its actual host inventory. Source names come from the frozen public catalog; guest metadata retains only bounded IDs and languages. Runtime errors never expose guest exception strings, request URLs, credentials or cookies in the report.
+
+Complete owned-flow evidence requires all five exact APK/source stages. Partial fixtures, generic empty-response probes, browser harness requirements, missing APIs and unexecuted cells remain distinct. Dependency reference counts are not conformance results. Package updates do not inherit old proof, and package-load failures do not fabricate source indices. "Verified offline" does not verify live sites or every optional branch.
+
+The build-52 full audit's next HTTP gaps affect five multipart packages and four Headers-companion packages. Multipart builders now retain ordered, GC-traced parts and immutable snapshots; string/binary parts, optional filenames, body-derived content headers and matching boundaries cross both HTTP bridges as raw bytes. Custom RequestBody serializers run lazily and retain errors/unknown lengths; bounded output, invalid parts and depth/budget failures have host regressions. Regular form bodies work as nested parts. No file-backed upload or unrestricted streaming support is added.
+
+Root Headers.Companion, preserve ordered duplicate headers and validate vararg/map factory input. Jsoup evaluator Class/Id constructors previously stored bare values that the pinned consumer mistook for tag selectors; canonical escaped literal selectors preserve receiver scope and ordering. Supply the existing Swift HTTP user agent as a virtual `http.agent` property on every command; older/offline callers use `AnimeCompanion/MangaRuntime`. Other virtual properties keep their old behavior and guest environment access remains denied.
+
+| Exact published APK, source 0 | New complete owned flow |
+| --- | --- |
+| Digital Comic Museum 1.6.0 | Popular catalog, raw UTF-8 multipart search, details, chapter, ordered lazy page URLs, image resolution and transport |
+| Rawkuma 1.6.41 (NatsuId) | Nonce request, multipart catalog, generated JSON DTOs, title metadata, dated chapters, ordered pages and image transport |
+| Manhuawu 1.6.0 (MCCMS) | Headers factory, evaluator-based catalog/details, chapter order, pages, source-owned image request and transport |
+
+All 139 Rust regressions and 16 audit parser/evidence/privacy checks pass locally; warnings-denied Clippy, formatting, production-library and license-notice generation also pass. Real Chromium tests cover matrix filters, identities, evidence dialogs, CSV, pagination, API-backlog navigation, phone layout and absence of HTTP requests. The nine-package HTTP audit runs 68 probes with no observed API gaps and four unexecuted cells. The committed catalog-wide matrix has complete static inventories for all 1,444 APKs and 14 complete owned flows; its 11,342 operation probes leave 3,887 known cells unexecuted and 271 packages unprobed. Limits remain visible rather than becoming unsupported/verified claims. Three native Swift/C/Rust tests reuse these neutral fixtures; the multipart case additionally checks the C callback's raw bytes in Swift. Native execution awaits hosted Xcode CI. [BUILD_STATUS.md](../../BUILD_STATUS.md) records snapshot coverage and hosted results.
+
 ## Build and verification
 
 ```bash

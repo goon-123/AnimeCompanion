@@ -1,0 +1,7 @@
+{
+  "name": "anime-companion-manga-audit-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Development-only browser verification of the generated compatibility matrix",
+  "devDependencies": { "playwright": "1.55.0" }
+}

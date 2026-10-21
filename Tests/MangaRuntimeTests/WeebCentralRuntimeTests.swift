@@ -64,6 +64,8 @@ final class OwnedExtensionFixtureHTTP {
     var failChapters = false
     var urls: [String] = []
     var headersByURL: [String: [[String]]] = [:]
+    var bodiesByURL: [String: Data] = [:]
+    var methodsByURL: [String: String] = [:]
 
     init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil, responseHeaders: [[String]] = []) throws {
         self.responseHeaders = responseHeaders
@@ -102,6 +104,8 @@ final class OwnedExtensionFixtureHTTP {
         guard let request = try? JSONDecoder().decode(Request.self, from: Data(bytes: input, count: strlen(input))) else { return nil }
         urls.append(request.url)
         headersByURL[request.url] = request.headers
+        methodsByURL[request.url] = request.method
+        if let encoded = request.bodyBase64 { bodiesByURL[request.url] = Data(base64Encoded: encoded) }
         let failure = failChapters && request.url.hasSuffix("full-chapter-list")
         var components = URLComponents(string: request.url)
         components?.query = nil
@@ -111,7 +115,7 @@ final class OwnedExtensionFixtureHTTP {
         guard let data = try? JSONSerialization.data(withJSONObject: response), let json = String(data: data, encoding: .utf8) else { return nil }
         return strdup(json)
     }
-    private struct Request: Decodable { let url: String; let headers: [[String]] }
+    private struct Request: Decodable { let url: String; let headers: [[String]]; let method: String?; let bodyBase64: String? }
     private struct Envelope<T: Decodable>: Decodable { let ok: Bool; let data: T?; let error: String? }
 }
 

@@ -7,6 +7,9 @@ on:
       - 'scripts/manga_audit/**'
       - 'scripts/tests/test_manga_audit.py'
       - 'scripts/audit-manga-compatibility.py'
+      - 'scripts/render-manga-matrix.py'
+      - 'scripts/test-manga-matrix.cjs'
+      - 'Tools/MangaAudit/**'
       - 'scripts/test-manga-runtime.sh'
       - 'scripts/prepare-manga-interpreter.py'
       - '.github/workflows/manga-compatibility-audit.yml'
@@ -47,6 +50,11 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p test_manga_audit.py -v
       - name: Audit every APK in the frozen catalog without website requests
         run: python3 scripts/audit-manga-compatibility.py --workers 4 --deadline-seconds 1200
+      - name: Verify the searchable matrix in a real browser
+        run: |
+          npm --prefix Tools/MangaAudit ci --ignore-scripts --no-audit --no-fund
+          node Tools/MangaAudit/node_modules/playwright/cli.js install --with-deps chromium --only-shell
+          node scripts/test-manga-matrix.cjs
       - name: Upload reproducible compatibility matrix and API inventory
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,6 +63,10 @@ jobs:
           path: |
             build/manga-audit/compatibility.json
             build/manga-audit/compatibility.md
+            build/manga-audit/compatibility.html
+            build/manga-audit/compatibility.csv
+            build/manga-audit/compatibility-matrix.json
             build/manga-audit/runtime-inventory.json
+            build/manga-matrix-browser
           if-no-files-found: ignore
           retention-days: 30

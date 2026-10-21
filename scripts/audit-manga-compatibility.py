@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 
 from manga_audit.dex import Dex, apk_inventory, unmatched_references, MAX_APK
+from manga_audit.dependencies import dependency_families
 from manga_audit.report import fixture_evidence, passing_tests, write_report
 from manga_audit.runtime import probe, safe_reference
 
@@ -119,8 +120,25 @@ def catalog(ref):
         validate_url(url)
         if not url.startswith("https://github.com/keiyoushi/extensions/releases/download/"):
             raise ValueError("Unexpected catalog APK origin")
+        public_sources = []
+        for encoded_source in entry.get(8, []):
+            source = protobuf(encoded_source)
+            source_id = source[1][0]
+            if source_id >= 1 << 63:
+                source_id -= 1 << 64
+            source_name, language = source[2][0].decode(), source[3][0].decode()
+            if len(source_name) > 240 or not re.fullmatch(r"[A-Za-z0-9-]{1,12}", language):
+                raise ValueError("Invalid public source metadata")
+            # Names come from the public frozen catalog, never guest responses;
+            # home URLs and arbitrary guest display strings stay out of reports.
+            public_sources.append({"id": str(source_id), "name": source_name, "language": language})
+        display_name = entry[1][0].decode()
+        if len(display_name) > 240 or len(public_sources) > 512:
+            raise ValueError("Catalog display metadata exceeds limit")
         entries.append({"package": package, "name": name, "sha256": digest,
-                        "url": url, "api": entry[4][0].decode()})
+                        "url": url, "api": entry[4][0].decode(),
+                        "displayName": display_name, "version": entry[6][0].decode(),
+                        "declaredSources": public_sources})
     if len({entry["package"] for entry in entries}) != len(entries):
         raise ValueError("Duplicate catalog package")
     return entries, {"indexSHA256": hashlib.sha256(raw).hexdigest(),
@@ -145,7 +163,7 @@ def verified_apk(entry, cache):
 
 
 def read_probe(path):
-    operations, sources = [], []
+    operations, sources, metadata = [], [], []
     if path.exists():
         for line in path.read_text().splitlines():
             try:
@@ -157,7 +175,8 @@ def read_probe(path):
                 operations.append(row)
             elif row.get("record") == "sources":
                 sources = row["indices"]
-    return {"operations": operations, "sources": sources}
+                metadata = row.get("metadata", [])
+    return {"operations": operations, "sources": sources, "sourceMetadata": metadata}
 
 
 def run_probe(library, apk, modern, seconds, directory):
@@ -197,6 +216,7 @@ def audit_entry(entry, args, capabilities, bundled, fixtures, passed):
         # Only bounded API identifiers enter reports; never guest content strings.
         missing = [list(ref) for ref in missing if safe_reference(ref)]
         row.update(inventoryStatus="complete", methodReferences=len(inventory["references"]),
+                   dependencyFamilies=dependency_families(inventory),
                    unmatchedReferenceCount=len(missing), unmatchedReferences=missing[:256],
                    unmatchedReferencesTruncated=len(missing) > 256, _unmatched=missing)
     except Exception as error:

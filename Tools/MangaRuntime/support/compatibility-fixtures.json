@@ -559,6 +559,39 @@
         "sources": [0],
         "stages": ["popular", "details", "chapters", "pages", "images"]
       }]
+    },
+    {
+      "name": "tachiyomi-en.digitalcomicmuseum-v1.6.0.apk",
+      "sha256": "167187db99558eb918115dabbb33320f81968437565771385872a27391b6b468",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-en.digitalcomicmuseum-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.digitalcomicmuseum",
+      "cases": [{
+        "test": "network_extension_tests::digitalcomicmuseum_multipart_search_catalog_book_lazy_pages_and_images",
+        "sources": [0],
+        "stages": ["popular", "search", "details", "chapters", "pages", "images"]
+      }]
+    },
+    {
+      "name": "tachiyomi-ja.rawkuma-v1.6.41.apk",
+      "sha256": "4ac058403b9fd7ec2b5c9913c2dafa6022e06eb3ac8a306e297795f58cf9fc49",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-2/tachiyomi-ja.rawkuma-v1.6.41.apk",
+      "package": "eu.kanade.tachiyomi.extension.ja.rawkuma",
+      "cases": [{
+        "test": "network_extension_tests::natsuid_multipart_nonce_dtos_dated_chapters_and_ordered_reader",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters", "pages", "images"]
+      }]
+    },
+    {
+      "name": "tachiyomi-zh.manhuawu-v1.6.0.apk",
+      "sha256": "a025a564c91368037728ad35da7975b3adbbbee88a1a7370e9e7e7c0f63c2257",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-zh.manhuawu-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.zh.manhuawu",
+      "cases": [{
+        "test": "network_extension_tests::mccms_header_factory_catalog_details_chapters_pages_and_images",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters", "pages", "images"]
+      }]
     }
   ]
 }

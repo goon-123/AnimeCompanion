@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Manga compatibility matrix and HTTP support (0.25.6 / build 53)
+
+The [searchable compatibility matrix](docs/manga-compatibility/README.md) shows exact-version source evidence for catalog, details, chapters, pages and image transport. Filter by name, language or status; inspect the missing API and named tests; export a CSV. Verified offline, partial, runtime-blocked and unverified results stay separate. The audit also ranks shared dependency families to guide the next runtime fixes.
+
+Add real multipart request bodies, bounded immutable Header factories, literal Jsoup class/ID evaluators and the host's default HTTP user agent. Digital Comic Museum, Rawkuma and Manhuawu gain complete owned reading-flow regressions. All 139 Rust and 16 audit tests pass locally, along with browser interactions on desktop and phone. Hosted native and IPA checks are tracked in [build status](BUILD_STATUS.md). Full extension and live-site compatibility remains unfinished.
+
 ### More shared manga extension APIs (0.25.5 / build 52)
 
 Add standard Locale constants and localized chapter-date text, Kotlin random byte generation and collection marker interfaces. Complete reader replays also expose and fix shared hex defaults, nullable Boolean decoding, float boxing, map lookup, URL form encoding and millisecond Instant addition.
