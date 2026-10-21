@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import AnimeCore
 @testable import AnimeCompanion
 
@@ -102,6 +103,53 @@ final class FrameworkCompatibilityRuntimeTests: XCTestCase {
         XCTAssertTrue(host.urls.isEmpty)
         try flow(catalogHost: host, bookHost: host, readerHost: host, id: "6286738698187452081", settings: [:],
                  expectedImages: ["https://images.example/media/photos/1/owned-page-2.webp", "https://images.example/media/photos/1/owned-page-1.webp"])
+    }
+    private func pixel(_ image: CGImage, y: Int) throws -> [UInt8] {
+        let sample = try XCTUnwrap(image.cropping(to: CGRect(x: 16, y: y, width: 1, height: 1)))
+        var rgba = [UInt8](repeating: 0, count: 4)
+        try rgba.withUnsafeMutableBytes { storage in
+            let context = try XCTUnwrap(CGContext(data: storage.baseAddress, width: 1, height: 1,
+                bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+            context.draw(sample, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        return rgba
+    }
+    func testJinmanScrambledCodecsAndGzipRestoreStripPixelsThroughNativeBridge() throws {
+        let url = "https://images.example/media/photos/260000/owned.webp"
+        for name in ["owned-bands.png", "owned-bands.jpg", "owned-bands.webp", "owned-bands.webp.gz"] {
+            let compressed = name.hasSuffix(".gz")
+            let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-zh.jinmantiantang-v1.6.59.apk",
+                responses: [url: try fixture(name)], responseHeaders: compressed ? [["Content-Encoding", "gzip"]] : [])
+            let payload: ImagePayload = try host.execute(["op": "image", "image": ["index": 0, "url": "", "imageURL": url]])
+            let data = try XCTUnwrap(Data(base64Encoded: payload.bodyBase64))
+            XCTAssertEqual(Array(data.prefix(2)), [255, 216], name)
+            let output = try XCTUnwrap(UIImage(data: data)?.cgImage)
+            let originalName = compressed ? "owned-bands.webp" : name
+            let original = try XCTUnwrap(UIImage(data: fixture(originalName))?.cgImage)
+            XCTAssertEqual(output.width, 32)
+            XCTAssertEqual(output.height, 163)
+            var outputY = 0
+            for (index, sourceY) in [144, 128, 112, 96, 80, 64, 48, 32, 16, 0].enumerated() {
+                let height = index == 0 ? 19 : 16
+                let expected = try pixel(original, y: sourceY + height / 2)
+                let actual = try pixel(output, y: outputY + height / 2)
+                for channel in 0..<3 {
+                    XCTAssertLessThanOrEqual(abs(Int(expected[channel]) - Int(actual[channel])), 25, "\(name), strip \(index)")
+                }
+                outputY += height
+            }
+        }
+    }
+    func testJinmanModernGifAndGzippedGifPreserveEveryAnimationByte() throws {
+        let url = "https://images.example/media/photos/300000/owned.webp"
+        let expected = try fixture("owned-animation.gif")
+        for name in ["owned-animation.gif", "owned-animation.gif.gz"] {
+            let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-zh.jinmantiantang-v1.6.59.apk",
+                responses: [url: try fixture(name)], responseHeaders: name.hasSuffix(".gz") ? [["Content-Encoding", "gzip"]] : [])
+            let payload: ImagePayload = try host.execute(["op": "image", "image": ["index": 0, "url": "", "imageURL": url]])
+            XCTAssertEqual(Data(base64Encoded: payload.bodyBase64), expected, name)
+        }
     }
     private struct SettingsSchema: Decodable { let settings: [Setting] }
     private struct Setting: Decodable { let key: String; let control: String; let choices: [Choice] }

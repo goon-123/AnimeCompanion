@@ -1,5 +1,20 @@
 # Manga compatibility matrix
 
+Build 56 completes the owned JinmanTiantang image replay through shared Okio peek,
+bitmap codecs/rectangle copies and bounded gzip streams. The pinned APK restores
+PNG/JPEG/WebP input, including gzip, through all three strip-count branches; every
+output row is checked with JPEG tolerance. Ordinary and gzipped animated GIFs
+retain every byte. The [focused matrix](build56/compatibility.html),
+[CSV](build56/compatibility.csv) and [JSON](build56/compatibility.json) inventory
+2/2 packages, enumerate four sources and record 30 production C-ABI preflights,
+with no expected cells left unexecuted. Komga source 0 and Jinman are verified
+against owned fixtures; Komga's other two identities remain enumeration-only.
+Runtime evidence points to `64d70e7584d54af37735282ff3edf03f21cf1644`.
+Native iPhone/iPad checks and live availability are separate. The full-catalog
+baseline remains build 53; this selected-package result is not a catalog-wide
+success rate. Bitmap decode options, other pixel storage/paint/transform paths,
+WebP output encoding, login/check-in and browser paths remain outside this result.
+
 Build 55 fixes the shared Komga coroutine and JinmanTiantang typed-array settings blockers. Komga source 0 has a complete owned reading replay; its other two source identities enumerate. Jinman has catalog/details/dated-chapter/ordered-page evidence and a legacy unscrambled-image replay, but modern scrambled images still encounter missing `okio.BufferedSource.peek()`. It remains partial. Native iPhone/iPad checks and live availability are separate from this offline evidence. The full-catalog baseline remains build 53. The [focused matrix](build55/compatibility.html), [CSV](build55/compatibility.csv) and [JSON](build55/compatibility.json) inventory both packages, enumerate four sources and record 30 production C-ABI preflights against runtime code `001e361119e0adbd21c18a20a7ecd58b42ea03bc`. One row is verified offline, one partial and two have enumeration-only evidence. All expected generic probe cells ran. The scrambled-image blocker is established by its named real-APK regression, beyond the generic image probe's synthetic path.
 
 Build 54's [focused matrix](build54/compatibility.html) and [CSV](build54/compatibility.csv) cover the eleven packages targeted in this batch. It inventories all eleven, enumerates 118 source instances and records 88 offline preflights. LANraragi (1), Mango and StashApp have complete owned reading-flow evidence; one row has a confirmed runtime blocker and 115 rows remain unverified. MangaDot's large source factory leaves 748 generic operation cells unexecuted. This is a selected-package snapshot against runtime code `adc98e3803731ab3d31733eb620b8a8e24f17d61`, not a new full-catalog success rate. The complete catalog baseline below remains explicitly build 53.

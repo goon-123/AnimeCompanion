@@ -22,9 +22,11 @@ mod coroutine_compat;
 mod date_compat;
 mod date_zone_compat;
 mod diagnostics;
+mod graphics_compat;
 mod headers_compat;
 mod http_query_compat;
 mod http_wire;
+mod image_io_compat;
 mod java_compat;
 #[cfg(test)]
 mod java_kotlin_extension_tests;
@@ -37,6 +39,7 @@ mod local_date_compat;
 mod locale_compat;
 mod multipart_compat;
 mod okio_compat;
+mod okio_peek_compat;
 mod reflection_compat;
 mod regex_compat;
 mod serialization_compat;
@@ -1141,6 +1144,9 @@ where
     }
     jsoup_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     okio_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    okio_peek_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    image_io_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    graphics_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     collection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     browser_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

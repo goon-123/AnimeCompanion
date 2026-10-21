@@ -207,16 +207,105 @@ fn jinman_catalog_dated_book_ordered_pages_and_unscrambled_image() {
         [0, 255, 23, 128]
     );
 }
-#[test]
-fn jinman_scrambled_images_report_the_remaining_okio_peek_gap() {
+fn owned_image(name: &str) -> Vec<u8> {
+    std::fs::read(format!(
+        "{}/../../Tests/MangaRuntimeTests/OwnedFixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+}
+fn jinman_image(aid: u32, body: Vec<u8>, gzip: bool) -> Result<Vec<u8>, String> {
+    use std::io::Write;
+    let body = if gzip {
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        encoder.write_all(&body).unwrap();
+        encoder.finish().unwrap()
+    } else {
+        body
+    };
     let bytes = apk("tachiyomi-zh.jinmantiantang-v1.6.59.apk");
-    let result=execute(&bytes,serde_json::from_value(json!({"op":"image","modern":true,"image":{"index":0,"url":"","imageURL":"https://images.example/media/photos/300000/owned.webp"}})).unwrap(),|r| {
-        assert_eq!(r.url,"https://images.example/media/photos/300000/owned.webp");
-        HttpResp{code:200,message:"OK".into(),headers:vec![],body:Some(vec![137,80,78,71])}
-    });
-    let error = result.unwrap_err();
-    assert!(
-        error.contains("no method peek ()Lokio/BufferedSource;"),
-        "{error}"
-    );
+    let url = format!("https://images.example/media/photos/{aid}/owned.webp");
+    let result = execute(
+        &bytes,
+        serde_json::from_value(
+            json!({"op":"image","modern":true,"image":{"index":0,"url":"","imageURL":url}}),
+        )
+        .unwrap(),
+        move |r| {
+            assert_eq!(r.url, url);
+            HttpResp {
+                code: 200,
+                message: "OK".into(),
+                headers: if gzip {
+                    vec![
+                        ("Content-Encoding".into(), "gzip".into()),
+                        ("Content-Length".into(), body.len().to_string()),
+                    ]
+                } else {
+                    vec![]
+                },
+                body: Some(body.clone()),
+            }
+        },
+    )?;
+    STANDARD
+        .decode(result["bodyBase64"].as_str().unwrap())
+        .map_err(|e| e.to_string())
+}
+#[test]
+fn jinman_scrambled_png_jpeg_webp_and_gzip_restore_pixels_through_guest_bytecode() {
+    // Explicit source strip starts for the three published row-count branches.
+    for (aid, starts) in [
+        (260000, vec![144, 128, 112, 96, 80, 64, 48, 32, 16, 0]),
+        (
+            300000,
+            vec![
+                150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0,
+            ],
+        ),
+        (500000, vec![140, 120, 100, 80, 60, 40, 20, 0]),
+    ] {
+        for name in ["owned-bands.png", "owned-bands.jpg", "owned-bands.webp"] {
+            let input = owned_image(name);
+            let original = image::load_from_memory(&input).unwrap().to_rgb8();
+            for gzip in [false, true] {
+                let bytes = jinman_image(aid, input.clone(), gzip)
+                    .unwrap_or_else(|e| panic!("{aid}/{name}/gzip={gzip}: {e}"));
+                assert!(bytes.starts_with(&[255, 216]), "Output must be a real JPEG");
+                let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
+                assert_eq!(decoded.dimensions(), (32, 163));
+                let mut out_y = 0;
+                for (index, &source_y) in starts.iter().enumerate() {
+                    let height = if index == 0 {
+                        163 / starts.len() as u32 + 163 % starts.len() as u32
+                    } else {
+                        163 / starts.len() as u32
+                    };
+                    for row in 0..height {
+                        let expected = original.get_pixel(16, source_y + row);
+                        let actual = decoded.get_pixel(16, out_y + row);
+                        for channel in 0..3 {
+                            assert!(
+                                (i16::from(expected[channel]) - i16::from(actual[channel])).abs() <= 30,
+                                "{aid}/{name}/gzip={gzip}, strip={index}, row={row}: {expected:?} != {actual:?}"
+                            );
+                        }
+                    }
+                    out_y += height;
+                }
+                assert_eq!(out_y, 163);
+            }
+        }
+    }
+}
+#[test]
+fn jinman_modern_gif_and_gzipped_gif_preserve_animation_bytes() {
+    let bytes = owned_image("owned-animation.gif");
+    for gzip in [false, true] {
+        assert_eq!(jinman_image(300000, bytes.clone(), gzip).unwrap(), bytes);
+    }
+}
+#[test]
+fn jinman_malformed_scrambled_image_fails_without_placeholder_output() {
+    assert!(jinman_image(300000, b"not an image".to_vec(), false).is_err());
 }

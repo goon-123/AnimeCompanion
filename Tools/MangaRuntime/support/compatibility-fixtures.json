@@ -29,6 +29,16 @@
           "sources": [
             0
           ]
+        },
+        {
+          "test": "java_kotlin_extension_tests::jinman_scrambled_png_jpeg_webp_and_gzip_restore_pixels_through_guest_bytecode",
+          "stages": ["images"],
+          "sources": [0]
+        },
+        {
+          "test": "java_kotlin_extension_tests::jinman_modern_gif_and_gzipped_gif_preserve_animation_bytes",
+          "stages": ["images"],
+          "sources": [0]
         }
       ]
     },
