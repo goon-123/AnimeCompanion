@@ -65,6 +65,14 @@ bdcf84f tachiyomi-all.stashapp-v1.6.0.apk
 4217666-2 tachiyomi-zh.noyacg-v1.6.7.apk
 ff521c1 tachiyomi-all.komga-v1.6.74.apk
 2ba5b61 tachiyomi-zh.jinmantiantang-v1.6.59.apk
+bdcf84f tachiyomi-all.tappytoon-v1.6.0.apk
+cfc0199 tachiyomi-ar.arabmanhwa-v1.6.57.apk
+7363e42 tachiyomi-ar.procomic-v1.6.0.apk
+7363e42 tachiyomi-es.codearc-v1.6.2.apk
+39e8efc tachiyomi-es.inmanga-v1.6.1.apk
+4217666-1 tachiyomi-es.lectorjpg-v1.6.50.apk
+4217666-1 tachiyomi-ja.linemanga-v1.6.1.apk
+cfc0199 tachiyomi-ru.nudemoon-v1.6.32.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -109,8 +117,17 @@ expected = {
     'tachiyomi-zh.noyacg-v1.6.7.apk': '119100c7bba5b7158644e0dd75ad0a8aa051b234fab268fe85ed0e1595b1971d',
     'tachiyomi-all.komga-v1.6.74.apk': '0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9',
     'tachiyomi-zh.jinmantiantang-v1.6.59.apk': 'baebb449741b28f110f88408ff5a7edf6fc76fae0d60134e4b71c15cb7c3d56a',
+    'tachiyomi-all.tappytoon-v1.6.0.apk': '0512c19b9a1b3ad6e846cb62e5eb3a1fc640c4eddd6f1c6f2ec94eb8b1cc48b5',
+    'tachiyomi-ar.arabmanhwa-v1.6.57.apk': '6f1255bf46426d80c61cb244aef0fe091c1332161178afb7f6323d3e86a7c018',
+    'tachiyomi-ar.procomic-v1.6.0.apk': '96cdbd7033c7b050d70d9fa73531c7020beb005985c25b2e77b043ac2054e444',
+    'tachiyomi-es.codearc-v1.6.2.apk': 'fae361c711f31104e4303dec63c69c1c4554e5b85de8ddd03caa5e1a2516b836',
+    'tachiyomi-es.inmanga-v1.6.1.apk': '10d0bcc52ecb0e272c145af4d2c7a05f1b6dcecd6c415012e5f216284a4f15d0',
+    'tachiyomi-es.lectorjpg-v1.6.50.apk': '13135c71b001bf86d601f7eeda291dabc5541d2caadfd4dc3ddbb289f7be2f76',
+    'tachiyomi-ja.linemanga-v1.6.1.apk': '41dac9936f81e2446a86b14e76076fcf41551dcf59eddebb092b99714166dca7',
+    'tachiyomi-ru.nudemoon-v1.6.32.apk': 'ef4d485fd8abe4ed5357094a4cfb5b14ef5945990512707279b058b55b16218b',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
 PY
+python3 -c 'import hashlib; from pathlib import Path; assert hashlib.sha256(Path("Tools/MangaRuntime/test-support/shared-jvm-probe.dex").read_bytes()).hexdigest() == "5d4c0a97d6489906b0ba3b8380cd128a235fd5bcffcbe3762fe4f5f919ee1006"'
 MANGA_TEST_APK_DIR="$fixture_dir" cargo test --locked --manifest-path Tools/MangaRuntime/Cargo.toml -j 2

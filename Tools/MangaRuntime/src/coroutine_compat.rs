@@ -1,6 +1,10 @@
 //! Bounded coroutine contexts for the single guest thread. Elements and job
 //! parents are arena-traced; no process-global guest references or OS threads.
-use dexvm::vm::{error::JvmError, object::Native, FieldRef, NatErr, NativeEntry, Vm};
+use dexvm::vm::{
+    error::JvmError,
+    object::{ArrayData, Native},
+    FieldRef, NatErr, NativeEntry, Vm,
+};
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
 const CONTEXT: &str = "Lkotlin/coroutines/CoroutineContext;";
@@ -326,26 +330,187 @@ fn coroutine_scope(vm: &mut Vm, args: &[JValue]) -> R {
     .map_err(|e| java(vm, e))
 }
 fn launch(vm: &mut Vm, args: &[JValue]) -> R {
+    let task = async_task(vm, args)?;
+    if let Some(Native::Deferred { error, .. }) = vm.payload_of(task) {
+        if !error.is_null_ref() {
+            return Err(NatErr::Throw(error.as_obj()));
+        }
+    }
+    Ok(task)
+}
+// App async fields: parent, state (-1 lazy, 0 running, 1 cancelled, 2 done),
+// cause, child scope, block. Native::Deferred retains the value/exception.
+pub(super) fn async_task(vm: &mut Vm, args: &[JValue]) -> R {
     let scope = task_scope(vm, args)?;
     let context = scope_context(vm, scope)?;
     let k = singleton(vm, JOB, "Key", "Lkotlinx/coroutines/Job$Key;")?;
     let parent = get(vm, &[context, k])?;
-    let job = new_job(vm, parent)?;
+    let default = args.get(4).is_some_and(|v| v.as_int() & 2 != 0);
+    let lazy = if default {
+        false
+    } else {
+        matches!(
+            vm.payload_of(args[2]),
+            Some(Native::Enum { ordinal: 1, .. })
+        )
+    };
+    let task = vm
+        .alloc_native(
+            "Lkotlinx/coroutines/Deferred;",
+            Native::Deferred {
+                value: JValue::Null,
+                error: JValue::Null,
+            },
+        )
+        .map_err(NatErr::Fatal)?;
+    let child = plus(vm, &[context, task])?;
+    let scope = super::coroutine_compat::scope(vm, child)?;
+    vm.arena.objects[task.as_obj() as usize].fields =
+        vec![parent, JValue::Int(-1), JValue::Null, scope, args[3]];
+    if !lazy {
+        start_task(vm, &[task])?;
+    }
+    Ok(task)
+}
+fn start_task(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[0].is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    let fields = vm.arena.objects[args[0].as_obj() as usize].fields.clone();
+    if fields.len() != 5 || fields[1] != JValue::Int(-1) {
+        return Ok(JValue::Int(0));
+    }
+    vm.arena.objects[args[0].as_obj() as usize].fields[1] = JValue::Int(0);
+    let scope = fields[3];
+    if !job_active(vm, fields[0])? {
+        let cause = JValue::Obj(vm.throwable_of(
+            "Ljava/util/concurrent/CancellationException;",
+            "Coroutine parent cancelled",
+        ));
+        let object = &mut vm.arena.objects[args[0].as_obj() as usize];
+        object.fields[1] = JValue::Int(1);
+        object.fields[2] = cause;
+        object.fields[4] = JValue::Null;
+        object.native = Some(Native::Deferred {
+            value: JValue::Null,
+            error: cause,
+        });
+        return Ok(JValue::Int(0));
+    }
+    let context = scope_context(vm, scope)?;
     let previous = enter(vm, context)?;
-    let result = vm.invoke_virtual_args(
-        args[3],
-        "invoke",
-        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-        vec![scope, JValue::Null],
-    );
+    let result = super::continuation_compat::run_block(vm, fields[4], scope, context);
     restore(vm, previous)?;
-    result.map_err(|e| java(vm, e))?;
-    vm.arena.objects[job.as_obj() as usize].fields[1] = JValue::Int(2);
-    Ok(job)
+    let (value, error) = match result {
+        Ok(value) => (value, JValue::Null),
+        Err(NatErr::Throw(id)) => (JValue::Null, JValue::Obj(id)),
+        Err(error) => return Err(error),
+    };
+    let object = &mut vm.arena.objects[args[0].as_obj() as usize];
+    if object.fields[1] != JValue::Int(1) {
+        object.fields[1] = JValue::Int(2);
+        object.fields[2] = error;
+        object.native = Some(Native::Deferred { value, error });
+    }
+    object.fields[4] = JValue::Null;
+    Ok(JValue::Int(1))
+}
+pub(super) fn await_task(vm: &mut Vm, args: &[JValue]) -> R {
+    start_task(vm, &args[..1])?;
+    let fields = &vm.arena.objects[args[0].as_obj() as usize].fields;
+    if fields.len() == 5 && fields[1] == JValue::Int(1) {
+        let cause = fields[2];
+        return Err(NatErr::Throw(if cause.is_null_ref() {
+            vm.throwable_of(
+                "Ljava/util/concurrent/CancellationException;",
+                "Task cancelled",
+            )
+        } else {
+            cause.as_obj()
+        }));
+    }
+    if fields.len() == 5 && fields[1] != JValue::Int(2) {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IllegalStateException;",
+            "Task is still running",
+        )));
+    }
+    match vm.payload_of(args[0]) {
+        Some(Native::Deferred { value, error }) if error.is_null_ref() => Ok(value),
+        Some(Native::Deferred { error, .. }) => Err(NatErr::Throw(error.as_obj())),
+        _ => Err(NatErr::Throw(vm.err_iae("Invalid deferred result"))),
+    }
+}
+pub(super) fn is_app_task(vm: &Vm, value: JValue) -> bool {
+    matches!(value,JValue::Obj(id) if vm.arena.objects[id as usize].fields.len()==5 && matches!(vm.arena.objects[id as usize].native,Some(Native::Deferred{..})))
+}
+fn completed(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[0].is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    Ok(JValue::Int(i32::from(
+        vm.arena.objects[args[0].as_obj() as usize]
+            .fields
+            .get(1)
+            .is_some_and(|v| matches!(v, JValue::Int(1 | 2))),
+    )))
+}
+fn cancelled(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[0].is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    let fields = &vm.arena.objects[args[0].as_obj() as usize].fields;
+    Ok(JValue::Int(i32::from(
+        fields.get(1) == Some(&JValue::Int(1)) || fields.get(2).is_some_and(|v| !v.is_null_ref()),
+    )))
+}
+fn join(vm: &mut Vm, args: &[JValue]) -> R {
+    start_task(vm, &args[..1])?;
+    unit(vm)
+}
+fn unit(vm: &mut Vm) -> R {
+    singleton(vm, "Lkotlin/Unit;", "INSTANCE", "Lkotlin/Unit;")
+}
+fn run_blocking(vm: &mut Vm, args: &[JValue]) -> R {
+    let context = if args[0].is_null_ref() || args.get(2).is_some_and(|v| v.as_int() & 1 != 0) {
+        empty(vm)?
+    } else {
+        args[0]
+    };
+    let scope = create_scope(vm, &[context])?;
+    let context = scope_context(vm, scope)?;
+    let previous = enter(vm, context)?;
+    let result = super::continuation_compat::run_block(vm, args[1], scope, context);
+    restore(vm, previous)?;
+    result
+}
+fn delay(vm: &mut Vm, args: &[JValue]) -> R {
+    let duration = args[0].as_long();
+    if duration <= 0 {
+        return unit(vm);
+    }
+    let start = std::time::Instant::now();
+    let context = current(vm)?;
+    let scope = scope(vm, context)?;
+    loop {
+        charge(vm, 1)?;
+        ensure_active(vm, scope)?;
+        super::browser_compat::check_deadline(vm)?;
+        let elapsed = start.elapsed().as_millis();
+        if elapsed >= duration as u128 {
+            break;
+        }
+        // No guest timers are skipped. The operation deadline bounds the wait,
+        // and cancellation/budget checks run between short sleeping slices.
+        std::thread::sleep(std::time::Duration::from_millis(
+            (duration as u128 - elapsed).min(5) as u64,
+        ));
+    }
+    unit(vm)
 }
 fn await_all(vm: &mut Vm, args: &[JValue]) -> R {
     let values = match vm.payload_of(args[0]) {
-        Some(Native::List(v) | Native::Set(v)) => v,
+        Some(Native::List(v) | Native::Set(v) | Native::Array(ArrayData::Obj(v))) => v,
         _ => return Err(NatErr::Throw(vm.err_npe())),
     };
     charge(vm, values.len())?;
@@ -436,13 +601,40 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         (SCOPE,"getCoroutineContext","()Lkotlin/coroutines/CoroutineContext;",true,get_context),
         ("Lkotlinx/coroutines/SupervisorKt;","SupervisorJob$default","(Lkotlinx/coroutines/Job;ILjava/lang/Object;)Lkotlinx/coroutines/CompletableJob;",false,supervisor),
         (JOB,"isActive","()Z",true,job_is_active),
+        (JOB,"isCompleted","()Z",true,completed),
+        (JOB,"isCancelled","()Z",true,cancelled),
+        (JOB,"start","()Z",true,start_task),
+        (JOB,"join","(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",true,join),
         (JOB,"cancel$default","(Lkotlinx/coroutines/Job;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V",false,job_cancel),
         (JOB,"cancel","(Ljava/util/concurrent/CancellationException;)V",true,job_cancel),
         ("Lkotlinx/coroutines/CoroutineScopeKt;","isActive","(Lkotlinx/coroutines/CoroutineScope;)Z",false,active),
         ("Lkotlinx/coroutines/CoroutineScopeKt;","coroutineScope","(Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,coroutine_scope),
         ("Lkotlinx/coroutines/AwaitKt;","awaitAll","(Ljava/util/Collection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,await_all),
+        ("Lkotlinx/coroutines/AwaitKt;","awaitAll","([Lkotlinx/coroutines/Deferred;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,await_all),
+        ("Lkotlinx/coroutines/DelayKt;","delay","(JLkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,delay),
+        ("Lkotlinx/coroutines/DelayKt;","delay-VtjQ1oo","(JLkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,delay),
+        ("Lkotlinx/coroutines/BuildersKt;","runBlockingK","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;",false,run_blocking),
+        ("Lkotlinx/coroutines/BuildersKt;","runBlockingK$default","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/lang/Object;",false,run_blocking),
+        ("Lkotlinx/coroutines/BuildersKt;","runBlocking","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;",false,run_blocking),
+        ("Lkotlinx/coroutines/BuildersKt;","runBlocking$default","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/lang/Object;",false,run_blocking),
         ("Lkotlinx/coroutines/BuildersKt;","launch$default","(Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/CoroutineContext;Lkotlinx/coroutines/CoroutineStart;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lkotlinx/coroutines/Job;",false,launch),
     ] {vm.register_native(NativeEntry {class,name,sig,instance,f})?;}
+    let class = "Lkotlinx/coroutines/CoroutineStart;";
+    super::kotlin_type_compat::marker(vm, class);
+    for (ordinal, name) in ["DEFAULT", "LAZY", "ATOMIC", "UNDISPATCHED"]
+        .into_iter()
+        .enumerate()
+    {
+        let value = vm.alloc_native(
+            class,
+            Native::Enum {
+                name: name.into(),
+                ordinal: ordinal as i32,
+            },
+        )?;
+        super::multipart_compat::static_value(vm, class, name, class, value)?;
+    }
+    super::continuation_compat::install(vm)?;
     Ok(())
 }
 
@@ -453,6 +645,96 @@ mod tests {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();
         vm
+    }
+    fn counting_block(vm: &mut Vm, args: &[JValue]) -> R {
+        let Some(Native::IntBox(n)) = &mut vm.arena.objects[args[0].as_obj() as usize].native
+        else {
+            unreachable!()
+        };
+        *n += 1;
+        assert!(!args[1].is_null_ref());
+        assert!(!args[2].is_null_ref());
+        Ok(vm.alloc_string("owned"))
+    }
+    fn delayed_block(vm: &mut Vm, args: &[JValue]) -> R {
+        delay(vm, &[JValue::Long(50), args[2]])
+    }
+    fn block(vm: &mut Vm, f: dexvm::vm::NativeFn) -> JValue {
+        vm.register_native(NativeEntry {
+            class: "Lapp/CoroutineBlock;",
+            name: "invoke",
+            sig: "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            instance: true,
+            f,
+        })
+        .unwrap();
+        vm.alloc_native("Lapp/CoroutineBlock;", Native::IntBox(0))
+            .unwrap()
+    }
+    #[test]
+    fn lazy_tasks_start_once_retain_results_and_observe_parent_cancellation() {
+        let mut vm = vm();
+        let block = block(&mut vm, counting_block);
+        let lazy = singleton(
+            &mut vm,
+            "Lkotlinx/coroutines/CoroutineStart;",
+            "LAZY",
+            "Lkotlinx/coroutines/CoroutineStart;",
+        )
+        .unwrap();
+        let parent = new_job(&mut vm, JValue::Null).unwrap();
+        let s = scope(&mut vm, parent).unwrap();
+        let args = [s, JValue::Null, lazy, block, JValue::Int(1), JValue::Null];
+        let task = async_task(&mut vm, &args).unwrap();
+        assert!(matches!(vm.payload_of(block), Some(Native::IntBox(0))));
+        assert_eq!(job_is_active(&mut vm, &[task]).unwrap(), JValue::Int(0));
+        vm.gc(&[task.as_obj(), s.as_obj()]);
+        let result = await_task(&mut vm, &[task]).unwrap();
+        assert_eq!(vm.str_of_jvalue(result).as_deref(), Some("owned"));
+        assert_eq!(await_task(&mut vm, &[task]).unwrap(), result);
+        assert!(matches!(vm.payload_of(block), Some(Native::IntBox(1))));
+        assert_eq!(completed(&mut vm, &[task]).unwrap(), JValue::Int(1));
+        assert_eq!(cancelled(&mut vm, &[task]).unwrap(), JValue::Int(0));
+        let cancelled_task = async_task(&mut vm, &args).unwrap();
+        job_cancel(&mut vm, &[parent, JValue::Null]).unwrap();
+        assert!(matches!(
+            await_task(&mut vm, &[cancelled_task]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(vm.payload_of(block), Some(Native::IntBox(1))));
+        assert_eq!(
+            cancelled(&mut vm, &[cancelled_task]).unwrap(),
+            JValue::Int(1)
+        );
+    }
+    #[test]
+    fn delay_waits_and_checks_cancellation_timeout_and_instruction_budget() {
+        let mut vm = vm();
+        super::super::browser_compat::install(&mut vm).unwrap();
+        let start = std::time::Instant::now();
+        delay(&mut vm, &[JValue::Long(12), JValue::Null]).unwrap();
+        assert!(start.elapsed() >= std::time::Duration::from_millis(12));
+        let job = new_job(&mut vm, JValue::Null).unwrap();
+        let old = enter(&mut vm, job).unwrap();
+        job_cancel(&mut vm, &[job, JValue::Null]).unwrap();
+        assert!(matches!(
+            delay(&mut vm, &[JValue::Long(1), JValue::Null]),
+            Err(NatErr::Throw(_))
+        ));
+        restore(&mut vm, old).unwrap();
+        let b = block(&mut vm, delayed_block);
+        let result = vm.invoke_static(
+            "Lkotlinx/coroutines/TimeoutKt;",
+            "withTimeout-KLykuaI",
+            "(JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+            vec![JValue::Long(5), b, JValue::Null],
+        );
+        assert!(matches!(result, Err(JvmError::Uncaught(_))), "{result:?}");
+        vm.budget = 0;
+        assert!(matches!(
+            delay(&mut vm, &[JValue::Long(1), JValue::Null]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
     }
     fn dispatcher(vm: &mut Vm, main: bool) -> JValue {
         vm.invoke_static(
