@@ -169,16 +169,9 @@ fn with_zone(vm: &mut Vm, args: &[JValue]) -> R {
     Ok(result)
 }
 fn start_of_day(vm: &mut Vm, args: &[JValue]) -> R {
-    let Some(Native::LocalDay(day)) = vm.payload_of(args[0]) else {
-        return Err(NatErr::Throw(vm.err_npe()));
-    };
-    let millis = super::date_zone_compat::local_to_epoch(
-        vm,
-        args[1],
-        i64::from(day) * 86_400_000,
-        true,
-        None,
-    )?;
+    let day = super::local_date_compat::day(vm, args[0])?;
+    let millis =
+        super::date_zone_compat::local_to_epoch(vm, args[1], day * 86_400_000, true, None)?;
     super::date_zone_compat::zoned(vm, millis, args[1])
 }
 #[cfg(test)]
@@ -439,10 +432,7 @@ fn parsed(vm: &mut Vm, args: &[JValue]) -> Result<(i64, i32), NatErr> {
 }
 fn local_date(vm: &mut Vm, args: &[JValue]) -> R {
     let (_, day) = parsed(vm, args)?;
-    let day = u32::try_from(day)
-        .map_err(|_| NatErr::Throw(vm.err_iae("LocalDate before runtime epoch is unsupported")))?;
-    vm.alloc_native("Ljava/time/LocalDate;", Native::LocalDay(day))
-        .map_err(NatErr::Fatal)
+    super::local_date_compat::from_day(vm, i64::from(day))
 }
 fn local_datetime(vm: &mut Vm, args: &[JValue]) -> R {
     let (millis, _) = parsed(vm, args)?;
@@ -478,6 +468,9 @@ fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
     let desc = vm.str_of(vm.classes[class as usize].descriptor).to_owned();
     let (wall, has_time, offset) = match vm.payload_of(args[1]) {
         Some(Native::LocalDay(day)) => (i64::from(day) * 86_400_000, false, None),
+        Some(Native::LongBox(day)) if desc == "Ljava/time/LocalDate;" => {
+            (day * 86_400_000, false, None)
+        }
         Some(Native::EpochMillis(millis)) if desc == "Ljava/time/LocalDateTime;" => {
             (millis, true, None)
         }
@@ -761,6 +754,7 @@ fn weekday_value(vm: &mut Vm, args: &[JValue]) -> R {
 fn weekday(vm: &mut Vm, args: &[JValue]) -> R {
     let day = match vm.payload_of(args[0]) {
         Some(Native::LocalDay(day)) => i64::from(day),
+        Some(Native::LongBox(day)) => day,
         Some(Native::EpochMillis(millis)) => {
             let zone = super::date_zone_compat::object_zone(vm, args[0])?;
             super::date_zone_compat::local_millis(vm, zone, millis)?.div_euclid(86_400_000)

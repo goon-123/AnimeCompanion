@@ -14,9 +14,11 @@ const MAX_APK: usize = 32 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 96 * 1024 * 1024;
 
 mod array_compat;
+mod authenticator_compat;
 mod browser_compat;
 mod chapter_wire;
 mod collection_compat;
+mod coroutine_compat;
 mod date_compat;
 mod date_zone_compat;
 mod diagnostics;
@@ -24,11 +26,14 @@ mod headers_compat;
 mod http_query_compat;
 mod http_wire;
 mod java_compat;
+#[cfg(test)]
+mod java_kotlin_extension_tests;
 mod json_compat;
 mod json_serializer_compat;
 mod jsoup_compat;
 mod kotlin_runtime_compat;
 mod kotlin_type_compat;
+mod local_date_compat;
 mod locale_compat;
 mod multipart_compat;
 mod okio_compat;
@@ -75,21 +80,29 @@ fn abstract_function(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
 // until await. The pinned host silently converted every failed task to null.
 fn coroutine_async(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     use dexvm::vm::{error::JvmError, object::Native};
-    let (value, error) = match vm.invoke_virtual_args(
+    let scope = coroutine_compat::task_scope(vm, args)?;
+    let context = coroutine_compat::scope_context(vm, scope)?;
+    let previous = coroutine_compat::enter(vm, context)?;
+    let result = vm.invoke_virtual_args(
         args[3],
         "invoke",
         "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-        vec![args[0], JValue::Null],
-    ) {
+        vec![scope, JValue::Null],
+    );
+    coroutine_compat::restore(vm, previous)?;
+    let (value, error) = match result {
         Ok(value) => (value, JValue::Null),
         Err(JvmError::Uncaught(error)) => (JValue::Null, JValue::Obj(error)),
         Err(error) => return Err(NatErr::Fatal(error)),
     };
-    vm.alloc_native(
-        "Lkotlinx/coroutines/Deferred;",
-        Native::Deferred { value, error },
-    )
-    .map_err(NatErr::Fatal)
+    let deferred = vm
+        .alloc_native(
+            "Lkotlinx/coroutines/Deferred;",
+            Native::Deferred { value, error },
+        )
+        .map_err(NatErr::Fatal)?;
+    vm.arena.objects[deferred.as_obj() as usize].fields = vec![JValue::Null, JValue::Int(2), error];
+    Ok(deferred)
 }
 
 fn coroutine_await(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
@@ -1080,11 +1093,13 @@ where
     }
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_framework_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    authenticator_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     locale_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_zone_compat::install(ext.ctx().vm(), &command.time_zone_id).map_err(|e| e.to_string())?;
+    local_date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_runtime_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
@@ -1129,6 +1144,7 @@ where
     collection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     browser_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    coroutine_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::seed(
         &mut ext,
         command.settings_source_id.as_deref(),

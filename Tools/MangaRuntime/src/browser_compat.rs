@@ -430,16 +430,16 @@ fn with_timeout(vm: &mut Vm, args: &[JValue]) -> R {
 fn with_context(vm: &mut Vm, args: &[JValue]) -> R {
     let state = root(vm)?;
     let previous = field(vm, state, 3);
-    let main = if args[0].is_null() {
+    let context = super::coroutine_compat::merged_current(vm, args[0])?;
+    let main = if context.is_null() {
         false
     } else {
-        vm.class_desc_str(vm.arena.objects[args[0].as_obj() as usize].class)
-            .contains("MainCoroutineDispatcher")
+        super::coroutine_compat::contains_main(vm, context)?
     };
+    let scope = super::coroutine_compat::scope(vm, context)?;
+    super::coroutine_compat::ensure_active(vm, scope)?;
+    let previous_context = super::coroutine_compat::enter(vm, context)?;
     set(vm, state, 3, JValue::Int(i32::from(main)));
-    let scope = vm
-        .alloc_native("Lkotlinx/coroutines/CoroutineScope;", Native::Opaque)
-        .map_err(NatErr::Fatal)?;
     let result = invoke(
         vm,
         args[1],
@@ -447,6 +447,7 @@ fn with_context(vm: &mut Vm, args: &[JValue]) -> R {
         "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
         vec![scope, args[2]],
     );
+    super::coroutine_compat::restore(vm, previous_context)?;
     set(vm, state, 3, previous);
     result
 }
@@ -769,6 +770,7 @@ mod tests {
     fn vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         install(&mut vm).unwrap();
+        super::super::coroutine_compat::install(&mut vm).unwrap();
         vm
     }
     fn throws(vm: &mut Vm, _: &[JValue]) -> R {

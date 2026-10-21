@@ -1,8 +1,10 @@
 # Manga compatibility matrix
 
+Build 55 fixes the shared Komga coroutine and JinmanTiantang typed-array settings blockers. Komga source 0 has a complete owned reading replay; its other two source identities enumerate. Jinman has catalog/details/dated-chapter/ordered-page evidence and a legacy unscrambled-image replay, but modern scrambled images still encounter missing `okio.BufferedSource.peek()`. It remains partial. Native iPhone/iPad checks and live availability are separate from this offline evidence. The full-catalog baseline remains build 53.
+
 Build 54's [focused matrix](build54/compatibility.html) and [CSV](build54/compatibility.csv) cover the eleven packages targeted in this batch. It inventories all eleven, enumerates 118 source instances and records 88 offline preflights. LANraragi (1), Mango and StashApp have complete owned reading-flow evidence; one row has a confirmed runtime blocker and 115 rows remain unverified. MangaDot's large source factory leaves 748 generic operation cells unexecuted. This is a selected-package snapshot against runtime code `adc98e3803731ab3d31733eb620b8a8e24f17d61`, not a new full-catalog success rate. The complete catalog baseline below remains explicitly build 53.
 
-The new flows use source-configured public HTTPS servers. They verify saved custom URLs, source-owned login/API-key requests, dated chapters, ordered pages and image transport. Source-written state across commands, local/private HTTP servers, complete browser readers and live availability remain separate gaps. Komga still encounters coroutine-context construction; JinmanTiantang's settings encounter a typed-array cast error.
+The new flows use source-configured public HTTPS servers. They verify saved custom URLs, source-owned login/API-key requests, dated chapters, ordered pages and image transport. Source-written state across commands, local/private HTTP servers, complete browser readers and live availability remain separate gaps. Those build-54 Komga coroutine and JinmanTiantang typed-array settings failures are fixed by build 55; the historical matrix remains unchanged.
 
 [Open or download the matrix](compatibility.html). Save the HTML file and open it in a browser for search, language/status filters, per-source reading stages, evidence details and CSV export. The file works offline and makes no website requests.
 

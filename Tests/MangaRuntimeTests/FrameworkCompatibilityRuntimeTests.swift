@@ -70,4 +70,40 @@ final class FrameworkCompatibilityRuntimeTests: XCTestCase {
         let filter = try XCTUnwrap(variables["filter"] as? [String: Any])
         XCTAssertEqual(filter["direction"] as? String, "DESC")
     }
+    func testKomgaCoroutineContextTypedSetsReflectionAndCompleteReader() throws {
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-all.komga-v1.6.74.apk", responses: [
+            "https://library.example/api/v1/series": try fixture("komga-catalog.json"),
+            "https://library.example/api/v1/series/owned": try fixture("komga-series.json"),
+            "https://library.example/api/v1/series/owned/books": try fixture("komga-books.json"),
+            "https://library.example/api/v1/books/chapter2/pages": try fixture("komga-pages.json"),
+            "https://library.example/api/v1/books/chapter2/pages/2": bytes
+        ])
+        let settings = ["Address": "https://library.example", "API key": "owned-key"]
+        let id = "4508733312114627536"
+        try flow(catalogHost: host, bookHost: host, readerHost: host, id: id, settings: settings,
+                 expectedImages: ["https://library.example/api/v1/books/chapter2/pages/2", "https://library.example/api/v1/books/chapter2/pages/1?convert=png"])
+        let book: MangaBook = try execute(host, id: id, settings: settings, ["op": "book", "timeZoneID": "UTC", "manga": ["url": "https://library.example/api/v1/series/owned", "title": "Owned story"]])
+        XCTAssertEqual(book.chapters.last?.uploadedAt, -86_400_000)
+        XCTAssertTrue(host.headersByURL.values.allSatisfy { headers in
+            headers.contains { $0.count == 2 && $0[0].lowercased() == "x-api-key" && $0[1] == "owned-key" }
+        })
+    }
+    func testJinmanTypedArraySettingsAndUnscrambledReadingFlow() throws {
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-zh.jinmantiantang-v1.6.59.apk", responses: [
+            "https://18comic.vip/albums": try fixture("jinman-catalog.html"),
+            "https://18comic.vip/album/1/": try fixture("jinman-book.html"),
+            "https://18comic.vip/photo/1/": try fixture("jinman-pages.html"),
+            "https://images.example/media/photos/1/owned-page-2.webp": bytes
+        ])
+        let schema: SettingsSchema = try host.execute(["op": "settings"])
+        let mirror = try XCTUnwrap(schema.settings.first { $0.key == "useMirrorWebsitePreference" })
+        XCTAssertEqual(mirror.control, "choice")
+        XCTAssertEqual(mirror.choices.count, 7)
+        XCTAssertTrue(host.urls.isEmpty)
+        try flow(catalogHost: host, bookHost: host, readerHost: host, id: "6286738698187452081", settings: [:],
+                 expectedImages: ["https://images.example/media/photos/1/owned-page-2.webp", "https://images.example/media/photos/1/owned-page-1.webp"])
+    }
+    private struct SettingsSchema: Decodable { let settings: [Setting] }
+    private struct Setting: Decodable { let key: String; let control: String; let choices: [Choice] }
+    private struct Choice: Decodable { let value: String }
 }

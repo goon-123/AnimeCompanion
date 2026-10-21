@@ -4,6 +4,53 @@ use dexvm::vm::object::Native;
 use dexvm::vm::{error::JvmError, NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
+
+fn pattern_compile(vm: &mut Vm, args: &[JValue]) -> R {
+    let source = vm
+        .str_of_jvalue(args[0])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    if source.len() > 65_536 || vm.budget <= source.len() as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= source.len() as i64 + 1;
+    let flags = args.get(1).map(|v| v.as_int()).unwrap_or(0);
+    if flags & !(2 | 4 | 8 | 16 | 32 | 64 | 256) != 0 {
+        return Err(NatErr::Throw(vm.err_iae("Unsupported regex flags")));
+    }
+    let mut translated = if flags & 16 != 0 {
+        fancy_regex::escape(&source).into_owned()
+    } else {
+        // Java Unicode block syntax used by normal accent stripping. Rust's
+        // regex engine supports categories/scripts, but not Java block names.
+        source
+            .replace(r"\p{InCombiningDiacriticalMarks}", r"[\u{0300}-\u{036f}]")
+            .replace(r"\P{InCombiningDiacriticalMarks}", r"[^\u{0300}-\u{036f}]")
+    };
+    for (bit, mode) in [(2, "i"), (4, "x"), (8, "m"), (32, "s")] {
+        if flags & bit != 0 {
+            translated = format!("(?{mode}){translated}");
+        }
+    }
+    let re = fancy_regex::RegexBuilder::new(&translated)
+        .backtrack_limit(1_000_000)
+        .build()
+        .map_err(|_| NatErr::Throw(vm.err_iae("Unsupported or invalid regex")))?;
+    let value = vm
+        .alloc_native("Ljava/util/regex/Pattern;", Native::Pattern { re, source })
+        .map_err(NatErr::Fatal)?;
+    vm.arena.objects[value.as_obj() as usize].fields = vec![JValue::Int(flags)];
+    Ok(value)
+}
+fn pattern_flags(vm: &mut Vm, args: &[JValue]) -> R {
+    let JValue::Obj(id) = args[0] else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    Ok(vm.arena.objects[id as usize]
+        .fields
+        .first()
+        .copied()
+        .unwrap_or(JValue::Int(0)))
+}
 fn groups(vm: &mut Vm, args: &[JValue]) -> R {
     let Some(Native::Matcher(state)) = vm.payload_of(args[0]) else {
         return Err(NatErr::Throw(vm.err_npe()));
@@ -78,6 +125,25 @@ fn range(vm: &mut Vm, args: &[JValue]) -> R {
     }
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for sig in [
+        "(Ljava/lang/String;)Ljava/util/regex/Pattern;",
+        "(Ljava/lang/String;I)Ljava/util/regex/Pattern;",
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Ljava/util/regex/Pattern;",
+            name: "compile",
+            sig,
+            instance: false,
+            f: pattern_compile,
+        })?;
+    }
+    vm.register_native(NativeEntry {
+        class: "Ljava/util/regex/Pattern;",
+        name: "flags",
+        sig: "()I",
+        instance: true,
+        f: pattern_flags,
+    })?;
     for (class, name, sig, f) in [
         (
             "Lkotlin/text/MatcherMatchResult;",
@@ -125,6 +191,32 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn java_unicode_blocks_compile_and_flags_preserve_matching_and_pattern_identity() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let source = vm.alloc_string(r"\p{InCombiningDiacriticalMarks}+");
+        let pattern = pattern_compile(&mut vm, &[source]).unwrap();
+        let Some(Native::Pattern { re, source }) = vm.payload_of(pattern) else {
+            panic!("Missing pattern")
+        };
+        assert_eq!(source, r"\p{InCombiningDiacriticalMarks}+");
+        assert_eq!(re.replace_all("Cafe\u{301}", ""), "Cafe");
+        let source = vm.alloc_string("owned.*");
+        let pattern = pattern_compile(&mut vm, &[source, JValue::Int(2 | 16)]).unwrap();
+        assert_eq!(pattern_flags(&mut vm, &[pattern]).unwrap(), JValue::Int(18));
+        let Some(Native::Pattern { re, .. }) = vm.payload_of(pattern) else {
+            panic!("Missing pattern")
+        };
+        assert!(re.is_match("OWNED.*").unwrap());
+        assert!(!re.is_match("owned text").unwrap());
+        assert!(pattern_compile(&mut vm, &[source, JValue::Int(128)]).is_err());
+        vm.budget = 0;
+        assert!(matches!(
+            pattern_compile(&mut vm, &[source]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+    }
     #[test]
     fn groups_keep_null_empty_and_utf16_positions() {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
