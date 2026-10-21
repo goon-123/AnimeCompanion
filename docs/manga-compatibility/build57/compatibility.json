@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalogRef": "b00de1d361ab08eb38567ecacfd267c154130592",
-  "runtimeRevision": "6b65cb91e187051eb9de990d600428c8e9ad28a1",
+  "runtimeRevision": "efd146f1f9481944976c11c565e663c2b0d81d05",
   "scope": "selectedPackages",
   "summary": {
     "catalogPackages": 10,
@@ -133,8 +133,8 @@
   "provenance": {
     "indexSHA256": "ae9a4ee3e404173b6f7cbb363a4020a9d1a431d31a885765f0ed8ac4658ce33c",
     "assetManifestSHA256": "d6860373e95afe0b2a7926d3712c5750de12ea4541b4af6545ee81472ecc8689",
-    "capabilitiesSHA256": "1880a3e67b9d994e004ffb1af841abd9b2cccb2c45be424a9c9b2554b27f872a",
-    "testLogSHA256": "b8f96482a2263ca5e8a1a8ef086c94de614818397e2e9192dcb52034782d13fd"
+    "capabilitiesSHA256": "53b2c82d2e2241a418537a74fdee800db8e08e33a565dc84a84241938b29468e",
+    "testLogSHA256": "3e5daf04ea13aed1e1f167b928f334cb77311947532cd304aa32f24356f59762"
   },
   "rows": [
     {

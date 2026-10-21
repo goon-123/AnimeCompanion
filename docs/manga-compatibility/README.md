@@ -4,7 +4,7 @@ Build 57 extends coroutine task/continuation handling, Java method and Kotlin pr
 reflection, and the observed Java date/time gaps. Its [focused matrix](build57/compatibility.html),
 [CSV](build57/compatibility.csv) and [JSON](build57/compatibility.json) cover ten exact APKs,
 fourteen source identities and 108 production C-ABI preflights against code
-`6b65cb91e187051eb9de990d600428c8e9ad28a1`. All expected cells ran. Four source rows
+`efd146f1f9481944976c11c565e663c2b0d81d05`. All expected cells ran. Four source rows
 have complete owned reading flows: InManga, ArabManhwa, Komga source 0 and JinmanTiantang.
 Five are partial, four unverified and one remains runtime-blocked. The observed Java/Kotlin
 gaps targeted by this batch no longer occur in these probes; Line Manga's page path now
