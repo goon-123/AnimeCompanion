@@ -48,6 +48,7 @@ enum MangaRuntime {
     private static func run<T: Decodable>(_ apk: Data, command inputCommand: [String: Any], networking: Bool,
                                          sourceID: String? = nil, settings: MangaSourceSettings = .init()) async throws -> T {
         var command = inputCommand
+        command["timeZoneID"] = TimeZone.current.identifier
         if let sourceID {
             let encoded = try settings.encoded()
             guard let object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { throw MangaExtensionError.invalidSourceSettings }

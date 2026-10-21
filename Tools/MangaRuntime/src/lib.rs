@@ -18,6 +18,7 @@ mod browser_compat;
 mod chapter_wire;
 mod collection_compat;
 mod date_compat;
+mod date_zone_compat;
 mod diagnostics;
 mod http_query_compat;
 mod http_wire;
@@ -38,6 +39,8 @@ use serialization_compat::*;
 mod compatibility_inventory;
 #[cfg(test)]
 mod compatibility_tests;
+#[cfg(test)]
+mod date_extension_tests;
 #[cfg(test)]
 mod extension_reader_tests;
 #[cfg(test)]
@@ -618,6 +621,8 @@ struct Command {
     query: String,
     #[serde(default)]
     modern: bool,
+    #[serde(default = "default_time_zone", rename = "timeZoneID")]
+    time_zone_id: String,
     #[serde(default)]
     manga: MangaInput,
     #[serde(default)]
@@ -631,6 +636,9 @@ struct Command {
 }
 fn first_page() -> i32 {
     1
+}
+fn default_time_zone() -> String {
+    "UTC".into()
 }
 
 #[derive(Default, Deserialize)]
@@ -1057,6 +1065,7 @@ where
     array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    date_zone_compat::install(ext.ctx().vm(), &command.time_zone_id).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

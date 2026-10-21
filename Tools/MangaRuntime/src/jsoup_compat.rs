@@ -66,6 +66,13 @@ static ENTRIES: &[NativeEntry] = &[
 ];
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Lorg/jsoup/nodes/Element;",
+        name: "toString",
+        sig: "()Ljava/lang/String;",
+        instance: true,
+        f: outer_string,
+    })?;
     if ORIGINALS.get().is_none() {
         let mut originals: Vec<NativeFn> = Vec::new();
         for entry in ENTRIES {
@@ -97,6 +104,13 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         f: element_data,
     })?;
     Ok(())
+}
+fn outer_string(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    vm.invoke_virtual(args[0], "outerHtml", "()Ljava/lang/String;")
+        .map_err(|e| match e {
+            JvmError::Uncaught(o) => NatErr::Throw(o),
+            other => NatErr::Fatal(other),
+        })
 }
 
 enum Test {
