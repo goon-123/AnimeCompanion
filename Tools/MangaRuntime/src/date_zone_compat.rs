@@ -304,6 +304,74 @@ fn minus_minutes(vm: &mut Vm, args: &[JValue]) -> R {
 fn minus_seconds(vm: &mut Vm, args: &[JValue]) -> R {
     zoned_delta(vm, args, 1000, -1, false)
 }
+fn plus_unit(vm: &mut Vm, args: &[JValue]) -> R {
+    unit_delta(vm, args, 1)
+}
+fn minus_unit(vm: &mut Vm, args: &[JValue]) -> R {
+    unit_delta(vm, args, -1)
+}
+fn unit_delta(vm: &mut Vm, args: &[JValue], sign: i128) -> R {
+    let unit = match vm.payload_of(args[2]) {
+        Some(Native::Str(name) | Native::Enum { name, .. }) => name,
+        _ if args[2].is_null_ref() => return Err(NatErr::Throw(vm.err_npe())),
+        _ => return Err(error(vm, "Unsupported date arithmetic unit")),
+    };
+    let amount = i128::from(args[1].as_long()) * sign;
+    let Some(Native::EpochMillis(millis)) = vm.payload_of(args[0]) else {
+        return Err(error(vm, "Expected zoned date-time"));
+    };
+    let zone = object_zone(vm, args[0])?;
+    let scale = match unit.as_str() {
+        "MILLIS" => 1,
+        "SECONDS" => 1000,
+        "MINUTES" => 60_000,
+        "HOURS" => 3_600_000,
+        "HALF_DAYS" => 43_200_000,
+        "DAYS" => DAY_MS,
+        "WEEKS" => 7 * DAY_MS,
+        "MONTHS" | "YEARS" | "DECADES" | "CENTURIES" | "MILLENNIA" => {
+            let scale = match unit.as_str() {
+                "MONTHS" => 1,
+                "YEARS" => 12,
+                "DECADES" => 120,
+                "CENTURIES" => 1200,
+                _ => 12000,
+            };
+            let months = amount * scale;
+            let count = u32::try_from(months.unsigned_abs())
+                .map_err(|_| error(vm, "Date arithmetic overflow"))?;
+            let wall = local_millis(vm, zone, millis)?;
+            let date = DateTime::<Utc>::from_timestamp_millis(wall)
+                .ok_or_else(|| error(vm, "Date exceeds supported range"))?;
+            let next = if months >= 0 {
+                date.checked_add_months(chrono::Months::new(count))
+            } else {
+                date.checked_sub_months(chrono::Months::new(count))
+            }
+            .ok_or_else(|| error(vm, "Date arithmetic overflow"))?;
+            let preferred = offset_at(vm, zone, millis)?;
+            let instant =
+                local_to_epoch(vm, zone, next.timestamp_millis(), false, Some(preferred))?;
+            return zoned(vm, instant, zone);
+        }
+        _ => return Err(error(vm, "Unsupported date arithmetic unit")),
+    };
+    let calendar = matches!(unit.as_str(), "DAYS" | "WEEKS");
+    let start = if calendar {
+        local_millis(vm, zone, millis)?
+    } else {
+        millis
+    };
+    let next = i64::try_from(i128::from(start) + amount * i128::from(scale))
+        .map_err(|_| error(vm, "Date arithmetic overflow"))?;
+    let instant = if calendar {
+        let preferred = offset_at(vm, zone, millis)?;
+        local_to_epoch(vm, zone, next, false, Some(preferred))?
+    } else {
+        next
+    };
+    zoned(vm, instant, zone)
+}
 fn truncated(vm: &mut Vm, args: &[JValue]) -> R {
     let unit = match vm.payload_of(args[1]) {
         Some(Native::Str(name)) => name,
@@ -330,6 +398,18 @@ fn truncated(vm: &mut Vm, args: &[JValue]) -> R {
     zoned(vm, instant, zone)
 }
 pub(super) fn install(vm: &mut Vm, default_id: &str) -> Result<(), JvmError> {
+    for (name, f) in [
+        ("minus", minus_unit as dexvm::vm::NativeFn),
+        ("plus", plus_unit),
+    ] {
+        vm.register_native(NativeEntry {
+            class: ZONED,
+            name,
+            sig: "(JLjava/time/temporal/TemporalUnit;)Ljava/time/ZonedDateTime;",
+            instance: true,
+            f,
+        })?;
+    }
     for (class, name, sig, instance, f) in [
         (
             ZONE,
@@ -495,6 +575,48 @@ mod tests {
         crate::date_compat::install(&mut vm).unwrap();
         install(&mut vm, id).unwrap();
         vm
+    }
+    #[test]
+    fn generic_units_distinguish_calendar_days_elapsed_hours_and_month_ends() {
+        let mut vm = vm("Europe/London");
+        let zone = system_default(&mut vm, &[]).unwrap();
+        let value = zoned(&mut vm, millis("2024-03-31T11:00:00Z"), zone).unwrap();
+        for (unit, expected) in [
+            ("DAYS", "2024-03-30T12:00:00Z"),
+            ("HOURS", "2024-03-30T11:00:00Z"),
+        ] {
+            let unit = vm
+                .alloc_native("Ljava/time/temporal/ChronoUnit;", Native::Str(unit.into()))
+                .unwrap();
+            let next = minus_unit(
+                &mut vm,
+                &[
+                    value,
+                    JValue::Long(if expected.contains("T11:") { 24 } else { 1 }),
+                    unit,
+                ],
+            )
+            .unwrap();
+            assert!(
+                matches!(vm.payload_of(next),Some(Native::EpochMillis(n)) if n==millis(expected))
+            );
+            assert_eq!(object_zone(&mut vm, next).unwrap(), zone);
+        }
+        let january = zoned(&mut vm, millis("2024-01-31T12:00:00Z"), zone).unwrap();
+        let months = vm
+            .alloc_native(
+                "Ljava/time/temporal/ChronoUnit;",
+                Native::Str("MONTHS".into()),
+            )
+            .unwrap();
+        let february = plus_unit(&mut vm, &[january, JValue::Long(1), months]).unwrap();
+        assert!(
+            matches!(vm.payload_of(february),Some(Native::EpochMillis(n)) if n==millis("2024-02-29T12:00:00Z"))
+        );
+        assert!(matches!(
+            minus_unit(&mut vm, &[value, JValue::Long(i64::MIN), months]),
+            Err(NatErr::Throw(_))
+        ));
     }
     #[test]
     fn iana_rules_resolve_gaps_overlaps_and_skipped_midnights() {

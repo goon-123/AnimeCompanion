@@ -32,13 +32,21 @@
         },
         {
           "test": "java_kotlin_extension_tests::jinman_scrambled_png_jpeg_webp_and_gzip_restore_pixels_through_guest_bytecode",
-          "stages": ["images"],
-          "sources": [0]
+          "stages": [
+            "images"
+          ],
+          "sources": [
+            0
+          ]
         },
         {
           "test": "java_kotlin_extension_tests::jinman_modern_gif_and_gzipped_gif_preserve_animation_bytes",
-          "stages": ["images"],
-          "sources": [0]
+          "stages": [
+            "images"
+          ],
+          "sources": [
+            0
+          ]
         }
       ]
     },
@@ -778,121 +786,520 @@
       "sha256": "83199410013398b1552887b43b30355d575ce32493d394c1b62f5ded2d1092d9",
       "url": "https://github.com/keiyoushi/extensions/releases/download/cfc0199/tachiyomi-en.flamecomics-v1.6.1.apk",
       "package": "eu.kanade.tachiyomi.extension.en.flamecomics",
-      "cases": [{
-        "test": "json_extension_tests::flame_generic_dtos_catalog_book_ordered_pages_and_image_transport",
-        "sources": [0],
-        "stages": ["popular", "latest", "search", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "json_extension_tests::flame_generic_dtos_catalog_book_ordered_pages_and_image_transport",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "latest",
+            "search",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.allanime-v1.6.29.apk",
       "sha256": "88f751348962664bab7b74ede9aa209583968f6ed8508e08cb1e9f8bcc62cee4",
       "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-en.allanime-v1.6.29.apk",
       "package": "eu.kanade.tachiyomi.extension.en.allanime",
-      "cases": [{
-        "test": "json_extension_tests::allmanga_encodes_graphql_variables_and_decodes_generic_json_elements",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters"]
-      }]
+      "cases": [
+        {
+          "test": "json_extension_tests::allmanga_encodes_graphql_variables_and_decodes_generic_json_elements",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.deathtollscans-v1.6.6.apk",
       "sha256": "a5ce8f912140f5c9ba816b8119bf04e673a3e173acfa52631d287245824813e8",
       "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-en.deathtollscans-v1.6.6.apk",
       "package": "eu.kanade.tachiyomi.extension.en.deathtollscans",
-      "cases": [{
-        "test": "date_extension_tests::foolslide_calendar_defaults_catalog_dated_chapters_and_ordered_pages",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "date_extension_tests::foolslide_calendar_defaults_catalog_dated_chapters_and_ordered_pages",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.dynasty-v1.6.1.apk",
       "sha256": "0c6bd0be254e73cca3401c6a7578a368c3fc9af2461c5b9fbe03fe6251eb2d72",
       "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-en.dynasty-v1.6.1.apk",
       "package": "eu.kanade.tachiyomi.extension.en.dynasty",
-      "cases": [{
-        "test": "date_extension_tests::dynasty_formatter_zone_dated_chapter_and_json_reader",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "date_extension_tests::dynasty_formatter_zone_dated_chapter_and_json_reader",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.hiveworks-v1.6.2.apk",
       "sha256": "7d869e29b2f7835719ebef6600077556c13517063f29b7f825bc0997c4f06bf4",
       "url": "https://github.com/keiyoushi/extensions/releases/download/cfc0199/tachiyomi-en.hiveworks-v1.6.2.apk",
       "package": "eu.kanade.tachiyomi.extension.en.hiveworks",
-      "cases": [{
-        "test": "date_extension_tests::hiveworks_latest_uses_the_real_calendar_weekday",
-        "sources": [0],
-        "stages": ["latest"]
-      }]
+      "cases": [
+        {
+          "test": "date_extension_tests::hiveworks_latest_uses_the_real_calendar_weekday",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "latest"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-fr.furyosquad-v1.6.0.apk",
       "sha256": "d12bb8884031351379af39c99ce47632cd9fc3329624f6d3e682ab75288f85e3",
       "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-fr.furyosquad-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.fr.furyosquad",
-      "cases": [{
-        "test": "kotlin_extension_tests::furyosquad_french_locale_catalog_dated_chapters_ordered_pages_and_images",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "kotlin_extension_tests::furyosquad_french_locale_catalog_dated_chapters_ordered_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.mangafoxfun-v1.6.38.apk",
       "sha256": "1e3ba3767c9f09455a1787f2b626c915cbb088feed5672816fcec0009c8514ba",
       "url": "https://github.com/keiyoushi/extensions/releases/download/b5d2cd5/tachiyomi-en.mangafoxfun-v1.6.38.apk",
       "package": "eu.kanade.tachiyomi.extension.en.mangafoxfun",
-      "cases": [{
-        "test": "kotlin_extension_tests::mangahub_random_key_catalog_dated_chapters_plain_pages_and_images",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "kotlin_extension_tests::mangahub_random_key_catalog_dated_chapters_plain_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.assortedscans-v1.6.0.apk",
       "sha256": "864b7da29949a73a5be754a07256d6103422cf2e69c39749530fb84b3c7c0fef",
       "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-en.assortedscans-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.en.assortedscans",
-      "cases": [{
-        "test": "kotlin_extension_tests::mangadventure_delegated_iterables_catalog_book_pages_and_images",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "kotlin_extension_tests::mangadventure_delegated_iterables_catalog_book_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-en.digitalcomicmuseum-v1.6.0.apk",
       "sha256": "167187db99558eb918115dabbb33320f81968437565771385872a27391b6b468",
       "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-en.digitalcomicmuseum-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.en.digitalcomicmuseum",
-      "cases": [{
-        "test": "network_extension_tests::digitalcomicmuseum_multipart_search_catalog_book_lazy_pages_and_images",
-        "sources": [0],
-        "stages": ["popular", "search", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "network_extension_tests::digitalcomicmuseum_multipart_search_catalog_book_lazy_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "search",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-ja.rawkuma-v1.6.41.apk",
       "sha256": "4ac058403b9fd7ec2b5c9913c2dafa6022e06eb3ac8a306e297795f58cf9fc49",
       "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-2/tachiyomi-ja.rawkuma-v1.6.41.apk",
       "package": "eu.kanade.tachiyomi.extension.ja.rawkuma",
-      "cases": [{
-        "test": "network_extension_tests::natsuid_multipart_nonce_dtos_dated_chapters_and_ordered_reader",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "network_extension_tests::natsuid_multipart_nonce_dtos_dated_chapters_and_ordered_reader",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
     },
     {
       "name": "tachiyomi-zh.manhuawu-v1.6.0.apk",
       "sha256": "a025a564c91368037728ad35da7975b3adbbbee88a1a7370e9e7e7c0f63c2257",
       "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-zh.manhuawu-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.zh.manhuawu",
-      "cases": [{
-        "test": "network_extension_tests::mccms_header_factory_catalog_details_chapters_pages_and_images",
-        "sources": [0],
-        "stages": ["popular", "details", "chapters", "pages", "images"]
-      }]
+      "cases": [
+        {
+          "test": "network_extension_tests::mccms_header_factory_catalog_details_chapters_pages_and_images",
+          "sources": [
+            0
+          ],
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.tappytoon-v1.6.0.apk",
+      "sha256": "0512c19b9a1b3ad6e846cb62e5eb3a1fc640c4eddd6f1c6f2ec94eb8b1cc48b5",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-all.tappytoon-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.tappytoon",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::tappytoon_localized_short_weekday_is_used_for_latest",
+          "stages": [
+            "latest"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ar.arabmanhwa-v1.6.57.apk",
+      "sha256": "6f1255bf46426d80c61cb244aef0fe091c1332161178afb7f6323d3e86a7c018",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/cfc0199/tachiyomi-ar.arabmanhwa-v1.6.57.apk",
+      "package": "eu.kanade.tachiyomi.extension.ar.arabmanhwa",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::arabmanhwa_java_duration_relative_dates_pages_and_images",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ar.procomic-v1.6.0.apk",
+      "sha256": "96cdbd7033c7b050d70d9fa73531c7020beb005985c25b2e77b043ac2054e444",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-ar.procomic-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.ar.procomic",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::procomic_mutable_cursor_references_skip_unreadable_pages",
+          "stages": [
+            "popular"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-es.codearc-v1.6.2.apk",
+      "sha256": "fae361c711f31104e4303dec63c69c1c4554e5b85de8ddd03caa5e1a2516b836",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-es.codearc-v1.6.2.apk",
+      "package": "eu.kanade.tachiyomi.extension.es.codearc",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::codearc_bound_client_headers_and_url_references_execute_in_the_image_interceptor",
+          "stages": [
+            "popular",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-es.inmanga-v1.6.1.apk",
+      "sha256": "10d0bcc52ecb0e272c145af4d2c7a05f1b6dcecd6c415012e5f216284a4f15d0",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/39e8efc/tachiyomi-es.inmanga-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.es.inmanga",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::inmanga_fractional_dates_async_details_ordered_pages_and_images",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-es.lectorjpg-v1.6.50.apk",
+      "sha256": "13135c71b001bf86d601f7eeda291dabc5541d2caadfd4dc3ddbb289f7be2f76",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-1/tachiyomi-es.lectorjpg-v1.6.50.apk",
+      "package": "eu.kanade.tachiyomi.extension.es.lectorjpg",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::localized_weekday_and_instant_cursors_reach_the_real_catalog_requests",
+          "stages": [
+            "latest"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ja.linemanga-v1.6.1.apk",
+      "sha256": "41dac9936f81e2446a86b14e76076fcf41551dcf59eddebb092b99714166dca7",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-1/tachiyomi-ja.linemanga-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.ja.linemanga",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::localized_weekday_and_instant_cursors_reach_the_real_catalog_requests",
+          "stages": [
+            "latest"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ru.nudemoon-v1.6.32.apk",
+      "sha256": "ef4d485fd8abe4ed5357094a4cfb5b14ef5945990512707279b058b55b16218b",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/cfc0199/tachiyomi-ru.nudemoon-v1.6.32.apk",
+      "package": "eu.kanade.tachiyomi.extension.ru.nudemoon",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "shared_jvm_extension_tests::nudemoon_optional_custom_month_text_parses_a_real_chapter_date",
+          "stages": [
+            "details",
+            "chapters"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
     }
   ]
 }

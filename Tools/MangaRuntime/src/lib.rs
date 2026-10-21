@@ -18,8 +18,11 @@ mod authenticator_compat;
 mod browser_compat;
 mod chapter_wire;
 mod collection_compat;
+mod continuation_compat;
 mod coroutine_compat;
+mod date_amount_compat;
 mod date_compat;
+mod date_fields_compat;
 mod date_zone_compat;
 mod diagnostics;
 mod graphics_compat;
@@ -37,12 +40,19 @@ mod kotlin_runtime_compat;
 mod kotlin_type_compat;
 mod local_date_compat;
 mod locale_compat;
+mod method_reflection_compat;
 mod multipart_compat;
 mod okio_compat;
 mod okio_peek_compat;
+mod property_reference_compat;
 mod reflection_compat;
 mod regex_compat;
 mod serialization_compat;
+mod serialization_elements_compat;
+#[cfg(test)]
+mod shared_jvm_extension_tests;
+#[cfg(test)]
+mod shared_jvm_probe_tests;
 mod source_framework_compat;
 mod source_settings;
 mod time_source_compat;
@@ -79,49 +89,12 @@ fn abstract_function(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
     )))
 }
 
-// Network natives complete inline, but async must still retain thrown results
-// until await. The pinned host silently converted every failed task to null.
+// App-owned task lifecycle and error retention for the interpreted guest thread.
 fn coroutine_async(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
-    use dexvm::vm::{error::JvmError, object::Native};
-    let scope = coroutine_compat::task_scope(vm, args)?;
-    let context = coroutine_compat::scope_context(vm, scope)?;
-    let previous = coroutine_compat::enter(vm, context)?;
-    let result = vm.invoke_virtual_args(
-        args[3],
-        "invoke",
-        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-        vec![scope, JValue::Null],
-    );
-    coroutine_compat::restore(vm, previous)?;
-    let (value, error) = match result {
-        Ok(value) => (value, JValue::Null),
-        Err(JvmError::Uncaught(error)) => (JValue::Null, JValue::Obj(error)),
-        Err(error) => return Err(NatErr::Fatal(error)),
-    };
-    let deferred = vm
-        .alloc_native(
-            "Lkotlinx/coroutines/Deferred;",
-            Native::Deferred { value, error },
-        )
-        .map_err(NatErr::Fatal)?;
-    vm.arena.objects[deferred.as_obj() as usize].fields = vec![JValue::Null, JValue::Int(2), error];
-    Ok(deferred)
+    coroutine_compat::async_task(vm, args)
 }
-
 fn coroutine_await(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
-    match vm.payload_of(args[0]) {
-        Some(dexvm::vm::object::Native::Deferred { value, error }) => {
-            if error.is_null() {
-                Ok(value)
-            } else {
-                Err(NatErr::Throw(error.as_obj()))
-            }
-        }
-        _ => Err(NatErr::Throw(vm.throwable_of(
-            "Ljava/lang/NullPointerException;",
-            "Invalid deferred result",
-        ))),
-    }
+    coroutine_compat::await_task(vm, args)
 }
 
 fn install_host_fields(vm: &mut Vm) -> Result<(), dexvm::vm::error::JvmError> {
@@ -1101,9 +1074,13 @@ where
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     locale_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    date_amount_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_zone_compat::install(ext.ctx().vm(), &command.time_zone_id).map_err(|e| e.to_string())?;
     local_date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    date_fields_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    method_reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    property_reference_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_runtime_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     time_source_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
@@ -1113,6 +1090,7 @@ where
     uri_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_serializer_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    serialization_elements_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     http_query_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     for (name, sig, f) in [
         (

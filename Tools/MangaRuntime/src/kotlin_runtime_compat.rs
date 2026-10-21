@@ -6,6 +6,19 @@ use dexvm::vm::{
 };
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
+fn check_not_null(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[0].is_null_ref() {
+        let message = args
+            .get(1)
+            .and_then(|v| vm.str_of_jvalue(*v))
+            .unwrap_or_else(|| "Required value was null".into());
+        Err(NatErr::Throw(
+            vm.throwable_of("Ljava/lang/NullPointerException;", message),
+        ))
+    } else {
+        Ok(JValue::Null)
+    }
+}
 const DEFAULT: &str = "Lkotlin/random/Random$Default;";
 const LIMIT: usize = 1_000_000;
 fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue>) -> R {
@@ -60,16 +73,62 @@ fn map_value(vm: &mut Vm, args: &[JValue]) -> R {
 }
 fn instant_plus(vm: &mut Vm, args: &[JValue]) -> R {
     charge(vm, 1)?;
-    let Some(Native::EpochMillis(millis)) = vm.payload_of(args[0]) else {
+    let nanos = kotlin_instant_nanos(vm, args[0])? + i128::from(args[1].as_long()) * 1_000_000;
+    kotlin_instant(vm, nanos)
+}
+fn instant_minus(vm: &mut Vm, args: &[JValue]) -> R {
+    charge(vm, 1)?;
+    let nanos = kotlin_instant_nanos(vm, args[0])? - i128::from(args[1].as_long()) * 1_000_000;
+    kotlin_instant(vm, nanos)
+}
+fn kotlin_instant(vm: &mut Vm, nanos: i128) -> R {
+    let nanos = nanos.clamp(
+        i128::from(i64::MIN) * 1_000_000,
+        i128::from(i64::MAX) * 1_000_000 + 999_999,
+    );
+    let value = vm
+        .alloc_native(
+            "Lkotlin/time/Instant;",
+            Native::EpochMillis(nanos.div_euclid(1_000_000) as i64),
+        )
+        .map_err(NatErr::Fatal)?;
+    vm.arena.objects[value.as_obj() as usize].fields =
+        vec![JValue::Int(nanos.rem_euclid(1_000_000) as i32)];
+    Ok(value)
+}
+fn instant_from_seconds(vm: &mut Vm, args: &[JValue]) -> R {
+    charge(vm, 1)?;
+    let nanos = if args.get(3).is_some_and(|mask| mask.as_int() & 2 != 0) {
+        0
+    } else {
+        args[2].as_long()
+    };
+    kotlin_instant(
+        vm,
+        i128::from(args[1].as_long()) * 1_000_000_000 + i128::from(nanos),
+    )
+}
+fn instant_from_seconds_int(vm: &mut Vm, args: &[JValue]) -> R {
+    instant_from_seconds(
+        vm,
+        &[args[0], args[1], JValue::Long(i64::from(args[2].as_int()))],
+    )
+}
+fn kotlin_instant_nanos(vm: &mut Vm, value: JValue) -> Result<i128, NatErr> {
+    let Some(Native::EpochMillis(millis)) = vm.payload_of(value) else {
         return Err(NatErr::Throw(vm.err_npe()));
     };
-    // DurationKt's pinned host representation is whole milliseconds. Keep
-    // that ABI and its saturating epoch-millisecond boundary, like minus.
-    vm.alloc_native(
-        "Lkotlin/time/Instant;",
-        Native::EpochMillis(millis.saturating_add(args[1].as_long())),
-    )
-    .map_err(NatErr::Fatal)
+    let extra = vm.arena.objects[value.as_obj() as usize]
+        .fields
+        .first()
+        .map_or(0, |v| v.as_int());
+    Ok(i128::from(millis) * 1_000_000 + i128::from(extra))
+}
+fn instant_compare(vm: &mut Vm, args: &[JValue]) -> R {
+    charge(vm, 1)?;
+    let a = kotlin_instant_nanos(vm, args[0])?;
+    let b = kotlin_instant_nanos(vm, args[1])?;
+    Ok(JValue::Int(a.cmp(&b) as i32))
 }
 fn box_float(vm: &mut Vm, args: &[JValue]) -> R {
     vm.invoke_static(
@@ -239,12 +298,68 @@ fn hex_explicit(vm: &mut Vm, args: &[JValue]) -> R {
     hex(vm, args, false)
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (name, sig, instance, f) in [
+        (
+            "fromEpochSeconds",
+            "(JJ)Lkotlin/time/Instant;",
+            true,
+            instant_from_seconds as dexvm::vm::NativeFn,
+        ),
+        (
+            "fromEpochSeconds",
+            "(JI)Lkotlin/time/Instant;",
+            true,
+            instant_from_seconds_int,
+        ),
+        (
+            "fromEpochSeconds$default",
+            "(Lkotlin/time/Instant$Companion;JJILjava/lang/Object;)Lkotlin/time/Instant;",
+            false,
+            instant_from_seconds,
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lkotlin/time/Instant$Companion;",
+            name,
+            sig,
+            instance,
+            f,
+        })?;
+    }
+    for sig in ["(Lkotlin/time/Instant;)I", "(Ljava/lang/Object;)I"] {
+        vm.register_native(NativeEntry {
+            class: "Lkotlin/time/Instant;",
+            name: "compareTo",
+            sig,
+            instance: true,
+            f: instant_compare,
+        })?;
+    }
+    for sig in [
+        "(Ljava/lang/Object;)V",
+        "(Ljava/lang/Object;Ljava/lang/String;)V",
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lkotlin/jvm/internal/Intrinsics;",
+            name: "checkNotNull",
+            sig,
+            instance: false,
+            f: check_not_null,
+        })?;
+    }
     vm.register_native(NativeEntry {
         class: "Lkotlin/collections/MapsKt;",
         name: "getValue",
         sig: "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
         instance: false,
         f: map_value,
+    })?;
+    vm.register_native(NativeEntry {
+        class: "Lkotlin/time/Instant;",
+        name: "minus-LRDsOJo",
+        sig: "(J)Lkotlin/time/Instant;",
+        instance: true,
+        f: instant_minus,
     })?;
     vm.register_native(NativeEntry {
         class: "Lkotlin/time/Instant;",
@@ -330,6 +445,34 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn kotlin_epoch_second_defaults_normalize_adjustments_and_compare_submilliseconds() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let before =
+            instant_from_seconds(&mut vm, &[JValue::Null, JValue::Long(0), JValue::Long(-1)])
+                .unwrap();
+        let epoch = instant_from_seconds(
+            &mut vm,
+            &[
+                JValue::Null,
+                JValue::Long(0),
+                JValue::Long(99),
+                JValue::Int(2),
+                JValue::Null,
+            ],
+        )
+        .unwrap();
+        assert_eq!(kotlin_instant_nanos(&mut vm, before).unwrap(), -1);
+        assert_eq!(kotlin_instant_nanos(&mut vm, epoch).unwrap(), 0);
+        assert_eq!(
+            instant_compare(&mut vm, &[before, epoch]).unwrap(),
+            JValue::Int(-1)
+        );
+        let later = instant_plus(&mut vm, &[before, JValue::Long(1)]).unwrap();
+        let restored = instant_minus(&mut vm, &[later, JValue::Long(1)]).unwrap();
+        assert_eq!(kotlin_instant_nanos(&mut vm, restored).unwrap(), -1);
+    }
     #[test]
     fn map_get_value_uses_virtual_map_contract_and_preserves_present_null() {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();

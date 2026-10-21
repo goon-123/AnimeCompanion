@@ -405,6 +405,12 @@ fn with_timeout(vm: &mut Vm, args: &[JValue]) -> R {
     let state = root(vm)?;
     let previous = field(vm, state, 2);
     let raw = args[0].as_long();
+    if raw <= 0 {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Lkotlinx/coroutines/TimeoutCancellationException;",
+            "Coroutine timed out",
+        )));
+    }
     // The pinned Kotlin host represents Duration values as milliseconds.
     let millis = raw.clamp(0, 60_000);
     set(
@@ -499,6 +505,9 @@ fn run_due(vm: &mut Vm) -> Result<(), NatErr> {
     Ok(())
 }
 fn deferred_await(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::coroutine_compat::is_app_task(vm, args[0]) {
+        return super::coroutine_compat::await_task(vm, args);
+    }
     let state = root(vm)?;
     // Ordinary inline async results have no pending-state field.
     for _ in 0..4096 {
@@ -538,6 +547,24 @@ fn deferred_await(vm: &mut Vm, args: &[JValue]) -> R {
         Some(Native::Deferred { error, .. }) => Err(NatErr::Throw(error.as_obj())),
         _ => Err(err(vm, "Invalid deferred result")),
     }
+}
+pub(super) fn check_deadline(vm: &mut Vm) -> Result<(), NatErr> {
+    // Browser-free unit VMs also use coroutine natives.
+    let descriptor = vm.intern(ROOT);
+    let Some(&owner) = vm.class_by_desc.get(&descriptor) else {
+        return Ok(());
+    };
+    if vm.classes[owner as usize].statics.is_empty() {
+        return Ok(());
+    }
+    let state = root(vm)?;
+    if now() >= field(vm, state, 2).as_long() {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Lkotlinx/coroutines/TimeoutCancellationException;",
+            "Coroutine timed out",
+        )));
+    }
+    Ok(())
 }
 fn dispatch(vm: &mut Vm, web: JValue, event: &Value) -> Result<(), NatErr> {
     let url = vm.alloc_string(event["url"].as_str().unwrap_or_default());

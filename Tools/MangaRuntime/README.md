@@ -243,3 +243,40 @@ reordering and compression. Production has no Jinman-specific decoder. The
 build-55 `peek()` blocker above is historical; build-56 results are recorded in
 BUILD_STATUS.md and its focused compatibility matrix. Native and live-site
 verification are separate from the offline Rust evidence.
+
+## Shared JVM continuation (build 57)
+
+Version 0.25.10. `continuation_compat` implements stable, VM-rooted suspension tokens,
+SafeContinuation state transitions and bounded guest resume chains. Child task
+contexts/results are traced by the arena. Lazy tasks start once on start/await;
+cancellation, guest failure, instruction exhaustion and timeout remain distinct.
+Delays consume real time in short cancellable slices. The runtime uses one guest
+thread. It does not provide a general parallel scheduler or pretend that an
+unavailable external callback completed.
+
+`method_reflection_compat` searches actual VM declarations/inheritance, enforces
+method access and argument conversion, dispatches virtual overrides, boxes return
+values and wraps guest exceptions while keeping VM limits fatal. It never exposes
+host classes. `property_reference_compat` preserves Kotlin bound/unbound receivers,
+metadata, generated subclass accessors and mutable cursor state. Dynamic proxy
+creation, full Kotlin reflection and other reflective entry points are not covered.
+
+Java Duration uses normalized seconds/nanoseconds, independently of the pinned
+Kotlin millisecond Duration ABI. Instant factories/now/parse and duration arithmetic
+retain nanoseconds within the existing signed-millisecond epoch range. Kotlin epoch-second factories/defaults and comparison also retain fractional adjustments; Kotlin duration arguments keep their pinned millisecond ABI. Date builders
+support optional sections, literals, numeric widths/signs, custom text maps and
+variable-width fractions. Week definitions and weekday text use the real calendar;
+generic zoned day/week/month/year arithmetic preserves local time and zone rules.
+Formatter/chapter timestamps remain millisecond based. Unsupported units, patterns,
+calendar ranges and numeric overflow report errors.
+
+Published APK replays cover InManga and ArabManhwa from catalog to image, ProComic's
+mutable pagination references, Code Arc's bound image-refresh references, and the
+four additional date paths. Nullable numeric serializable elements keep their Object
+ABI; JsonNames alternatives are applied to a decoder-owned copy of the JSON object.
+All network responses are owned fixtures. Live website availability is not implied.
+
+The app-owned `test-support/SharedJvmProbe.kt` is also compiled to a test-only DEX.
+Its tests actually suspend/resume guest bytecode across GC and exercise Java method
+reflection. Rebuild it with JDK 17 using `python3 scripts/rebuild-manga-probe.py`;
+the compiler, D8 and output checksums are pinned. The probe is not bundled into the app.

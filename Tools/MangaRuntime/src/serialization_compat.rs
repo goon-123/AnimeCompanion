@@ -34,6 +34,7 @@ pub(super) fn json_decode_boolean(vm: &mut Vm, args: &[JValue]) -> Result<JValue
     }
 }
 pub(super) fn json_element_index(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    super::serialization_elements_compat::normalize_aliases(vm, args)?;
     use dexvm::vm::object::{JsonVal, Native};
     let (element, index) = match vm.payload_of(args[0]) {
         Some(Native::JsonDecoder { element, index, .. }) => (element, index),

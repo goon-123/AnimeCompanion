@@ -103,6 +103,15 @@ fn defaulting(vm: &mut Vm, args: &[JValue]) -> R {
     Ok(args[0])
 }
 fn to_formatter(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::DateFormatter { pattern, .. }) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    let depth = optional_depth(&pattern)
+        .ok_or_else(|| NatErr::Throw(vm.err_iae("Invalid optional section")))?;
+    if depth > 0 {
+        let closing = vm.alloc_string(&"]".repeat(depth));
+        append_pattern(vm, &[args[0], closing])?;
+    }
     let Some(value @ Native::DateFormatter { .. }) = vm.payload_of(args[0]) else {
         return Err(NatErr::Throw(vm.err_npe()));
     };
@@ -178,10 +187,259 @@ fn start_of_day(vm: &mut Vm, args: &[JValue]) -> R {
 fn parse(text: &str, pattern: &str, insensitive: bool) -> Option<(i64, i32)> {
     parse_defaults(text, pattern, insensitive, &[])
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum ParsedField {
     Part(char, usize),
     Default(i32, i64),
+    Builder(BuilderPart),
+}
+const BUILDER_MARKER: char = '\u{e000}';
+#[derive(Clone)]
+enum BuilderPart {
+    Fraction {
+        field: usize,
+        min: usize,
+        max: usize,
+        decimal: bool,
+    },
+    Value {
+        field: usize,
+        min: usize,
+        max: usize,
+        sign: i32,
+    },
+    Text {
+        field: usize,
+        entries: Vec<(i64, String)>,
+    },
+}
+fn chrono_field(vm: &mut Vm, value: JValue) -> Result<usize, NatErr> {
+    match vm.payload_of(value) {
+        Some(Native::Enum { ordinal, .. }) if (0..30).contains(&ordinal) => Ok(ordinal as usize),
+        _ if value.is_null_ref() => Err(NatErr::Throw(vm.err_npe())),
+        _ => Err(NatErr::Throw(vm.err_iae("Unsupported temporal field"))),
+    }
+}
+fn fixed_range(field: usize) -> Option<(i64, i64)> {
+    Some(match field {
+        0 => (0, 999_999_999),
+        2 => (0, 999_999),
+        4 => (0, 999),
+        6 | 8 => (0, 59),
+        10 => (0, 11),
+        11 => (1, 12),
+        12 => (0, 23),
+        13 => (1, 24),
+        14 => (0, 1),
+        15 => (1, 7),
+        23 => (1, 12),
+        _ => return None,
+    })
+}
+fn append_builder_part(vm: &mut Vm, builder: JValue, tag: i32, values: Vec<JValue>) -> R {
+    initialize_state(vm, builder)?;
+    let Some(Native::DateFormatter { pattern, .. }) = vm.payload_of(builder) else {
+        unreachable!()
+    };
+    if pattern.len() + BUILDER_MARKER.len_utf8() > 256
+        || vm.arena.objects[builder.as_obj() as usize].fields.len() >= 99
+    {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    let data = vm
+        .alloc_native("Ljava/util/ArrayList;", Native::List(values))
+        .map_err(NatErr::Fatal)?;
+    let object = &mut vm.arena.objects[builder.as_obj() as usize];
+    object.fields.extend([
+        JValue::Int(pattern.chars().count() as i32),
+        JValue::Int(tag),
+        data,
+    ]);
+    let Some(Native::DateFormatter { pattern, .. }) = &mut object.native else {
+        unreachable!()
+    };
+    pattern.push(BUILDER_MARKER);
+    Ok(builder)
+}
+fn append_fraction(vm: &mut Vm, args: &[JValue]) -> R {
+    let field = chrono_field(vm, args[1])?;
+    let (min, max) = (args[2].as_int(), args[3].as_int());
+    if !(0..=9).contains(&min)
+        || !(1..=9).contains(&max)
+        || min > max
+        || fixed_range(field).is_none()
+    {
+        return Err(NatErr::Throw(
+            vm.err_iae("Invalid fraction field or widths"),
+        ));
+    }
+    append_builder_part(
+        vm,
+        args[0],
+        -1,
+        vec![JValue::Int(field as i32), args[2], args[3], args[4]],
+    )
+}
+fn append_value(vm: &mut Vm, args: &[JValue]) -> R {
+    let field = chrono_field(vm, args[1])?;
+    let (min, max, sign) = match args.len() {
+        2 => (1, 19, 0),
+        3 => (args[2].as_int(), args[2].as_int(), 3),
+        _ => match vm.payload_of(args[4]) {
+            Some(Native::Enum { ordinal, .. }) if (0..5).contains(&ordinal) => {
+                (args[2].as_int(), args[3].as_int(), ordinal)
+            }
+            _ => return Err(NatErr::Throw(vm.err_iae("Invalid sign style"))),
+        },
+    };
+    if !(1..=19).contains(&min) || !(min..=19).contains(&max) {
+        return Err(NatErr::Throw(vm.err_iae("Invalid value widths")));
+    }
+    append_builder_part(
+        vm,
+        args[0],
+        -2,
+        vec![
+            JValue::Int(field as i32),
+            JValue::Int(min),
+            JValue::Int(max),
+            JValue::Int(sign),
+        ],
+    )
+}
+fn append_text(vm: &mut Vm, args: &[JValue]) -> R {
+    let field = chrono_field(vm, args[1])?;
+    let Some(Native::Map(entries)) = vm.payload_of(args[2]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    if entries.len() > 256 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    let mut values = vec![JValue::Int(field as i32)];
+    let mut size = 0;
+    for (key, value) in entries {
+        let number = match vm.payload_of(key) {
+            Some(Native::LongBox(n)) => n,
+            _ => return Err(NatErr::Throw(vm.err_iae("Text keys must be longs"))),
+        };
+        let text = vm
+            .str_of_jvalue(value)
+            .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+        size += text.len();
+        if size > 4096 {
+            return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+        }
+        if text.is_empty() {
+            return Err(NatErr::Throw(vm.err_iae("Empty temporal text")));
+        }
+        values.extend([JValue::Long(number), value]);
+    }
+    append_builder_part(vm, args[0], -3, values)
+}
+fn builder_parts(vm: &mut Vm, formatter: JValue) -> Vec<(usize, BuilderPart)> {
+    let fields = &vm.arena.objects[formatter.as_obj() as usize].fields;
+    fields
+        .get(3..)
+        .unwrap_or_default()
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter_map(|entry| {
+            if entry[1].as_int() >= 0 {
+                return None;
+            }
+            let Some(Native::List(data)) = vm.payload_of(entry[2]) else {
+                return None;
+            };
+            let field = data.first()?.as_int() as usize;
+            let part = match entry[1].as_int() {
+                -1 if data.len() == 4 => BuilderPart::Fraction {
+                    field,
+                    min: data[1].as_int() as usize,
+                    max: data[2].as_int() as usize,
+                    decimal: !data[3].is_zero(),
+                },
+                -2 if data.len() == 4 => BuilderPart::Value {
+                    field,
+                    min: data[1].as_int() as usize,
+                    max: data[2].as_int() as usize,
+                    sign: data[3].as_int(),
+                },
+                -3 => BuilderPart::Text {
+                    field,
+                    entries: data[1..]
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .filter_map(|pair| Some((pair[0].as_long(), vm.str_of_jvalue(pair[1])?)))
+                        .collect(),
+                },
+                _ => return None,
+            };
+            Some((entry[0].as_int() as usize, part))
+        })
+        .collect()
+}
+fn optional_depth(pattern: &str) -> Option<usize> {
+    let (mut depth, mut quoted) = (0usize, false);
+    for c in pattern.chars() {
+        match c {
+            '\'' => quoted = !quoted,
+            '[' if !quoted => {
+                depth += 1;
+                if depth > 16 {
+                    return None;
+                }
+            }
+            ']' if !quoted => depth = depth.checked_sub(1)?,
+            _ => {}
+        }
+    }
+    if quoted {
+        None
+    } else {
+        Some(depth)
+    }
+}
+fn optional_start(vm: &mut Vm, args: &[JValue]) -> R {
+    optional(vm, args, true)
+}
+fn optional_end(vm: &mut Vm, args: &[JValue]) -> R {
+    optional(vm, args, false)
+}
+fn optional(vm: &mut Vm, args: &[JValue], start: bool) -> R {
+    let Some(Native::DateFormatter { pattern, .. }) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    let depth = optional_depth(&pattern)
+        .ok_or_else(|| NatErr::Throw(vm.err_iae("Invalid optional section")))?;
+    if start && depth >= 16 || !start && depth == 0 {
+        return Err(NatErr::Throw(vm.err_iae("Invalid optional section")));
+    }
+    let text = vm.alloc_string(if start { "[" } else { "]" });
+    append_pattern(vm, &[args[0], text])
+}
+fn literal_string(vm: &mut Vm, args: &[JValue]) -> R {
+    let text = vm
+        .str_of_jvalue(args[1])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    if text.is_empty() {
+        return Ok(args[0]);
+    }
+    let pattern = if text == "'" {
+        "''".to_owned()
+    } else {
+        format!("'{}'", text.replace('\'', "''"))
+    };
+    let text = vm.alloc_string(&pattern);
+    append_pattern(vm, &[args[0], text])
+}
+fn literal_char(vm: &mut Vm, args: &[JValue]) -> R {
+    let text = char::from_u32(args[1].as_int() as u32)
+        .ok_or_else(|| NatErr::Throw(vm.err_iae("Invalid literal character")))?
+        .to_string();
+    let value = vm.alloc_string(&text);
+    literal_string(vm, &[args[0], value])
 }
 #[cfg(test)]
 fn parse_defaults(
@@ -198,12 +456,23 @@ fn parse_defaults(
         Some(chrono::Locale::POSIX),
     )
 }
+#[cfg(test)]
 fn parse_localized(
     text: &str,
     pattern: &str,
     insensitive: bool,
     defaults: &[(usize, i32, i64)],
     locale: Option<chrono::Locale>,
+) -> Option<(i64, i32)> {
+    parse_builder(text, pattern, insensitive, defaults, locale, &[])
+}
+fn parse_builder(
+    text: &str,
+    pattern: &str,
+    insensitive: bool,
+    defaults: &[(usize, i32, i64)],
+    locale: Option<chrono::Locale>,
+    parts: &[(usize, BuilderPart)],
 ) -> Option<(i64, i32)> {
     if text.len() > 512 || pattern.len() > 256 {
         return None;
@@ -226,6 +495,48 @@ fn parse_localized(
         }
         let c = chars[index];
         index += 1;
+        if c == BUILDER_MARKER {
+            if let Some((_, part)) = parts.iter().find(|(pos, _)| *pos == index - 1) {
+                match part {
+                    BuilderPart::Fraction {
+                        min, max, decimal, ..
+                    } => {
+                        if *decimal && *min == 0 {
+                            regex.push_str(&format!("(?:\\.([0-9]{{0,{max}}}))?"));
+                        } else {
+                            if *decimal {
+                                regex.push_str("\\.");
+                            }
+                            regex.push_str(&format!("([0-9]{{{min},{max}}})"));
+                        }
+                    }
+                    BuilderPart::Value { min, max, sign, .. } => {
+                        regex.push_str(match sign {
+                            0 => "(-?",
+                            1 => "([+-]",
+                            4 => "([+-]?",
+                            _ => "(",
+                        });
+                        regex.push_str(&format!("[0-9]{{{min},{max}}})"));
+                    }
+                    BuilderPart::Text { entries, .. } => {
+                        let mut choices = entries.iter().map(|(_, text)| text).collect::<Vec<_>>();
+                        choices.sort_by_key(|text| std::cmp::Reverse(text.len()));
+                        regex.push('(');
+                        regex.push_str(
+                            &choices
+                                .into_iter()
+                                .map(|text| fancy_regex::escape(text))
+                                .collect::<Vec<_>>()
+                                .join("|"),
+                        );
+                        regex.push(')');
+                    }
+                }
+                fields.push(ParsedField::Builder(part.clone()));
+                continue;
+            }
+        }
         if c == '\'' {
             let mut literal = String::new();
             if chars.get(index) == Some(&'\'') {
@@ -314,6 +625,53 @@ fn parse_localized(
                 continue;
             }
             ParsedField::Part(c, count) => (c, count),
+            ParsedField::Builder(part) => {
+                let (field, number) = match part {
+                    BuilderPart::Fraction { field, .. } => {
+                        let (low, high) = fixed_range(field)?;
+                        let fraction = if value.is_empty() {
+                            0
+                        } else {
+                            format!("{value}000000000")[..9].parse::<i64>().ok()?
+                        };
+                        (field, low + fraction * (high - low + 1) / 1_000_000_000)
+                    }
+                    BuilderPart::Value {
+                        field, min, sign, ..
+                    } => {
+                        let digits = value.trim_start_matches(['+', '-']);
+                        if sign == 4
+                            && (value.starts_with('+')
+                                != (digits.len() > min && !value.starts_with('-')))
+                        {
+                            return None;
+                        }
+                        let number = value.parse::<i64>().ok()?;
+                        if number == 0 && value.starts_with('-') {
+                            return None;
+                        }
+                        (field, number)
+                    }
+                    BuilderPart::Text { field, entries } => (
+                        field,
+                        entries
+                            .iter()
+                            .find(|(_, text)| {
+                                if insensitive {
+                                    text.to_lowercase() == value.to_lowercase()
+                                } else {
+                                    text == value
+                                }
+                            })?
+                            .0,
+                    ),
+                };
+                if values[field].is_some_and(|old| old != number) {
+                    return None;
+                }
+                values[field] = Some(number);
+                continue;
+            }
         };
         let (field, value) = match c {
             'y' | 'u' => {
@@ -419,11 +777,13 @@ fn parsed(vm: &mut Vm, args: &[JValue]) -> Result<(i64, i32), NatErr> {
         .as_chunks::<3>()
         .0
         .iter()
+        .filter(|v| v[1].as_int() >= 0)
         .map(|v| (v[0].as_int() as usize, v[1].as_int(), v[2].as_long()))
         .collect();
     let locale = fields.get(2).copied().unwrap_or(JValue::Null);
     let locale = super::locale_compat::calendar_locale(vm, locale)?;
-    parse_localized(&text, &pattern, insensitive, &defaults, locale).ok_or_else(|| {
+    let parts = builder_parts(vm, args[1]);
+    parse_builder(&text, &pattern, insensitive, &defaults, locale, &parts).ok_or_else(|| {
         NatErr::Throw(vm.throwable_of(
             "Ljava/time/format/DateTimeParseException;",
             "Unsupported pattern or invalid date",
@@ -501,6 +861,7 @@ fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
         ))
     })?;
     let chars: Vec<_> = pattern.chars().collect();
+    let parts = builder_parts(vm, args[0]);
     let mut stack = vec![Some(String::new())];
     let mut i = 0;
     while i < chars.len() {
@@ -527,7 +888,67 @@ fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
             }
             continue;
         }
-        let text = if c == '\'' {
+        let text = if c == BUILDER_MARKER && parts.iter().any(|(pos, _)| *pos == i - 1) {
+            let part = &parts.iter().find(|(pos, _)| *pos == i - 1).unwrap().1;
+            let field = match part {
+                BuilderPart::Fraction { field, .. }
+                | BuilderPart::Value { field, .. }
+                | BuilderPart::Text { field, .. } => *field,
+            };
+            let value = match field {
+                0 if has_time => Some(i64::from(date.nanosecond())),
+                2 if has_time => Some(i64::from(date.nanosecond() / 1000)),
+                4 if has_time => Some(i64::from(date.nanosecond() / 1_000_000)),
+                6 if has_time => Some(i64::from(date.second())),
+                8 if has_time => Some(i64::from(date.minute())),
+                12 if has_time => Some(i64::from(date.hour())),
+                15 => Some(i64::from(date.weekday().number_from_monday())),
+                18 => Some(i64::from(date.day())),
+                19 => Some(i64::from(date.ordinal())),
+                23 => Some(i64::from(date.month())),
+                25 | 26 => Some(i64::from(date.year())),
+                _ => None,
+            };
+            if let (Some(value), BuilderPart::Value { max, sign, .. }) = (value, part) {
+                if value.unsigned_abs().to_string().len() > *max || value < 0 && *sign == 3 {
+                    return Err(NatErr::Throw(vm.throwable_of(
+                        "Ljava/time/DateTimeException;",
+                        "Value exceeds formatter width",
+                    )));
+                }
+            }
+            value.map(|value| match part {
+                BuilderPart::Fraction {
+                    min, max, decimal, ..
+                } => {
+                    let (low, high) = fixed_range(field).unwrap();
+                    let fraction = (value - low) * 1_000_000_000 / (high - low + 1);
+                    let mut text = format!("{fraction:09}")[..*max].to_owned();
+                    while text.len() > *min && text.ends_with('0') {
+                        text.pop();
+                    }
+                    if *decimal && !text.is_empty() {
+                        text.insert(0, '.');
+                    }
+                    text
+                }
+                BuilderPart::Value { min, sign, .. } => {
+                    let digits = value.unsigned_abs().to_string();
+                    let prefix = if value < 0 && *sign != 2 {
+                        "-"
+                    } else if *sign == 1 || *sign == 4 && digits.len() > *min {
+                        "+"
+                    } else {
+                        ""
+                    };
+                    format!("{prefix}{:0>width$}", digits, width = *min)
+                }
+                BuilderPart::Text { entries, .. } => entries
+                    .iter()
+                    .find(|(n, _)| *n == value)
+                    .map_or_else(|| value.to_string(), |(_, text)| text.clone()),
+            })
+        } else if c == '\'' {
             let mut text = String::new();
             if chars.get(i) == Some(&'\'') {
                 text.push('\'');
@@ -822,6 +1243,43 @@ fn install_enums(vm: &mut Vm) -> Result<(), JvmError> {
             class.static_fields.insert(key, (owner, offset));
         }
     }
+    for (class, names) in [
+        (
+            "Ljava/time/format/SignStyle;",
+            &["NORMAL", "ALWAYS", "NEVER", "NOT_NEGATIVE", "EXCEEDS_PAD"][..],
+        ),
+        (
+            "Ljava/time/format/TextStyle;",
+            &[
+                "FULL",
+                "FULL_STANDALONE",
+                "SHORT",
+                "SHORT_STANDALONE",
+                "NARROW",
+                "NARROW_STANDALONE",
+            ][..],
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name: "name",
+            sig: "()Ljava/lang/String;",
+            instance: true,
+            f: enum_name,
+        })?;
+        let owner = vm.ensure_class_by_desc(class)?;
+        vm.classes[owner as usize].superclass = Some(vm.ensure_class_by_desc("Ljava/lang/Enum;")?);
+        for (ordinal, name) in names.iter().enumerate() {
+            let value = vm.alloc_native(
+                class,
+                Native::Enum {
+                    name: (*name).into(),
+                    ordinal: ordinal as i32,
+                },
+            )?;
+            super::multipart_compat::static_value(vm, class, name, class, value)?;
+        }
+    }
     Ok(())
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
@@ -837,6 +1295,15 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         ("Ljava/time/LocalDateTime;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
         ("Ljava/time/ZonedDateTime;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;", true, append_pattern),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendFraction", "(Ljava/time/temporal/TemporalField;IIZ)Ljava/time/format/DateTimeFormatterBuilder;", true, append_fraction),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendValue", "(Ljava/time/temporal/TemporalField;)Ljava/time/format/DateTimeFormatterBuilder;", true, append_value),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendValue", "(Ljava/time/temporal/TemporalField;I)Ljava/time/format/DateTimeFormatterBuilder;", true, append_value),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendValue", "(Ljava/time/temporal/TemporalField;IILjava/time/format/SignStyle;)Ljava/time/format/DateTimeFormatterBuilder;", true, append_value),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendText", "(Ljava/time/temporal/TemporalField;Ljava/util/Map;)Ljava/time/format/DateTimeFormatterBuilder;", true, append_text),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendLiteral", "(C)Ljava/time/format/DateTimeFormatterBuilder;", true, literal_char),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "appendLiteral", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;", true, literal_string),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "optionalStart", "()Ljava/time/format/DateTimeFormatterBuilder;", true, optional_start),
+        ("Ljava/time/format/DateTimeFormatterBuilder;", "optionalEnd", "()Ljava/time/format/DateTimeFormatterBuilder;", true, optional_end),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "parseDefaulting", "(Ljava/time/temporal/TemporalField;J)Ljava/time/format/DateTimeFormatterBuilder;", true, defaulting),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;", true, case_insensitive as dexvm::vm::NativeFn),
         ("Ljava/time/format/DateTimeFormatterBuilder;", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;", true, to_formatter),
@@ -864,6 +1331,113 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fraction_builder_handles_optional_digits_copies_and_invalid_widths() {
+        let mut vm = host_vm();
+        let builder = vm
+            .alloc_native(
+                "Ljava/time/format/DateTimeFormatterBuilder;",
+                Native::DateFormatter {
+                    pattern: "yyyy-MM-dd'T'HH:mm:ss".into(),
+                    zone: String::new(),
+                },
+            )
+            .unwrap();
+        let nano = enum_constant(
+            &mut vm,
+            "Ljava/time/temporal/ChronoField;",
+            "NANO_OF_SECOND",
+        )
+        .unwrap();
+        append_fraction(
+            &mut vm,
+            &[
+                builder,
+                nano,
+                JValue::Int(0),
+                JValue::Int(9),
+                JValue::Int(1),
+            ],
+        )
+        .unwrap();
+        let formatter = to_formatter(&mut vm, &[builder]).unwrap();
+        vm.gc(&[formatter.as_obj(), builder.as_obj(), nano.as_obj()]);
+        for (text, expected) in [
+            ("2024-02-29T12:34:56", 1709210096000_i64),
+            ("2024-02-29T12:34:56.1", 1709210096100),
+            ("2024-02-29T12:34:56.123456789", 1709210096123),
+        ] {
+            let text = vm.alloc_string(text);
+            let date = local_datetime(&mut vm, &[text, formatter]).unwrap();
+            assert!(matches!(vm.payload_of(date),Some(Native::EpochMillis(n)) if n==expected));
+        }
+        for text in [
+            "2024-02-30T12:34:56.12",
+            "2024-02-29T12:34:56.1234567890",
+            "2024-02-29T12:34:56x1",
+        ] {
+            let text = vm.alloc_string(text);
+            assert!(matches!(
+                local_datetime(&mut vm, &[text, formatter]),
+                Err(NatErr::Throw(_))
+            ));
+        }
+        for (min, max) in [(-1, 9), (2, 1), (0, 10)] {
+            assert!(matches!(
+                append_fraction(
+                    &mut vm,
+                    &[
+                        builder,
+                        nano,
+                        JValue::Int(min),
+                        JValue::Int(max),
+                        JValue::Int(1)
+                    ]
+                ),
+                Err(NatErr::Throw(_))
+            ));
+        }
+        let date = vm
+            .alloc_native(
+                "Ljava/time/LocalDateTime;",
+                Native::EpochMillis(1709210096120),
+            )
+            .unwrap();
+        let formatted = format_date(&mut vm, &[formatter, date]).unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(formatted).as_deref(),
+            Some("2024-02-29T12:34:56.12")
+        );
+    }
+    #[test]
+    fn optional_builder_closes_on_snapshot_and_rejects_unmatched_end() {
+        let mut vm = host_vm();
+        let builder = vm
+            .alloc_native(
+                "Ljava/time/format/DateTimeFormatterBuilder;",
+                Native::DateFormatter {
+                    pattern: "yyyy-MM-dd".into(),
+                    zone: String::new(),
+                },
+            )
+            .unwrap();
+        assert!(matches!(
+            optional_end(&mut vm, &[builder]),
+            Err(NatErr::Throw(_))
+        ));
+        optional_start(&mut vm, &[builder]).unwrap();
+        let text = vm.alloc_string("'T'HH:mm:ss");
+        append_pattern(&mut vm, &[builder, text]).unwrap();
+        let formatter = to_formatter(&mut vm, &[builder]).unwrap();
+        let text = vm.alloc_string("2024-02-29");
+        let date = local_date(&mut vm, &[text, formatter]).unwrap();
+        let formatted = format_date(&mut vm, &[formatter, date]).unwrap();
+        assert_eq!(vm.str_of_jvalue(formatted).as_deref(), Some("2024-02-29"));
+        assert!(matches!(
+            optional_end(&mut vm, &[builder]),
+            Err(NatErr::Throw(_))
+        ));
+    }
     fn host_vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         super::super::java_compat::install(&mut vm).unwrap();
