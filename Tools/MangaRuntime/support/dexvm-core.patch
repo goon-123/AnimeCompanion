@@ -111,6 +111,24 @@ index 9111360..37e21b4 100644
                                      ri += 1;
                                      if is_wide_desc(self.str_of(arg_desc)) {
                                          ri += 1;
+@@ -781,7 +796,7 @@ impl Vm {
+                 Flow::Next(0)
+             }
+             Insn::ConstHigh16(d, lit) => {
+-                f.regs[*d as usize] = JValue::Int(lit.wrapping_shl(16));
++                f.regs[*d as usize] = JValue::Int(*lit);
+                 Flow::Next(0)
+             }
+             Insn::ConstWide16(d, lit) | Insn::ConstWide32(d, lit) => {
+@@ -793,7 +808,7 @@ impl Vm {
+                 Flow::Next(0)
+             }
+             Insn::ConstWideHigh16(d, lit) => {
+-                f.regs[*d as usize] = JValue::Long(i64::from(lit.wrapping_shl(16) as u32) << 32);
++                f.regs[*d as usize] = JValue::Long(*lit);
+                 Flow::Next(0)
+             }
+             Insn::ConstString(d, str_idx) | Insn::ConstStringJumbo(d, str_idx) => {
 @@ -877,9 +892,7 @@ impl Vm {
              }
              Insn::NewInstance(d, type_idx) => {

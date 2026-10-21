@@ -63,6 +63,8 @@ bdcf84f tachiyomi-all.stashapp-v1.6.0.apk
 1319949 tachiyomi-en.mangadotnet-v1.6.25.apk
 58fd63f tachiyomi-zh.favcomic-v1.6.4.apk
 4217666-2 tachiyomi-zh.noyacg-v1.6.7.apk
+ff521c1 tachiyomi-all.komga-v1.6.74.apk
+2ba5b61 tachiyomi-zh.jinmantiantang-v1.6.59.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -105,6 +107,8 @@ expected = {
     'tachiyomi-en.mangadotnet-v1.6.25.apk': 'df1987dc6f89b5111a0004b605a3422b50f1afa8b1ed2f2bcc3eda3b854fbdf9',
     'tachiyomi-zh.favcomic-v1.6.4.apk': '5b582b534d6f37850480d4ab0b74013b7020415337fff155f4fe1a0bf946933e',
     'tachiyomi-zh.noyacg-v1.6.7.apk': '119100c7bba5b7158644e0dd75ad0a8aa051b234fab268fe85ed0e1595b1971d',
+    'tachiyomi-all.komga-v1.6.74.apk': '0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9',
+    'tachiyomi-zh.jinmantiantang-v1.6.59.apk': 'baebb449741b28f110f88408ff5a7edf6fc76fae0d60134e4b71c15cb7c3d56a',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

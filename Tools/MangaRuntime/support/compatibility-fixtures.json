@@ -4,6 +4,76 @@
   "meaning": "Exact APK/version and source-index evidence from passing owned-fixture tests. No live verification is implied.",
   "fixtures": [
     {
+      "name": "tachiyomi-zh.jinmantiantang-v1.6.59.apk",
+      "sha256": "baebb449741b28f110f88408ff5a7edf6fc76fae0d60134e4b71c15cb7c3d56a",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/2ba5b61/tachiyomi-zh.jinmantiantang-v1.6.59.apk",
+      "package": "eu.kanade.tachiyomi.extension.zh.jinmantiantang",
+      "cases": [
+        {
+          "test": "java_kotlin_extension_tests::jinman_typed_string_array_settings",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "java_kotlin_extension_tests::jinman_catalog_dated_book_ordered_pages_and_unscrambled_image",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.komga-v1.6.74.apk",
+      "sha256": "0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/ff521c1/tachiyomi-all.komga-v1.6.74.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.komga",
+      "cases": [
+        {
+          "test": "java_kotlin_extension_tests::komga_coroutine_context_factory_and_settings",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "test": "java_kotlin_extension_tests::komga_coroutine_context_factory_and_settings",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "java_kotlin_extension_tests::komga_configured_catalog_async_details_dated_chapters_ordered_pages_and_images",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
       "name": "tachiyomi-all.lanraragi-v1.6.1.apk",
       "sha256": "152a626bd08a1c92c3be2bbfc587cb8ece73aedca27a994d0f6fc5753fa14da6",
       "url": "https://github.com/keiyoushi/extensions/releases/download/d0c0864/tachiyomi-all.lanraragi-v1.6.1.apk",

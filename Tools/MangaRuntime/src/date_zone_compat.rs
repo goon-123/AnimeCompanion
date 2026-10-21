@@ -216,9 +216,7 @@ fn local_now(vm: &mut Vm, args: &[JValue]) -> R {
         args[0]
     };
     let day = local_millis(vm, zone, now_millis()?)?.div_euclid(DAY_MS);
-    let day = u32::try_from(day).map_err(|_| error(vm, "LocalDate precedes supported epoch"))?;
-    vm.alloc_native("Ljava/time/LocalDate;", Native::LocalDay(day))
-        .map_err(NatErr::Fatal)
+    super::local_date_compat::from_day(vm, day)
 }
 fn zoned_now(vm: &mut Vm, args: &[JValue]) -> R {
     let zone = if args.is_empty() {

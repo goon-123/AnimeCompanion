@@ -1,5 +1,5 @@
 //! Typed Java collection arrays and Kotlin indexed-value components.
-use dexvm::vm::object::{ArrayData, Native};
+use dexvm::vm::object::{ArrayData, ClassOrPrim, Native};
 use dexvm::vm::{error::JvmError, NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 
@@ -12,8 +12,204 @@ fn array_store(vm: &mut Vm) -> NatErr {
     ))
 }
 
+fn charge(vm: &mut Vm, count: usize) -> Result<(), NatErr> {
+    if count > 1_000_000 || vm.budget <= count as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= count as i64 + 1;
+    Ok(())
+}
+
+fn descriptor(vm: &mut Vm, array: JValue) -> Result<String, NatErr> {
+    let JValue::Obj(id) = array else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    let object = &vm.arena.objects[id as usize];
+    if !matches!(object.native, Some(Native::Array(_))) {
+        return Err(NatErr::Throw(vm.err_iae("Expected an array")));
+    }
+    Ok(vm
+        .str_of(vm.classes[object.class as usize].descriptor)
+        .to_owned())
+}
+
+fn check_elements(vm: &mut Vm, desc: &str, values: &[JValue]) -> Result<(), NatErr> {
+    let target = vm.ensure_class_by_desc(&desc[1..]).map_err(NatErr::Fatal)?;
+    for value in values {
+        if value.is_null_ref() {
+            continue;
+        }
+        let JValue::Obj(id) = value else {
+            return Err(array_store(vm));
+        };
+        if !vm
+            .is_assignable(vm.arena.objects[*id as usize].class, target)
+            .map_err(NatErr::Fatal)?
+        {
+            return Err(array_store(vm));
+        }
+    }
+    Ok(())
+}
+
+// Object array payloads do not carry their component type. Always consult the
+// arena class, including for nested arrays; elem_desc() would erase it.
+fn copy_array(vm: &mut Vm, args: &[JValue], range: bool) -> R {
+    let original = descriptor(vm, args[0])?;
+    let Some(Native::Array(source)) = vm.payload_of(args[0]) else {
+        unreachable!()
+    };
+    let (from, to, type_index) = if range {
+        (args[1].as_int(), args[2].as_int(), 3)
+    } else {
+        (0, args[1].as_int(), 2)
+    };
+    if !range && to < 0 {
+        return Err(NatErr::Throw(vm.err_neg_arr_size()));
+    }
+    if range && from > to {
+        return Err(NatErr::Throw(vm.err_iae("Array range is reversed")));
+    }
+    if from < 0 || from as usize > source.len() {
+        return Err(NatErr::Throw(vm.err_aioobe(from, source.len() as i32)));
+    }
+    let length = (i64::from(to) - i64::from(from)) as usize;
+    charge(vm, length)?;
+    let desc = if let Some(class) = args.get(type_index) {
+        if class.is_null_ref() {
+            return Err(NatErr::Throw(vm.err_npe()));
+        }
+        match vm.payload_of(*class) {
+            Some(Native::ClassObj(ClassOrPrim::Class(id))) => {
+                let d = vm.str_of(vm.classes[id as usize].descriptor).to_owned();
+                if !d.starts_with("[L") && !d.starts_with("[[") {
+                    return Err(NatErr::Throw(
+                        vm.err_iae("Expected a reference array class"),
+                    ));
+                }
+                d
+            }
+            _ if class.is_null_ref() => return Err(NatErr::Throw(vm.err_npe())),
+            _ => return Err(NatErr::Throw(vm.err_iae("Expected an array class"))),
+        }
+    } else {
+        original
+    };
+    let mut output = ArrayData::new(&desc[1..], length);
+    let copied = length.min(source.len() - from as usize);
+    if let ArrayData::Obj(values) = &source {
+        check_elements(vm, &desc, &values[from as usize..from as usize + copied])?;
+    }
+    for i in 0..copied {
+        output.set(i, source.get(from as usize + i));
+    }
+    vm.alloc_native(&desc, Native::Array(output))
+        .map_err(NatErr::Fatal)
+}
+fn copy_of(vm: &mut Vm, args: &[JValue]) -> R {
+    copy_array(vm, args, false)
+}
+fn copy_range(vm: &mut Vm, args: &[JValue]) -> R {
+    copy_array(vm, args, true)
+}
+
+fn concat(vm: &mut Vm, args: &[JValue], element: bool) -> R {
+    let desc = descriptor(vm, args[0])?;
+    let Some(Native::Array(ArrayData::Obj(mut left))) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_iae("Expected a reference array")));
+    };
+    let right = if element {
+        vec![args[1]]
+    } else {
+        if args[1].is_null_ref() {
+            return Err(NatErr::Throw(vm.err_npe()));
+        }
+        match vm.payload_of(args[1]) {
+            Some(Native::Array(ArrayData::Obj(v)) | Native::List(v) | Native::Set(v)) => v,
+            _ => return Err(NatErr::Throw(vm.err_npe())),
+        }
+    };
+    charge(vm, left.len().saturating_add(right.len()))?;
+    check_elements(vm, &desc, &right)?;
+    left.extend(right);
+    vm.alloc_native(&desc, Native::Array(ArrayData::Obj(left)))
+        .map_err(NatErr::Fatal)
+}
+fn plus(vm: &mut Vm, args: &[JValue]) -> R {
+    concat(vm, args, false)
+}
+fn plus_element(vm: &mut Vm, args: &[JValue]) -> R {
+    concat(vm, args, true)
+}
+fn set_serializer_init(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[1].is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    let object = &mut vm.arena.objects[args[0].as_obj() as usize];
+    object.native = Some(Native::Opaque);
+    object.fields = vec![args[1]];
+    Ok(JValue::Null)
+}
+fn set_descriptor(vm: &mut Vm, args: &[JValue]) -> R {
+    let child = vm.arena.objects[args[0].as_obj() as usize].fields[0];
+    let value = vm
+        .alloc_native(
+            "Lkotlinx/serialization/internal/PluginGeneratedSerialDescriptor;",
+            Native::SerialDescriptor {
+                name: "kotlin.collections.LinkedHashSet".into(),
+                elements: vec!["0".into()],
+                element_annotations: vec![vec![]],
+            },
+        )
+        .map_err(NatErr::Fatal)?;
+    vm.arena.objects[value.as_obj() as usize].fields = vec![child];
+    Ok(value)
+}
+fn set_deserialize(vm: &mut Vm, args: &[JValue]) -> R {
+    if let Some(Native::JsonDecoder { element, .. }) = vm.payload_of(args[1]) {
+        match vm.payload_of(element) {
+            Some(Native::Json(dexvm::vm::object::JsonVal::Array(values)))
+                if values.len() <= 10_000 => {}
+            _ => {
+                return Err(NatErr::Throw(vm.throwable_of(
+                    "Lkotlinx/serialization/SerializationException;",
+                    "Expected a bounded JSON set array",
+                )))
+            }
+        }
+    }
+    let child = vm.arena.objects[args[0].as_obj() as usize].fields[0];
+    let serializer = vm
+        .alloc_native(
+            "Lkotlinx/serialization/internal/ArrayListSerializer;",
+            Native::ArrayListSerializer { child },
+        )
+        .map_err(NatErr::Fatal)?;
+    let list = super::serialization_compat::list_deserialize(vm, &[serializer, args[1]])?;
+    let Some(Native::List(values)) = vm.payload_of(list) else {
+        return Err(NatErr::Throw(vm.err_iae("Expected decoded list")));
+    };
+    charge(vm, values.len())?;
+    let set = vm
+        .alloc_native("Ljava/util/LinkedHashSet;", Native::Set(vec![]))
+        .map_err(NatErr::Fatal)?;
+    for value in values {
+        let length = match vm.payload_of(set) {
+            Some(Native::Set(v)) => v.len(),
+            _ => unreachable!(),
+        };
+        charge(vm, length)?;
+        vm.invoke_virtual_args(set, "add", "(Ljava/lang/Object;)Z", vec![value])
+            .map_err(|e| match e {
+                JvmError::Uncaught(id) => NatErr::Throw(id),
+                e => NatErr::Fatal(e),
+            })?;
+    }
+    Ok(set)
+}
+
 fn typed_array(vm: &mut Vm, args: &[JValue]) -> R {
-    if args[0].is_null() || args[1].is_null() {
+    if args[0].is_null_ref() || args[1].is_null_ref() {
         return Err(NatErr::Throw(vm.err_npe()));
     }
     let values = match vm.payload_of(args[0]) {
@@ -145,6 +341,97 @@ fn array_store_init(vm: &mut Vm, args: &[JValue]) -> R {
 }
 
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (name, sig, f) in [
+        (
+            "<init>",
+            "(Lkotlinx/serialization/KSerializer;)V",
+            set_serializer_init as dexvm::vm::NativeFn,
+        ),
+        (
+            "getDescriptor",
+            "()Lkotlinx/serialization/descriptors/SerialDescriptor;",
+            set_descriptor,
+        ),
+        (
+            "deserialize",
+            "(Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;",
+            set_deserialize,
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lkotlinx/serialization/internal/LinkedHashSetSerializer;",
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
+    for sig in [
+        "([Ljava/lang/Object;[Ljava/lang/Object;)[Ljava/lang/Object;",
+        "([Ljava/lang/Object;Ljava/util/Collection;)[Ljava/lang/Object;",
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lkotlin/collections/ArraysKt;",
+            name: "plus",
+            sig,
+            instance: false,
+            f: plus,
+        })?;
+    }
+    vm.register_native(NativeEntry {
+        class: "Lkotlin/collections/ArraysKt;",
+        name: "plus",
+        sig: "([Ljava/lang/Object;Ljava/lang/Object;)[Ljava/lang/Object;",
+        instance: false,
+        f: plus_element,
+    })?;
+    for (name, sig, f) in [
+        (
+            "copyOf",
+            "([Ljava/lang/Object;I)[Ljava/lang/Object;",
+            copy_of as dexvm::vm::NativeFn,
+        ),
+        (
+            "copyOf",
+            "([Ljava/lang/Object;ILjava/lang/Class;)[Ljava/lang/Object;",
+            copy_of,
+        ),
+        (
+            "copyOfRange",
+            "([Ljava/lang/Object;II)[Ljava/lang/Object;",
+            copy_range,
+        ),
+        (
+            "copyOfRange",
+            "([Ljava/lang/Object;IILjava/lang/Class;)[Ljava/lang/Object;",
+            copy_range,
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Ljava/util/Arrays;",
+            name,
+            sig,
+            instance: false,
+            f,
+        })?;
+    }
+    {
+        let sig = "(Ljava/util/Collection;[Ljava/lang/Object;)[Ljava/lang/Object;";
+        vm.register_native(NativeEntry {
+            class: "Lkotlin/jvm/internal/CollectionToArray;",
+            name: "toArray",
+            sig,
+            instance: false,
+            f: typed_array,
+        })?;
+    }
+    vm.register_native(NativeEntry {
+        class: "Lkotlin/jvm/internal/SpreadBuilder;",
+        name: "toArray",
+        sig: "([Ljava/lang/Object;)[Ljava/lang/Object;",
+        instance: true,
+        f: typed_array,
+    })?;
     vm.register_native(NativeEntry {
         class: "Lkotlin/collections/CollectionsKt;",
         name: "removeAll",
@@ -199,6 +486,98 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kotlin_array_concatenation_and_java_copies_keep_runtime_component_types() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let a = vm.alloc_string("alpha");
+        let b = vm.alloc_string("beta");
+        let array = vm
+            .alloc_native(
+                "[Ljava/lang/String;",
+                Native::Array(ArrayData::Obj(vec![a])),
+            )
+            .unwrap();
+        let list = vm
+            .alloc_native("Ljava/util/ArrayList;", Native::List(vec![b, JValue::Null]))
+            .unwrap();
+        let combined = plus(&mut vm, &[array, list]).unwrap();
+        assert_eq!(
+            descriptor(&mut vm, combined).unwrap(),
+            "[Ljava/lang/String;"
+        );
+        assert!(
+            matches!(vm.payload_of(combined),Some(Native::Array(ArrayData::Obj(v))) if v==[a,b,JValue::Null])
+        );
+        let copy = copy_of(&mut vm, &[combined, JValue::Int(5)]).unwrap();
+        assert_eq!(descriptor(&mut vm, copy).unwrap(), "[Ljava/lang/String;");
+        assert!(
+            matches!(vm.payload_of(copy),Some(Native::Array(ArrayData::Obj(v))) if v==[a,b,JValue::Null,JValue::Null,JValue::Null])
+        );
+        let range = copy_range(&mut vm, &[array, JValue::Int(1), JValue::Int(3)]).unwrap();
+        assert!(
+            matches!(vm.payload_of(range),Some(Native::Array(ArrayData::Obj(v))) if v==[JValue::Null,JValue::Null])
+        );
+        let clazz = vm.ensure_class_by_desc("[Ljava/lang/Object;").unwrap();
+        let clazz = vm.class_obj(clazz).unwrap();
+        let widened = copy_of(&mut vm, &[combined, JValue::Int(2), clazz]).unwrap();
+        assert_eq!(descriptor(&mut vm, widened).unwrap(), "[Ljava/lang/Object;");
+        let number = vm
+            .alloc_native("Ljava/lang/Integer;", Native::IntBox(7))
+            .unwrap();
+        assert!(matches!(
+            plus_element(&mut vm, &[array, number]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(
+            plus(&mut vm, &[array, JValue::Int(0)]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(
+            copy_of(&mut vm, &[array, JValue::Int(-1)]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(
+            copy_range(&mut vm, &[array, JValue::Int(2), JValue::Int(3)]),
+            Err(NatErr::Throw(_))
+        ));
+        vm.budget = 1;
+        assert!(matches!(
+            copy_of(&mut vm, &[array, JValue::Int(i32::MAX)]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+    }
+
+    #[test]
+    fn nested_array_copies_retain_dimensions_and_reject_incompatible_narrowing() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let text = vm.alloc_string("owned");
+        let inner = vm
+            .alloc_native(
+                "[Ljava/lang/String;",
+                Native::Array(ArrayData::Obj(vec![text])),
+            )
+            .unwrap();
+        let outer = vm
+            .alloc_native(
+                "[[Ljava/lang/String;",
+                Native::Array(ArrayData::Obj(vec![inner])),
+            )
+            .unwrap();
+        let copied = copy_of(&mut vm, &[outer, JValue::Int(2)]).unwrap();
+        assert_eq!(descriptor(&mut vm, copied).unwrap(), "[[Ljava/lang/String;");
+        assert!(
+            matches!(vm.payload_of(copied),Some(Native::Array(ArrayData::Obj(v))) if v==[inner,JValue::Null])
+        );
+        let wrong = vm.ensure_class_by_desc("[Ljava/lang/Integer;").unwrap();
+        let wrong = vm.class_obj(wrong).unwrap();
+        assert!(matches!(
+            copy_of(&mut vm, &[inner, JValue::Int(1), wrong]),
+            Err(NatErr::Throw(_))
+        ));
+    }
 
     fn predicate(vm: &mut Vm, args: &[JValue]) -> R {
         vm.alloc_native(

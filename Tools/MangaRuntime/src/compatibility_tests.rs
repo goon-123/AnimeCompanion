@@ -2,6 +2,51 @@
 use super::*;
 
 #[test]
+fn dalvik_high_constants_keep_all_int_long_and_floating_point_bits() {
+    use std::sync::{Arc, OnceLock};
+    for wide in [false, true] {
+        for high in [1_u16, 0x1234, 0x3f80, 0x3ff0, 0x7f80, 0x8000, 0xffff] {
+            let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+            vm.register_native(NativeEntry {
+                class: "LOwnedConstants;",
+                name: "value",
+                sig: "()J",
+                instance: false,
+                f: abstract_function,
+            })
+            .unwrap();
+            let class = vm.ensure_class_by_desc("LOwnedConstants;").unwrap();
+            let key = (vm.intern("value"), vm.intern("()J"));
+            let slot = vm.classes[class as usize].dispatch[&key];
+            let method = &mut vm.classes[class as usize].methods[slot as usize];
+            method.native_key = None;
+            method.insns = OnceLock::new();
+            method.code = Some(Arc::new(dexvm::dex::CodeItem {
+                registers_size: 2,
+                ins_size: 0,
+                outs_size: 0,
+                insns: vec![
+                    if wide { 0x19 } else { 0x15 },
+                    high,
+                    if wide { 0x10 } else { 0x0f },
+                ]
+                .into(),
+                tries: vec![],
+            }));
+            let value = dexvm::vm::interpret::run(&mut vm, class, slot, vec![]).unwrap();
+            assert_eq!(
+                value,
+                if wide {
+                    JValue::Long(i64::from(high as i16) << 48)
+                } else {
+                    JValue::Int(i32::from(high as i16) << 16)
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn dalvik_floating_unary_instructions_read_raw_constants() {
     use std::sync::{Arc, OnceLock};
     for (opcode, input, expected) in [

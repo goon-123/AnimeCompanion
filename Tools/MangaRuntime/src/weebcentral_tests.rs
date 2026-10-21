@@ -126,6 +126,7 @@ fn exhausted_task(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
 }
 fn task_vm(f: dexvm::vm::NativeFn) -> (Vm, Vec<JValue>) {
     let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+    coroutine_compat::install(&mut vm).unwrap();
     vm.register_native(NativeEntry {
         class: "Lkotlin/jvm/functions/Function2;",
         name: "invoke",

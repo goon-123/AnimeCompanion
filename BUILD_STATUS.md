@@ -1,3 +1,15 @@
+## Shared Java/Kotlin contexts, collections, reflection and dates — build 55
+
+Version 0.25.8. Fix the shared `const/high16`/`const-wide/high16` double shift, keyed coroutine contexts with cancellation/error restoration, typed array concatenation/copying, actual ordered-set deserialization, reflective array/field metadata, signed Gregorian LocalDate arithmetic/rendering and Java Unicode-block regex compilation. Preserve transport ownership and all VM/resource limits. Komga's source-owned Authenticator now executes bounded challenge/retry flows with correct static Basic-auth arguments and charsets.
+
+Komga 1.6.74 enumerates three sources; source 0 completes the owned catalog/details/dated chapters/ordered pages/image-transport flow on a configured public HTTPS server. Dates include 1969-12-31 and 2024-02-29. Accepted and rejected username/password authentication are tested. JinmanTiantang 1.6.59 loads all seven mirror choices and executes owned catalog/details/dated chapters/ordered pages plus an unscrambled image. A separate regression records the remaining `BufferedSource.peek()` blocker for scrambled images; Jinman is not marked fully compatible.
+
+Local validation: 165 Rust regressions, 16 audit/evidence/privacy tests, warnings-denied Clippy, formatting, verified interpreter patch, shell/Python syntax and Safari bundle/version checks pass. Two added Swift/C/Rust native cases reuse the owned fixtures. Native iPhone/iPad execution and the unsigned build-55 IPA require hosted CI. Full Java/Kotlin API coverage, source-written state persistence, local/private HTTP, modern Jinman image processing and live-site certification remain outside this verified result.
+
+The [build-55 focused matrix](docs/manga-compatibility/build55/compatibility.html) inventories 2/2 packages, enumerates four sources and records 30 production C-ABI preflights with no known cells left unexecuted. It shows one verified offline row (Komga source 0), one partial row (Jinman) and two enumeration-only Komga rows. Its runtime revision is `001e361119e0adbd21c18a20a7ecd58b42ea03bc`; generic image probing does not exercise Jinman's scrambled path. The full-catalog snapshot remains explicitly build 53.
+
+The initial published build-55 commit's hosted Rust regressions, device/universal simulator libraries, core tests, Seanime runtime and Safari/browser checks passed. Native readers/layout checks and unsigned IPA packaging remain in progress, and the final evidence commit restarts checks for the updated branch. An isolated migration check also preserves/upgrades the exact build-54 generated interpreter and rejects unknown local edits without changing them.
+
 ## Source framework, preferences and configured readers — build 54
 
 Version 0.25.7. Continue manga compatibility from the merged build-53 matrix. Add UnmeteredSource/Source inheritance, stable UpdateStrategy constants, the default DNS token, typed SharedPreferences.getAll snapshots, preference title getters and monotonic timing/catchable cancellation exceptions. Keep transport, source identity, VM limits and credential boundaries.
