@@ -26,7 +26,9 @@ mod java_compat;
 mod json_compat;
 mod json_serializer_compat;
 mod jsoup_compat;
+mod kotlin_runtime_compat;
 mod kotlin_type_compat;
+mod locale_compat;
 mod okio_compat;
 mod reflection_compat;
 mod regex_compat;
@@ -49,6 +51,8 @@ mod hentainexus_tests;
 mod http_body_tests;
 #[cfg(test)]
 mod json_extension_tests;
+#[cfg(test)]
+mod kotlin_extension_tests;
 
 // The extension supplies these functional-interface implementations itself.
 // Register the host type so DEX lambdas can resolve their Java 8 interfaces;
@@ -1064,10 +1068,12 @@ where
     install_host_fields(ext.ctx().vm()).map_err(|e| e.to_string())?;
     array_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     java_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    locale_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_zone_compat::install(ext.ctx().vm(), &command.time_zone_id).map_err(|e| e.to_string())?;
     reflection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     kotlin_type_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    kotlin_runtime_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     regex_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     uri_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     json_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
@@ -1078,6 +1084,11 @@ where
             "decodeSequentially",
             "()Z",
             json_decode_sequentially as dexvm::vm::NativeFn,
+        ),
+        (
+            "decodeBoolean",
+            "()Z",
+            json_decode_boolean as dexvm::vm::NativeFn,
         ),
         (
             "decodeElementIndex",

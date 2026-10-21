@@ -1,5 +1,11 @@
 # Anime Companion
 
+### More shared manga extension APIs (0.25.5 / build 52)
+
+Add standard Locale constants and localized chapter-date text, Kotlin random byte generation and collection marker interfaces. Complete reader replays also expose and fix shared hex defaults, nullable Boolean decoding, float boxing, map lookup, URL form encoding and millisecond Instant addition.
+
+FuryoSquad 1.6.0, MangaFox.fun/MangaHub 1.6.38 and Assorted Scans/MangAdventure 1.6.0 now pass owned catalog, details, dated chapters, ordered pages and image transport. MangaHub's encrypted page branch remains unverified. All 131 Rust regressions and 10 audit checks pass locally; three native Swift/C/Rust cases are added. Hosted iPhone/iPad, catalog-audit and IPA results are tracked in [build status](BUILD_STATUS.md). These fixtures do not certify live websites or every extension.
+
 ### More manga readers and clearer errors (0.25.0 / build 47)
 
 Expand shared runtime compatibility for Comic Fury, Comics Kingdom, Project Suki and MangaBuddy/MangaK. Additional real-extension tests cover catalog covers, chapter/page parsing and image requests. Comic Fury and Comics Kingdom also have combined title/chapter checks; Project Suki and MangaK title-update coverage remains incomplete.

@@ -12,6 +12,27 @@ pub(super) fn json_decode_sequentially(vm: &mut Vm, args: &[JValue]) -> Result<J
     };
     Ok(JValue::Int(i32::from(sequential)))
 }
+pub(super) fn json_decode_boolean(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    use dexvm::vm::{
+        error::JvmError,
+        object::{JsonVal, Native},
+    };
+    if vm.budget <= 0 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= 1;
+    let element = match vm.payload_of(args[0]) {
+        Some(Native::JsonDecoder { element, .. }) => element,
+        _ => return Err(abstract_json_error(vm)),
+    };
+    match vm.payload_of(element) {
+        Some(Native::Json(JsonVal::Bool(value))) => Ok(JValue::Int(i32::from(value))),
+        _ => Err(NatErr::Throw(vm.throwable_of(
+            "Lkotlinx/serialization/SerializationException;",
+            "Expected a JSON boolean",
+        ))),
+    }
+}
 pub(super) fn json_element_index(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     use dexvm::vm::object::{JsonVal, Native};
     let (element, index) = match vm.payload_of(args[0]) {
@@ -476,6 +497,54 @@ pub(super) fn list_deserialize(vm: &mut Vm, args: &[JValue]) -> Result<JValue, N
 mod tests {
     use super::*;
     use dexvm::vm::object::Native;
+
+    #[test]
+    fn scalar_boolean_decoder_distinguishes_false_null_and_wrong_types() {
+        use dexvm::vm::object::JsonVal;
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        for (value, expected) in [
+            (JsonVal::Bool(true), Some(1)),
+            (JsonVal::Bool(false), Some(0)),
+            (JsonVal::Null, None),
+            (JsonVal::Int(0), None),
+            (JsonVal::Str("false".into()), None),
+        ] {
+            let element = vm
+                .alloc_native(
+                    "Lkotlinx/serialization/json/JsonPrimitive;",
+                    Native::Json(value),
+                )
+                .unwrap();
+            let decoder = vm
+                .alloc_native(
+                    "Lkotlinx/serialization/json/internal/StreamingJsonDecoder;",
+                    Native::JsonDecoder {
+                        element,
+                        members: None,
+                        index: 0,
+                        module: None,
+                    },
+                )
+                .unwrap();
+            vm.gc(&[decoder.as_obj()]);
+            match expected {
+                Some(value) => assert_eq!(
+                    json_decode_boolean(&mut vm, &[decoder]).unwrap(),
+                    JValue::Int(value)
+                ),
+                None => assert!(matches!(
+                    json_decode_boolean(&mut vm, &[decoder]),
+                    Err(NatErr::Throw(_))
+                )),
+            }
+            vm.budget = 0;
+            assert!(matches!(
+                json_decode_boolean(&mut vm, &[decoder]),
+                Err(NatErr::Fatal(dexvm::vm::error::JvmError::BudgetExceeded))
+            ));
+            vm.budget = 1_000;
+        }
+    }
 
     #[test]
     fn buffered_reads_consume_exact_bytes_and_preserve_cursor_on_failure() {

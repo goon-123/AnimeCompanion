@@ -1,7 +1,52 @@
-//! Java URI relativization operates on package data, without any networking.
+//! Java URI and form-encoding contracts operate on data without networking.
 use dexvm::vm::object::Native;
 use dexvm::vm::{error::JvmError, NatErr, NativeEntry, Vm};
 use dexvm::JValue;
+static ORIGINAL_FORM: std::sync::OnceLock<[dexvm::vm::NativeFn; 2]> = std::sync::OnceLock::new();
+fn form(vm: &mut Vm, args: &[JValue], decode: bool) -> Result<JValue, NatErr> {
+    let text = vm
+        .str_of_jvalue(args[0])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    let charset = vm
+        .str_of_jvalue(args[1])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    let cost = text.len().saturating_mul(12).saturating_add(12);
+    if text.len() > 256_000 || charset.len() > 64 || vm.budget <= cost as i64 {
+        return Err(NatErr::Fatal(JvmError::BudgetExceeded));
+    }
+    vm.budget -= cost as i64;
+    if decode {
+        let bytes = text.as_bytes();
+        for (i, &b) in bytes.iter().enumerate() {
+            if b == b'%'
+                && (i + 2 >= bytes.len()
+                    || !bytes[i + 1].is_ascii_hexdigit()
+                    || !bytes[i + 2].is_ascii_hexdigit())
+            {
+                return Err(NatErr::Throw(vm.err_iae("Malformed form escape")));
+            }
+        }
+    }
+    // The pinned helper expects an instance slot even though both Java APIs
+    // are static. Adapt that private calling convention, retaining charsets.
+    // The pinned charset normalizer accepts UTF8 but omits the canonical
+    // UTF-8 spelling. Both names designate the same charset in Java.
+    let charset = if charset.eq_ignore_ascii_case("UTF-8") {
+        vm.alloc_string("UTF8")
+    } else {
+        args[1]
+    };
+    ORIGINAL_FORM
+        .get()
+        .ok_or_else(|| NatErr::Fatal(JvmError::Resolution("Missing form encoder".into())))?
+        [usize::from(decode)](vm, &[JValue::Null, args[0], charset])
+}
+fn form_encode(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    form(vm, args, false)
+}
+fn form_decode(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
+    form(vm, args, true)
+}
 
 struct Parts<'a> {
     scheme: Option<&'a str>,
@@ -119,6 +164,40 @@ fn relativize(vm: &mut Vm, args: &[JValue]) -> Result<JValue, NatErr> {
     }
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    let entries = [
+        (
+            "Ljava/net/URLEncoder;",
+            "encode",
+            form_encode as dexvm::vm::NativeFn,
+        ),
+        ("Ljava/net/URLDecoder;", "decode", form_decode),
+    ];
+    const SIG: &str = "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;";
+    if ORIGINAL_FORM.get().is_none() {
+        let mut functions = Vec::new();
+        for (class, name, _) in entries {
+            let key = (vm.intern(class), vm.intern(name), vm.intern(SIG));
+            functions.push(
+                *vm.natives
+                    .get(&key)
+                    .ok_or_else(|| JvmError::Resolution("Missing form native".into()))?,
+            );
+        }
+        let _ = ORIGINAL_FORM.set(
+            functions
+                .try_into()
+                .map_err(|_| JvmError::Resolution("Invalid form native table".into()))?,
+        );
+    }
+    for (class, name, f) in entries {
+        vm.register_native(NativeEntry {
+            class,
+            name,
+            sig: SIG,
+            instance: false,
+            f,
+        })?;
+    }
     vm.register_native(NativeEntry {
         class: "Ljava/net/URI;",
         name: "relativize",
@@ -130,6 +209,50 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn static_form_encoding_round_trips_unicode_and_keeps_errors_bounded() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let input = vm.alloc_string("é space+/?&=~*");
+        let charset = vm.alloc_string("utf-8");
+        let sig = "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;";
+        let encoded = vm
+            .invoke_static("Ljava/net/URLEncoder;", "encode", sig, vec![input, charset])
+            .unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(encoded).as_deref(),
+            Some("%C3%A9+space%2B%2F%3F%26%3D%7E*")
+        );
+        let decoded = vm
+            .invoke_static(
+                "Ljava/net/URLDecoder;",
+                "decode",
+                sig,
+                vec![encoded, charset],
+            )
+            .unwrap();
+        assert_eq!(vm.str_of_jvalue(decoded), vm.str_of_jvalue(input));
+        let latin = vm.alloc_string("ISO-8859-1");
+        let accent = vm.alloc_string("é");
+        let encoded = form_encode(&mut vm, &[accent, latin]).unwrap();
+        assert_eq!(vm.str_of_jvalue(encoded).as_deref(), Some("%E9"));
+        for value in ["%", "%A", "%GG", "%0+"] {
+            let malformed = vm.alloc_string(value);
+            assert!(matches!(
+                form_decode(&mut vm, &[malformed, charset]),
+                Err(NatErr::Throw(_))
+            ));
+        }
+        assert!(matches!(
+            form_encode(&mut vm, &[JValue::Null, charset]),
+            Err(NatErr::Throw(_))
+        ));
+        vm.budget = 0;
+        assert!(matches!(
+            form_encode(&mut vm, &[input, charset]),
+            Err(NatErr::Fatal(JvmError::BudgetExceeded))
+        ));
+    }
     #[test]
     fn relativize_preserves_boundaries_queries_fragments_and_unchanged_identity() {
         for (base, target, expected) in [

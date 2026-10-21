@@ -133,6 +133,24 @@ The Swift host supplies `timeZoneID` on every command; older/offline callers def
 
 The complete flows also verify shared Jsoup Element/Document.toString outer-HTML behavior and fresh OkHttp URL builder initialization/required-component checks. All 118 Rust regressions and 10 audit parser/evidence/privacy tests pass locally. The final targeted audit inventories 54 packages, enumerates 56 sources and runs 434 bounded offline probes with no unexecuted operation cells. None of the six original API gaps appears in exercised paths; further clock, formatter, TLS and serializer APIs remain. Three native Swift/C/Rust tests share the same neutral fixtures. Native iPhone/iPad execution, full-catalog scanning and unsigned IPA packaging remain pending build-51 CI; no real chapter content or source-specific production parser is included.
 
+## Locale and Kotlin runtime compatibility (build 52)
+
+Version 0.25.5 targets the completed build-51 audit's next three shared gaps: missing Locale constants (16 packages), Random.Default.nextBytes(Int) (11) and KMappedMarker (7). These are 34 distinct packages, not 34 newly working readers.
+
+Supply rooted standard Locale constants, constructor language/country/variant identity, equality and getters. DateTimeFormatter ofPattern/toFormatter/withLocale retain Locale references alongside defaults, case options and zones through copies and GC. Compiled-in chrono/pure-rust-locales tables provide month and weekday text; French dotted abbreviations and accented case matching have regressions. Unknown textual locales fail explicitly while supported numeric patterns still work. This does not implement all Java Locale/BCP47 behavior, locale-sensitive casing, calendar extensions, resolver styles or complete CLDR date patterns. Existing pre-1970 LocalDate and millisecond limits remain.
+
+Kotlin collection markers are actual interfaces with their mutable-parent relationships; Java collections are not falsely marked Kotlin read-only. Default-generator byte arrays use bounded host entropy, preserve array identity and requested subranges, and honor the default-argument mask. Negative sizes, invalid ranges and VM limits retain errors. Seeded random conformance is not expanded.
+
+Complete real-APK replays additionally require correct Kotlin hex default masks, Function5 resolution for the APK's own lambda, boxed Float values, virtual Map.getValue with present-null handling, scalar Boolean decoding, static URL form-encoding arguments and the canonical UTF-8 charset spelling. Kotlin Instant addition preserves the existing host's whole-millisecond Duration representation and saturating millisecond boundary. It is not full Kotlin Duration/Instant precision or range support. No source-specific request builder or decoder is added to production.
+
+| Extension | Exact-version owned-fixture evidence, source 0 |
+| --- | --- |
+| FuryoSquad 1.6.0 | Popular, details, accented French leap-day/August chapter dates, ordered pages, image transport |
+| MangaFox.fun 1.6.38 (MangaHub) | Popular with random hex request key, details, dated fractional chapter, plaintext JSON page metadata, ordered pages, image transport |
+| Assorted Scans 1.6.0 (MangAdventure) | Popular delegated iterable, nullable Boolean DTO, details, dated fractional chapter, ordered pages, image transport |
+
+All 131 Rust regressions and 10 audit parser/evidence/privacy checks pass locally, along with formatting, warnings-denied Clippy, production-library compilation and generated dependency notices. The selected audit inventories all 34 packages, enumerates 49 sources and executes 357 bounded offline probes, with no unexecuted cells and no observed runtime API gaps in these exercised paths. Complete owned-flow evidence in this subset is limited to the three fixtures; empty-response acceptance is not reader success. Three Swift/C/Rust cases reuse the same neutral owned response files and pinned APKs; native execution awaits hosted Xcode CI. MangaHub's AES-GCM branch, live website availability and cookie persistence from guest CookieJar.saveFromResponse remain unverified or incomplete. Test-only APKs/content are absent from the production bundle. See [BUILD_STATUS.md](../../BUILD_STATUS.md) for hosted build results.
+
 ## Build and verification
 
 ```bash
