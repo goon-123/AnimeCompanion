@@ -138,7 +138,14 @@ def probe(library, apk_path, output, modern, seconds=15):
         return
     indices = [s["index"] for s in sources
                if isinstance(s.get("index"), int) and 0 <= s["index"] < 512]
-    record({"record": "sources", "indices": sorted(set(indices))})
+    metadata = [{"index": source["index"], "id": source["id"],
+                 "language": source["language"]}
+                for source in sources if source.get("index") in indices
+                and isinstance(source.get("id"), str)
+                and re.fullmatch(r"-?[0-9]{1,20}", source["id"])
+                and isinstance(source.get("language"), str)
+                and re.fullmatch(r"[A-Za-z0-9-]{1,12}", source["language"])]
+    record({"record": "sources", "indices": sorted(set(indices)), "metadata": metadata})
     # Test each actual source instance; unexecuted cells stay explicitly untested.
     latest = {s["index"]: s.get("supportsLatest", False) for s in sources}
     for index in sorted(set(indices)):

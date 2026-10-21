@@ -10,6 +10,7 @@ App/Info.plist
 SafariExtension/Info.plist
 Tools/SafariExtension/node_modules/
 Tools/SeanimeRuntime/node_modules/
+Tools/MangaAudit/node_modules/
 App/SeanimeRuntimeResources/
 Tools/MangaRuntime/target/
 App/MangaRuntimeLicenses.txt

@@ -7,12 +7,15 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from manga_audit.dex import Dex, DexError, apk_inventory, unmatched_references
 from manga_audit.report import cell, fixture_evidence, passing_tests, group_gaps
 from manga_audit.runtime import classify
+from manga_audit.matrix import make_matrix, render_html, render_csv, write_matrix
+from manga_audit.dependencies import dependency_families, dependency_summary
 
 spec = importlib.util.spec_from_file_location("audit_cli", ROOT / "scripts/audit-manga-compatibility.py")
 cli = importlib.util.module_from_spec(spec)
@@ -147,6 +150,95 @@ class EvidenceTests(unittest.TestCase):
         script = (ROOT / "scripts/test-manga-runtime.sh").read_text()
         expected = dict(re.findall(r"'([^']+\.apk)': '([0-9a-f]{64})'", script))
         self.assertEqual({f["name"]: f["sha256"] for f in fixtures["fixtures"]}, expected)
+
+
+class MatrixTests(unittest.TestCase):
+    def entry(self, **changes):
+        value = {"package": "eu.kanade.tachiyomi.extension.en.owned", "name": "owned-v1.apk", "sha256": "a" * 64,
+                 "displayName": "Owned extension", "evidence": {"sources": {}, "historical": []},
+                 "declaredSources": [{"id": "42", "name": "Owned source", "language": "en"}],
+                 "probe": {"sources": [0], "operations": [], "processStatus": "completed"}}
+        value.update(changes)
+        return value
+
+    def matrix(self, *entries):
+        return make_matrix({"packages": list(entries), "catalogRef": "b" * 40, "runtimeRevision": "c" * 40,
+                            "summary": {"catalogPackages": len(entries)}, "observedGaps": []})
+
+    def test_only_complete_exact_source_fixtures_verify_reading(self):
+        value = self.entry()
+        value["probe"]["operations"] = [{"op": op, "source": 0, "status": "ownedResponseAccepted"} for op in ("popular", "book", "pages", "image")]
+        self.assertEqual(self.matrix(value)["rows"][0]["status"], "unverified")
+        self.assertEqual(self.matrix(value)["rows"][0]["stages"]["pages"], "probeOnly")
+        value["evidence"]["sources"]["0"] = {"stages": ["popular", "details", "chapters", "pages"], "tests": ["owned::partial"]}
+        self.assertEqual(self.matrix(value)["rows"][0]["status"], "partial")
+        value["evidence"]["sources"]["0"]["stages"].append("images")
+        self.assertEqual(self.matrix(value)["rows"][0]["status"], "verified")
+        value["probe"]["sources"].append(1)
+        self.assertEqual([r["status"] for r in self.matrix(value)["rows"]], ["verified", "unverified"])
+        value["evidence"] = {"sources": {}, "historical": [{"name": "old.apk"}]}
+        self.assertTrue(all(r["status"] == "unverified" for r in self.matrix(value)["rows"]))
+
+    def test_reading_blockers_are_distinct_from_settings_errors_and_unknown_failures(self):
+        value = self.entry()
+        value["probe"]["operations"] = [{"source": 0, "op": "settings", "status": "runtimeAPIError", "missingClass": "Landroid/Owned;"},
+                                          {"source": 0, "op": "pages", "status": "unclassifiedFailure"}]
+        self.assertEqual(self.matrix(value)["rows"][0]["status"], "unverified")
+        value["probe"]["operations"].append({"source": 0, "op": "pages", "status": "runtimeAPIError", "missingClass": "Lokhttp3/Owned;"})
+        self.assertEqual(self.matrix(value)["rows"][0]["status"], "unsupported")
+        value["probe"] = {"sources": [], "operations": [{"source": None, "op": "inspect", "status": "runtimeAPIError", "missingClass": "LOwned;"}], "processStatus": "completed"}
+        row = self.matrix(value)["rows"][0]
+        self.assertIsNone(row["sourceIndex"])
+        self.assertEqual(set(row["stages"].values()), {"blocked"})
+
+    def test_identity_joins_catalog_by_id_without_assuming_language_order(self):
+        value = self.entry()
+        value["declaredSources"].append({"id": "17", "name": "Owned French", "language": "fr"})
+        value["probe"].update(sources=[0, 1], sourceMetadata=[{"index": 0, "id": "17", "language": "fr"}, {"index": 1, "id": "42", "language": "en"}])
+        rows = {r["sourceIndex"]: r for r in self.matrix(value)["rows"]}
+        self.assertEqual((rows[0]["name"], rows[0]["language"]), ("Owned French", "fr"))
+        self.assertEqual(rows[1]["name"], "Owned source")
+        value["probe"].pop("sourceMetadata")
+        self.assertTrue(all(r["language"] == "" for r in self.matrix(value)["rows"]))
+
+    def test_library_ranking_counts_packages_once_and_excludes_guest_declarations(self):
+        supplied = ("Lkotlin/Owned;", "call", "()V")
+        families = dependency_families({"references": {supplied, ("Lokhttp3/Request;", "build", "()V"), ("Lokhttp3/Headers;", "get", "()V")}, "declared": {supplied}})
+        self.assertEqual(families, {"OkHttp": {"classes": 2, "methods": 2}})
+        value = self.entry(dependencyFamilies=families)
+        gaps = [{"api": "Lokhttp3/Headers; get ()V", "packages": [value["package"]]}]
+        summary = dependency_summary([value], gaps)
+        self.assertEqual((summary[0]["referencingPackages"], summary[0]["blockedPackages"]), (1, 1))
+
+    def test_html_metadata_and_spreadsheet_formulas_remain_inert(self):
+        value = self.entry(displayName='</script><img src=x onerror=alert(1)>')
+        value["declaredSources"][0]["name"] = '=HYPERLINK("https://example.invalid")'
+        matrix = self.matrix(value)
+        html = render_html(matrix)
+        self.assertNotIn('</script><img', html)
+        self.assertIn('\\u003c/script\\u003e', html)
+        import csv, io
+        rows = list(csv.reader(io.StringIO(render_csv(matrix))))
+        self.assertTrue(rows[1][0].startswith("'="))
+        self.assertIn("textContent", html)
+        self.assertNotIn("innerHTML", html)
+
+    def test_probe_metadata_keeps_only_bounded_ids_and_languages(self):
+        from manga_audit.runtime import probe
+        secret = "private-token-must-not-escape"
+        class FakeRuntime:
+            def __init__(self, _path): pass
+            def execute(self, _apk, _command):
+                return {"ok": True, "data": {"sources": [
+                    {"index": 0, "id": "42", "language": "en", "name": secret, "homeURL": "https://private.example/" + secret},
+                    {"index": 1, "id": secret, "language": "fr"}]}}, 0, 0
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); (root / "owned.apk").write_bytes(b"owned")
+            with patch("manga_audit.runtime.OfflineRuntime", FakeRuntime):
+                probe("unused", root / "owned.apk", root / "probe.jsonl", True, seconds=0)
+            text = (root / "probe.jsonl").read_text()
+            self.assertNotIn(secret, text)
+            self.assertEqual(cli.read_probe(root / "probe.jsonl")["sourceMetadata"], [{"index": 0, "id": "42", "language": "en"}])
 
 
 if __name__ == "__main__":
