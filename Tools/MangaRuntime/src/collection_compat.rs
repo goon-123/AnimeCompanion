@@ -121,6 +121,9 @@ fn concat(vm: &mut Vm, args: &[JValue], element: bool) -> R {
     let right = if element {
         vec![args[1]]
     } else {
+        if args[1].is_null_ref() {
+            return Err(NatErr::Throw(vm.err_npe()));
+        }
         match vm.payload_of(args[1]) {
             Some(Native::Array(ArrayData::Obj(v)) | Native::List(v) | Native::Set(v)) => v,
             _ => return Err(NatErr::Throw(vm.err_npe())),
@@ -525,6 +528,10 @@ mod tests {
             .unwrap();
         assert!(matches!(
             plus_element(&mut vm, &[array, number]),
+            Err(NatErr::Throw(_))
+        ));
+        assert!(matches!(
+            plus(&mut vm, &[array, JValue::Int(0)]),
             Err(NatErr::Throw(_))
         ));
         assert!(matches!(

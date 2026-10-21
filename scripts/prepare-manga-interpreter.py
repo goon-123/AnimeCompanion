@@ -90,7 +90,7 @@ if DESTINATION.exists():
         and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
                 for path, digest in {
                     "src/dex/insn.rs": PATCHED_DECODER_SHA256,
-                    "src/vm/interpret.rs": PATCHED_SOURCE_SHA256,
+                    "src/vm/interpret.rs": "ed747088560a2451d8368502550832d4b69f85977bee70f15104dec2826a306c",
                     "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                 }.items())
