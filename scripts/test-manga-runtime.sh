@@ -51,6 +51,9 @@ cfc0199 tachiyomi-en.flamecomics-v1.6.1.apk
 4217666-0 tachiyomi-en.deathtollscans-v1.6.6.apk
 bdcf84f tachiyomi-en.dynasty-v1.6.1.apk
 cfc0199 tachiyomi-en.hiveworks-v1.6.2.apk
+24bc6c2 tachiyomi-fr.furyosquad-v1.6.0.apk
+b5d2cd5 tachiyomi-en.mangafoxfun-v1.6.38.apk
+bdcf84f tachiyomi-en.assortedscans-v1.6.0.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
@@ -81,6 +84,9 @@ expected = {
     'tachiyomi-en.deathtollscans-v1.6.6.apk': 'a5ce8f912140f5c9ba816b8119bf04e673a3e173acfa52631d287245824813e8',
     'tachiyomi-en.dynasty-v1.6.1.apk': '0c6bd0be254e73cca3401c6a7578a368c3fc9af2461c5b9fbe03fe6251eb2d72',
     'tachiyomi-en.hiveworks-v1.6.2.apk': '7d869e29b2f7835719ebef6600077556c13517063f29b7f825bc0997c4f06bf4',
+    'tachiyomi-fr.furyosquad-v1.6.0.apk': 'd12bb8884031351379af39c99ce47632cd9fc3329624f6d3e682ab75288f85e3',
+    'tachiyomi-en.mangafoxfun-v1.6.38.apk': '1e3ba3767c9f09455a1787f2b626c915cbb088feed5672816fcec0009c8514ba',
+    'tachiyomi-en.assortedscans-v1.6.0.apk': '864b7da29949a73a5be754a07256d6103422cf2e69c39749530fb84b3c7c0fef',
 }
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name

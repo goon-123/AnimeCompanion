@@ -526,6 +526,39 @@
         "sources": [0],
         "stages": ["latest"]
       }]
+    },
+    {
+      "name": "tachiyomi-fr.furyosquad-v1.6.0.apk",
+      "sha256": "d12bb8884031351379af39c99ce47632cd9fc3329624f6d3e682ab75288f85e3",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-fr.furyosquad-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.fr.furyosquad",
+      "cases": [{
+        "test": "kotlin_extension_tests::furyosquad_french_locale_catalog_dated_chapters_ordered_pages_and_images",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters", "pages", "images"]
+      }]
+    },
+    {
+      "name": "tachiyomi-en.mangafoxfun-v1.6.38.apk",
+      "sha256": "1e3ba3767c9f09455a1787f2b626c915cbb088feed5672816fcec0009c8514ba",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/b5d2cd5/tachiyomi-en.mangafoxfun-v1.6.38.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.mangafoxfun",
+      "cases": [{
+        "test": "kotlin_extension_tests::mangahub_random_key_catalog_dated_chapters_plain_pages_and_images",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters", "pages", "images"]
+      }]
+    },
+    {
+      "name": "tachiyomi-en.assortedscans-v1.6.0.apk",
+      "sha256": "864b7da29949a73a5be754a07256d6103422cf2e69c39749530fb84b3c7c0fef",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-en.assortedscans-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.assortedscans",
+      "cases": [{
+        "test": "kotlin_extension_tests::mangadventure_delegated_iterables_catalog_book_pages_and_images",
+        "sources": [0],
+        "stages": ["popular", "details", "chapters", "pages", "images"]
+      }]
     }
   ]
 }

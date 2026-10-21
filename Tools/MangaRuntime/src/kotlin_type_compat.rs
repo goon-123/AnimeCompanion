@@ -287,7 +287,7 @@ fn token_hash(vm: &mut Vm, args: &[JValue]) -> R {
 
 // A marker has no callable methods. Register the actual interface, not a
 // fabricated method which could accidentally make unsupported reflection work.
-fn marker(vm: &mut Vm, desc: &str) -> u32 {
+pub(super) fn marker(vm: &mut Vm, desc: &str) -> u32 {
     let descriptor = vm.intern(desc);
     if let Some(id) = vm.class_by_desc.get(&descriptor) {
         return *id;

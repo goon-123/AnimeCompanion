@@ -1,25 +1,21 @@
 //! Bounded Java date patterns used by source chapter timestamps. Preserve
-//! optional sections, English month names and case-insensitive builders.
+//! optional sections, localized month text and case-insensitive builders.
 use dexvm::vm::object::Native;
 use dexvm::vm::{error::JvmError, NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 
 type R = Result<JValue, NatErr>;
 const INSENSITIVE: &str = "ac:case-insensitive";
-const MONTHS: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
+fn month_names(locale: chrono::Locale, short: bool) -> Vec<String> {
+    (1..=12)
+        .map(|month| {
+            chrono::NaiveDate::from_ymd_opt(2000, month, 1)
+                .unwrap()
+                .format_localized(if short { "%b" } else { "%B" }, locale)
+                .to_string()
+        })
+        .collect()
+}
 
 fn of_pattern(vm: &mut Vm, args: &[JValue]) -> R {
     let pattern = vm
@@ -30,21 +26,26 @@ fn of_pattern(vm: &mut Vm, args: &[JValue]) -> R {
             vm.err_iae("Date pattern exceeds the host limit"),
         ));
     }
-    vm.alloc_native(
-        "Ljava/time/format/DateTimeFormatter;",
-        Native::DateFormatter {
-            pattern,
-            zone: String::new(),
-        },
-    )
-    .map_err(NatErr::Fatal)
+    let value = vm
+        .alloc_native(
+            "Ljava/time/format/DateTimeFormatter;",
+            Native::DateFormatter {
+                pattern,
+                zone: String::new(),
+            },
+        )
+        .map_err(NatErr::Fatal)?;
+    if let Some(locale) = args.get(1) {
+        set_locale(vm, value, *locale)?;
+    }
+    Ok(value)
 }
 fn case_insensitive(vm: &mut Vm, args: &[JValue]) -> R {
     initialize_state(vm, args[0])?;
     vm.arena.objects[args[0].as_obj() as usize].fields[0] = JValue::Int(1);
     Ok(args[0])
 }
-// Header: case flag, overriding ZoneId. Remaining triples record a default's
+// Header: case flag, overriding ZoneId, Locale. Remaining triples record a default's
 // pattern position, ChronoField ordinal and long value, preserving parse order.
 fn initialize_state(vm: &mut Vm, value: JValue) -> R {
     let Some(Native::DateFormatter { zone, .. }) = vm.payload_of(value) else {
@@ -56,8 +57,11 @@ fn initialize_state(vm: &mut Vm, value: JValue) -> R {
         } else {
             super::date_zone_compat::of_id(vm, &zone)?
         };
-        vm.arena.objects[value.as_obj() as usize].fields =
-            vec![JValue::Int(i32::from(zone == INSENSITIVE)), zone_value];
+        vm.arena.objects[value.as_obj() as usize].fields = vec![
+            JValue::Int(i32::from(zone == INSENSITIVE)),
+            zone_value,
+            JValue::Null,
+        ];
     }
     Ok(value)
 }
@@ -88,7 +92,7 @@ fn defaulting(vm: &mut Vm, args: &[JValue]) -> R {
         return Err(NatErr::Throw(vm.err_npe()));
     };
     let fields = &mut vm.arena.objects[args[0].as_obj() as usize].fields;
-    if fields.len() >= 2 + 32 * 3 {
+    if fields.len() >= 3 + 32 * 3 {
         return Err(NatErr::Fatal(JvmError::BudgetExceeded));
     }
     fields.extend([
@@ -107,7 +111,37 @@ fn to_formatter(vm: &mut Vm, args: &[JValue]) -> R {
         .alloc_native("Ljava/time/format/DateTimeFormatter;", value)
         .map_err(NatErr::Fatal)?;
     vm.arena.objects[result.as_obj() as usize].fields = fields;
+    if let Some(locale) = args.get(1) {
+        set_locale(vm, result, *locale)?;
+    }
     Ok(result)
+}
+fn set_locale(vm: &mut Vm, value: JValue, locale: JValue) -> R {
+    if locale.is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    super::locale_compat::calendar_locale(vm, locale)?;
+    initialize_state(vm, value)?;
+    vm.arena.objects[value.as_obj() as usize].fields[2] = locale;
+    Ok(value)
+}
+fn with_locale(vm: &mut Vm, args: &[JValue]) -> R {
+    initialize_state(vm, args[0])?;
+    let value = to_formatter(vm, &args[..1])?;
+    set_locale(vm, value, args[1])
+}
+fn formatter_locale(vm: &mut Vm, args: &[JValue]) -> R {
+    initialize_state(vm, args[0])?;
+    let locale = vm.arena.objects[args[0].as_obj() as usize].fields[2];
+    if !locale.is_null_ref() {
+        return Ok(locale);
+    }
+    let field = dexvm::vm::FieldRef {
+        class_desc: vm.intern("Ljava/util/Locale;"),
+        name: vm.intern("ROOT"),
+        ty: vm.intern("Ljava/util/Locale;"),
+    };
+    vm.static_field_get(field).map_err(NatErr::Fatal)
 }
 fn formatter_zone(vm: &mut Vm, args: &[JValue]) -> R {
     initialize_state(vm, args[0])?;
@@ -156,11 +190,27 @@ enum ParsedField {
     Part(char, usize),
     Default(i32, i64),
 }
+#[cfg(test)]
 fn parse_defaults(
     text: &str,
     pattern: &str,
     insensitive: bool,
     defaults: &[(usize, i32, i64)],
+) -> Option<(i64, i32)> {
+    parse_localized(
+        text,
+        pattern,
+        insensitive,
+        defaults,
+        Some(chrono::Locale::POSIX),
+    )
+}
+fn parse_localized(
+    text: &str,
+    pattern: &str,
+    insensitive: bool,
+    defaults: &[(usize, i32, i64)],
+    locale: Option<chrono::Locale>,
 ) -> Option<(i64, i32)> {
     if text.len() > 512 || pattern.len() > 256 {
         return None;
@@ -232,9 +282,9 @@ fn parse_defaults(
         let expression = match (c, count) {
             ('y' | 'u', 2) => "[0-9]{2}".to_owned(),
             ('y' | 'u', 1..=4) => "[0-9]{4}".to_owned(),
-            ('M' | 'L', 3 | 4) => MONTHS
+            ('M' | 'L', 3 | 4) => month_names(locale?, count == 3)
                 .iter()
-                .map(|s| if count == 3 { &s[..3] } else { s })
+                .map(|s| fancy_regex::escape(s))
                 .collect::<Vec<_>>()
                 .join("|"),
             ('M' | 'L' | 'd' | 'H' | 'h' | 'm' | 's', 1) => "[0-9]{1,2}".to_owned(),
@@ -281,9 +331,12 @@ fn parse_defaults(
                 (if c == 'y' { 25 } else { 26 }, year)
             }
             'M' | 'L' if count >= 3 => {
-                let month = MONTHS.iter().position(|m| {
-                    m.eq_ignore_ascii_case(value)
-                        || (count == 3 && m[..3].eq_ignore_ascii_case(value))
+                let month = month_names(locale?, count == 3).iter().position(|m| {
+                    if insensitive {
+                        m.to_lowercase() == value.to_lowercase()
+                    } else {
+                        m == value
+                    }
                 })? as i64
                     + 1;
                 (23, month)
@@ -368,14 +421,16 @@ fn parsed(vm: &mut Vm, args: &[JValue]) -> Result<(i64, i32), NatErr> {
         .map(|v| v.as_int() != 0)
         .unwrap_or(zone == INSENSITIVE);
     let defaults: Vec<_> = fields
-        .get(2..)
+        .get(3..)
         .unwrap_or_default()
         .as_chunks::<3>()
         .0
         .iter()
         .map(|v| (v[0].as_int() as usize, v[1].as_int(), v[2].as_long()))
         .collect();
-    parse_defaults(&text, &pattern, insensitive, &defaults).ok_or_else(|| {
+    let locale = fields.get(2).copied().unwrap_or(JValue::Null);
+    let locale = super::locale_compat::calendar_locale(vm, locale)?;
+    parse_localized(&text, &pattern, insensitive, &defaults, locale).ok_or_else(|| {
         NatErr::Throw(vm.throwable_of(
             "Ljava/time/format/DateTimeParseException;",
             "Unsupported pattern or invalid date",
@@ -415,6 +470,8 @@ fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
         return Err(NatErr::Fatal(JvmError::BudgetExceeded));
     }
     let overriding = formatter_zone(vm, &args[..1])?;
+    let locale = vm.arena.objects[args[0].as_obj() as usize].fields[2];
+    let locale = super::locale_compat::calendar_locale(vm, locale)?;
     let class = vm
         .object_class(args[1])
         .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
@@ -517,25 +574,19 @@ fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
                     padded(date.year())
                 }),
                 ('M' | 'L', 1 | 2) => Some(padded(date.month() as i32)),
-                ('M' | 'L', 3) => Some(MONTHS[date.month0() as usize][..3].into()),
-                ('M' | 'L', 4) => Some(MONTHS[date.month0() as usize].into()),
+                ('M' | 'L', 3 | 4) if locale.is_some() => {
+                    Some(month_names(locale.unwrap(), count == 3)[date.month0() as usize].clone())
+                }
                 ('d', 1 | 2) => Some(padded(date.day() as i32)),
                 ('D', 1..=3) => Some(padded(date.ordinal() as i32)),
-                ('E', 1..=5) => {
-                    let name = [
-                        "Monday",
-                        "Tuesday",
-                        "Wednesday",
-                        "Thursday",
-                        "Friday",
-                        "Saturday",
-                        "Sunday",
-                    ][date.weekday().num_days_from_monday() as usize]
-                        .to_owned();
-                    Some(match count {
-                        1..=3 => name[..3].into(),
-                        4 => name,
-                        _ => name[..1].into(),
+                ('E', 1..=5) if locale.is_some() => {
+                    let name = date
+                        .format_localized(if count <= 3 { "%a" } else { "%A" }, locale.unwrap())
+                        .to_string();
+                    Some(if count == 5 {
+                        name.chars().take(1).collect()
+                    } else {
+                        name
                     })
                 }
                 ('H' | 'h' | 'k' | 'K' | 'm' | 's', 1 | 2) if has_time => Some(padded(match c {
@@ -785,6 +836,8 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         ("Ljava/time/format/DateTimeFormatter;", "ofPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;", false, of_pattern as dexvm::vm::NativeFn),
         ("Ljava/time/format/DateTimeFormatter;", "ofPattern", "(Ljava/lang/String;Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;", false, of_pattern),
         ("Ljava/time/format/DateTimeFormatter;", "withZone", "(Ljava/time/ZoneId;)Ljava/time/format/DateTimeFormatter;", true, with_zone),
+        ("Ljava/time/format/DateTimeFormatter;", "withLocale", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;", true, with_locale),
+        ("Ljava/time/format/DateTimeFormatter;", "getLocale", "()Ljava/util/Locale;", true, formatter_locale),
         ("Ljava/time/format/DateTimeFormatter;", "format", "(Ljava/time/temporal/TemporalAccessor;)Ljava/lang/String;", true, format_date),
         ("Ljava/time/LocalDate;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
         ("Ljava/time/LocalDateTime;", "format", "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;", true, format_value),
@@ -820,9 +873,83 @@ mod tests {
     fn host_vm() -> Vm {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
         super::super::java_compat::install(&mut vm).unwrap();
+        super::super::locale_compat::install(&mut vm).unwrap();
         install(&mut vm).unwrap();
         super::super::date_zone_compat::install(&mut vm, "UTC").unwrap();
         vm
+    }
+    #[test]
+    fn localized_months_keep_accents_punctuation_and_calendar_validation() {
+        let french = Some(chrono::Locale::fr_FR);
+        let expected = parse("2024-02-29", "yyyy-MM-dd", false);
+        for (text, pattern, insensitive) in [
+            ("29 févr. 2024", "d MMM yyyy", false),
+            ("29 FÉVRIER 2024", "d MMMM yyyy", true),
+        ] {
+            assert_eq!(
+                parse_localized(text, pattern, insensitive, &[], french),
+                expected
+            );
+        }
+        for text in [
+            "29 févrX 2024",
+            "29 févr. 2023",
+            "30 février 2024",
+            "29 February 2024",
+        ] {
+            assert!(parse_localized(text, "d [MMM][MMMM] yyyy", true, &[], french).is_none());
+        }
+        assert!(parse_localized("29 février 2024", "d MMMM yyyy", false, &[], None).is_none());
+        assert_eq!(
+            parse_localized("2024-02-29", "yyyy-MM-dd", false, &[], None),
+            expected
+        );
+    }
+    #[test]
+    fn formatter_locale_copies_keep_defaults_zones_and_gc_references() {
+        let mut vm = host_vm();
+        let french = vm
+            .alloc_native("Ljava/util/Locale;", Native::Str("fr-FR".into()))
+            .unwrap();
+        let japanese = vm
+            .alloc_native("Ljava/util/Locale;", Native::Str("ja-JP".into()))
+            .unwrap();
+        let builder = vm
+            .alloc_native(
+                "Ljava/time/format/DateTimeFormatterBuilder;",
+                Native::DateFormatter {
+                    pattern: "d MMMM".into(),
+                    zone: String::new(),
+                },
+            )
+            .unwrap();
+        case_insensitive(&mut vm, &[builder]).unwrap();
+        let year = enum_constant(&mut vm, "Ljava/time/temporal/ChronoField;", "YEAR").unwrap();
+        defaulting(&mut vm, &[builder, year, JValue::Long(2024)]).unwrap();
+        let original = to_formatter(&mut vm, &[builder, french]).unwrap();
+        let zone = super::super::date_zone_compat::of_id(&mut vm, "Europe/Paris").unwrap();
+        let zoned = with_zone(&mut vm, &[original, zone]).unwrap();
+        let copied = with_locale(&mut vm, &[zoned, japanese]).unwrap();
+        vm.gc(&[original.as_obj(), zoned.as_obj(), copied.as_obj()]);
+        assert_eq!(formatter_locale(&mut vm, &[original]).unwrap(), french);
+        assert_eq!(formatter_locale(&mut vm, &[copied]).unwrap(), japanese);
+        assert_eq!(formatter_zone(&mut vm, &[copied]).unwrap(), zone);
+        assert_eq!(formatter_zone(&mut vm, &[original]).unwrap(), JValue::Null);
+        let text = vm.alloc_string("29 FÉVRIER");
+        let date = local_date(&mut vm, &[text, zoned]).unwrap();
+        assert!(local_date(&mut vm, &[text, copied]).is_err());
+        let pattern = vm.alloc_string("EEEE d MMMM yyyy");
+        let formatter = of_pattern(&mut vm, &[pattern, french]).unwrap();
+        let text = format_date(&mut vm, &[formatter, date]).unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(text).as_deref(),
+            Some("jeudi 29 février 2024")
+        );
+        let pattern = vm.alloc_string("EEEEE MMMM");
+        let formatter = of_pattern(&mut vm, &[pattern, japanese]).unwrap();
+        let text = format_date(&mut vm, &[formatter, date]).unwrap();
+        assert_eq!(vm.str_of_jvalue(text).as_deref(), Some("木 2月"));
+        assert!(with_locale(&mut vm, &[zoned, JValue::Null]).is_err());
     }
     #[test]
     fn calendar_defaults_keep_parse_order_and_formatter_snapshots() {
