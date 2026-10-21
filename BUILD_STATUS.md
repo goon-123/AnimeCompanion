@@ -6,7 +6,9 @@ Komga 1.6.74 enumerates three sources; source 0 completes the owned catalog/deta
 
 Local validation: 165 Rust regressions, 16 audit/evidence/privacy tests, warnings-denied Clippy, formatting, verified interpreter patch, shell/Python syntax and Safari bundle/version checks pass. Two added Swift/C/Rust native cases reuse the owned fixtures. Native iPhone/iPad execution and the unsigned build-55 IPA require hosted CI. Full Java/Kotlin API coverage, source-written state persistence, local/private HTTP, modern Jinman image processing and live-site certification remain outside this verified result.
 
-The full-catalog snapshot remains explicitly build 53; build 55 adds a focused exact-APK matrix for Komga and Jinman after production C-ABI verification.
+The [build-55 focused matrix](docs/manga-compatibility/build55/compatibility.html) inventories 2/2 packages, enumerates four sources and records 30 production C-ABI preflights with no known cells left unexecuted. It shows one verified offline row (Komga source 0), one partial row (Jinman) and two enumeration-only Komga rows. Its runtime revision is `001e361119e0adbd21c18a20a7ecd58b42ea03bc`; generic image probing does not exercise Jinman's scrambled path. The full-catalog snapshot remains explicitly build 53.
+
+The initial published build-55 commit's hosted Rust regressions, device/universal simulator libraries, core tests, Seanime runtime and Safari/browser checks passed. Native readers/layout checks and unsigned IPA packaging remain in progress, and the final evidence commit restarts checks for the updated branch. An isolated migration check also preserves/upgrades the exact build-54 generated interpreter and rejects unknown local edits without changing them.
 
 ## Source framework, preferences and configured readers — build 54
 
