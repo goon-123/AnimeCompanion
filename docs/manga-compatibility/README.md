@@ -1,5 +1,28 @@
 # Manga compatibility matrix
 
+Build 57 extends coroutine task/continuation handling, Java method and Kotlin property
+reflection, and the observed Java date/time gaps. Its [focused matrix](build57/compatibility.html),
+[CSV](build57/compatibility.csv) and [JSON](build57/compatibility.json) cover ten exact APKs,
+fourteen source identities and 108 production C-ABI preflights against code
+`6b65cb91e187051eb9de990d600428c8e9ad28a1`. All expected cells ran. Four source rows
+have complete owned reading flows: InManga, ArabManhwa, Komga source 0 and JinmanTiantang.
+Five are partial, four unverified and one remains runtime-blocked. The observed Java/Kotlin
+gaps targeted by this batch no longer occur in these probes; Line Manga's page path now
+reaches a separate `okio.BufferedSource.readUtf8Line()` gap. Its localized weekday/latest
+request is independently verified. This selected-package result is not a catalog-wide rate.
+
+The 191 passing Rust tests include actual Kotlin compiler-produced suspend/resume bytecode,
+GC, cancellation/lazy-start/timeout checks, method argument/access/exception contracts,
+optional/custom-month/fractional date builders, DST and overflow behavior. The eight new
+APKs load factories and settings. InManga and ArabManhwa replay catalog to image; ProComic
+verifies mutable pagination, Code Arc verifies image-access refresh after HTTP rejection or
+an expired token, and Tappytoon/LectorJPG/Line Manga/Nude-Moon exercise their respective date
+paths. New native bridge cases cover four sources; hosted verification is tracked in the PR.
+General parallel coroutine scheduling, complete reflection/proxy APIs, all date ranges and
+sub-millisecond formatter transport remain outside these claims. The full-catalog committed
+baseline remains build 53; hosted audit artifacts provide later catalog-wide snapshots.
+
+
 Build 56 completes the owned JinmanTiantang image replay through shared Okio peek,
 bitmap codecs/rectangle copies and bounded gzip streams. The pinned APK restores
 PNG/JPEG/WebP input, including gzip, through all three strip-count branches; every
