@@ -1,3 +1,13 @@
+## Jinman scrambled images and shared bitmap/stream support — build 56
+
+Version 0.25.9. Continue the merged build-55 Java/Kotlin work through JinmanTiantang's modern image interceptor. Add independent, non-consuming Okio peek views with segment buffering, upstream-consumption invalidation, nested views and GC roots. Fix the shared static BitmapFactory stream/byte-array arguments and add real PNG/JPEG/WebP/GIF decoding, JPEG/PNG encoding, Android bitmap constants, checked rectangle copies, pixel-array ranges and recycling. The extension's own DEX code still chooses and rearranges the strips.
+
+Gzip input uses virtual stream reads, validates CRC/trailers and bounds expansion. Its stream hierarchy, reads, zero-length/EOF behavior and closure are explicit. Encoded/decoded byte counts, live bitmap/peek storage and pixel work are bounded; VM limits remain fatal. Unsupported bitmap storage, non-default decode options, transformed/painted rectangle copies and WebP output encoding do not report placeholder success.
+
+Local validation passes 172 Rust regressions, 16 audit/evidence/privacy tests, warnings-denied Clippy, formatting, verified interpreter preparation, shell syntax, license generation and Safari bundle/version checks. The focused build-56 matrix is being refreshed from the production C bridge. Owned synthetic color bands verify every output row for PNG/JPEG/WebP, gzip, all three strip-count branches and remainder rows; animated GIFs retain every original byte. Two native Swift/C/Rust cases reuse those files; iPhone/iPad execution and unsigned IPA packaging await hosted CI. No production APK or chapter content is bundled. Live availability, login/check-in/browser flows and universal Android/Java/Kotlin API coverage remain unverified.
+
+Build 55 was merged as PR #36. Its final IPA and iPhone/iPad reader jobs passed. The separate iPad layout check failed, and its catalog audit downloaded 1,443/1,444 packages because one APK download timed out; neither is represented as a passing full run.
+
 ## Shared Java/Kotlin contexts, collections, reflection and dates — build 55
 
 Version 0.25.8. Fix the shared `const/high16`/`const-wide/high16` double shift, keyed coroutine contexts with cancellation/error restoration, typed array concatenation/copying, actual ordered-set deserialization, reflective array/field metadata, signed Gregorian LocalDate arithmetic/rendering and Java Unicode-block regex compilation. Preserve transport ownership and all VM/resource limits. Komga's source-owned Authenticator now executes bounded challenge/retry flows with correct static Basic-auth arguments and charsets.

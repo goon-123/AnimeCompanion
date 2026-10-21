@@ -204,3 +204,42 @@ Kotlin array concatenation, Java reference-array copies/ranges, `CollectionToArr
 Komga 1.6.74's three source instances enumerate and source 0 completes owned catalog, asynchronous details/chapters, pre-epoch and leap-day dates, ordered pages, converted-image URLs and image transport. Its settings exercise the APK's own Apache text library, requiring Java's combining-diacritical-marks Unicode block regex and reflective array length. Its actual Authenticator runs bounded 401 follow-ups with source-provided credentials; static Basic-auth arguments/default charset handling no longer shift their inputs. Both accepted and rejected credentials are covered.
 
 JinmanTiantang 1.6.59's seven mirror choices now load, and owned catalog/details/dated chapters/pages plus an unscrambled image execute. **Modern scrambled images remain partial:** a separate exact-APK regression confirms missing `okio.BufferedSource.peek()` before later image processing. No evidence for those images is added to the complete-flow matrix. Login/check-in/browser paths, arbitrary source-written state and live availability are not established. Native Swift/C/Rust cases reuse the same owned fixtures; production bundles neither APKs nor source content.
+
+
+## Shared image and stream continuation (build 56)
+
+Version 0.25.9. `okio_peek_compat` provides non-consuming, independently buffered
+peek views of the host's eager sources. Views retain their upstream through GC,
+observe appends, retain prefetched bytes, reject later refills after upstream
+consumption, and close independently. The implemented read/request/EOF paths
+retain byte, cache, nesting and work bounds; this is not a general lazy Okio
+transport implementation.
+
+`graphics_compat` replaces dimension-only/placeholder behavior on the exercised
+bitmap path. PNG, JPEG, WebP and GIF decode into actual ARGB pixels. Static
+stream/byte-array argument positions and array offsets/counts are respected.
+JPEG quality and PNG output use real encoders and virtual OutputStream writes.
+Rectangle copies clip to the destination, validate source bounds and account
+for pixel work; pixel arrays support checked positive and negative strides.
+Recycling releases storage. Canonical Config/CompressFormat constants are
+GC-rooted enum values.
+
+Image buffers are limited to 16,000,000 bytes, individual bitmaps to 16,000,000
+pixels, live bitmap storage to 32,000,000 pixels and live peek caches to
+32,000,000 bytes. Decoder allocation limits apply in addition to dimension and
+pixel checks. Gzip validates trailers/CRC and bounds expansion through virtual
+InputStream reads. Closed gzip streams reject reads, while EOF and zero-length
+reads retain their standard behavior.
+
+Only ARGB_8888 storage (including Android's ARGB_4444 promotion), default decode
+options, untransformed rectangle copies with default paint, and JPEG/PNG
+encoding are implemented here. Other configuration/options/paint paths fail
+explicitly; unsupported output formats return false. They never emit raw pixel
+placeholders as encoded images. This is not full Android graphics support.
+
+Owned band images and an animated GIF exercise the pinned JinmanTiantang APK's
+own interceptor. Its DEX bytecode performs row-count hashing, strip selection,
+reordering and compression. Production has no Jinman-specific decoder. The
+build-55 `peek()` blocker above is historical; build-56 results are recorded in
+BUILD_STATUS.md and its focused compatibility matrix. Native and live-site
+verification are separate from the offline Rust evidence.
