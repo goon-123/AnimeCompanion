@@ -873,19 +873,10 @@ fn source_image(
         .ctx()
         .invoke_on(src.inst(), "getHeaders", "()Lokhttp3/Headers;", &[])
         .map_err(|e| ext.describe_error(&e))?;
-    let mut additions = match ext.ctx().vm().payload_of(source_headers) {
+    let additions = match ext.ctx().vm().payload_of(source_headers) {
         Some(Native::Headers(headers)) => headers,
         _ => return Err("The source returned invalid image headers.".into()),
     };
-    if !additions
-        .iter()
-        .any(|(name, _)| name.eq_ignore_ascii_case("referer"))
-    {
-        let base = ext
-            .source_base_url(src)
-            .map_err(|e| ext.describe_error(&e))?;
-        additions.push(("Referer".into(), format!("{}/", base.trim_end_matches('/'))));
-    }
     let request = ext
         .ctx()
         .invoke_on(
@@ -902,14 +893,7 @@ fn source_image(
     else {
         return Err("The source returned an invalid image request.".into());
     };
-    for (name, value) in additions {
-        if !headers
-            .iter()
-            .any(|(existing, _)| existing.eq_ignore_ascii_case(&name))
-        {
-            headers.push((name, value));
-        }
-    }
+    merge_image_request_headers(headers, additions);
     let client = ext
         .ctx()
         .invoke_on(src.inst(), "getClient", "()Lokhttp3/OkHttpClient;", &[])
@@ -934,6 +918,56 @@ fn source_image(
             ..
         }) if !data.is_empty() && data.len() <= 16_000_000 => Ok(data),
         _ => Err("The source image could not be loaded.".into()),
+    }
+}
+
+/// Honor extension-declared image headers without inventing a Referer.
+/// Some sources (such as Kiutaku) intentionally remove Referer because their
+/// image CDN rejects hotlinked requests carrying the site's origin.
+fn merge_image_request_headers(
+    request: &mut Vec<(String, String)>,
+    source: Vec<(String, String)>,
+) {
+    for (name, value) in source {
+        if !request.iter().any(|(existing, _)| existing.eq_ignore_ascii_case(&name)) {
+            request.push((name, value));
+        }
+    }
+}
+
+#[cfg(test)]
+mod image_header_contract_tests {
+    use super::merge_image_request_headers;
+
+    #[test]
+    fn absent_referer_remains_absent_when_source_removes_it() {
+        let mut request = vec![("User-Agent".into(), "Owned".into())];
+        merge_image_request_headers(&mut request, vec![("Accept".into(), "image/*".into())]);
+        assert!(!request.iter().any(|(name, _)| name.eq_ignore_ascii_case("referer")));
+    }
+
+    #[test]
+    fn source_referer_and_other_headers_are_preserved() {
+        let mut request = vec![("User-Agent".into(), "Owned".into())];
+        merge_image_request_headers(
+            &mut request,
+            vec![
+                ("Referer".into(), "https://owned.example/".into()),
+                ("Accept".into(), "image/webp".into()),
+            ],
+        );
+        assert!(request.contains(&("Referer".into(), "https://owned.example/".into())));
+        assert!(request.contains(&("Accept".into(), "image/webp".into())));
+    }
+
+    #[test]
+    fn explicit_image_request_headers_take_precedence_case_insensitively() {
+        let mut request = vec![("referer".into(), "https://cdn.owned.example/".into())];
+        merge_image_request_headers(
+            &mut request,
+            vec![("Referer".into(), "https://owned.example/".into())],
+        );
+        assert_eq!(request, vec![("referer".into(), "https://cdn.owned.example/".into())]);
     }
 }
 
