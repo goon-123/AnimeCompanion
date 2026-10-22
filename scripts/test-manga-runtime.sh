@@ -83,11 +83,15 @@ ac40914 tachiyomi-pt.nexusmangas-v1.6.1.apk
 a0e93c0 tachiyomi-ru.wamanga-v1.6.2.apk
 24bc6c2 tachiyomi-zh.comicabc-v1.6.0.apk
 a2d7e26 tachiyomi-es.lectormonline-v1.6.4.apk
+06f6d69 tachiyomi-ru.senkuro-v1.6.0.apk
+06f6d69 tachiyomi-ru.senkognito-v1.6.0.apk
 PINS
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 expected = {
+    'tachiyomi-ru.senkuro-v1.6.0.apk': '85f79e81b858697454273c409c05564c914d83e930b7916e63fcec323b42b8f7',
+    'tachiyomi-ru.senkognito-v1.6.0.apk': '33064a7cf823632d380b7d4c5617e2b71ba48ca013b9bb915e2a592ff624b0a9',
     'tachiyomi-en.mangapill-v1.4.9.apk': 'a89cedebe600d4545625b59022b4f241d8416c245916cb451476aaa954451b5c',
     'tachiyomi-vi.cuutruyenmoe-v1.6.3.apk': '508a81325727bbf2ec7151265dcf24a294d0d0dab5b639c7ffbb902809814340',
     'tachiyomi-all.akuma-v1.4.10.apk': '9f5e744ee3066ccf0c785dc8f427af8b7854933997eee1fe349fea388d4ba39a',
@@ -149,5 +153,5 @@ expected = {
 for name, digest in expected.items():
     assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
 PY
-python3 -c 'import hashlib; from pathlib import Path; assert hashlib.sha256(Path("Tools/MangaRuntime/test-support/shared-jvm-probe.dex").read_bytes()).hexdigest() == "156b4e820d95eebb50b8cbf5eeac96fbef47ec290e44d01bd5966cd4ebea05db"'
+python3 -c 'import hashlib; from pathlib import Path; assert hashlib.sha256(Path("Tools/MangaRuntime/test-support/shared-jvm-probe.dex").read_bytes()).hexdigest() == "11bc678a705469c525b3bdff11aedd045cf09894a15cb9ed994ec697f714d3db"'
 MANGA_TEST_APK_DIR="$fixture_dir" cargo test --locked --manifest-path Tools/MangaRuntime/Cargo.toml -j 2

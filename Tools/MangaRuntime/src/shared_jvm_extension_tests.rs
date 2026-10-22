@@ -39,6 +39,59 @@ fn run(bytes: &[u8], command: Value, http: impl Fn(&HttpData) -> HttpResp + 'sta
     execute(bytes, serde_json::from_value(command).unwrap(), http).unwrap()
 }
 #[test]
+fn senkuro_and_senkognito_iso_dates_execute_complete_owned_reading_flows() {
+    for name in [
+        "tachiyomi-ru.senkuro-v1.6.0.apk",
+        "tachiyomi-ru.senkognito-v1.6.0.apk",
+    ] {
+        let bytes = apk(name);
+        let respond = |request: &HttpData| {
+            assert_eq!(request.method, "POST");
+            assert!(request.url.ends_with("/graphql"), "{}", request.url);
+            let body: Value = serde_json::from_str(request.body.as_deref().unwrap()).unwrap();
+            let file = match body["operationName"].as_str().unwrap() {
+                "searchTachiyomiManga" => "senkuro-catalog.json",
+                "fetchTachiyomiManga" => "senkuro-book.json",
+                "fetchTachiyomiChapters" => "senkuro-chapters.json",
+                "fetchTachiyomiChapterPages" => "senkuro-pages.json",
+                operation => panic!("Unexpected owned operation: {operation}"),
+            };
+            HttpResp::ok(fixture(file))
+        };
+        for op in ["inspect", "settings"] {
+            run(&bytes, json!({"op":op}), |_| {
+                panic!("Metadata must not network")
+            });
+        }
+        let catalog = run(&bytes, json!({"op":"popular"}), respond);
+        assert_eq!(catalog["mangas"][0]["title"], "Owned story");
+        let book = run(
+            &bytes,
+            json!({"op":"book","manga":catalog["mangas"][0]}),
+            respond,
+        );
+        assert_eq!(book["manga"]["description"], "Owned description");
+        assert_eq!(book["chapters"][0]["uploadedAt"], 1_709_201_096_123_i64);
+        assert_eq!(book["chapters"][1]["uploadedAt"], 1_709_210_096_123_i64);
+        assert_eq!(book["chapters"][2]["uploadedAt"], 0_i64);
+        assert_eq!(book["chapters"][0]["scanlator"], "Owned team");
+        let pages = run(
+            &bytes,
+            json!({"op":"pages","chapter":book["chapters"][0]}),
+            respond,
+        );
+        assert_eq!(
+            pages[0]["imageURL"],
+            "https://images.example/owned-page-2.webp"
+        );
+        assert_eq!(
+            pages[1]["imageURL"],
+            "https://images.example/owned-page-1.webp"
+        );
+        image(&bytes, &pages[0]);
+    }
+}
+#[test]
 fn shared_jvm_extensions_load_their_real_factories_and_settings_without_network() {
     for name in [
         "tachiyomi-all.tappytoon-v1.6.0.apk",

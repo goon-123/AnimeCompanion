@@ -60,7 +60,7 @@ pub(super) fn instant_nanos(vm: &mut Vm, value: JValue) -> Result<i128, NatErr> 
     };
     Ok(i128::from(millis) * 1_000_000 + i128::from(remainder))
 }
-fn new_instant(vm: &mut Vm, nanos: i128) -> R {
+pub(super) fn new_instant(vm: &mut Vm, nanos: i128) -> R {
     let millis = i64::try_from(nanos.div_euclid(1_000_000)).map_err(|_| overflow(vm))?;
     let value = vm
         .alloc_native(INSTANT, Native::EpochMillis(millis))

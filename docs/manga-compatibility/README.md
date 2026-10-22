@@ -1,5 +1,14 @@
 # Manga compatibility matrix
 
+Build 60 adds real constructor/executable reflection, DEX Throws metadata, wide
+argument and floating boxing fixes, loaded Class GC roots and ISO_DATE_TIME
+resolution with covered nanosecond conversions. Senkuro and Senkognito 1.6.0
+gain complete owned catalog/details/dated-chapters/ordered-pages/image replays.
+The shared Java/Kotlin estimate moves from **90% merged to approximately 93%**
+with the proposed batch. Native bridge and broader catalog results are recorded
+on the PR; no live-site success rate is implied. See [remaining scope](java-kotlin-progress.md)
+and [validation](../../BUILD_STATUS.md).
+
 Build 59 adds cooperative task scheduling, real reflective field operations and
 declared-owner DEX field access, nanosecond value contracts and standard TimeUnit
 conversions. The shared Java/Kotlin estimate moves from approximately **85% to

@@ -61,14 +61,16 @@ final class OwnedExtensionFixtureHTTP {
     let apk: Data
     let responses: [String: Data]
     let responseHeaders: [[String]]
+    let graphQLResponses: [String: Data]
     var failChapters = false
     var urls: [String] = []
     var headersByURL: [String: [[String]]] = [:]
     var bodiesByURL: [String: Data] = [:]
     var methodsByURL: [String: String] = [:]
 
-    init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil, responseHeaders: [[String]] = []) throws {
+    init(apkName: String = "tachiyomi-en.weebcentral-v1.6.25.apk", responses: [String: Data]? = nil, responseHeaders: [[String]] = [], graphQLResponses: [String: Data] = [:]) throws {
         self.responseHeaders = responseHeaders
+        self.graphQLResponses = graphQLResponses
         let bundle = Bundle(for: WeebCentralRuntimeTests.self)
         let apks = try XCTUnwrap(bundle.url(forResource: "Fixtures", withExtension: nil))
         apk = try Data(contentsOf: apks.appendingPathComponent(apkName))
@@ -109,7 +111,10 @@ final class OwnedExtensionFixtureHTTP {
         let failure = failChapters && request.url.hasSuffix("full-chapter-list")
         var components = URLComponents(string: request.url)
         components?.query = nil
-        let body = failure ? Data("unavailable".utf8) : (responses[request.url] ?? responses[components?.string ?? ""])
+        let posted = request.bodyBase64.flatMap { Data(base64Encoded: $0) }
+        let operation = posted.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["operationName"] as? String
+        let graphQLBody = request.method == "POST" && request.url.hasSuffix("/graphql") ? operation.flatMap { graphQLResponses[$0] } : nil
+        let body = failure ? Data("unavailable".utf8) : (graphQLBody ?? responses[request.url] ?? responses[components?.string ?? ""])
         let code = failure ? 503 : (body == nil ? 404 : 200)
         let response: [String: Any] = ["code": code, "headers": responseHeaders, "bodyBase64": (body ?? Data()).base64EncodedString()]
         guard let data = try? JSONSerialization.data(withJSONObject: response), let json = String(data: data, encoding: .utf8) else { return nil }

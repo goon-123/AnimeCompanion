@@ -10,14 +10,14 @@ use dexvm::JValue;
 use std::collections::HashSet;
 type R = Result<JValue, NatErr>;
 const METHOD: &str = "Ljava/lang/reflect/Method;";
-fn charge(vm: &mut Vm, n: usize) -> Result<(), NatErr> {
+pub(super) fn charge(vm: &mut Vm, n: usize) -> Result<(), NatErr> {
     if n > 10_000 || vm.budget <= n as i64 {
         return Err(NatErr::Fatal(JvmError::BudgetExceeded));
     }
     vm.budget -= n as i64;
     Ok(())
 }
-fn class_id(vm: &mut Vm, value: JValue) -> Result<u32, NatErr> {
+pub(super) fn class_id(vm: &mut Vm, value: JValue) -> Result<u32, NatErr> {
     if value.is_null_ref() {
         return Err(NatErr::Throw(vm.err_npe()));
     }
@@ -26,7 +26,7 @@ fn class_id(vm: &mut Vm, value: JValue) -> Result<u32, NatErr> {
         _ => Err(NatErr::Throw(vm.err_iae("Expected reference class"))),
     }
 }
-fn descriptor(vm: &mut Vm, value: JValue) -> Result<String, NatErr> {
+pub(super) fn descriptor(vm: &mut Vm, value: JValue) -> Result<String, NatErr> {
     if value.is_null_ref() {
         return Err(NatErr::Throw(vm.err_npe()));
     }
@@ -38,7 +38,7 @@ fn descriptor(vm: &mut Vm, value: JValue) -> Result<String, NatErr> {
         _ => Err(NatErr::Throw(vm.err_iae("Expected class"))),
     }
 }
-fn array(vm: &mut Vm, value: JValue) -> Result<Vec<JValue>, NatErr> {
+pub(super) fn array(vm: &mut Vm, value: JValue) -> Result<Vec<JValue>, NatErr> {
     if value.is_null_ref() {
         return Ok(vec![]);
     }
@@ -114,18 +114,30 @@ fn declared(vm: &mut Vm, args: &[JValue]) -> R {
 fn public(vm: &mut Vm, args: &[JValue]) -> R {
     find(vm, args, true)
 }
-fn method(vm: &mut Vm, value: JValue) -> Result<(dexvm::vm::class::Method, bool), NatErr> {
+pub(super) fn method(
+    vm: &mut Vm,
+    value: JValue,
+) -> Result<(dexvm::vm::class::Method, bool), NatErr> {
     if value.is_null_ref() {
         return Err(NatErr::Throw(vm.err_npe()));
     }
+    let valid = vm.object_class(value).is_some_and(|id| {
+        matches!(
+            vm.str_of(vm.classes[id as usize].descriptor),
+            METHOD | "Ljava/lang/reflect/Constructor;"
+        )
+    });
+    if !valid {
+        return Err(NatErr::Throw(vm.err_iae("Expected an executable")));
+    }
     let fields = &vm.arena.objects[value.as_obj() as usize].fields;
-    if let [class, slot, access] = fields.as_slice() {
+    if let [JValue::Int(class), JValue::Int(slot), JValue::Int(access)] = fields.as_slice() {
         if let Some(method) = vm
             .classes
-            .get(class.as_int() as usize)
-            .and_then(|c| c.methods.get(slot.as_int() as usize))
+            .get(*class as usize)
+            .and_then(|c| c.methods.get(*slot as usize))
         {
-            return Ok((method.clone(), !access.is_zero()));
+            return Ok((method.clone(), *access != 0));
         }
     }
     Err(NatErr::Throw(vm.err_iae("Expected a method")))
@@ -242,7 +254,7 @@ pub(super) fn call(
     };
     let kind = if static_method {
         InvokeKind::Static
-    } else if private {
+    } else if private || vm.str_of(method.name) == "<init>" {
         InvokeKind::Direct
     } else {
         InvokeKind::Virtual
@@ -263,7 +275,16 @@ pub(super) fn call(
             if !static_method {
                 all.push(receiver);
             }
-            all.extend(args);
+            // call_target's bytecode ABI uses Dalvik register words; native
+            // calls use one logical value per argument. Wide values occupy two
+            // words even when followed by references or other primitives.
+            let bytecode = matches!(&target, dexvm::vm::Target::Bytecode { .. });
+            for (value, ty) in args.into_iter().zip(&method.args) {
+                all.push(value);
+                if bytecode && matches!(vm.str_of(*ty), "J" | "D") {
+                    all.push(value);
+                }
+            }
             vm.call_target(target, all)
         });
     vm.recursion_depth -= 1;
@@ -335,13 +356,26 @@ fn get_modifiers(vm: &mut Vm, args: &[JValue]) -> R {
     let (m, _) = method(vm, args[0])?;
     Ok(JValue::Int(m.access_flags as i32))
 }
-fn class_object(vm: &mut Vm, desc: &str) -> R {
+pub(super) fn class_object(vm: &mut Vm, desc: &str) -> R {
     if desc.len() == 1 {
-        vm.alloc_native(
-            "Ljava/lang/Class;",
-            Native::ClassObj(ClassOrPrim::Primitive(desc.as_bytes()[0])),
-        )
-        .map_err(NatErr::Fatal)
+        let wrapper = match desc {
+            "Z" => "Ljava/lang/Boolean;",
+            "B" => "Ljava/lang/Byte;",
+            "C" => "Ljava/lang/Character;",
+            "S" => "Ljava/lang/Short;",
+            "I" => "Ljava/lang/Integer;",
+            "J" => "Ljava/lang/Long;",
+            "F" => "Ljava/lang/Float;",
+            "D" => "Ljava/lang/Double;",
+            "V" => "Ljava/lang/Void;",
+            _ => return Err(NatErr::Throw(vm.err_iae("Invalid primitive class"))),
+        };
+        let field = dexvm::vm::FieldRef {
+            class_desc: vm.intern(wrapper),
+            name: vm.intern("TYPE"),
+            ty: vm.intern("Ljava/lang/Class;"),
+        };
+        vm.static_field_get(field).map_err(NatErr::Fatal)
     } else {
         let class = vm.ensure_class_by_desc(desc).map_err(NatErr::Fatal)?;
         vm.class_obj(class).map_err(NatErr::Fatal)
@@ -373,6 +407,24 @@ fn cause(vm: &mut Vm, args: &[JValue]) -> R {
     }
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Ljava/lang/Void;",
+        name: "__marker",
+        sig: "()V",
+        instance: true,
+        f: super::abstract_function,
+    })?;
+    let void = vm.alloc_native(
+        "Ljava/lang/Class;",
+        Native::ClassObj(ClassOrPrim::Primitive(b'V')),
+    )?;
+    super::multipart_compat::static_value(
+        vm,
+        "Ljava/lang/Void;",
+        "TYPE",
+        "Ljava/lang/Class;",
+        void,
+    )?;
     for (class, name, sig, f) in [
         (
             "Ljava/lang/Class;",

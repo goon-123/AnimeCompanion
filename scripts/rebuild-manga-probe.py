@@ -35,6 +35,6 @@ with tempfile.TemporaryDirectory() as temporary:
     subprocess.run(["java", "-cp", str(directory / "r8.jar"), "com.android.tools.r8.D8", "--min-api", "26", "--no-desugaring", "--lib", str(directory / "kotlinc/lib/kotlin-stdlib.jar"), "--output", str(directory / "probe.zip"), str(directory / "probe.jar")], check=True)
     with zipfile.ZipFile(directory / "probe.zip") as archive:
         data = archive.read("classes.dex")
-    assert hashlib.sha256(data).hexdigest() == "156b4e820d95eebb50b8cbf5eeac96fbef47ec290e44d01bd5966cd4ebea05db"
+    assert hashlib.sha256(data).hexdigest() == "11bc678a705469c525b3bdff11aedd045cf09894a15cb9ed994ec697f714d3db"
     (ROOT / "Tools/MangaRuntime/test-support/shared-jvm-probe.dex").write_bytes(data)
     print(hashlib.sha256(data).hexdigest())

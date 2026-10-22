@@ -19,6 +19,16 @@ fn check_not_null(vm: &mut Vm, args: &[JValue]) -> R {
         Ok(JValue::Null)
     }
 }
+fn check_expression(vm: &mut Vm, args: &[JValue]) -> R {
+    if args[0].is_null_ref() {
+        let expression = vm.str_of_jvalue(args[1]).unwrap_or_default();
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/NullPointerException;",
+            format!("{expression} must not be null"),
+        )));
+    }
+    Ok(JValue::Null)
+}
 const DEFAULT: &str = "Lkotlin/random/Random$Default;";
 const LIMIT: usize = 1_000_000;
 fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue>) -> R {
@@ -140,16 +150,22 @@ fn instant_compare(vm: &mut Vm, args: &[JValue]) -> R {
     Ok(JValue::Int(a.cmp(&b) as i32))
 }
 fn box_float(vm: &mut Vm, args: &[JValue]) -> R {
-    vm.invoke_static(
-        "Ljava/lang/Float;",
-        "valueOf",
-        "(F)Ljava/lang/Float;",
-        vec![args[0]],
-    )
-    .map_err(|e| match e {
-        JvmError::Uncaught(o) => NatErr::Throw(o),
-        e => NatErr::Fatal(e),
-    })
+    let value = match args[0] {
+        JValue::Float(v) => v,
+        JValue::Int(bits) => f32::from_bits(bits as u32),
+        _ => return Err(NatErr::Throw(vm.err_iae("Expected float register"))),
+    };
+    vm.alloc_native("Ljava/lang/Float;", Native::FloatBox(value))
+        .map_err(NatErr::Fatal)
+}
+fn box_double(vm: &mut Vm, args: &[JValue]) -> R {
+    let value = match args[0] {
+        JValue::Double(v) => v,
+        JValue::Long(bits) => f64::from_bits(bits as u64),
+        _ => return Err(NatErr::Throw(vm.err_iae("Expected double register"))),
+    };
+    vm.alloc_native("Ljava/lang/Double;", Native::DoubleBox(value))
+        .map_err(NatErr::Fatal)
 }
 fn charge(vm: &mut Vm, size: usize) -> Result<(), NatErr> {
     if size > LIMIT || vm.budget <= size as i64 {
@@ -307,6 +323,41 @@ fn hex_explicit(vm: &mut Vm, args: &[JValue]) -> R {
     hex(vm, args, false)
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (class, name, sig, f) in [
+        (
+            "Ljava/lang/Float;",
+            "valueOf",
+            "(F)Ljava/lang/Float;",
+            box_float as dexvm::vm::NativeFn,
+        ),
+        (
+            "Ljava/lang/Double;",
+            "valueOf",
+            "(D)Ljava/lang/Double;",
+            box_double,
+        ),
+        (
+            "Lkotlin/coroutines/jvm/internal/Boxing;",
+            "boxDouble",
+            "(D)Ljava/lang/Double;",
+            box_double,
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name,
+            sig,
+            instance: false,
+            f,
+        })?;
+    }
+    vm.register_native(NativeEntry {
+        class: "Lkotlin/jvm/internal/Intrinsics;",
+        name: "checkNotNullExpressionValue",
+        sig: "(Ljava/lang/Object;Ljava/lang/String;)V",
+        instance: false,
+        f: check_expression,
+    })?;
     for (name, sig, instance, f) in [
         (
             "fromEpochSeconds",
