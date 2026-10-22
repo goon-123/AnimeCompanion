@@ -1,0 +1,1318 @@
+{
+  "schemaVersion": 1,
+  "catalogRef": "b00de1d361ab08eb38567ecacfd267c154130592",
+  "runtimeRevision": "c6bd98f28d9a1ce32e3f35ec0737ea9f2b9ab5d2",
+  "scope": "selectedPackages",
+  "summary": {
+    "catalogPackages": 11,
+    "inventoriedPackages": 11,
+    "enumeratedSources": 25,
+    "operationProbes": 185,
+    "completeOwnedSources": 4,
+    "incompleteProbePackages": 0,
+    "unprobedPackages": 0,
+    "unexecutedOperationCells": 0
+  },
+  "sourceStatuses": {
+    "unverified": 19,
+    "verified": 4,
+    "partial": 2
+  },
+  "packageOnlyRows": 0,
+  "dependencyInventoryPackages": 11,
+  "dependencySummary": [
+    {
+      "family": "Java core",
+      "referencingPackages": 11,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Kotlin standard library",
+      "referencingPackages": 11,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Kotlin time",
+      "referencingPackages": 11,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "OkHttp",
+      "referencingPackages": 11,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Source framework",
+      "referencingPackages": 11,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Android platform",
+      "referencingPackages": 10,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "JSON serialization",
+      "referencingPackages": 9,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Serialization core",
+      "referencingPackages": 9,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Coroutines",
+      "referencingPackages": 8,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Jsoup",
+      "referencingPackages": 8,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Android preferences",
+      "referencingPackages": 6,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Java date and locale",
+      "referencingPackages": 4,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Okio",
+      "referencingPackages": 4,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Android browser",
+      "referencingPackages": 2,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    },
+    {
+      "family": "Java cryptography and TLS",
+      "referencingPackages": 1,
+      "blockedPackages": 0,
+      "observedAPIs": []
+    }
+  ],
+  "observedGaps": [],
+  "provenance": {
+    "indexSHA256": "ae9a4ee3e404173b6f7cbb363a4020a9d1a431d31a885765f0ed8ac4658ce33c",
+    "assetManifestSHA256": "d6860373e95afe0b2a7926d3712c5750de12ea4541b4af6545ee81472ecc8689",
+    "capabilitiesSHA256": "570880d01b631b136269049cd35adb9928db0fe1df9978cc67fda53d43ce5c45",
+    "testLogSHA256": "7ce1614412d2dfe2519fb924496652d72ca856325cc123020d2977cb3aaba3ae"
+  },
+  "rows": [
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.danbooru",
+      "apk": "tachiyomi-all.danbooru-v1.6.0.apk",
+      "sha256": "bcad22cfbb9a6b6d4405e6fe8b27ff2b6a8f388e8f29cb103533a8d82ab0ac72",
+      "extension": "Danbooru",
+      "name": "Danbooru",
+      "sourceIndex": 0,
+      "sourceID": "7602260701584916302",
+      "language": "all",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 6,
+        "unclassifiedFailure": 2
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "apk": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "extension": "HentaiFox",
+      "name": "HentaiFox",
+      "sourceIndex": 0,
+      "sourceID": "7945033982379409892",
+      "language": "en",
+      "version": "1.6.18",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "probeOnly",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 7,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "apk": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "extension": "HentaiFox",
+      "name": "HentaiFox",
+      "sourceIndex": 1,
+      "sourceID": "8640201438684762638",
+      "language": "ja",
+      "version": "1.6.18",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "probeOnly",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 7,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "apk": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "extension": "HentaiFox",
+      "name": "HentaiFox",
+      "sourceIndex": 2,
+      "sourceID": "3252050349835097844",
+      "language": "zh",
+      "version": "1.6.18",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "probeOnly",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 7,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "apk": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "extension": "HentaiFox",
+      "name": "HentaiFox",
+      "sourceIndex": 3,
+      "sourceID": "2146024794445748144",
+      "language": "ko",
+      "version": "1.6.18",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "probeOnly",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 7,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "apk": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "extension": "HentaiFox",
+      "name": "HentaiFox",
+      "sourceIndex": 4,
+      "sourceID": "2697587119837846427",
+      "language": "all",
+      "version": "1.6.18",
+      "status": "unverified",
+      "stages": {
+        "popular": "probeOnly",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "probeOnly",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "notAdvertised": 1,
+        "ownedResponseAccepted": 6,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.en.hentaihere",
+      "apk": "tachiyomi-en.hentaihere-v1.6.1.apk",
+      "sha256": "6bff924148b9be583396ad8eb1f80ed66af646fe9c1fbb9ebdfc039ec28eefaa",
+      "extension": "HentaiHere",
+      "name": "HentaiHere",
+      "sourceIndex": 0,
+      "sourceID": "7266624490370375187",
+      "language": "en",
+      "version": "1.6.1",
+      "status": "verified",
+      "stages": {
+        "popular": "verified",
+        "details": "verified",
+        "chapters": "verified",
+        "pages": "verified",
+        "images": "verified"
+      },
+      "verifiedStages": [
+        "chapters",
+        "details",
+        "images",
+        "inspect",
+        "pages",
+        "popular",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+        "collection_extension_tests::hentaihere_character_range_filters_catalog_chapters_ordered_pages_and_image"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 6,
+        "unclassifiedFailure": 2
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.komga",
+      "apk": "tachiyomi-all.komga-v1.6.74.apk",
+      "sha256": "0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9",
+      "extension": "Komga",
+      "name": "Komga",
+      "sourceIndex": 0,
+      "sourceID": "4508733312114627536",
+      "language": "all",
+      "version": "1.6.74",
+      "status": "verified",
+      "stages": {
+        "popular": "verified",
+        "details": "verified",
+        "chapters": "verified",
+        "pages": "verified",
+        "images": "verified"
+      },
+      "verifiedStages": [
+        "chapters",
+        "details",
+        "images",
+        "inspect",
+        "pages",
+        "popular",
+        "settings"
+      ],
+      "tests": [
+        "java_kotlin_extension_tests::komga_configured_catalog_async_details_dated_chapters_ordered_pages_and_images",
+        "java_kotlin_extension_tests::komga_coroutine_context_factory_and_settings"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.komga",
+      "apk": "tachiyomi-all.komga-v1.6.74.apk",
+      "sha256": "0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9",
+      "extension": "Komga",
+      "name": "Komga (2)",
+      "sourceIndex": 1,
+      "sourceID": "8074481155021144106",
+      "language": "all",
+      "version": "1.6.74",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "java_kotlin_extension_tests::komga_coroutine_context_factory_and_settings"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.komga",
+      "apk": "tachiyomi-all.komga-v1.6.74.apk",
+      "sha256": "0fd95b938742d7f203281350c7f901098425b6fe5eafab873411e2430bd693b9",
+      "extension": "Komga",
+      "name": "Komga (3)",
+      "sourceIndex": 2,
+      "sourceID": "5132811728275817394",
+      "language": "all",
+      "version": "1.6.74",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "java_kotlin_extension_tests::komga_coroutine_context_factory_and_settings"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.ko.sbxh",
+      "apk": "tachiyomi-ko.sbxh-v1.6.1.apk",
+      "sha256": "90ecb3072c12df46820255f9ab3b1bbb6e9da278a68771c166dd9a8915f905f9",
+      "extension": "Newtoki (SBXH)",
+      "name": "Newtoki (SBXH)",
+      "sourceIndex": 0,
+      "sourceID": "5836877907605844302",
+      "language": "ko",
+      "version": "1.6.1",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android browser",
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 4,
+        "unclassifiedFailure": 4
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.pt.nexusmangas",
+      "apk": "tachiyomi-pt.nexusmangas-v1.6.1.apk",
+      "sha256": "e37bc8e33684b041dbd93c67a6f1f8a15eed1ed9f3ba1732392eed6fea825d66",
+      "extension": "Nexus Mangás",
+      "name": "Nexus Mangás",
+      "sourceIndex": 0,
+      "sourceID": "3647960912061862872",
+      "language": "pt-BR",
+      "version": "1.6.1",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "apk": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "extension": "Pixiv",
+      "name": "Pixiv",
+      "sourceIndex": 0,
+      "sourceID": "4964829535501435742",
+      "language": "en",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "apk": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "extension": "Pixiv",
+      "name": "Pixiv",
+      "sourceIndex": 1,
+      "sourceID": "2134233417037741790",
+      "language": "ja",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "apk": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "extension": "Pixiv",
+      "name": "Pixiv",
+      "sourceIndex": 2,
+      "sourceID": "6934645150441404855",
+      "language": "zh",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "apk": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "extension": "Pixiv",
+      "name": "Pixiv",
+      "sourceIndex": 3,
+      "sourceID": "7732030561788182970",
+      "language": "zh-tw",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "apk": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "extension": "Pixiv",
+      "name": "Pixiv",
+      "sourceIndex": 4,
+      "sourceID": "5123765142540943901",
+      "language": "ko",
+      "version": "1.6.0",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.ru.wamanga",
+      "apk": "tachiyomi-ru.wamanga-v1.6.2.apk",
+      "sha256": "5e695c6704d713283f613816fb9655f66df6d2121058ae35ce9d14dac79bab68",
+      "extension": "WaManga",
+      "name": "WaManga",
+      "sourceIndex": 0,
+      "sourceID": "1686869715645322994",
+      "language": "ru",
+      "version": "1.6.2",
+      "status": "verified",
+      "stages": {
+        "popular": "verified",
+        "details": "verified",
+        "chapters": "verified",
+        "pages": "verified",
+        "images": "verified"
+      },
+      "verifiedStages": [
+        "chapters",
+        "details",
+        "images",
+        "inspect",
+        "pages",
+        "popular",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+        "collection_extension_tests::wamanga_lazy_svelte_lines_catalog_dated_chapters_sorted_pages_and_image"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "JSON serialization",
+        "Java core",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 3,
+        "unclassifiedFailure": 5
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "apk": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "extension": "Webcomics",
+      "name": "Webcomics",
+      "sourceIndex": 0,
+      "sourceID": "5830834696627804450",
+      "language": "en",
+      "version": "1.6.11",
+      "status": "partial",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "unverified"
+      },
+      "verifiedStages": [
+        "inspect",
+        "latest",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+        "collection_extension_tests::webcomics_latest_uses_array_last_and_the_guest_user_agent_interceptor"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 2,
+        "unclassifiedFailure": 6
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "apk": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "extension": "Webcomics",
+      "name": "Webcomics",
+      "sourceIndex": 1,
+      "sourceID": "5885774493166465039",
+      "language": "fr",
+      "version": "1.6.11",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "unverified"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 2,
+        "unclassifiedFailure": 6
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "apk": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "extension": "Webcomics",
+      "name": "Webcomics",
+      "sourceIndex": 2,
+      "sourceID": "3396104446323720599",
+      "language": "pt",
+      "version": "1.6.11",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "unverified"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 2,
+        "unclassifiedFailure": 6
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "apk": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "extension": "Webcomics",
+      "name": "Webcomics",
+      "sourceIndex": 3,
+      "sourceID": "8965174723997547979",
+      "language": "es",
+      "version": "1.6.11",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "unverified"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 2,
+        "unclassifiedFailure": 6
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "apk": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "extension": "Webcomics",
+      "name": "Webcomics",
+      "sourceIndex": 4,
+      "sourceID": "1203016038113719139",
+      "language": "id",
+      "version": "1.6.11",
+      "status": "unverified",
+      "stages": {
+        "popular": "unverified",
+        "details": "unverified",
+        "chapters": "unverified",
+        "pages": "unverified",
+        "images": "unverified"
+      },
+      "verifiedStages": [
+        "inspect"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android platform",
+        "Coroutines",
+        "JSON serialization",
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Serialization core",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 2,
+        "unclassifiedFailure": 6
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.zh.comicabc",
+      "apk": "tachiyomi-zh.comicabc-v1.6.0.apk",
+      "sha256": "0180a4796d8152f1c3759dbf9fb0171d7a596b932fa861167256f4dd0ea2ebfb",
+      "extension": "Comicabc",
+      "name": "無限動漫",
+      "sourceIndex": 0,
+      "sourceID": "8110122805257580230",
+      "language": "zh",
+      "version": "1.6.0",
+      "status": "partial",
+      "stages": {
+        "popular": "verified",
+        "details": "verified",
+        "chapters": "verified",
+        "pages": "unverified",
+        "images": "probeOnly"
+      },
+      "verifiedStages": [
+        "chapters",
+        "details",
+        "inspect",
+        "popular",
+        "settings"
+      ],
+      "tests": [
+        "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+        "collection_extension_tests::comicabc_utf16_dictionary_catalog_details_and_chapters"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Java core",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 6,
+        "unclassifiedFailure": 2
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    },
+    {
+      "package": "eu.kanade.tachiyomi.extension.zh.jinmantiantang",
+      "apk": "tachiyomi-zh.jinmantiantang-v1.6.59.apk",
+      "sha256": "baebb449741b28f110f88408ff5a7edf6fc76fae0d60134e4b71c15cb7c3d56a",
+      "extension": "Jinman Tiantang",
+      "name": "禁漫天堂",
+      "sourceIndex": 0,
+      "sourceID": "6286738698187452081",
+      "language": "zh",
+      "version": "1.6.59",
+      "status": "verified",
+      "stages": {
+        "popular": "verified",
+        "details": "verified",
+        "chapters": "verified",
+        "pages": "verified",
+        "images": "verified"
+      },
+      "verifiedStages": [
+        "chapters",
+        "details",
+        "images",
+        "pages",
+        "popular",
+        "settings"
+      ],
+      "tests": [
+        "java_kotlin_extension_tests::jinman_catalog_dated_book_ordered_pages_and_unscrambled_image",
+        "java_kotlin_extension_tests::jinman_modern_gif_and_gzipped_gif_preserve_animation_bytes",
+        "java_kotlin_extension_tests::jinman_scrambled_png_jpeg_webp_and_gzip_restore_pixels_through_guest_bytecode",
+        "java_kotlin_extension_tests::jinman_typed_string_array_settings"
+      ],
+      "runtimeGaps": [],
+      "gapFamilies": [],
+      "dependencies": [
+        "Android browser",
+        "Android platform",
+        "Android preferences",
+        "Coroutines",
+        "Java core",
+        "Java cryptography and TLS",
+        "Java date and locale",
+        "Jsoup",
+        "Kotlin standard library",
+        "Kotlin time",
+        "OkHttp",
+        "Okio",
+        "Source framework"
+      ],
+      "probeOutcomes": {
+        "ownedResponseAccepted": 7,
+        "unclassifiedFailure": 1
+      },
+      "incomplete": false,
+      "historicalEvidence": false
+    }
+  ]
+}
