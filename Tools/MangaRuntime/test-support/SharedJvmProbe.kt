@@ -9,7 +9,94 @@ object SharedJvmProbe {
         check(fieldContracts())
         check(timeUnitContracts())
         check(preciseTimeContracts())
-        println("Owned field/time contracts pass on the reference JVM")
+        check(constructorContracts())
+        check(isoDateContracts())
+        println("Owned field/time/constructor/ISO contracts pass on the reference JVM")
+    }
+    @JvmStatic fun isoDateContracts(): Boolean {
+        val iso = java.time.format.DateTimeFormatter.ISO_DATE_TIME
+        val utc = iso.withZone(java.time.ZoneOffset.UTC)
+        val stamp = java.time.ZonedDateTime.parse("2024-02-29T12:34:56.123456789+02:30", iso)
+        check(stamp.toInstant() == java.time.Instant.parse("2024-02-29T10:04:56.123456789Z")) { "ISO explicit offset beats default zone" }
+        check(stamp.nano == 123456789) { "ISO nanoseconds" }
+        val overridden = java.time.ZonedDateTime.parse("2024-02-29T12:34:56.123456789+02:30", utc)
+        check(overridden.toInstant() == stamp.toInstant() && overridden.zone.id == "Z") { "ISO parse zone override" }
+        check(utc.format(stamp) == "2024-02-29T10:04:56.123456789Z") { "ISO overriding format zone" }
+        check(iso.format(stamp) == "2024-02-29T12:34:56.123456789+02:30") { "ISO offset formatting" }
+        val local = java.time.LocalDateTime.parse("1969-12-31t23:59:59.999999999", iso)
+        check(local.nano == 999999999 && iso.format(local) == "1969-12-31T23:59:59.999999999") { "ISO local nanos" }
+        check(local.toInstant(java.time.ZoneOffset.UTC) == java.time.Instant.parse("1969-12-31T23:59:59.999999999Z")) { "local to instant nanos" }
+        check(local.atZone(java.time.ZoneOffset.UTC).toInstant() == local.toInstant(java.time.ZoneOffset.UTC)) { "local to zoned nanos" }
+        check(stamp.toInstant().atZone(java.time.ZoneOffset.UTC).nano == 123456789) { "instant to zoned nanos" }
+        check(stamp.toLocalDateTime().nano == 123456789 && stamp.plusDays(1).nano == 123456789) { "zoned conversion and date arithmetic nanos" }
+        check(local.minusDays(1).nano == 999999999) { "local date arithmetic nanos" }
+        check(java.time.LocalDate.parse("2024-02-29T12:34:56Z",iso).toEpochDay() == 19782L) { "ISO local date query" }
+        val region = java.time.ZonedDateTime.parse("2024-07-01T12:00:00+01:00[Europe/Paris]",utc)
+        check(region.toInstant() == java.time.Instant.parse("2024-07-01T11:00:00Z")) { "ISO offset and region conflict resolution" }
+        check(iso.format(region) == "2024-07-01T13:00:00+02:00[Europe/Paris]") { "ISO region formatting" }
+        check(java.time.ZonedDateTime.parse("2024-02-29T12:34",utc).toInstant() == java.time.Instant.parse("2024-02-29T12:34:00Z")) { "ISO default zone" }
+        check(java.time.ZonedDateTime.parse("2024-02-29T12:34:56-01:02:03",iso).toInstant() == java.time.Instant.parse("2024-02-29T13:36:59Z")) { "ISO second offset" }
+        for (text in listOf("2023-02-29T12:34:56Z", "2024-02-29T24:00:00Z", "2024-02-29T12:34:60Z", "2024-02-29T12:34:56+18:00:01", "2024-02-29T12:34:56.1234567890Z", "2024-02-29T12:34:56+02:00[Unknown/Region]", "2024-02-29T12:34:56[Europe/Paris]", "2024-02-29T12:34:56+02")) {
+            try { java.time.ZonedDateTime.parse(text,utc); error("ISO accepted invalid date: $text") } catch (_: java.time.format.DateTimeParseException) {}
+        }
+        try { java.time.ZonedDateTime.parse("2024-02-29T12:34",iso); return false } catch (_: java.time.format.DateTimeParseException) {}
+        return true
+    }
+    open class ConstructorBase(val inherited: String)
+    class Constructed @Throws(java.io.IOException::class) constructor(@JvmField val number: Long, @JvmField val label: String) : ConstructorBase(label) {
+        init { if (number < 0) throw java.io.IOException("owned constructor failure") }
+        private constructor() : this(19, "private")
+        fun marker() = label
+        @Throws(java.io.IOException::class) fun risky() = number
+        fun spread(vararg values: String) = values.size
+        fun mixed(first: Double, label: String, last: Long): Boolean = first == 3.5 && label == "tail" && last == 9L
+    }
+    abstract class AbstractConstructed
+    enum class ReflectiveEnum { ONE }
+    class NoArg { @JvmField var value = 7 }
+    @Suppress("DEPRECATION")
+    @JvmStatic fun constructorContracts(): Boolean {
+        val owner = Constructed::class.java
+        val constructor = owner.getConstructor(Long::class.javaPrimitiveType, String::class.java)
+        check(constructor.declaringClass == owner && constructor.name == owner.name) { "constructor owner/name" }
+        check(constructor.modifiers == java.lang.reflect.Modifier.PUBLIC) { "Java constructor flags, not DEX flags" }
+        check(constructor.parameterCount == 2 && constructor.parameterTypes[0] == Long::class.javaPrimitiveType) { "constructor parameter types" }
+        check(constructor.exceptionTypes.contentEquals(arrayOf(java.io.IOException::class.java))) { "constructor throws metadata" }
+        check(constructor == owner.getConstructor(Long::class.javaPrimitiveType, String::class.java)) { "constructor identity equality" }
+        check(constructor.hashCode() == owner.name.hashCode()) { "constructor hash" }
+        val value = constructor.newInstance(23.toByte(), "owned")
+        check(value.number == 23L && value.label == "owned" && value.inherited == "owned") { "actual constructor execution" }
+        check(owner.getMethod("mixed",Double::class.javaPrimitiveType,String::class.java,Long::class.javaPrimitiveType).invoke(value,3.5f,"tail",9.toByte()) == true) { "wide method arguments retain following slots" }
+        try { constructor.newInstance(1.0, "wrong"); return false } catch (_: IllegalArgumentException) {}
+        try { constructor.newInstance(null, "wrong"); return false } catch (_: IllegalArgumentException) {}
+        try { constructor.newInstance(1, 2); return false } catch (_: IllegalArgumentException) {}
+        try { constructor.newInstance(1); return false } catch (_: IllegalArgumentException) {}
+        try { constructor.newInstance(-1, "failure"); return false }
+        catch (error: java.lang.reflect.InvocationTargetException) { check(error.cause is java.io.IOException && error.cause!!.message == "owned constructor failure") }
+        check(owner.constructors.size == 1 && owner.declaredConstructors.size == 2) { "public/declared constructors" }
+        try { owner.getConstructor(); return false } catch (_: NoSuchMethodException) {}
+        val private = owner.getDeclaredConstructor()
+        try { private.newInstance(); return false } catch (_: IllegalAccessException) {}
+        private.isAccessible = true
+        check(private.newInstance().number == 19L && private.isAccessible) { "constructor access override" }
+        private.isAccessible = false
+        try { private.newInstance(); return false } catch (_: IllegalAccessException) {}
+        try { AbstractConstructed::class.java.getConstructor().newInstance(); return false } catch (_: InstantiationException) {}
+        val enum = ReflectiveEnum::class.java.getDeclaredConstructor(String::class.java, Int::class.javaPrimitiveType)
+        enum.isAccessible = true
+        try { enum.newInstance("TWO", 1); return false } catch (_: IllegalArgumentException) {}
+        check(NoArg::class.java.newInstance().value == 7) { "legacy class newInstance" }
+        try { owner.newInstance(); return false } catch (_: IllegalAccessException) {}
+        val methods = owner.declaredMethods
+        check(methods.any { it.name == "marker" } && methods.none { it.name == "getInherited" }) { "declared method enumeration" }
+        check(owner.methods.any { it.name == "getInherited" && it.declaringClass == ConstructorBase::class.java }) { "inherited method enumeration" }
+        val risky = owner.getMethod("risky")
+        check(risky.exceptionTypes.contentEquals(arrayOf(java.io.IOException::class.java))) { "method throws metadata" }
+        check(risky == owner.getDeclaredMethod("risky") && risky.hashCode() == (owner.name.hashCode() xor "risky".hashCode())) { "method equality/hash" }
+        check(owner.getMethod("spread", Array<String>::class.java).isVarArgs) { "varargs metadata" }
+        check(!constructor.isSynthetic && !risky.isBridge) { "executable flags" }
+        check(Int::class.javaPrimitiveType!!.declaredMethods.isEmpty() && Int::class.javaPrimitiveType!!.constructors.isEmpty()) { "primitive metadata is empty" }
+        return true
     }
     @JvmStatic fun nestedChildCompletion(): String = runBlocking {
         scheduledLog = ""

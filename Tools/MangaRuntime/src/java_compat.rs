@@ -224,8 +224,11 @@ fn local_instant(vm: &mut Vm, args: &[JValue]) -> ResultValue {
     let instant = millis
         .checked_sub(offset)
         .ok_or_else(|| exception(vm, "Ljava/lang/ArithmeticException;", "Instant overflow"))?;
-    vm.alloc_native("Ljava/time/Instant;", Native::EpochMillis(instant))
-        .map_err(NatErr::Fatal)
+    super::date_amount_compat::new_instant(
+        vm,
+        i128::from(instant) * 1_000_000
+            + i128::from(super::iso_date_compat::remainder(vm, args[0])),
+    )
 }
 fn date_format(vm: &mut Vm, args: &[JValue]) -> ResultValue {
     vm.invoke_virtual_args(
@@ -470,8 +473,7 @@ fn local_minus_days(vm: &mut Vm, args: &[JValue]) -> ResultValue {
         .checked_mul(86_400_000)
         .and_then(|n| millis.checked_sub(n))
         .ok_or_else(|| exception(vm, "Ljava/lang/ArithmeticException;", "Date overflow"))?;
-    vm.alloc_native("Ljava/time/LocalDateTime;", Native::EpochMillis(updated))
-        .map_err(NatErr::Fatal)
+    super::iso_date_compat::local(vm, updated, super::iso_date_compat::remainder(vm, args[0]))
 }
 fn local_truncated(vm: &mut Vm, args: &[JValue]) -> ResultValue {
     let Some(Native::EpochMillis(millis)) = vm.payload_of(args[0]) else {

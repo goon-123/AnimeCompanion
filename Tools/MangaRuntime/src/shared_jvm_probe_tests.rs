@@ -5,6 +5,20 @@ fn call(vm: &mut Vm, name: &str, sig: &str) -> JValue {
     vm.invoke_static(CLASS, name, sig, vec![])
         .unwrap_or_else(|error| {
             if let dexvm::vm::error::JvmError::Uncaught(id) = error {
+                if let Some(dexvm::vm::object::Native::Throwable { cause, .. }) =
+                    vm.payload_of(JValue::Obj(id))
+                {
+                    if !cause.is_null_ref() {
+                        let message = match vm.payload_of(cause) {
+                            Some(dexvm::vm::object::Native::Throwable { message, .. }) => message,
+                            _ => None,
+                        };
+                        eprintln!(
+                            "{name} cause: {} {message:?}",
+                            vm.class_desc_str(vm.arena.objects[cause.as_obj() as usize].class)
+                        );
+                    }
+                }
                 let message = match vm.payload_of(JValue::Obj(id)) {
                     Some(dexvm::vm::object::Native::Throwable { message, .. }) => message,
                     _ => None,
@@ -28,9 +42,14 @@ fn vm() -> Vm {
     kotlin_collection_compat::install(&mut vm).unwrap();
     kotlin_text_compat::install(&mut vm).unwrap();
     sequence_compat::install(&mut vm).unwrap();
-    method_reflection_compat::install(&mut vm).unwrap();
     reflection_compat::install(&mut vm).unwrap();
+    method_reflection_compat::install(&mut vm).unwrap();
+    executable_reflection_compat::install(&mut vm).unwrap();
+    locale_compat::install(&mut vm).unwrap();
+    date_compat::install(&mut vm).unwrap();
     date_amount_compat::install(&mut vm).unwrap();
+    date_zone_compat::install(&mut vm, "UTC").unwrap();
+    local_date_compat::install(&mut vm).unwrap();
     time_unit_compat::install(&mut vm).unwrap();
     property_reference_compat::install(&mut vm).unwrap();
     browser_compat::install(&mut vm).unwrap();
@@ -39,6 +58,81 @@ fn vm() -> Vm {
         vm.register_native(*entry).unwrap();
     }
     vm
+}
+#[test]
+fn guest_constructors_and_executable_metadata_observe_real_dex_contracts() {
+    let mut vm = vm();
+    assert_eq!(call(&mut vm, "constructorContracts", "()Z"), JValue::Int(1));
+    // Cached reference classes and wrapper TYPE objects remain valid without a
+    // guest strong reference, since this VM does not unload classes.
+    vm.gc(&[]);
+    assert_eq!(call(&mut vm, "constructorContracts", "()Z"), JValue::Int(1));
+}
+#[test]
+fn cached_class_objects_survive_gc_and_constructor_limits_stay_fatal() {
+    use dexvm::vm::{
+        error::JvmError,
+        object::{ClassOrPrim, Native},
+    };
+    let mut vm = vm();
+    let class = vm
+        .ensure_class_by_desc("Lapp/animecompanion/probe/SharedJvmProbe$NoArg;")
+        .unwrap();
+    let object = vm.class_obj(class).unwrap();
+    vm.gc(&[]);
+    for _ in 0..20 {
+        vm.alloc_native("Ljava/lang/Integer;", Native::IntBox(99))
+            .unwrap();
+    }
+    assert_eq!(vm.class_obj(class).unwrap(), object);
+    assert!(
+        matches!(vm.payload_of(object),Some(Native::ClassObj(ClassOrPrim::Class(id))) if id==class)
+    );
+    let ctor = vm
+        .invoke_virtual_args(
+            object,
+            "getConstructor",
+            "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;",
+            vec![JValue::Null],
+        )
+        .unwrap();
+    fn exhausted(_vm: &mut Vm, _args: &[JValue]) -> Result<JValue, NatErr> {
+        Err(NatErr::Fatal(JvmError::BudgetExceeded))
+    }
+    vm.register_native(NativeEntry {
+        class: "Lapp/animecompanion/probe/SharedJvmProbe$NoArg;",
+        name: "<init>",
+        sig: "()V",
+        instance: true,
+        f: exhausted,
+    })
+    .unwrap();
+    let depth = vm.recursion_depth;
+    assert!(matches!(
+        vm.invoke_virtual_args(
+            ctor,
+            "newInstance",
+            "([Ljava/lang/Object;)Ljava/lang/Object;",
+            vec![JValue::Null]
+        ),
+        Err(JvmError::BudgetExceeded)
+    ));
+    assert_eq!(vm.recursion_depth, depth);
+    vm.budget = 0;
+    assert!(matches!(
+        vm.invoke_virtual_args(
+            object,
+            "getDeclaredMethods",
+            "()[Ljava/lang/reflect/Method;",
+            vec![]
+        ),
+        Err(JvmError::BudgetExceeded)
+    ));
+}
+#[test]
+fn guest_iso_dates_resolve_offsets_zones_and_fractional_values() {
+    let mut vm = vm();
+    assert_eq!(call(&mut vm, "isoDateContracts", "()Z"), JValue::Int(1));
 }
 #[test]
 fn guest_field_reflection_and_time_unit_contracts_execute_real_call_sites() {

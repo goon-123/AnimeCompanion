@@ -791,15 +791,24 @@ fn parsed(vm: &mut Vm, args: &[JValue]) -> Result<(i64, i32), NatErr> {
     })
 }
 fn local_date(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::iso_date_compat::is_iso(vm, args[1]) {
+        return super::iso_date_compat::local_date(vm, args);
+    }
     let (_, day) = parsed(vm, args)?;
     super::local_date_compat::from_day(vm, i64::from(day))
 }
 fn local_datetime(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::iso_date_compat::is_iso(vm, args[1]) {
+        return super::iso_date_compat::local_datetime(vm, args);
+    }
     let (millis, _) = parsed(vm, args)?;
     vm.alloc_native("Ljava/time/LocalDateTime;", Native::EpochMillis(millis))
         .map_err(NatErr::Fatal)
 }
 fn zoned_datetime(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::iso_date_compat::is_iso(vm, args[1]) {
+        return super::iso_date_compat::zoned_datetime(vm, args);
+    }
     let (wall, _) = parsed(vm, args)?;
     let zone = formatter_zone(vm, &args[1..2])?;
     if zone.is_null_ref() {
@@ -812,6 +821,9 @@ fn zoned_datetime(vm: &mut Vm, args: &[JValue]) -> R {
     super::date_zone_compat::zoned(vm, instant, zone)
 }
 fn format_date(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::iso_date_compat::is_iso(vm, args[0]) {
+        return super::iso_date_compat::format(vm, args);
+    }
     use chrono::{Datelike, Timelike};
     let Some(Native::DateFormatter { pattern, .. }) = vm.payload_of(args[0]) else {
         return Err(NatErr::Throw(vm.err_npe()));
@@ -1325,6 +1337,7 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     vm.classes[exception as usize].superclass = Some(parent);
     vm.classes[parent as usize].superclass =
         Some(vm.ensure_class_by_desc("Ljava/lang/RuntimeException;")?);
+    super::iso_date_compat::install(vm)?;
     Ok(())
 }
 

@@ -242,7 +242,12 @@ fn at_zone(vm: &mut Vm, args: &[JValue]) -> R {
         return Err(error(vm, "Expected local date-time"));
     };
     let millis = local_to_epoch(vm, args[1], wall, false, None)?;
-    zoned(vm, millis, args[1])
+    super::iso_date_compat::zoned(
+        vm,
+        millis,
+        args[1],
+        super::iso_date_compat::remainder(vm, args[0]),
+    )
 }
 fn legacy_default(vm: &mut Vm, _: &[JValue]) -> R {
     let zone = system_default(vm, &[])?;
@@ -287,7 +292,12 @@ fn zoned_delta(vm: &mut Vm, args: &[JValue], unit: i64, sign: i64, calendar: boo
             .checked_add(amount)
             .ok_or_else(|| error(vm, "Date arithmetic overflow"))?
     };
-    zoned(vm, result, zone)
+    super::iso_date_compat::zoned(
+        vm,
+        result,
+        zone,
+        super::iso_date_compat::remainder(vm, args[0]),
+    )
 }
 fn plus_days(vm: &mut Vm, args: &[JValue]) -> R {
     zoned_delta(vm, args, DAY_MS, 1, true)
@@ -352,7 +362,12 @@ fn unit_delta(vm: &mut Vm, args: &[JValue], sign: i128) -> R {
             let preferred = offset_at(vm, zone, millis)?;
             let instant =
                 local_to_epoch(vm, zone, next.timestamp_millis(), false, Some(preferred))?;
-            return zoned(vm, instant, zone);
+            return super::iso_date_compat::zoned(
+                vm,
+                instant,
+                zone,
+                super::iso_date_compat::remainder(vm, args[0]),
+            );
         }
         _ => return Err(error(vm, "Unsupported date arithmetic unit")),
     };
@@ -370,7 +385,12 @@ fn unit_delta(vm: &mut Vm, args: &[JValue], sign: i128) -> R {
     } else {
         next
     };
-    zoned(vm, instant, zone)
+    super::iso_date_compat::zoned(
+        vm,
+        instant,
+        zone,
+        super::iso_date_compat::remainder(vm, args[0]),
+    )
 }
 fn truncated(vm: &mut Vm, args: &[JValue]) -> R {
     let unit = match vm.payload_of(args[1]) {

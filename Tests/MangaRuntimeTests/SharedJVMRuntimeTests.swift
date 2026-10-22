@@ -10,6 +10,29 @@ final class SharedJVMRuntimeTests: XCTestCase {
     private struct ImagePayload: Decodable { let bodyBase64: String }
     private let bytes = Data([0, 255, 23, 128])
 
+    func testSenkuroAndSenkognitoISODatesAndCompleteReaderThroughNativeBridge() throws {
+        for apk in ["tachiyomi-ru.senkuro-v1.6.0.apk", "tachiyomi-ru.senkognito-v1.6.0.apk"] {
+            let host = try OwnedExtensionFixtureHTTP(apkName: apk, responses: ["https://images.example/owned-page-2.webp": bytes], graphQLResponses: [
+                "searchTachiyomiManga": try fixture("senkuro-catalog.json"),
+                "fetchTachiyomiManga": try fixture("senkuro-book.json"),
+                "fetchTachiyomiChapters": try fixture("senkuro-chapters.json"),
+                "fetchTachiyomiChapterPages": try fixture("senkuro-pages.json")
+            ])
+            let catalog: SourceMangaPage = try host.execute(["op": "popular"])
+            let manga = try XCTUnwrap(catalog.mangas.first)
+            XCTAssertEqual(manga.title, "Owned story")
+            let book: MangaBook = try host.execute(["op": "book", "timeZoneID": "UTC", "manga": ["url": manga.url, "title": manga.title]])
+            XCTAssertEqual(book.manga.description, "Owned description")
+            XCTAssertEqual(book.chapters.map(\.uploadedAt), [1_709_201_096_123, 1_709_210_096_123, 0])
+            XCTAssertEqual(book.chapters.first?.scanlator, "Owned team")
+            let chapter = try XCTUnwrap(book.chapters.first)
+            let pages: [SourceMangaImage] = try host.execute(["op": "pages", "chapter": MangaRuntime.chapterInput(chapter)])
+            XCTAssertEqual(pages.map(\.imageURL), ["https://images.example/owned-page-2.webp", "https://images.example/owned-page-1.webp"])
+            try assertImage(try XCTUnwrap(pages.first), host: host)
+            XCTAssertEqual(host.methodsByURL.filter { $0.key.hasSuffix("/graphql") }.values.first, "POST")
+        }
+    }
+
     func testWaMangaLazyLinesAndCompleteReaderThroughNativeBridge() throws {
         let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-ru.wamanga-v1.6.2.apk", responses: [
             "https://wamanga.ru/catalog/__data.json": try fixture("wamanga-catalog.jsonl"),

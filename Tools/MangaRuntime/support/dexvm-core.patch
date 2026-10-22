@@ -849,3 +849,19 @@ index 1f24d97..c42fef0 100644
      }
 -    Ok(String::from_utf8_lossy(&out).into_owned())
  }
+diff --git a/src/vm/mod.rs b/src/vm/mod.rs
+index 8f14cd9..c86ffd0 100644
+--- a/src/vm/mod.rs
++++ b/src/vm/mod.rs
+@@ -1045,6 +1045,11 @@ impl Vm {
+             seed(s, &mut marks, &mut stack);
+         }
+         for c in &self.classes {
++            // Loaded classes are not unloaded in this VM. Their cached Class
++            // objects must stay alive, even between reflective guest calls.
++            if let Some(object) = c.class_obj {
++                seed(object, &mut marks, &mut stack);
++            }
+             for v in &c.statics {
+                 if let JValue::Obj(o) = v {
+                     seed(*o, &mut marks, &mut stack);

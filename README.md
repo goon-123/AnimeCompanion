@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Constructors and ISO chapter dates (0.25.13 / build 60)
+
+Execute real guest constructors, enumerate methods/constructors and read declared exception metadata from DEX. Fix wide reflection argument slots, floating-point boxing and cached Class objects across GC. Add ISO_DATE_TIME offset/region/default-zone handling and nanosecond preservation in the covered conversion paths. Senkuro and Senkognito now pass complete owned reading replays; Komga/Jinman and existing readers remain regressions.
+
+Shared Java/Kotlin progress: **90% merged → approximately 93% with this proposed PR**. Dynamic proxies/generic and broader Kotlin reflection, more coroutine APIs/parallel execution, remaining date and collection contracts, and further native validation are still open. This is an engineering estimate, not a percentage of working extensions. See [scope](docs/manga-compatibility/java-kotlin-progress.md) and [validation](BUILD_STATUS.md).
+
 ### Cooperative coroutines and shared JVM contracts (0.25.12 / build 59)
 
 Add bounded cooperative scheduling for suspended tasks, delays/yield, ordered awaitAll and nested child completion. Extend actual Java field access (including hidden fields), nanosecond Instant/Duration value behavior and saturating TimeUnit conversions. Existing browser, Komga and Jinman reader regressions remain covered.

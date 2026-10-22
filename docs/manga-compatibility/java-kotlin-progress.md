@@ -7,7 +7,8 @@ date/time support needed by manga extensions, including Komga and JinmanTiantang
 | --- | --- | --- |
 | Merged build 57 / PR #38 | 80% | Komga/Jinman owned reading flows; continuation resume, method/property reflection and eight observed date/reflection blockers covered |
 | Merged build 58 / PR #39 | 85% | Nine observed collection/type/string blockers removed; compiled Kotlin contracts; WaManga/HentaiHere complete owned flows |
-| Proposed build 59 | 90% | Cooperative delayed/pending tasks, ordered awaitAll on guest collections, cancellation/finally and nested-child completion; real field access and field-owner bytecode fix; nanosecond value contracts and saturating TimeUnit conversions |
+| Merged build 59 / PR #40 | 90% | Cooperative delayed/pending tasks, ordered awaitAll on guest collections, cancellation/finally and nested-child completion; real field access and field-owner bytecode fix; nanosecond value contracts and saturating TimeUnit conversions |
+| Proposed build 60 / PR #41 | 93% | Real constructor execution and executable/Throws metadata; wide reflection argument slots and float/double boxing; cached Class GC roots; ISO_DATE_TIME with offset/region/default-zone resolution and covered nanosecond bridges; Senkuro/Senkognito complete owned reading flows |
 
 These are engineering estimates for this roadmap item. They are not percentages
 of the Java/Kotlin API surface, all working extensions or development time.
@@ -31,6 +32,14 @@ behavior, validation and known remaining gaps to the user.
 - Typed reference-array copies/concatenation, ordered sets, deque operations,
   array search and map defaults have execution tests.
 - Method and Kotlin property references dispatch actual guest code.
+- Constructor lookup/invocation executes guest bytecode with access, argument,
+  abstract/enum and exception checks. Method/constructor enumeration uses real
+  declarations and declared exception types come from the package's DEX Throws
+  annotations. Loaded reference Class objects survive GC; primitive method
+  metadata uses canonical wrapper TYPE objects.
+- ISO_DATE_TIME handles strict dates, optional seconds/fractions, explicit
+  offsets and bracketed regions. The covered local/zoned/Instant bridges and
+  date arithmetic retain nanoseconds; chapter upload output remains milliseconds.
 - Common Java/Kotlin dates, durations, localized fields, fractional parsing and
   zone/calendar arithmetic have covered contracts.
 - Lazy line sequences stop at the requested result, retain callbacks through GC
@@ -41,10 +50,11 @@ behavior, validation and known remaining gaps to the user.
 1. True parallel-task execution, full dispatcher/CoroutineStart behavior,
    cancellation handlers/channels/flows and other coroutine APIs beyond the
    covered cooperative scheduling paths. Host HTTP remains synchronous.
-2. Advanced reflection, including dynamic proxies, constructors/generic type
+2. Advanced reflection, including dynamic proxies and generic type
    metadata and remaining Kotlin reflection entry points required by packages.
 3. Remaining date/time formatter patterns/units, calendar range and precision
-   contracts; formatter/chapter transport is still millisecond based.
+   contracts; arbitrary pattern and unextended temporal operations still use
+   milliseconds, and chapter output intentionally exposes milliseconds.
 4. Additional typed/mutable collection and sequence contracts, iterator
    invalidation/views and other helpers reached by the frozen catalog.
 5. Further exact-APK and native reading validation as those paths become

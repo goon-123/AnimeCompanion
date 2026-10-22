@@ -18,6 +18,7 @@ LEGACY_COLLECTIONS_SHA256 = "377a6ac4a1af671c067ebbcbfa25b7d7536d3e59a7679290454
 PATCHED_JOIN_SHA256 = "dce8e171a42e6aa57fdda334f5eeec78f164515a3ed453d3bc8c5e6b0ade345f"
 PATCHED_DECODER_SHA256 = "e4b078de9a7918e69ecc071eba0283a1e9e80855e36d752d439dcbf79809d30f"
 PATCHED_STRING_SHA256 = "b07d4e38fd1d753f593e179aed9637e5657522a1fc6af1138adeabd2d373fca6"
+PATCHED_VM_SHA256 = "23437a0b6bd187c265664baf66b8a6ec698b9b88e8f21a4ec9d919fdc9f8618d"
 PATCHED_HTTP_SHA256 = {
     "src/vm/native/mod.rs": "eb671ffd6b30433d06b8892180cf767c90d634f63cf6058fdc6927970188dad7",
     "src/vm/native/keiyoushi.rs": "4996954d99fda5e2f4e189fddf27f6268d27d3469bf2f6e87fbb935137d92f58",
@@ -35,9 +36,11 @@ def verify(directory):
         raise RuntimeError("Unexpected interpreter revision; leave existing files untouched")
     # Verify the entire tracked checkout, not only the patched function.
     changed = git(directory, "diff", "HEAD", "--name-only").decode().splitlines()
-    if changed != ["src/dex/insn.rs","src/dex/read.rs","src/vm/interpret.rs","src/vm/native/java/util/mod.rs","src/vm/native/keiyoushi.rs","src/vm/native/kotlin/collections.rs","src/vm/native/mod.rs","src/vm/native/okhttp/mod.rs"]:
+    if changed != ["src/dex/insn.rs","src/dex/read.rs","src/vm/interpret.rs","src/vm/mod.rs","src/vm/native/java/util/mod.rs","src/vm/native/keiyoushi.rs","src/vm/native/kotlin/collections.rs","src/vm/native/mod.rs","src/vm/native/okhttp/mod.rs"]:
         raise RuntimeError("Unexpected interpreter changes; leave existing files untouched")
     git(directory, "apply", "--reverse", "--check", str(PATCH))
+    if hashlib.sha256((directory / "src/vm/mod.rs").read_bytes()).hexdigest() != PATCHED_VM_SHA256:
+        raise RuntimeError("Unexpected VM class-root patch contents")
     digest = hashlib.sha256((directory / "src/vm/interpret.rs").read_bytes()).hexdigest()
     if digest != PATCHED_SOURCE_SHA256:
         raise RuntimeError("Unexpected interpreter patch contents")
@@ -143,7 +146,22 @@ if DESTINATION.exists():
                 }.items())
         and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
     )
-    if legacy or legacy_full or legacy_current or legacy_high_constants or legacy_strings or legacy_fields:
+    legacy_class_roots = (
+        git(DESTINATION, "rev-parse", "HEAD").decode().strip() == REVISION
+        and git(DESTINATION, "diff", "HEAD", "--name-only").decode().splitlines()
+            == ["src/dex/insn.rs", "src/dex/read.rs", "src/vm/interpret.rs", "src/vm/native/java/util/mod.rs", "src/vm/native/keiyoushi.rs", "src/vm/native/kotlin/collections.rs", "src/vm/native/mod.rs", "src/vm/native/okhttp/mod.rs"]
+        and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
+                for path, digest in {
+                    "src/dex/insn.rs": PATCHED_DECODER_SHA256,
+                    "src/dex/read.rs": PATCHED_STRING_SHA256,
+                    "src/vm/interpret.rs": PATCHED_SOURCE_SHA256,  # build 59
+                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
+                    **PATCHED_HTTP_SHA256,
+                }.items())
+        and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
+    )
+    if legacy or legacy_full or legacy_current or legacy_high_constants or legacy_strings or legacy_fields or legacy_class_roots:
         backup = Path(tempfile.mkdtemp(prefix="manga-legacy-interpreter-", dir=DESTINATION.parent)) / "source"
         DESTINATION.rename(backup)
         print(f"Preserved the known previous generated interpreter at {backup}")
