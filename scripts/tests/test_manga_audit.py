@@ -150,6 +150,10 @@ class EvidenceTests(unittest.TestCase):
         script = (ROOT / "scripts/test-manga-runtime.sh").read_text()
         expected = dict(re.findall(r"'([^']+\.apk)': '([0-9a-f]{64})'", script))
         self.assertEqual({f["name"]: f["sha256"] for f in fixtures["fixtures"]}, expected)
+        allowed = {"inspect", "settings", "popular", "latest", "search", "details", "chapters", "pages", "images"}
+        for fixture in fixtures["fixtures"]:
+            for case in fixture["cases"]:
+                self.assertLessEqual(set(case["stages"]), allowed, fixture["name"])
 
 
 class MatrixTests(unittest.TestCase):

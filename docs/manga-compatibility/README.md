@@ -5,8 +5,14 @@ argument and floating boxing fixes, loaded Class GC roots and ISO_DATE_TIME
 resolution with covered nanosecond conversions. Senkuro and Senkognito 1.6.0
 gain complete owned catalog/details/dated-chapters/ordered-pages/image replays.
 The shared Java/Kotlin estimate moves from **90% merged to approximately 93%**
-with the proposed batch. Native bridge and broader catalog results are recorded
-on the PR; no live-site success rate is implied. See [remaining scope](java-kotlin-progress.md)
+with the proposed batch. The [focused matrix](build60/compatibility.html),
+[CSV](build60/compatibility.csv) and [JSON](build60/compatibility-matrix.json)
+cover 4/4 APK inventories, 6 source identities and 44 production C-ABI probes
+against code `e59346af7b93a7949ad5996df52e15cee0036a6b`. All expected cells ran;
+four rows have complete owned flows and the other two Komga identities remain
+unverified. Native bridge and broader catalog results are recorded on
+[PR #41](https://github.com/goon-123/AnimeCompanion/pull/41); no live-site success
+rate is implied. See [remaining scope](java-kotlin-progress.md)
 and [validation](../../BUILD_STATUS.md).
 
 Build 59 adds cooperative task scheduling, real reflective field operations and

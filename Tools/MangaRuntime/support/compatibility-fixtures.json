@@ -8,14 +8,14 @@
       "sha256": "85f79e81b858697454273c409c05564c914d83e930b7916e63fcec323b42b8f7",
       "url": "https://github.com/keiyoushi/extensions/releases/download/06f6d69/tachiyomi-ru.senkuro-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.ru.senkuro",
-      "cases": [{"test": "shared_jvm_extension_tests::senkuro_and_senkognito_iso_dates_execute_complete_owned_reading_flows", "stages": ["inspect", "settings", "catalog", "details", "chapters", "pages", "image"], "sources": [0]}]
+      "cases": [{"test": "shared_jvm_extension_tests::senkuro_and_senkognito_iso_dates_execute_complete_owned_reading_flows", "stages": ["inspect", "settings", "popular", "details", "chapters", "pages", "images"], "sources": [0]}]
     },
     {
       "name": "tachiyomi-ru.senkognito-v1.6.0.apk",
       "sha256": "33064a7cf823632d380b7d4c5617e2b71ba48ca013b9bb915e2a592ff624b0a9",
       "url": "https://github.com/keiyoushi/extensions/releases/download/06f6d69/tachiyomi-ru.senkognito-v1.6.0.apk",
       "package": "eu.kanade.tachiyomi.extension.ru.senkognito",
-      "cases": [{"test": "shared_jvm_extension_tests::senkuro_and_senkognito_iso_dates_execute_complete_owned_reading_flows", "stages": ["inspect", "settings", "catalog", "details", "chapters", "pages", "image"], "sources": [0]}]
+      "cases": [{"test": "shared_jvm_extension_tests::senkuro_and_senkognito_iso_dates_execute_complete_owned_reading_flows", "stages": ["inspect", "settings", "popular", "details", "chapters", "pages", "images"], "sources": [0]}]
     },
     {
       "name": "tachiyomi-es.lectormonline-v1.6.4.apk",

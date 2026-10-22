@@ -8,7 +8,7 @@ date/time support needed by manga extensions, including Komga and JinmanTiantang
 | Merged build 57 / PR #38 | 80% | Komga/Jinman owned reading flows; continuation resume, method/property reflection and eight observed date/reflection blockers covered |
 | Merged build 58 / PR #39 | 85% | Nine observed collection/type/string blockers removed; compiled Kotlin contracts; WaManga/HentaiHere complete owned flows |
 | Merged build 59 / PR #40 | 90% | Cooperative delayed/pending tasks, ordered awaitAll on guest collections, cancellation/finally and nested-child completion; real field access and field-owner bytecode fix; nanosecond value contracts and saturating TimeUnit conversions |
-| Proposed build 60 | 93% | Real constructor execution and executable/Throws metadata; wide reflection argument slots and float/double boxing; cached Class GC roots; ISO_DATE_TIME with offset/region/default-zone resolution and covered nanosecond bridges; Senkuro/Senkognito complete owned reading flows |
+| Proposed build 60 / PR #41 | 93% | Real constructor execution and executable/Throws metadata; wide reflection argument slots and float/double boxing; cached Class GC roots; ISO_DATE_TIME with offset/region/default-zone resolution and covered nanosecond bridges; Senkuro/Senkognito complete owned reading flows |
 
 These are engineering estimates for this roadmap item. They are not percentages
 of the Java/Kotlin API surface, all working extensions or development time.
