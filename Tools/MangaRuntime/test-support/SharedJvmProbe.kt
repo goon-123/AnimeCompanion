@@ -2,8 +2,167 @@
 package app.animecompanion.probe
 
 import kotlin.coroutines.*
+import kotlinx.coroutines.*
 
 object SharedJvmProbe {
+    @JvmStatic fun main(args: Array<String>) {
+        check(fieldContracts())
+        check(timeUnitContracts())
+        check(preciseTimeContracts())
+        println("Owned field/time contracts pass on the reference JVM")
+    }
+    @JvmStatic fun nestedChildCompletion(): String = runBlocking {
+        scheduledLog = ""
+        val outer = async { launch { delay(2); scheduledLog = "nested done" }; "outer" }
+        val value = outer.await()
+        check(scheduledLog == "nested done")
+        value
+    }
+    @JvmStatic fun nestedChildFailure(): String = try {
+        runBlocking {
+            val outer = async { launch { yield(); error("owned nested failure") }; "early" }
+            outer.await()
+            "missing failure"
+        }
+    } catch (error: IllegalStateException) { error.message!! }
+    @JvmStatic fun nonCompletingTask() = runBlocking { suspendCoroutine<Unit> { } }
+    @JvmStatic fun completableResults(): String = runBlocking {
+        val deferred = CompletableDeferred<String>()
+        launch { yield(); deferred.complete("owned completion") }
+        awaitAll(deferred).single()
+    }
+    open class FieldBase {
+        @JvmField var publicInt = 7
+        private var hidden = 17
+    }
+    class FieldChild : FieldBase() {
+        private var hidden = 23
+        @JvmField var text: String? = "owned"
+        @JvmField var decimal = 1.5f
+        companion object {
+            @JvmField var counter = 40L
+            const val IMMUTABLE = 9
+        }
+    }
+    @JvmStatic fun fieldContracts(): Boolean {
+        val child = FieldChild()
+        val public = FieldChild::class.java.getField("publicInt")
+        check(public.declaringClass == FieldBase::class.java) { "field owner" }
+        check(public.get(child) == 7 && public.getLong(child) == 7L) { "field widening read" }
+        public.set(child, 42.toByte())
+        check(child.publicInt == 42) { "field widening write" }
+        try { public.setLong(child, 2L); return false } catch (_: IllegalArgumentException) {}
+        try { public.getBoolean(child); return false } catch (_: IllegalArgumentException) {}
+        try { public.getInt("wrong receiver"); return false } catch (_: IllegalArgumentException) {}
+        try { public.getInt(null); return false } catch (_: NullPointerException) {}
+        try { FieldChild::class.java.getDeclaredField("publicInt"); return false } catch (_: NoSuchFieldException) {}
+        val base = FieldBase::class.java.getDeclaredField("hidden")
+        val own = FieldChild::class.java.getDeclaredField("hidden")
+        try { own.getInt(child); return false } catch (_: IllegalAccessException) {}
+        own.isAccessible = true
+        base.isAccessible = true
+        check(own.getInt(child) == 23 && base.getInt(child) == 17) { "hidden field slots" }
+        own.setInt(child, 29)
+        check(base.getInt(child) == 17 && own.getInt(child) == 29) { "hidden field write" }
+        own.isAccessible = false
+        try { own.getInt(child); return false } catch (_: IllegalAccessException) {}
+        val counter = FieldChild::class.java.getDeclaredField("counter")
+        counter.setInt(null, 42)
+        check(counter.get(null) == 42L && FieldChild.counter == 42L) { "static field" }
+        val immutable = FieldChild::class.java.getDeclaredField("IMMUTABLE")
+        immutable.isAccessible = true
+        try { immutable.setInt(null, 10); return false } catch (_: IllegalAccessException) {}
+        val text = FieldChild::class.java.getField("text")
+        try { text.set(child, 4); return false } catch (_: IllegalArgumentException) {}
+        try { text.setInt(child, 4); return false } catch (_: IllegalArgumentException) {}
+        text.set(child, null)
+        check(child.text == null) { "reference field" }
+        val decimal = FieldChild::class.java.getField("decimal")
+        decimal.setInt(child, 3)
+        check(decimal.getDouble(child) == 3.0) { "floating field" }
+        return true
+    }
+    @JvmStatic fun timeUnitContracts(): Boolean {
+        val unit = java.util.concurrent.TimeUnit.SECONDS
+        check(java.util.concurrent.TimeUnit.values().size == 7)
+        check(java.util.concurrent.TimeUnit.valueOf("SECONDS") === unit)
+        check(unit.toMillis(3) == 3_000L)
+        check(unit.convert(-1_999, java.util.concurrent.TimeUnit.MILLISECONDS) == -1L)
+        check(java.util.concurrent.TimeUnit.DAYS.toNanos(Long.MAX_VALUE) == Long.MAX_VALUE)
+        check(java.util.concurrent.TimeUnit.DAYS.toNanos(Long.MIN_VALUE) == Long.MIN_VALUE)
+        check(unit.convert(java.time.Duration.ofNanos(-1)) == 0L)
+        check(java.util.concurrent.TimeUnit.NANOSECONDS.convert(java.time.Duration.ofSeconds(Long.MAX_VALUE)) == Long.MAX_VALUE)
+        return true
+    }
+    @JvmStatic fun preciseTimeContracts(): Boolean {
+        val before = java.time.Instant.parse("1969-12-31T23:59:59.999999999Z")
+        val epoch = java.time.Instant.ofEpochSecond(0)
+        check(before.toString() == "1969-12-31T23:59:59.999999999Z")
+        check(before.plusNanos(1) == epoch)
+        check(before != epoch && before.compareTo(epoch) < 0)
+        check(before.hashCode() == java.time.Instant.ofEpochSecond(-1, 999_999_999).hashCode())
+        check(epoch.minusNanos(1) == before)
+        check(epoch.plusMillis(1).minusNanos(1).nano == 999_999)
+        check(epoch.minusSeconds(1).plusNanos(999_999_999) == before)
+        check(java.time.Instant.ofEpochSecond(1, 123_456_000).toString() == "1970-01-01T00:00:01.123456Z")
+        val negative = java.time.Duration.ofNanos(-1)
+        check(negative.toString() == "PT-0.000000001S")
+        check(negative == java.time.Duration.ofSeconds(-1, 999_999_999))
+        check(negative.hashCode() == java.time.Duration.ofSeconds(-1, 999_999_999).hashCode())
+        check(negative.compareTo(java.time.Duration.ZERO) < 0)
+        check(java.time.Duration.ofSeconds(-3662, 999_999_999).toString() == "PT-1H-1M-1.000000001S")
+        return true
+    }
+    private var scheduled: Deferred<String>? = null
+    private var scheduledLog = ""
+
+    @JvmStatic fun prepareScheduled() {
+        scheduledLog = ""
+        scheduled = CoroutineScope(SupervisorJob()).async {
+            scheduledLog += "start;"
+            val first = async { delay(20); scheduledLog += "first;"; "one" }
+            val second = async { yield(); scheduledLog += "second;"; "two" }
+            val values = DeferredBag(listOf(first, second)).awaitAll()
+            scheduledLog += "end;"
+            values.joinToString("|")
+        }
+        check(!scheduled!!.isCompleted)
+        check(scheduledLog == "start;")
+    }
+    private class DeferredBag(private val values: List<Deferred<String>>) : Collection<Deferred<String>> by values
+    @JvmStatic fun finishScheduled(): String = runBlocking {
+        val result = scheduled!!.await()
+        check(scheduledLog == "start;second;first;end;")
+        check(scheduled!!.isCompleted)
+        result
+    }
+    @JvmStatic fun cancellationFinally(): Boolean = runBlocking {
+        var cleaned = false
+        val child = launch { try { delay(1_000) } finally { cleaned = true } }
+        check(!child.isCompleted)
+        child.cancel()
+        check(child.isCancelled)
+        child.join()
+        cleaned && child.isCompleted
+    }
+    @JvmStatic fun scheduledFailure(): String = runBlocking {
+        val owner = CoroutineScope(SupervisorJob())
+        val slow = owner.async { delay(30); "late" }
+        val failure = owner.async<String> { yield(); error("owned scheduled failure") }
+        try { awaitAll(slow, failure); "missing failure" }
+        catch (error: IllegalStateException) { slow.cancel(); error.message!! }
+    }
+    @JvmStatic fun timeoutAfterSuspension(): Boolean = runBlocking {
+        try { withTimeout(5L) { delay(50L) }; false }
+        catch (_: TimeoutCancellationException) { true }
+    }
+    @JvmStatic fun waitsForLaunchedChild(): Boolean = runBlocking {
+        val owner = CoroutineScope(coroutineContext)
+        owner.launch { delay(2); scheduledLog = "child finished" }
+        true
+    }
+    @JvmStatic fun launchedChildResult(): String = scheduledLog
+
     private var saved: Continuation<String>? = null
     private var outcome = "pending"
 

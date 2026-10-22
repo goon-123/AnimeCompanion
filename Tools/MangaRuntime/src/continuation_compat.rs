@@ -13,7 +13,7 @@ fn failure(error: JvmError) -> NatErr {
         e => NatErr::Fatal(e),
     }
 }
-fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue>) -> R {
+pub(super) fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue>) -> R {
     if receiver.is_null_ref() {
         return Err(NatErr::Throw(vm.err_npe()));
     }
@@ -94,13 +94,17 @@ fn resume(vm: &mut Vm, args: &[JValue]) -> R {
     let base = vm.ensure_class_by_desc(BASE).map_err(NatErr::Fatal)?;
     for _ in 0..256 {
         let completion = field(vm, receiver, "completion")?;
-        result = match invoke(
+        let context = field(vm, receiver, "_context")?;
+        let previous = super::coroutine_compat::enter(vm, context)?;
+        let resumed = invoke(
             vm,
             receiver,
             "invokeSuspend",
             "(Ljava/lang/Object;)Ljava/lang/Object;",
             vec![result],
-        ) {
+        );
+        super::coroutine_compat::restore(vm, previous)?;
+        result = match resumed {
             Ok(value) => value,
             Err(NatErr::Throw(id)) => vm
                 .alloc_native(
@@ -149,6 +153,10 @@ fn collect(vm: &mut Vm, args: &[JValue]) -> R {
     let fields = &mut vm.arena.objects[args[0].as_obj() as usize].fields;
     fields[1] = JValue::Int(1);
     fields[2] = args[1];
+    let task = fields.get(3).copied().unwrap_or(JValue::Null);
+    if !task.is_null_ref() {
+        super::coroutine_compat::complete_task(vm, task, args[1])?;
+    }
     Ok(JValue::Null)
 }
 fn unwrap(vm: &mut Vm, value: JValue) -> R {
@@ -158,31 +166,83 @@ fn unwrap(vm: &mut Vm, value: JValue) -> R {
         Ok(value)
     }
 }
-pub(super) fn run_block(vm: &mut Vm, block: JValue, scope: JValue, context: JValue) -> R {
+pub(super) fn resume_value(vm: &mut Vm, continuation: JValue, result: JValue) -> R {
+    invoke(
+        vm,
+        continuation,
+        "resumeWith",
+        "(Ljava/lang/Object;)V",
+        vec![result],
+    )
+}
+pub(super) fn begin_block(
+    vm: &mut Vm,
+    block: JValue,
+    scope: JValue,
+    context: JValue,
+    task: JValue,
+) -> R {
     let completion = vm
         .alloc_native(COLLECTOR, Native::Opaque)
         .map_err(NatErr::Fatal)?;
     vm.arena.objects[completion.as_obj() as usize].fields =
-        vec![context, JValue::Int(0), JValue::Null];
-    let value = invoke(
+        vec![context, JValue::Int(0), JValue::Null, task];
+    if !task.is_null_ref() {
+        vm.arena.objects[task.as_obj() as usize].fields[5] = completion;
+    }
+    let value = match invoke(
         vm,
         block,
         "invoke",
         "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
         vec![scope, completion],
-    )?;
+    ) {
+        Ok(value) => value,
+        Err(NatErr::Throw(id)) => vm
+            .alloc_native(
+                "Lkotlin/Result$Failure;",
+                Native::ResultFailure(JValue::Obj(id)),
+            )
+            .map_err(NatErr::Fatal)?,
+        Err(error) => return Err(error),
+    };
     if value != suspended(vm, &[])? {
-        return Ok(value);
+        collect(vm, &[completion, value])?;
     }
-    let fields = &vm.arena.objects[completion.as_obj() as usize].fields;
-    if fields[1].is_zero() {
-        return Err(NatErr::Throw(vm.throwable_of(
-            "Ljava/lang/IllegalStateException;",
-            "Coroutine suspended without an available completion event",
-        )));
+    Ok(completion)
+}
+pub(super) fn run_block(vm: &mut Vm, block: JValue, scope: JValue, context: JValue) -> R {
+    let checkpoint = super::coroutine_event_compat::checkpoint(vm)?;
+    let driver = super::coroutine_event_compat::enter_driver(vm)?;
+    let result = (|| {
+        let completion = begin_block(vm, block, scope, context, JValue::Null)?;
+        loop {
+            let fields = &vm.arena.objects[completion.as_obj() as usize].fields;
+            if !fields[1].is_zero() {
+                let value = fields[2];
+                if let Some(Native::ResultFailure(error)) = vm.payload_of(value) {
+                    super::coroutine_compat::cancel_context(vm, context, error)?;
+                }
+                if !super::coroutine_event_compat::has_children(vm, context)? {
+                    if let Some(error) = super::coroutine_compat::context_failure(vm, context)? {
+                        return Err(NatErr::Throw(error.as_obj()));
+                    }
+                    return unwrap(vm, value);
+                }
+            }
+            if !super::coroutine_event_compat::pump(vm)? {
+                return Err(NatErr::Throw(vm.throwable_of(
+                    "Ljava/lang/IllegalStateException;",
+                    "Coroutine suspended without an available completion event",
+                )));
+            }
+        }
+    })();
+    super::coroutine_event_compat::restore_driver(vm, driver)?;
+    if result.is_err() {
+        super::coroutine_event_compat::discard_since(vm, checkpoint)?;
     }
-    let result = fields[2];
-    unwrap(vm, result)
+    result
 }
 fn safe_init(vm: &mut Vm, args: &[JValue]) -> R {
     let (state, result) = if args.len() == 3 && args[2] == suspended(vm, &[])? {

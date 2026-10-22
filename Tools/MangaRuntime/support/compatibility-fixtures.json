@@ -4,6 +4,19 @@
   "meaning": "Exact APK/version and source-index evidence from passing owned-fixture tests. No live verification is implied.",
   "fixtures": [
     {
+      "name": "tachiyomi-es.lectormonline-v1.6.4.apk",
+      "sha256": "6315fcd1cde5f7b0f46ce715cb8a98bd845851a81a6d940d9dc89e6cbd117979",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/a2d7e26/tachiyomi-es.lectormonline-v1.6.4.apk",
+      "package": "eu.kanade.tachiyomi.extension.es.lectormonline",
+      "cases": [
+        {
+          "test": "shared_jvm_extension_tests::shared_jvm_extensions_load_their_real_factories_and_settings_without_network",
+          "stages": ["inspect", "settings"],
+          "sources": [0]
+        }
+      ]
+    },
+    {
       "name": "tachiyomi-zh.jinmantiantang-v1.6.59.apk",
       "sha256": "baebb449741b28f110f88408ff5a7edf6fc76fae0d60134e4b71c15cb7c3d56a",
       "url": "https://github.com/keiyoushi/extensions/releases/download/2ba5b61/tachiyomi-zh.jinmantiantang-v1.6.59.apk",

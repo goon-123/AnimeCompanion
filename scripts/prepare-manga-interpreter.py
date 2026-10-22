@@ -12,7 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = "38d3438d7e36b5c2c17414029fd36b2d717eefcb"
 PATCH = ROOT / "Tools/MangaRuntime/support/dexvm-core.patch"
-PATCHED_SOURCE_SHA256 = "c22775d94d3adee9851f4c8335e874e201672df416be7f7315dc2c5f21f01ee3"
+PATCHED_SOURCE_SHA256 = "1dbf5fbcca0c37512a084fab5abc540ae7ad59207f689a7608720a4807eabc2f"
 PATCHED_COLLECTIONS_SHA256 = "6edb8d39fb82b09993b0b12da4315af2228e0cdd44f84b105a85265f5bffd040"
 LEGACY_COLLECTIONS_SHA256 = "377a6ac4a1af671c067ebbcbfa25b7d7536d3e59a76792904544c9a7a33797e4"
 PATCHED_JOIN_SHA256 = "dce8e171a42e6aa57fdda334f5eeec78f164515a3ed453d3bc8c5e6b0ade345f"
@@ -121,14 +121,29 @@ if DESTINATION.exists():
         and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
                 for path, digest in {
                     "src/dex/insn.rs": PATCHED_DECODER_SHA256,
-                    "src/vm/interpret.rs": PATCHED_SOURCE_SHA256,
+                    "src/vm/interpret.rs": "c22775d94d3adee9851f4c8335e874e201672df416be7f7315dc2c5f21f01ee3",  # build 57
                     "src/vm/native/java/util/mod.rs": LEGACY_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                     **PATCHED_HTTP_SHA256,
                 }.items())
         and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
     )
-    if legacy or legacy_full or legacy_current or legacy_high_constants or legacy_strings:
+    legacy_fields = (
+        git(DESTINATION, "rev-parse", "HEAD").decode().strip() == REVISION
+        and git(DESTINATION, "diff", "HEAD", "--name-only").decode().splitlines()
+            == ["src/dex/insn.rs", "src/dex/read.rs", "src/vm/interpret.rs", "src/vm/native/java/util/mod.rs", "src/vm/native/keiyoushi.rs", "src/vm/native/kotlin/collections.rs", "src/vm/native/mod.rs", "src/vm/native/okhttp/mod.rs"]
+        and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
+                for path, digest in {
+                    "src/dex/insn.rs": PATCHED_DECODER_SHA256,
+                    "src/dex/read.rs": PATCHED_STRING_SHA256,
+                    "src/vm/interpret.rs": "c22775d94d3adee9851f4c8335e874e201672df416be7f7315dc2c5f21f01ee3",  # build 58
+                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
+                    **PATCHED_HTTP_SHA256,
+                }.items())
+        and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
+    )
+    if legacy or legacy_full or legacy_current or legacy_high_constants or legacy_strings or legacy_fields:
         backup = Path(tempfile.mkdtemp(prefix="manga-legacy-interpreter-", dir=DESTINATION.parent)) / "source"
         DESTINATION.rename(backup)
         print(f"Preserved the known previous generated interpreter at {backup}")

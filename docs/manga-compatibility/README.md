@@ -1,5 +1,15 @@
 # Manga compatibility matrix
 
+Build 59 adds cooperative task scheduling, real reflective field operations and
+declared-owner DEX field access, nanosecond value contracts and standard TimeUnit
+conversions. The shared Java/Kotlin estimate moves from approximately **85% to
+90%** with this proposed batch. Its compiled Kotlin field/time contracts also run
+against the reference JVM. Existing exact-APK reading flows remain regressions;
+there is no new complete source flow in this batch. MangoLibreria now loads its
+factory/settings but still encounters a separate OkHttp timeout overload when
+reading. See [scope and remaining work](java-kotlin-progress.md) and
+[validation](../../BUILD_STATUS.md). Hosted results are recorded on the PR.
+
 Build 58 fills nine observed collection/type/string gaps. WaManga and HentaiHere
 have complete owned reading replays; Webcomics has latest-catalog evidence and
 Comicabc has catalog/details/chapter evidence. Its JavaScript reader remains

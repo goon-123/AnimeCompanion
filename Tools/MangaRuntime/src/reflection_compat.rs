@@ -235,7 +235,269 @@ fn field_type(vm: &mut Vm, args: &[JValue]) -> R {
 fn field_modifiers(vm: &mut Vm, args: &[JValue]) -> R {
     Ok(JValue::Int(field_info(vm, args[0])?.1 as i32 & 0xffff))
 }
+fn find_field(vm: &mut Vm, args: &[JValue], inherited: bool) -> R {
+    let owner = class_id(vm, args[0])?;
+    let name = vm
+        .str_of_jvalue(args[1])
+        .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+    let array = fields(vm, args[0], inherited)?;
+    let Some(Native::Array(ArrayData::Obj(values))) = vm.payload_of(array) else {
+        unreachable!()
+    };
+    for field in values {
+        if let Some(Native::Field { name: id, .. }) = vm.payload_of(field) {
+            if vm.str_of(id) == name {
+                return Ok(field);
+            }
+        }
+    }
+    // Preserve the interpreter's existing fieldless host-shim injection ABI
+    // (HttpSource delegate installation). Never synthesize fields for guest DEX.
+    if !inherited && !vm.class_has_instance_fields(owner) && !guest_class(vm, owner) {
+        let name = vm.intern(&name);
+        return vm
+            .alloc_native(
+                "Ljava/lang/reflect/Field;",
+                Native::Field { class: owner, name },
+            )
+            .map_err(NatErr::Fatal);
+    }
+    Err(NatErr::Throw(
+        vm.throwable_of("Ljava/lang/NoSuchFieldException;", name),
+    ))
+}
+fn guest_class(vm: &Vm, owner: u32) -> bool {
+    let desc = vm.str_of(vm.classes[owner as usize].descriptor);
+    vm.dexes.iter().any(|dex| {
+        dex.classes
+            .iter()
+            .any(|class| dex.type_descriptor(class.class_idx) == desc)
+    })
+}
+fn declared_field(vm: &mut Vm, args: &[JValue]) -> R {
+    find_field(vm, args, false)
+}
+fn public_field(vm: &mut Vm, args: &[JValue]) -> R {
+    find_field(vm, args, true)
+}
+fn accessible(vm: &mut Vm, args: &[JValue]) -> R {
+    if !matches!(vm.payload_of(args[0]), Some(Native::Field { .. })) {
+        return Err(NatErr::Throw(vm.err_iae("Expected a field")));
+    }
+    vm.arena.objects[args[0].as_obj() as usize].fields =
+        vec![JValue::Int(i32::from(!args[1].is_zero()))];
+    Ok(JValue::Null)
+}
+fn is_accessible(vm: &mut Vm, args: &[JValue]) -> R {
+    if !matches!(vm.payload_of(args[0]), Some(Native::Field { .. })) {
+        return Err(NatErr::Throw(vm.err_iae("Expected a field")));
+    }
+    Ok(vm.arena.objects[args[0].as_obj() as usize]
+        .fields
+        .first()
+        .copied()
+        .unwrap_or(JValue::Int(0)))
+}
+fn field_target(
+    vm: &mut Vm,
+    field: JValue,
+    target: JValue,
+    write: bool,
+) -> Result<(u32, u32, String, u32), NatErr> {
+    let Some(Native::Field { class, name }) = vm.payload_of(field) else {
+        return Err(NatErr::Throw(vm.err_iae("Expected a field")));
+    };
+    let (ty, flags) = field_info(vm, field)?;
+    let override_access = !is_accessible(vm, &[field])?.is_zero();
+    if flags & 1 == 0 && !override_access
+        || write && flags & 16 != 0 && (flags & 8 != 0 || !override_access)
+    {
+        return Err(NatErr::Throw(vm.throwable_of(
+            "Ljava/lang/IllegalAccessException;",
+            "Field access is not permitted",
+        )));
+    }
+    if flags & 8 == 0 {
+        let actual = vm
+            .object_class(target)
+            .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
+        if !vm.is_assignable(actual, class).map_err(NatErr::Fatal)? {
+            return Err(NatErr::Throw(vm.err_iae("Wrong field receiver")));
+        }
+    }
+    Ok((class, name, ty, flags))
+}
+fn legacy_host_field(vm: &Vm, field: JValue) -> bool {
+    match vm.payload_of(field) {
+        Some(Native::Field { class, .. }) => {
+            !vm.class_has_instance_fields(class)
+                && !guest_class(vm, class)
+                && vm.classes[class as usize].static_fields.is_empty()
+        }
+        _ => false,
+    }
+}
+fn raw_get(vm: &mut Vm, field: JValue, target: JValue) -> Result<(JValue, String), NatErr> {
+    let (class, name, ty, flags) = field_target(vm, field, target, false)?;
+    let ty_id = vm.intern(&ty);
+    let value = if flags & 8 != 0 {
+        let fr = dexvm::vm::FieldRef {
+            class_desc: vm.classes[class as usize].descriptor,
+            name,
+            ty: ty_id,
+        };
+        vm.static_field_get(fr).map_err(java_error)?
+    } else {
+        let slot = vm
+            .field_offset(class, name, ty_id)
+            .ok_or_else(|| NatErr::Throw(vm.err_iae("Invalid field slot")))?;
+        vm.arena.objects[target.as_obj() as usize].fields[slot as usize]
+    };
+    Ok((value, ty))
+}
+fn java_error(error: JvmError) -> NatErr {
+    match error {
+        JvmError::Uncaught(id) => NatErr::Throw(id),
+        error => NatErr::Fatal(error),
+    }
+}
+fn field_get(vm: &mut Vm, args: &[JValue]) -> R {
+    if legacy_host_field(vm, args[0]) {
+        return Ok(JValue::Null);
+    }
+    let (value, ty) = raw_get(vm, args[0], args[1])?;
+    super::method_reflection_compat::boxed(vm, value, &ty)
+}
+fn field_set(vm: &mut Vm, args: &[JValue]) -> R {
+    if legacy_host_field(vm, args[0]) {
+        return Ok(JValue::Null);
+    }
+    let (class, name, ty, flags) = field_target(vm, args[0], args[1], true)?;
+    let value = super::method_reflection_compat::unbox(vm, args[2], &ty)?;
+    let ty = vm.intern(&ty);
+    if flags & 8 != 0 {
+        let fr = dexvm::vm::FieldRef {
+            class_desc: vm.classes[class as usize].descriptor,
+            name,
+            ty,
+        };
+        vm.static_field_put(fr, value).map_err(java_error)?;
+    } else {
+        let slot = vm
+            .field_offset(class, name, ty)
+            .ok_or_else(|| NatErr::Throw(vm.err_iae("Invalid field slot")))?;
+        vm.arena.objects[args[1].as_obj() as usize].fields[slot as usize] = value;
+    }
+    Ok(JValue::Null)
+}
+fn primitive_get(vm: &mut Vm, args: &[JValue], wanted: &str) -> R {
+    let (value, ty) = raw_get(vm, args[0], args[1])?;
+    if ty.starts_with(['L', '[']) {
+        return Err(NatErr::Throw(vm.err_iae("Expected primitive field")));
+    }
+    let boxed = super::method_reflection_compat::boxed(vm, value, &ty)?;
+    super::method_reflection_compat::unbox(vm, boxed, wanted)
+}
+fn primitive_set(vm: &mut Vm, args: &[JValue], ty: &str) -> R {
+    if field_info(vm, args[0])?.0.starts_with(['L', '[']) {
+        return Err(NatErr::Throw(vm.err_iae("Expected primitive field")));
+    }
+    let boxed = super::method_reflection_compat::boxed(vm, args[2], ty)?;
+    field_set(vm, &[args[0], args[1], boxed])
+}
+macro_rules! primitive_field {
+    ($get:ident, $set:ident, $ty:literal) => {
+        fn $get(vm: &mut Vm, args: &[JValue]) -> R {
+            primitive_get(vm, args, $ty)
+        }
+        fn $set(vm: &mut Vm, args: &[JValue]) -> R {
+            primitive_set(vm, args, $ty)
+        }
+    };
+}
+primitive_field!(get_boolean, set_boolean, "Z");
+primitive_field!(get_byte, set_byte, "B");
+primitive_field!(get_short, set_short, "S");
+primitive_field!(get_char, set_char, "C");
+primitive_field!(get_int, set_int, "I");
+primitive_field!(get_long, set_long, "J");
+primitive_field!(get_float, set_float, "F");
+primitive_field!(get_double, set_double, "D");
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (class, parent) in [
+        (
+            "Ljava/lang/ReflectiveOperationException;",
+            "Ljava/lang/Exception;",
+        ),
+        (
+            "Ljava/lang/NoSuchFieldException;",
+            "Ljava/lang/ReflectiveOperationException;",
+        ),
+        (
+            "Ljava/lang/NoSuchMethodException;",
+            "Ljava/lang/ReflectiveOperationException;",
+        ),
+        (
+            "Ljava/lang/IllegalAccessException;",
+            "Ljava/lang/ReflectiveOperationException;",
+        ),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name: "__marker",
+            sig: "()V",
+            instance: true,
+            f: super::abstract_function,
+        })?;
+        let id = vm.ensure_class_by_desc(class)?;
+        vm.classes[id as usize].superclass = Some(vm.ensure_class_by_desc(parent)?);
+    }
+    for (name, sig, f) in [
+        (
+            "get",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            field_get as dexvm::vm::NativeFn,
+        ),
+        ("set", "(Ljava/lang/Object;Ljava/lang/Object;)V", field_set),
+        ("setAccessible", "(Z)V", accessible),
+        ("isAccessible", "()Z", is_accessible),
+        ("getBoolean", "(Ljava/lang/Object;)Z", get_boolean),
+        ("setBoolean", "(Ljava/lang/Object;Z)V", set_boolean),
+        ("getByte", "(Ljava/lang/Object;)B", get_byte),
+        ("setByte", "(Ljava/lang/Object;B)V", set_byte),
+        ("getShort", "(Ljava/lang/Object;)S", get_short),
+        ("setShort", "(Ljava/lang/Object;S)V", set_short),
+        ("getChar", "(Ljava/lang/Object;)C", get_char),
+        ("setChar", "(Ljava/lang/Object;C)V", set_char),
+        ("getInt", "(Ljava/lang/Object;)I", get_int),
+        ("setInt", "(Ljava/lang/Object;I)V", set_int),
+        ("getLong", "(Ljava/lang/Object;)J", get_long),
+        ("setLong", "(Ljava/lang/Object;J)V", set_long),
+        ("getFloat", "(Ljava/lang/Object;)F", get_float),
+        ("setFloat", "(Ljava/lang/Object;F)V", set_float),
+        ("getDouble", "(Ljava/lang/Object;)D", get_double),
+        ("setDouble", "(Ljava/lang/Object;D)V", set_double),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Ljava/lang/reflect/Field;",
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
+    for (name, f) in [
+        ("getDeclaredField", declared_field as dexvm::vm::NativeFn),
+        ("getField", public_field),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Ljava/lang/Class;",
+            name,
+            sig: "(Ljava/lang/String;)Ljava/lang/reflect/Field;",
+            instance: true,
+            f,
+        })?;
+    }
     for (name, sig, f) in [
         (
             "getLength",
