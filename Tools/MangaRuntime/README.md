@@ -295,7 +295,9 @@ iterators (including U+FFFF), and dispatch to the supplied Random instance.
 `sequence_compat` supplies lazy line splitting and iterator-based map/filter,
 first/find and list consumption, including CRLF/trailing-empty handling, repeated
 iteration and mutations before iteration. New native work is bounded by element,
-instruction, depth and operation-deadline limits; unsupported APIs remain gaps.
+instruction, depth and operation-deadline limits. Older native consumers materialize
+these sequences through bounded virtual iteration, retaining their prior eager
+behavior; this is not universal lazy sequence support. Unsupported APIs remain gaps.
 
 The pinned DEX decoder combines modified UTF-8 surrogate pairs instead of
 corrupting supplementary characters. It rejects malformed encodings. The host

@@ -226,12 +226,10 @@ index 9111360..37e21b4 100644
          }
          // float
 diff --git a/src/vm/native/java/util/mod.rs b/src/vm/native/java/util/mod.rs
-index 9b71d61..46b36c5 100644
+index 9b71d61..6e22f9a 100644
 --- a/src/vm/native/java/util/mod.rs
 +++ b/src/vm/native/java/util/mod.rs
-@@ -46,28 +46,29 @@ pub(crate) fn coll_elems(vm: &mut Vm, v: JValue) -> Result<Vec<JValue>, NatErr>
-             Some(Native::Set(items)) => Ok(items.clone()),
-             Some(Native::ArrayDeque(items)) => Ok(items.clone()),
+@@ -48,24 +48,25 @@ pub(crate) fn coll_elems(vm: &mut Vm, v: JValue) -> Result<Vec<JValue>, NatErr>
              Some(Native::SFilterList(items)) => Ok(items.clone()),
 -            Some(Native::IntRange(first, last)) => Ok((*first..=*last).map(JValue::Int).collect()),
 -            Some(Native::IntProgression(first, last, step)) => {
@@ -278,12 +276,61 @@ index 9b71d61..46b36c5 100644
 -                Ok((*first..=*last).map(JValue::Long).collect())
 +                boxed_range(vm, *first, *last, 1, "Ljava/lang/Long;")
              }
-             Some(Native::Array(ArrayData::Obj(items))) => Ok(items.clone()),
-             #[cfg(feature = "jsoup")]
-@@ -124,6 +125,43 @@ pub(crate) fn coll_elems(vm: &mut Vm, v: JValue) -> Result<Vec<JValue>, NatErr>
-     }
- }
+@@ -90,2 +91,17 @@ pub(crate) fn coll_elems(vm: &mut Vm, v: JValue) -> Result<Vec<JValue>, NatErr>
+             _ => {
++                let class = vm.arena.objects[v.as_obj() as usize].class;
++                let iterable = vm
++                    .ensure_class_by_desc("Ljava/lang/Iterable;")
++                    .map_err(nat_fatal)?;
++                let mut can_iterate = vm.is_assignable(class, iterable).map_err(nat_fatal)?;
++                #[cfg(feature = "kotlin")]
++                {
++                    let sequence = vm
++                        .ensure_class_by_desc("Lkotlin/sequences/Sequence;")
++                        .map_err(nat_fatal)?;
++                    can_iterate |= vm.is_assignable(class, sequence).map_err(nat_fatal)?;
++                }
++                if can_iterate {
++                    return virtual_collection(vm, v);
++                }
+                 if std::env::var("DEXVM_TRACE").is_ok() {
+@@ -126,2 +142,74 @@ pub(crate) fn coll_elems(vm: &mut Vm, v: JValue) -> Result<Vec<JValue>, NatErr>
 
++// Retain the iterator protocol for guest iterables and lazy host sequences.
++// Existing native consumers must not assume every sequence is a Native::List.
++fn collection_call(vm: &mut Vm, receiver: JValue, name: &str, sig: &str) -> R {
++    if receiver.is_null_ref() {
++        return Err(npe(vm));
++    }
++    if vm.budget <= 0 {
++        return Err(nat_fatal(JvmError::BudgetExceeded));
++    }
++    vm.budget -= 1;
++    if vm.recursion_depth >= vm.depth_limit {
++        return Err(nat_fatal(JvmError::StackOverflow));
++    }
++    vm.recursion_depth += 1;
++    let result = inv_virt(vm, receiver, name, sig, &[]);
++    vm.recursion_depth -= 1;
++    result
++}
++fn virtual_collection(vm: &mut Vm, value: JValue) -> Result<Vec<JValue>, NatErr> {
++    let iterator = collection_call(vm, value, "iterator", "()Ljava/util/Iterator;")?;
++    let mut values = Vec::new();
++    while collection_call(vm, iterator, "hasNext", "()Z")?.as_int() != 0 {
++        if values.len() >= 100_000 {
++            return Err(nat_fatal(JvmError::BudgetExceeded));
++        }
++        values.push(collection_call(
++            vm,
++            iterator,
++            "next",
++            "()Ljava/lang/Object;",
++        )?);
++    }
++    Ok(values)
++}
++
 +/// Generic collections contain boxed values, unlike primitive iterators.
 +/// Bound host-side expansion too: it must not bypass the guest instruction cap.
 +fn boxed_range(
@@ -322,8 +369,6 @@ index 9b71d61..46b36c5 100644
 +}
 +
  pub(crate) fn list_alloc(vm: &mut Vm, items: Vec<JValue>) -> Result<JValue, NatErr> {
-     if std::env::var("DEXVM_TRACE").is_ok()
-         && items.iter().any(|v| matches!(v, JValue::Int(i) if *i == 0))
 diff --git a/src/vm/native/kotlin/collections.rs b/src/vm/native/kotlin/collections.rs
 index d3c0c2d..01bed0d 100644
 --- a/src/vm/native/kotlin/collections.rs

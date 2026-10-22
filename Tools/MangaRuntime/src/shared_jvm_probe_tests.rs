@@ -36,7 +36,11 @@ fn vm() -> Vm {
 
 #[test]
 fn guest_arrays_and_deques_preserve_values_types_order_and_failures() {
-    for name in ["arrayContracts", "dequeContracts"] {
+    for name in [
+        "arrayContracts",
+        "dequeContracts",
+        "sequenceConsumerContracts",
+    ] {
         let mut vm = vm();
         assert_eq!(call(&mut vm, name, "()Z"), JValue::Int(1));
     }
@@ -127,6 +131,19 @@ fn collection_callback_failures_and_vm_limits_propagate_without_results() {
                     "getValue",
                     "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
                     vec![wrapper, key]
+                ),
+                Err(JvmError::BudgetExceeded)
+            ));
+            let sequence = vm
+                .alloc_native("Lkotlin/sequences/Sequence;", Native::List(vec![key]))
+                .unwrap();
+            let mapped=vm.invoke_static("Lkotlin/sequences/SequencesKt;","map","(Lkotlin/sequences/Sequence;Lkotlin/jvm/functions/Function1;)Lkotlin/sequences/Sequence;",vec![sequence,callback]).unwrap();
+            assert!(matches!(
+                vm.invoke_static(
+                    "Lkotlin/sequences/SequencesKt;",
+                    "count",
+                    "(Lkotlin/sequences/Sequence;)I",
+                    vec![mapped]
                 ),
                 Err(JvmError::BudgetExceeded)
             ));

@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REVISION = "38d3438d7e36b5c2c17414029fd36b2d717eefcb"
 PATCH = ROOT / "Tools/MangaRuntime/support/dexvm-core.patch"
 PATCHED_SOURCE_SHA256 = "c22775d94d3adee9851f4c8335e874e201672df416be7f7315dc2c5f21f01ee3"
-PATCHED_COLLECTIONS_SHA256 = "377a6ac4a1af671c067ebbcbfa25b7d7536d3e59a76792904544c9a7a33797e4"
+PATCHED_COLLECTIONS_SHA256 = "6edb8d39fb82b09993b0b12da4315af2228e0cdd44f84b105a85265f5bffd040"
+LEGACY_COLLECTIONS_SHA256 = "377a6ac4a1af671c067ebbcbfa25b7d7536d3e59a76792904544c9a7a33797e4"
 PATCHED_JOIN_SHA256 = "dce8e171a42e6aa57fdda334f5eeec78f164515a3ed453d3bc8c5e6b0ade345f"
 PATCHED_DECODER_SHA256 = "e4b078de9a7918e69ecc071eba0283a1e9e80855e36d752d439dcbf79809d30f"
 PATCHED_STRING_SHA256 = "b07d4e38fd1d753f593e179aed9637e5657522a1fc6af1138adeabd2d373fca6"
@@ -81,7 +82,7 @@ if DESTINATION.exists():
         and all(hashlib.sha256((DESTINATION / path).read_bytes()).hexdigest() == digest
                 for path, digest in {
                     "src/dex/insn.rs": "657fb30464c446dd6f1ed218772abda7df484f76045ea5d00787d1f73f118a69",
-                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/java/util/mod.rs": LEGACY_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                 }.items())
         and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
@@ -94,7 +95,7 @@ if DESTINATION.exists():
                 for path, digest in {
                     "src/dex/insn.rs": PATCHED_DECODER_SHA256,
                     "src/vm/interpret.rs": "ed747088560a2451d8368502550832d4b69f85977bee70f15104dec2826a306c",
-                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/java/util/mod.rs": LEGACY_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                 }.items())
         and not git(DESTINATION, "ls-files", "--others", "--exclude-standard").strip()
@@ -107,7 +108,7 @@ if DESTINATION.exists():
                 for path, digest in {
                     "src/dex/insn.rs": PATCHED_DECODER_SHA256,
                     "src/vm/interpret.rs": "ed747088560a2451d8368502550832d4b69f85977bee70f15104dec2826a306c",  # builds 53/54
-                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/java/util/mod.rs": LEGACY_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                     **PATCHED_HTTP_SHA256,
                 }.items())
@@ -121,7 +122,7 @@ if DESTINATION.exists():
                 for path, digest in {
                     "src/dex/insn.rs": PATCHED_DECODER_SHA256,
                     "src/vm/interpret.rs": PATCHED_SOURCE_SHA256,
-                    "src/vm/native/java/util/mod.rs": PATCHED_COLLECTIONS_SHA256,
+                    "src/vm/native/java/util/mod.rs": LEGACY_COLLECTIONS_SHA256,
                     "src/vm/native/kotlin/collections.rs": PATCHED_JOIN_SHA256,
                     **PATCHED_HTTP_SHA256,
                 }.items())

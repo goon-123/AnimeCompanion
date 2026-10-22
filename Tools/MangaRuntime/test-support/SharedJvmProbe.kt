@@ -175,6 +175,17 @@ object SharedJvmProbe {
         return true
     }
 
+    @JvmStatic fun sequenceConsumerContracts(): Boolean {
+        val sequence = "owned\nother\nowned".lineSequence().map { it.trim() }
+        check(sequence.joinToString("|") == "owned|other|owned")
+        check(sequence.toSet().size == 2)
+        check(sequence.distinct().toList() == listOf("owned", "other"))
+        check(sequence.count() == 3)
+        check(sequence.lastOrNull() == "owned")
+        check(sequence.mapNotNull { if (it == "owned") it else null }.toList() == listOf("owned", "owned"))
+        return true
+    }
+
     private class ChosenRandom : kotlin.random.Random() {
         override fun nextBits(bitCount: Int): Int = error("Unexpected random entry point")
         override fun nextInt(from: Int, until: Int): Int {
