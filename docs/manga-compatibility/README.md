@@ -8,7 +8,13 @@ against the reference JVM. Existing exact-APK reading flows remain regressions;
 there is no new complete source flow in this batch. MangoLibreria now loads its
 factory/settings but still encounters a separate OkHttp timeout overload when
 reading. See [scope and remaining work](java-kotlin-progress.md) and
-[validation](../../BUILD_STATUS.md). Hosted results are recorded on the PR.
+[validation](../../BUILD_STATUS.md). The [focused matrix](build59/compatibility.html),
+[CSV](build59/compatibility.csv) and [JSON](build59/compatibility-matrix.json) cover 7/7
+inventoried APKs, 9 source identities and 70 production C-ABI probes against code
+`10f7dee7091e5abc6cf8205807ba36c2be0727f2`. Every expected cell ran. Six complete
+owned source rows retain earlier reading evidence, two are unverified and
+MangoLibreria remains blocked by the recorded OkHttp overload. Hosted results
+are recorded on [PR #40](https://github.com/goon-123/AnimeCompanion/pull/40).
 
 Build 58 fills nine observed collection/type/string gaps. WaManga and HentaiHere
 have complete owned reading replays; Webcomics has latest-catalog evidence and
