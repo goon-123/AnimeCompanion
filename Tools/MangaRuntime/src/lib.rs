@@ -18,6 +18,8 @@ mod authenticator_compat;
 mod browser_compat;
 mod chapter_wire;
 mod collection_compat;
+#[cfg(test)]
+mod collection_extension_tests;
 mod continuation_compat;
 mod coroutine_compat;
 mod date_amount_compat;
@@ -36,7 +38,9 @@ mod java_kotlin_extension_tests;
 mod json_compat;
 mod json_serializer_compat;
 mod jsoup_compat;
+mod kotlin_collection_compat;
 mod kotlin_runtime_compat;
+mod kotlin_text_compat;
 mod kotlin_type_compat;
 mod local_date_compat;
 mod locale_compat;
@@ -47,6 +51,7 @@ mod okio_peek_compat;
 mod property_reference_compat;
 mod reflection_compat;
 mod regex_compat;
+mod sequence_compat;
 mod serialization_compat;
 mod serialization_elements_compat;
 #[cfg(test)]
@@ -1126,6 +1131,9 @@ where
     image_io_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     graphics_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     collection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    kotlin_collection_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    kotlin_text_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    sequence_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     source_settings::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     browser_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     coroutine_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

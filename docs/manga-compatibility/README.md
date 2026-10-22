@@ -1,5 +1,12 @@
 # Manga compatibility matrix
 
+Build 58 fills nine observed collection/type/string gaps. WaManga and HentaiHere
+have complete owned reading replays; Webcomics has latest-catalog evidence and
+Comicabc has catalog/details/chapter evidence. Its JavaScript reader remains
+partial. The shared Java/Kotlin task estimate moves from approximately **80% to
+85%** with this proposed batch; see [scope and remaining work](java-kotlin-progress.md).
+Hosted results and the exact build-58 matrix are recorded on the PR.
+
 Build 57 extends coroutine task/continuation handling, Java method and Kotlin property
 reflection, and the observed Java date/time gaps. Its [focused matrix](build57/compatibility.html),
 [CSV](build57/compatibility.csv) and [JSON](build57/compatibility.json) cover ten exact APKs,

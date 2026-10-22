@@ -21,10 +21,10 @@ with tempfile.TemporaryDirectory() as temporary:
         (directory / name).write_bytes(data)
     with zipfile.ZipFile(directory / "kotlin.zip") as archive:
         archive.extractall(directory)
-    subprocess.run(["java", "-cp", str(directory / "kotlinc/lib/kotlin-compiler.jar"), "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-kotlin-home", str(directory / "kotlinc"), "-jvm-target", "1.8", "-d", str(directory / "probe.jar"), str(ROOT / "Tools/MangaRuntime/test-support/SharedJvmProbe.kt")], check=True)
+    subprocess.run(["java", "-cp", str(directory / "kotlinc/lib/kotlin-compiler.jar"), "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-kotlin-home", str(directory / "kotlinc"), "-jvm-target", "1.8", "-Xlambdas=class", "-d", str(directory / "probe.jar"), str(ROOT / "Tools/MangaRuntime/test-support/SharedJvmProbe.kt")], check=True)
     subprocess.run(["java", "-cp", str(directory / "r8.jar"), "com.android.tools.r8.D8", "--min-api", "26", "--no-desugaring", "--lib", str(directory / "kotlinc/lib/kotlin-stdlib.jar"), "--output", str(directory / "probe.zip"), str(directory / "probe.jar")], check=True)
     with zipfile.ZipFile(directory / "probe.zip") as archive:
         data = archive.read("classes.dex")
-    assert hashlib.sha256(data).hexdigest() == "5d4c0a97d6489906b0ba3b8380cd128a235fd5bcffcbe3762fe4f5f919ee1006"
+    assert hashlib.sha256(data).hexdigest() == "08e312f8f25a5409b0940ce5aeb60851ec835ed2ef749c337dadb5aea64539fa"
     (ROOT / "Tools/MangaRuntime/test-support/shared-jvm-probe.dex").write_bytes(data)
     print(hashlib.sha256(data).hexdigest())

@@ -680,3 +680,101 @@ diff --git a/src/vm/native/okhttp/mod.rs b/src/vm/native/okhttp/mod.rs
      });
      if std::env::var("DEXVM_TRACE").is_ok() {
          let preview: String = resp
+diff --git a/src/dex/read.rs b/src/dex/read.rs
+index 1f24d97..c42fef0 100644
+--- a/src/dex/read.rs
++++ b/src/dex/read.rs
+@@ -170,3 +170,3 @@ impl<'a> Cursor<'a> {
+ pub fn decode_mutf8(bytes: &[u8]) -> Result<String, DexError> {
+-    let mut out = Vec::with_capacity(bytes.len());
++    let mut units = Vec::with_capacity(bytes.len());
+     let mut i = 0;
+@@ -177,37 +177,58 @@ pub fn decode_mutf8(bytes: &[u8]) -> Result<String, DexError> {
+         }
+-        if b == 0xc0 && i + 1 < bytes.len() && bytes[i + 1] == 0x80 {
+-            out.push(0);
+-            i += 2;
+-            continue;
+-        }
+-        if b < 0x80 {
+-            out.push(b);
+-            i += 1;
+-        } else if b < 0xe0 {
+-            if i + 1 >= bytes.len() {
+-                return Err(DexError::new(i, "truncated utf8"));
++        let (value, length) = if b < 0x80 {
++            (u16::from(b), 1)
++        } else if b & 0xe0 == 0xc0 {
++            if i + 1 >= bytes.len() || bytes[i + 1] & 0xc0 != 0x80 {
++                return Err(DexError::new(i, "invalid modified UTF-8 pair"));
+             }
+-            out.push(b);
+-            out.push(bytes[i + 1]);
+-            i += 2;
+-        } else if b < 0xf0 {
+-            if i + 2 >= bytes.len() {
+-                return Err(DexError::new(i, "truncated utf8"));
++            let value = (u16::from(b & 0x1f) << 6) | u16::from(bytes[i + 1] & 0x3f);
++            if value < 0x80 && !(b == 0xc0 && bytes[i + 1] == 0x80) {
++                return Err(DexError::new(i, "overlong modified UTF-8 pair"));
+             }
+-            out.push(b);
+-            out.push(bytes[i + 1]);
+-            out.push(bytes[i + 2]);
+-            i += 3;
+-        } else {
+-            if i + 3 >= bytes.len() {
+-                return Err(DexError::new(i, "truncated utf8"));
++            (value, 2)
++        } else if b & 0xf0 == 0xe0 {
++            if i + 2 >= bytes.len() || bytes[i + 1] & 0xc0 != 0x80 || bytes[i + 2] & 0xc0 != 0x80 {
++                return Err(DexError::new(i, "invalid modified UTF-8 triple"));
++            }
++            let value = (u16::from(b & 0x0f) << 12)
++                | (u16::from(bytes[i + 1] & 0x3f) << 6)
++                | u16::from(bytes[i + 2] & 0x3f);
++            if value < 0x800 {
++                return Err(DexError::new(i, "overlong modified UTF-8 triple"));
+             }
+-            out.push(b);
+-            out.push(bytes[i + 1]);
+-            out.push(bytes[i + 2]);
+-            out.push(bytes[i + 3]);
+-            i += 4;
++            (value, 3)
++        } else {
++            return Err(DexError::new(i, "invalid modified UTF-8 lead byte"));
++        };
++        units.push(value);
++        i += length;
++    }
++    // DEX stores supplementary characters as UTF-16 surrogate pairs, each
++    // encoded as a three-byte unit. Decoding those as UTF-8 corrupts emoji.
++    Ok(String::from_utf16_lossy(&units))
++}
++
++#[cfg(test)]
++mod mutf_tests {
++    use super::decode_mutf8;
++    #[test]
++    fn modified_utf8_preserves_null_bmp_and_surrogate_pairs() {
++        assert_eq!(decode_mutf8(b"a\xc0\x80b\0").unwrap(), "a\0b");
++        assert_eq!(decode_mutf8(b"h\xc3\xa9llo").unwrap(), "héllo");
++        assert_eq!(decode_mutf8(b"A\xed\xa0\xbd\xed\xb8\x80Z").unwrap(), "A😀Z");
++    }
++    #[test]
++    fn modified_utf8_rejects_truncation_overlong_and_bad_continuations() {
++        for bytes in [
++            &b"\xc0"[..],
++            &b"\xe0\xa0"[..],
++            &b"\xc1\x81"[..],
++            &b"\xe0\x80\x81"[..],
++            &b"\xe1ab"[..],
++            &b"\x80"[..],
++            &b"\xf0\x9f\x98\x80"[..],
++        ] {
++            assert!(decode_mutf8(bytes).is_err(), "{bytes:?}");
+         }
+     }
+-    Ok(String::from_utf8_lossy(&out).into_owned())
+ }
