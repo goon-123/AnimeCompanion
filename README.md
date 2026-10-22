@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Shared Kotlin collection compatibility (0.25.11 / build 58)
+
+Add missing array, map-default, deque, character-range and lazy line-sequence contracts. Nine observed shared blockers are removed in targeted exact-APK checks. WaManga and HentaiHere have complete owned reading replays; Webcomics and Comicabc have narrower evidence. Komga and Jinman regressions remain covered.
+
+The Java/Kotlin roadmap item is estimated at **85% with this proposed batch**, up from 80% at build 57. This is an engineering estimate. See [remaining scope and progress](docs/manga-compatibility/java-kotlin-progress.md), the [compatibility matrix](docs/manga-compatibility/README.md) and [build status](BUILD_STATUS.md) for validation and limits.
+
 ### Manga compatibility matrix and HTTP support (0.25.6 / build 53)
 
 The [searchable compatibility matrix](docs/manga-compatibility/README.md) shows exact-version source evidence for catalog, details, chapters, pages and image transport. Filter by name, language or status; inspect the missing API and named tests; export a CSV. Verified offline, partial, runtime-blocked and unverified results stay separate. The audit also ranks shared dependency families to guide the next runtime fixes.

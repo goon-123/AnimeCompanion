@@ -1300,6 +1300,298 @@
           ]
         }
       ]
+    },
+    {
+      "name": "tachiyomi-all.danbooru-v1.6.0.apk",
+      "sha256": "bcad22cfbb9a6b6d4405e6fe8b27ff2b6a8f388e8f29cb103533a8d82ab0ac72",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.danbooru-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.danbooru",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.hentaifox-v1.6.18.apk",
+      "sha256": "97d7d2d6b37192190a1de36ebaa0dc7fe0ce4be684b61d69547e8610372ca2ca",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-all.hentaifox-v1.6.18.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.hentaifox",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.pixiv-v1.6.0.apk",
+      "sha256": "a813adfc5a8e1d1bd9e0ed19a45e4237b8bc036595bdfd7de0f11dd3ce110eb3",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/bdcf84f/tachiyomi-all.pixiv-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.pixiv",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-all.webcomics-v1.6.11.apk",
+      "sha256": "eb39e08062310f0640971e5ce4dbcb611b4cd393186933c91ac94dedd3e265c3",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/4217666-0/tachiyomi-all.webcomics-v1.6.11.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.webcomics",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::webcomics_latest_uses_array_last_and_the_guest_user_agent_interceptor",
+          "stages": [
+            "latest"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-en.hentaihere-v1.6.1.apk",
+      "sha256": "6bff924148b9be583396ad8eb1f80ed66af646fe9c1fbb9ebdfc039ec28eefaa",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/ac40914/tachiyomi-en.hentaihere-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.hentaihere",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::hentaihere_character_range_filters_catalog_chapters_ordered_pages_and_image",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ko.sbxh-v1.6.1.apk",
+      "sha256": "90ecb3072c12df46820255f9ab3b1bbb6e9da278a68771c166dd9a8915f905f9",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/7363e42/tachiyomi-ko.sbxh-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.ko.sbxh",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-pt.nexusmangas-v1.6.1.apk",
+      "sha256": "e37bc8e33684b041dbd93c67a6f1f8a15eed1ed9f3ba1732392eed6fea825d66",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/ac40914/tachiyomi-pt.nexusmangas-v1.6.1.apk",
+      "package": "eu.kanade.tachiyomi.extension.pt.nexusmangas",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-ru.wamanga-v1.6.2.apk",
+      "sha256": "5e695c6704d713283f613816fb9655f66df6d2121058ae35ce9d14dac79bab68",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/a0e93c0/tachiyomi-ru.wamanga-v1.6.2.apk",
+      "package": "eu.kanade.tachiyomi.extension.ru.wamanga",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::wamanga_lazy_svelte_lines_catalog_dated_chapters_sorted_pages_and_image",
+          "stages": [
+            "popular",
+            "details",
+            "chapters",
+            "pages",
+            "images"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tachiyomi-zh.comicabc-v1.6.0.apk",
+      "sha256": "0180a4796d8152f1c3759dbf9fb0171d7a596b932fa861167256f4dd0ea2ebfb",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-zh.comicabc-v1.6.0.apk",
+      "package": "eu.kanade.tachiyomi.extension.zh.comicabc",
+      "cases": [
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "inspect"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::collection_extension_factories_and_settings_use_real_guest_types",
+          "stages": [
+            "settings"
+          ],
+          "sources": [
+            0
+          ]
+        },
+        {
+          "test": "collection_extension_tests::comicabc_utf16_dictionary_catalog_details_and_chapters",
+          "stages": [
+            "popular",
+            "details",
+            "chapters"
+          ],
+          "sources": [
+            0
+          ]
+        }
+      ]
     }
   ]
 }

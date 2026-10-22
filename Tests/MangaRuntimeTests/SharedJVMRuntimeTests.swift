@@ -10,6 +10,42 @@ final class SharedJVMRuntimeTests: XCTestCase {
     private struct ImagePayload: Decodable { let bodyBase64: String }
     private let bytes = Data([0, 255, 23, 128])
 
+    func testWaMangaLazyLinesAndCompleteReaderThroughNativeBridge() throws {
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-ru.wamanga-v1.6.2.apk", responses: [
+            "https://wamanga.ru/catalog/__data.json": try fixture("wamanga-catalog.jsonl"),
+            "https://wamanga.ru/manga/owned/__data.json": try fixture("wamanga-book.jsonl"),
+            "https://wamanga.ru/manga/owned/glava-2/__data.json": try fixture("wamanga-pages.jsonl"),
+            "https://wamanga.ru/owned-page-1.webp": bytes
+        ])
+        let catalog: SourceMangaPage = try host.execute(["op": "popular"])
+        let manga = try XCTUnwrap(catalog.mangas.first)
+        XCTAssertEqual(manga.title, "Owned story")
+        let book: MangaBook = try host.execute(["op": "book", "timeZoneID": "UTC", "manga": ["url": manga.url, "title": manga.title]])
+        XCTAssertEqual(book.chapters.map(\.uploadedAt), [1_709_210_096_123, -1])
+        let chapter = try XCTUnwrap(book.chapters.first)
+        let pages: [SourceMangaImage] = try host.execute(["op": "pages", "chapter": MangaRuntime.chapterInput(chapter)])
+        XCTAssertEqual(pages.map(\.imageURL), ["https://wamanga.ru/owned-page-1.webp", "https://wamanga.ru/owned-page-2.webp"])
+        try assertImage(try XCTUnwrap(pages.first), host: host)
+    }
+
+    func testCharacterRangeFiltersAndCompleteReaderThroughNativeBridge() throws {
+        let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-en.hentaihere-v1.6.1.apk", responses: [
+            "https://hentaihere.com/category/34/most-viewed": try fixture("hentaihere-catalog.html"),
+            "https://hentaihere.com/original/owned": try fixture("hentaihere-book.html"),
+            "https://hentaihere.com/read/owned-2": try fixture("hentaihere-pages.html"),
+            "https://images.example/owned-page-2.webp": bytes
+        ])
+        let catalog: SourceMangaPage = try host.execute(["op": "popular"])
+        let manga = try XCTUnwrap(catalog.mangas.first)
+        XCTAssertEqual(manga.title, "Owned story")
+        let book: MangaBook = try host.execute(["op": "book", "manga": ["url": manga.url, "title": manga.title]])
+        XCTAssertEqual(book.chapters.map(\.name), ["Chapter 2", "Chapter 1"])
+        let chapter = try XCTUnwrap(book.chapters.first)
+        let pages: [SourceMangaImage] = try host.execute(["op": "pages", "chapter": MangaRuntime.chapterInput(chapter)])
+        XCTAssertEqual(pages.map(\.imageURL), ["https://images.example/owned-page-2.webp", "https://images.example/owned-page-1.webp"])
+        try assertImage(try XCTUnwrap(pages.first), host: host)
+    }
+
     func testInMangaAsyncDetailsFractionalDatesAndCompleteReaderThroughNativeBridge() throws {
         let host = try OwnedExtensionFixtureHTTP(apkName: "tachiyomi-es.inmanga-v1.6.1.apk", responses: [
             "https://inmanga.com/manga/getMangasConsultResult": try fixture("inmanga-catalog.html"),

@@ -38,6 +38,15 @@ fn invoke(vm: &mut Vm, receiver: JValue, name: &str, sig: &str, args: Vec<JValue
     })
 }
 fn map_value(vm: &mut Vm, args: &[JValue]) -> R {
+    if super::kotlin_collection_compat::is_default_map(vm, args[0]) {
+        return invoke(
+            vm,
+            args[0],
+            "getOrImplicitDefault",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            vec![args[1]],
+        );
+    }
     // JsonObject and guest Map implementations need their own virtual get;
     // a Native::Map-only shortcut loses them and conflates null with absence.
     let cost = match vm.payload_of(args[0]) {

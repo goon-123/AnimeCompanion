@@ -280,3 +280,33 @@ The app-owned `test-support/SharedJvmProbe.kt` is also compiled to a test-only D
 Its tests actually suspend/resume guest bytecode across GC and exercise Java method
 reflection. Rebuild it with JDK 17 using `python3 scripts/rebuild-manga-probe.py`;
 the compiler, D8 and output checksums are pinned. The probe is not bundled into the app.
+
+## Shared Kotlin collections and lazy sequences (build 58)
+
+Version 0.25.11. `kotlin_collection_compat` adds the observed reference-array
+helpers, backing-map default wrappers and actual Kotlin deque list operations.
+Default providers are evaluated only for absent keys through getValue; ordinary
+get/contains/iteration do not synthesize entries. Wrappers retain their backing
+map and provider as arena-traced references. Java List equality/hash iteration
+uses guest methods and preserves callback failures.
+
+`kotlin_text_compat` preserves UTF-16 code units, bounded character-range
+iterators (including U+FFFF), and dispatch to the supplied Random instance.
+`sequence_compat` supplies lazy line splitting and iterator-based map/filter,
+first/find and list consumption, including CRLF/trailing-empty handling, repeated
+iteration and mutations before iteration. New native work is bounded by element,
+instruction, depth and operation-deadline limits. Older native consumers materialize
+these sequences through bounded virtual iteration, retaining their prior eager
+behavior; this is not universal lazy sequence support. Unsupported APIs remain gaps.
+
+The pinned DEX decoder combines modified UTF-8 surrogate pairs instead of
+corrupting supplementary characters. It rejects malformed encodings. The host
+still uses Rust strings, so complete unpaired-surrogate String behavior is not
+provided. The reviewed patch, generated-source hashes and exact cache migration
+are checked by prepare-manga-interpreter.py.
+
+Nine additional exact APKs exercise the original observed blockers. WaManga and
+HentaiHere have neutral owned reading replays, Webcomics has a latest-catalog
+replay and Comicabc has catalog/details/chapter evidence. Comicabc's JavaScript
+array results remain a separate reader gap. These results do not certify live
+websites or all extension versions. Two new native bridge tests share the data.
