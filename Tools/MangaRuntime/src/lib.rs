@@ -924,12 +924,12 @@ fn source_image(
 /// Honor extension-declared image headers without inventing a Referer.
 /// Some sources (such as Kiutaku) intentionally remove Referer because their
 /// image CDN rejects hotlinked requests carrying the site's origin.
-fn merge_image_request_headers(
-    request: &mut Vec<(String, String)>,
-    source: Vec<(String, String)>,
-) {
+fn merge_image_request_headers(request: &mut Vec<(String, String)>, source: Vec<(String, String)>) {
     for (name, value) in source {
-        if !request.iter().any(|(existing, _)| existing.eq_ignore_ascii_case(&name)) {
+        if !request
+            .iter()
+            .any(|(existing, _)| existing.eq_ignore_ascii_case(&name))
+        {
             request.push((name, value));
         }
     }
@@ -943,7 +943,9 @@ mod image_header_contract_tests {
     fn absent_referer_remains_absent_when_source_removes_it() {
         let mut request = vec![("User-Agent".into(), "Owned".into())];
         merge_image_request_headers(&mut request, vec![("Accept".into(), "image/*".into())]);
-        assert!(!request.iter().any(|(name, _)| name.eq_ignore_ascii_case("referer")));
+        assert!(!request
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case("referer")));
     }
 
     #[test]
@@ -967,7 +969,10 @@ mod image_header_contract_tests {
             &mut request,
             vec![("Referer".into(), "https://owned.example/".into())],
         );
-        assert_eq!(request, vec![("referer".into(), "https://cdn.owned.example/".into())]);
+        assert_eq!(
+            request,
+            vec![("referer".into(), "https://cdn.owned.example/".into())]
+        );
     }
 }
 
