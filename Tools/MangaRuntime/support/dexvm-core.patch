@@ -75,7 +75,7 @@ index 302ec6f..df1bc47 100644
          // add-int/lit16 v0, v1, -1
          assert_eq!(
 diff --git a/src/vm/interpret.rs b/src/vm/interpret.rs
-index 9111360..37e21b4 100644
+index 9111360..c58f006 100644
 --- a/src/vm/interpret.rs
 +++ b/src/vm/interpret.rs
 @@ -103,7 +103,9 @@ pub fn run(vm: &mut Vm, class: u32, slot: u32, args: Vec<JValue>) -> Result<JVal
@@ -163,7 +163,33 @@ index 9111360..37e21b4 100644
                  let c = match (*kind, va, vb) {
                      (CmpOp::CmpLong, JValue::Long(x), JValue::Long(y)) => x.cmp(&y) as i32,
                      (CmpOp::CmpgFloat, JValue::Float(x), JValue::Float(y)) => fcmp(x, y, true),
-@@ -1291,7 +1320,21 @@ impl Vm {
+@@ -1107,7 +1136,11 @@ impl Vm {
+                 };
+                 let oc = self.arena.objects[o as usize].class;
+                 let fr = self.field_ref(f.dex, *field_idx)?;
+-                let off = self.field_offset(oc, fr.name, fr.ty).ok_or_else(|| {
++                let declared = self.ensure_class_by_desc_id(fr.class_desc)?;
++                if !self.is_assignable(oc, declared)? {
++                    return Err(JvmError::Resolution("Wrong instance field receiver".into()));
++                }
++                let off = self.field_offset(declared, fr.name, fr.ty).ok_or_else(|| {
+                     JvmError::Resolution(format!(
+                         "no field {} in {}",
+                         self.str_of(fr.name),
+@@ -1143,7 +1176,11 @@ impl Vm {
+                 };
+                 let oc = self.arena.objects[o as usize].class;
+                 let fr = self.field_ref(f.dex, *field_idx)?;
+-                let off = self.field_offset(oc, fr.name, fr.ty).ok_or_else(|| {
++                let declared = self.ensure_class_by_desc_id(fr.class_desc)?;
++                if !self.is_assignable(oc, declared)? {
++                    return Err(JvmError::Resolution("Wrong instance field receiver".into()));
++                }
++                let off = self.field_offset(declared, fr.name, fr.ty).ok_or_else(|| {
+                     JvmError::Resolution(format!(
+                         "no field {} in {}",
+                         self.str_of(fr.name),
+@@ -1291,7 +1328,21 @@ impl Vm {
                  Flow::Call(*kind, mref, target, *args, next_pc)
              }
              Insn::Unop(op, d, s) => {
@@ -186,7 +212,7 @@ index 9111360..37e21b4 100644
                  let r = match (*op, v) {
                      (Unop::NegInt, JValue::Int(x)) => JValue::Int(x.wrapping_neg()),
                      (Unop::NotInt, JValue::Int(x)) => JValue::Int(!x),
-@@ -1319,8 +1362,19 @@ impl Vm {
+@@ -1319,8 +1370,19 @@ impl Vm {
                  f.regs[*d as usize] = r;
                  Flow::Next(0)
              }
@@ -208,7 +234,7 @@ index 9111360..37e21b4 100644
                  match binop(self, *op, va, vb) {
                      Ok(v) => {
                          f.regs[*d as usize] = v;
-@@ -1546,13 +1600,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
+@@ -1546,13 +1608,13 @@ fn binop(vm: &mut Vm, op: Binop, a: JValue, b: JValue) -> Result<JValue, u32> {
          (Binop::And, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x & y)),
          (Binop::Or, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x | y)),
          (Binop::Xor, JValue::Long(x), JValue::Long(y)) => Ok(JValue::Long(x ^ y)),

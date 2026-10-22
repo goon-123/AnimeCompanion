@@ -508,6 +508,12 @@ fn deferred_await(vm: &mut Vm, args: &[JValue]) -> R {
     if super::coroutine_compat::is_app_task(vm, args[0]) {
         return super::coroutine_compat::await_task(vm, args);
     }
+    if args.get(1).is_some_and(|value| !value.is_null_ref())
+        && field(vm, args[0], 0).is_zero()
+        && super::coroutine_event_compat::driving(vm)?
+    {
+        return super::coroutine_compat::await_task(vm, args);
+    }
     let state = root(vm)?;
     // Ordinary inline async results have no pending-state field.
     for _ in 0..4096 {
@@ -565,6 +571,61 @@ pub(super) fn check_deadline(vm: &mut Vm) -> Result<(), NatErr> {
         )));
     }
     Ok(())
+}
+// Suspensions must retain timeout/dispatcher state after withTimeout/withContext
+// restore their caller's state. Browser-free VMs deliberately have no such root.
+pub(super) fn coroutine_event_state(vm: &mut Vm) -> Result<(JValue, JValue), NatErr> {
+    let descriptor = vm.intern(ROOT);
+    if !vm
+        .class_by_desc
+        .get(&descriptor)
+        .is_some_and(|id| !vm.classes[*id as usize].statics.is_empty())
+    {
+        return Ok((JValue::Long(i64::MAX), JValue::Int(0)));
+    }
+    let state = root(vm)?;
+    Ok((field(vm, state, 2), field(vm, state, 3)))
+}
+pub(super) fn poll_coroutine_events(vm: &mut Vm) -> Result<bool, NatErr> {
+    let descriptor = vm.intern(ROOT);
+    if !vm
+        .class_by_desc
+        .get(&descriptor)
+        .is_some_and(|id| !vm.classes[*id as usize].statics.is_empty())
+    {
+        return Ok(false);
+    }
+    let state = root(vm)?;
+    check_deadline(vm)?;
+    let had_handlers = !list(vm, field(vm, state, 1)).is_empty();
+    run_due(vm)?;
+    let active: Vec<_> = list(vm, field(vm, state, 0))
+        .into_iter()
+        .filter(|web| field(vm, *web, 5).is_zero() && !field(vm, *web, 6).is_zero())
+        .collect();
+    let had_webs = !active.is_empty();
+    for web in active {
+        let event = host(vm, json!({"op":"next","id":field(vm,web,0).as_int()}))?;
+        dispatch(vm, web, &event)?;
+    }
+    Ok(had_handlers || had_webs)
+}
+pub(super) fn replace_coroutine_event_state(
+    vm: &mut Vm,
+    values: (JValue, JValue),
+) -> Result<(JValue, JValue), NatErr> {
+    let previous = coroutine_event_state(vm)?;
+    let descriptor = vm.intern(ROOT);
+    if vm
+        .class_by_desc
+        .get(&descriptor)
+        .is_some_and(|id| !vm.classes[*id as usize].statics.is_empty())
+    {
+        let state = root(vm)?;
+        set(vm, state, 2, values.0);
+        set(vm, state, 3, values.1);
+    }
+    Ok(previous)
 }
 fn dispatch(vm: &mut Vm, web: JValue, event: &Value) -> Result<(), NatErr> {
     let url = vm.alloc_string(event["url"].as_str().unwrap_or_default());
@@ -687,6 +748,7 @@ pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
         n!(DEFERRED,"await","(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",true,deferred_await),
         n!("Lkotlinx/coroutines/Deferred;","await","(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",true,deferred_await),
         n!("Lkotlinx/coroutines/TimeoutKt;","withTimeout-KLykuaI","(JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,with_timeout),
+        n!("Lkotlinx/coroutines/TimeoutKt;","withTimeout","(JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,with_timeout),
     ] { vm.register_native(entry)?; }
     for name in ["v", "d", "i", "w", "e"] {
         vm.register_native(NativeEntry {

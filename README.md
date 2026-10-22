@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Cooperative coroutines and shared JVM contracts (0.25.12 / build 59)
+
+Add bounded cooperative scheduling for suspended tasks, delays/yield, ordered awaitAll and nested child completion. Extend actual Java field access (including hidden fields), nanosecond Instant/Duration value behavior and saturating TimeUnit conversions. Existing browser, Komga and Jinman reader regressions remain covered.
+
+The shared Java/Kotlin task is estimated at **90% with this proposed batch**, up from 85% at merged PR #39. This is a rough engineering estimate; parallel execution, dynamic proxies, remaining reflection/date/collection contracts and wider reading validation are still open. MangoLibreria's next reading blocker is the separate OkHttp timeout overload, not TimeUnit. See [progress and scope](docs/manga-compatibility/java-kotlin-progress.md) and [validation](BUILD_STATUS.md).
+
 ### Shared Kotlin collection compatibility (0.25.11 / build 58)
 
 Add missing array, map-default, deque, character-range and lazy line-sequence contracts. Nine observed shared blockers are removed in targeted exact-APK checks. WaManga and HentaiHere have complete owned reading replays; Webcomics and Comicabc have narrower evidence. Komga and Jinman regressions remain covered.

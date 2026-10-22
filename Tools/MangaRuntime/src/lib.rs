@@ -22,6 +22,7 @@ mod collection_compat;
 mod collection_extension_tests;
 mod continuation_compat;
 mod coroutine_compat;
+mod coroutine_event_compat;
 mod date_amount_compat;
 mod date_compat;
 mod date_fields_compat;
@@ -61,6 +62,7 @@ mod shared_jvm_probe_tests;
 mod source_framework_compat;
 mod source_settings;
 mod time_source_compat;
+mod time_unit_compat;
 mod uri_compat;
 use serialization_compat::*;
 
@@ -1080,6 +1082,7 @@ where
     locale_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_amount_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    time_unit_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_zone_compat::install(ext.ctx().vm(), &command.time_zone_id).map_err(|e| e.to_string())?;
     local_date_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     date_fields_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;

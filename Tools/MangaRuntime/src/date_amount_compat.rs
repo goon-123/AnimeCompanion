@@ -13,7 +13,10 @@ fn overflow(vm: &mut Vm) -> NatErr {
         "Time arithmetic overflow",
     ))
 }
-fn duration(vm: &mut Vm, value: JValue) -> Result<i128, NatErr> {
+pub(super) fn duration(vm: &mut Vm, value: JValue) -> Result<i128, NatErr> {
+    if value.is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
     let Some(class) = vm.object_class(value) else {
         return Err(NatErr::Throw(vm.err_npe()));
     };
@@ -38,6 +41,9 @@ fn new_duration(vm: &mut Vm, nanos: i128) -> R {
     Ok(value)
 }
 pub(super) fn instant_nanos(vm: &mut Vm, value: JValue) -> Result<i128, NatErr> {
+    if value.is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
     let Some(Native::EpochMillis(millis)) = vm.payload_of(value) else {
         return Err(NatErr::Throw(vm.err_iae("Expected an instant")));
     };
@@ -202,7 +208,161 @@ fn parse_instant(vm: &mut Vm, args: &[JValue]) -> R {
         i128::from(date.timestamp()) * BILLION + i128::from(date.timestamp_subsec_nanos()),
     )
 }
+fn same_type(vm: &Vm, value: JValue, desc: &str) -> bool {
+    vm.object_class(value)
+        .is_some_and(|class| vm.str_of(vm.classes[class as usize].descriptor) == desc)
+}
+fn instant_equal(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(JValue::Int(i32::from(
+        same_type(vm, args[1], INSTANT)
+            && instant_nanos(vm, args[0])? == instant_nanos(vm, args[1])?,
+    )))
+}
+fn duration_equal(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(JValue::Int(i32::from(
+        same_type(vm, args[1], DURATION) && duration(vm, args[0])? == duration(vm, args[1])?,
+    )))
+}
+fn hash_nanos(nanos: i128) -> JValue {
+    let seconds = nanos.div_euclid(BILLION) as i64;
+    JValue::Int(
+        ((seconds ^ (seconds >> 32)) as i32)
+            .wrapping_add((nanos.rem_euclid(BILLION) as i32).wrapping_mul(51)),
+    )
+}
+fn instant_hash(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(hash_nanos(instant_nanos(vm, args[0])?))
+}
+fn duration_hash(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(hash_nanos(duration(vm, args[0])?))
+}
+fn instant_compare(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(JValue::Int(
+        instant_nanos(vm, args[0])?.cmp(&instant_nanos(vm, args[1])?) as i32,
+    ))
+}
+fn duration_compare(vm: &mut Vm, args: &[JValue]) -> R {
+    Ok(JValue::Int(
+        duration(vm, args[0])?.cmp(&duration(vm, args[1])?) as i32,
+    ))
+}
+fn instant_string(vm: &mut Vm, args: &[JValue]) -> R {
+    let nanos = instant_nanos(vm, args[0])?;
+    let date = chrono::DateTime::from_timestamp(
+        nanos.div_euclid(BILLION) as i64,
+        nanos.rem_euclid(BILLION) as u32,
+    )
+    .ok_or_else(|| {
+        NatErr::Throw(vm.throwable_of(
+            "Ljava/time/DateTimeException;",
+            "Instant exceeds supported formatter range",
+        ))
+    })?;
+    Ok(vm.alloc_string(&date.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)))
+}
+fn duration_string(vm: &mut Vm, args: &[JValue]) -> R {
+    let nanos = duration(vm, args[0])?;
+    if nanos == 0 {
+        return Ok(vm.alloc_string("PT0S"));
+    }
+    let sign = if nanos < 0 { "-" } else { "" };
+    let value = nanos.abs();
+    let seconds = value / BILLION;
+    let mut text = String::from("PT");
+    if seconds / 3600 != 0 {
+        text.push_str(&format!("{sign}{}H", seconds / 3600));
+    }
+    if seconds / 60 % 60 != 0 {
+        text.push_str(&format!("{sign}{}M", seconds / 60 % 60));
+    }
+    let fraction = value % BILLION;
+    if seconds % 60 != 0 || fraction != 0 || text == "PT" {
+        text.push_str(&format!("{sign}{}", seconds % 60));
+        if fraction != 0 {
+            text.push('.');
+            text.push_str(format!("{fraction:09}").trim_end_matches('0'));
+        }
+        text.push('S');
+    }
+    Ok(vm.alloc_string(&text))
+}
+fn instant_scaled(vm: &mut Vm, args: &[JValue], scale: i128) -> R {
+    let nanos = instant_nanos(vm, args[0])? + i128::from(args[1].as_long()) * scale;
+    new_instant(vm, nanos)
+}
+macro_rules! instant_scale {
+    ($name:ident, $scale:expr) => {
+        fn $name(vm: &mut Vm, args: &[JValue]) -> R {
+            instant_scaled(vm, args, $scale)
+        }
+    };
+}
+instant_scale!(plus_seconds, BILLION);
+instant_scale!(plus_millis, 1_000_000);
+instant_scale!(plus_nanos, 1);
+instant_scale!(minus_seconds, -BILLION);
+instant_scale!(minus_millis, -1_000_000);
+instant_scale!(minus_nanos, -1);
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (class, name, sig, f) in [
+        (
+            DURATION,
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            duration_equal as dexvm::vm::NativeFn,
+        ),
+        (DURATION, "hashCode", "()I", duration_hash),
+        (
+            DURATION,
+            "toString",
+            "()Ljava/lang/String;",
+            duration_string,
+        ),
+        (
+            DURATION,
+            "compareTo",
+            "(Ljava/time/Duration;)I",
+            duration_compare,
+        ),
+        (INSTANT, "equals", "(Ljava/lang/Object;)Z", instant_equal),
+        (INSTANT, "hashCode", "()I", instant_hash),
+        (INSTANT, "toString", "()Ljava/lang/String;", instant_string),
+        (
+            INSTANT,
+            "compareTo",
+            "(Ljava/time/Instant;)I",
+            instant_compare,
+        ),
+        (
+            INSTANT,
+            "plusSeconds",
+            "(J)Ljava/time/Instant;",
+            plus_seconds,
+        ),
+        (INSTANT, "plusMillis", "(J)Ljava/time/Instant;", plus_millis),
+        (INSTANT, "plusNanos", "(J)Ljava/time/Instant;", plus_nanos),
+        (
+            INSTANT,
+            "minusSeconds",
+            "(J)Ljava/time/Instant;",
+            minus_seconds,
+        ),
+        (
+            INSTANT,
+            "minusMillis",
+            "(J)Ljava/time/Instant;",
+            minus_millis,
+        ),
+        (INSTANT, "minusNanos", "(J)Ljava/time/Instant;", minus_nanos),
+    ] {
+        vm.register_native(NativeEntry {
+            class,
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
     for (name, sig, instance, f) in [
         (
             "ofSeconds",

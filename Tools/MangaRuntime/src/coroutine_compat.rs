@@ -244,7 +244,8 @@ fn new_job(vm: &mut Vm, parent: JValue) -> R {
     let value = vm
         .alloc_native("Lkotlinx/coroutines/CompletableJob;", Native::Opaque)
         .map_err(NatErr::Fatal)?;
-    vm.arena.objects[value.as_obj() as usize].fields = vec![parent, JValue::Int(0), JValue::Null];
+    vm.arena.objects[value.as_obj() as usize].fields =
+        vec![parent, JValue::Int(0), JValue::Null, JValue::Int(0)];
     Ok(value)
 }
 fn supervisor(vm: &mut Vm, args: &[JValue]) -> R {
@@ -253,7 +254,9 @@ fn supervisor(vm: &mut Vm, args: &[JValue]) -> R {
     } else {
         args[0]
     };
-    new_job(vm, parent)
+    let job = new_job(vm, parent)?;
+    vm.arena.objects[job.as_obj() as usize].fields[3] = JValue::Int(1);
+    Ok(job)
 }
 fn job_active(vm: &mut Vm, value: JValue) -> Result<bool, NatErr> {
     let mut value = value;
@@ -266,7 +269,10 @@ fn job_active(vm: &mut Vm, value: JValue) -> Result<bool, NatErr> {
             return Err(NatErr::Throw(vm.err_npe()));
         };
         let fields = &vm.arena.objects[id as usize].fields;
-        if fields.get(1).is_some_and(|v| !v.is_zero()) {
+        if fields
+            .get(1)
+            .is_some_and(|v| !matches!(v, JValue::Int(0 | 4)))
+        {
             return Ok(false);
         }
         value = fields.first().copied().unwrap_or(JValue::Null);
@@ -285,20 +291,60 @@ fn job_cancel(vm: &mut Vm, args: &[JValue]) -> R {
     } else {
         args.get(1).copied().unwrap_or(JValue::Null)
     };
+    let task = is_app_task(vm, args[0]);
     let object = &mut vm.arena.objects[id as usize];
-    if object.fields.get(1) == Some(&JValue::Int(2)) {
+    if matches!(object.fields.get(1), Some(JValue::Int(1..=3))) {
         return Ok(JValue::Null);
     }
-    object.fields.resize(3, JValue::Null);
-    object.fields[1] = JValue::Int(1);
+    if object.fields.len() < 3 {
+        object.fields.resize(3, JValue::Null);
+    }
+    object.fields[1] = JValue::Int(if task && matches!(object.fields[1], JValue::Int(0 | 4)) {
+        3
+    } else {
+        1
+    });
     object.fields[2] = cause;
+    if task && object.fields[1] == JValue::Int(1) {
+        object.fields[4] = JValue::Null;
+        super::coroutine_event_compat::untrack(vm, args[0])?;
+    }
     Ok(JValue::Null)
 }
 fn active(vm: &mut Vm, args: &[JValue]) -> R {
     let ctx = scope_context(vm, args[0])?;
-    let k = singleton(vm, JOB, "Key", "Lkotlinx/coroutines/Job$Key;")?;
-    let job = get(vm, &[ctx, k])?;
+    let job = context_job(vm, ctx)?;
     Ok(JValue::Int(i32::from(job_active(vm, job)?)))
+}
+pub(super) fn context_job(vm: &mut Vm, context: JValue) -> R {
+    let key = singleton(vm, JOB, "Key", "Lkotlinx/coroutines/Job$Key;")?;
+    get(vm, &[context, key])
+}
+pub(super) fn context_failure(vm: &mut Vm, context: JValue) -> Result<Option<JValue>, NatErr> {
+    let job = context_job(vm, context)?;
+    if job.is_null_ref() || job_active(vm, job)? {
+        return Ok(None);
+    }
+    let error = vm.arena.objects[job.as_obj() as usize]
+        .fields
+        .get(2)
+        .copied()
+        .unwrap_or(JValue::Null);
+    Ok(Some(if error.is_null_ref() {
+        JValue::Obj(vm.throwable_of(
+            "Ljava/util/concurrent/CancellationException;",
+            "Coroutine scope cancelled",
+        ))
+    } else {
+        error
+    }))
+}
+pub(super) fn cancel_context(vm: &mut Vm, context: JValue, error: JValue) -> Result<(), NatErr> {
+    let job = context_job(vm, context)?;
+    if !job.is_null_ref() {
+        job_cancel(vm, &[job, error])?;
+    }
+    Ok(())
 }
 pub(super) fn ensure_active(vm: &mut Vm, value: JValue) -> Result<(), NatErr> {
     if active(vm, &[value])?.is_zero() {
@@ -339,7 +385,8 @@ fn launch(vm: &mut Vm, args: &[JValue]) -> R {
     Ok(task)
 }
 // App async fields: parent, state (-1 lazy, 0 running, 1 cancelled, 2 done),
-// cause, child scope, block. Native::Deferred retains the value/exception.
+// cause, child scope, block, completion, generation. State 3 is cancelling:
+// resume the suspended body with failure before declaring its finally complete.
 pub(super) fn async_task(vm: &mut Vm, args: &[JValue]) -> R {
     let scope = task_scope(vm, args)?;
     let context = scope_context(vm, scope)?;
@@ -365,8 +412,16 @@ pub(super) fn async_task(vm: &mut Vm, args: &[JValue]) -> R {
         .map_err(NatErr::Fatal)?;
     let child = plus(vm, &[context, task])?;
     let scope = super::coroutine_compat::scope(vm, child)?;
-    vm.arena.objects[task.as_obj() as usize].fields =
-        vec![parent, JValue::Int(-1), JValue::Null, scope, args[3]];
+    vm.arena.objects[task.as_obj() as usize].fields = vec![
+        parent,
+        JValue::Int(-1),
+        JValue::Null,
+        scope,
+        args[3],
+        JValue::Null,
+        JValue::Long(0),
+    ];
+    super::coroutine_event_compat::track(vm, task)?;
     if !lazy {
         start_task(vm, &[task])?;
     }
@@ -377,7 +432,7 @@ fn start_task(vm: &mut Vm, args: &[JValue]) -> R {
         return Err(NatErr::Throw(vm.err_npe()));
     }
     let fields = vm.arena.objects[args[0].as_obj() as usize].fields.clone();
-    if fields.len() != 5 || fields[1] != JValue::Int(-1) {
+    if fields.len() != 7 || fields[1] != JValue::Int(-1) {
         return Ok(JValue::Int(0));
     }
     vm.arena.objects[args[0].as_obj() as usize].fields[1] = JValue::Int(0);
@@ -395,30 +450,96 @@ fn start_task(vm: &mut Vm, args: &[JValue]) -> R {
             value: JValue::Null,
             error: cause,
         });
+        super::coroutine_event_compat::untrack(vm, args[0])?;
         return Ok(JValue::Int(0));
     }
     let context = scope_context(vm, scope)?;
     let previous = enter(vm, context)?;
-    let result = super::continuation_compat::run_block(vm, fields[4], scope, context);
+    let driver = super::coroutine_event_compat::enter_driver(vm)?;
+    let result = super::continuation_compat::begin_block(vm, fields[4], scope, context, args[0]);
+    super::coroutine_event_compat::restore_driver(vm, driver)?;
     restore(vm, previous)?;
-    let (value, error) = match result {
-        Ok(value) => (value, JValue::Null),
-        Err(NatErr::Throw(id)) => (JValue::Null, JValue::Obj(id)),
-        Err(error) => return Err(error),
+    result?;
+    vm.arena.objects[args[0].as_obj() as usize].fields[4] = JValue::Null;
+    Ok(JValue::Int(1))
+}
+pub(super) fn complete_task(vm: &mut Vm, task: JValue, result: JValue) -> Result<(), NatErr> {
+    let (mut value, mut error) = match vm.payload_of(result) {
+        Some(Native::ResultFailure(error)) => (JValue::Null, error),
+        _ => (result, JValue::Null),
     };
-    let object = &mut vm.arena.objects[args[0].as_obj() as usize];
+    let fields = &vm.arena.objects[task.as_obj() as usize].fields;
+    let cancelling = fields[1] == JValue::Int(3);
+    if cancelling {
+        value = JValue::Null;
+        error = if fields[2].is_null_ref() {
+            JValue::Obj(vm.throwable_of(
+                "Ljava/util/concurrent/CancellationException;",
+                "Task cancelled",
+            ))
+        } else {
+            fields[2]
+        };
+    }
+    let context = scope_context(vm, vm.arena.objects[task.as_obj() as usize].fields[3])?;
+    let children = super::coroutine_event_compat::has_children(vm, context)?;
+    let parent = vm.arena.objects[task.as_obj() as usize].fields[0];
+    if !error.is_null_ref()
+        && !parent.is_null_ref()
+        && !is_type(vm, error, "Ljava/util/concurrent/CancellationException;")?
+    {
+        let supervisor =
+            vm.arena.objects[parent.as_obj() as usize].fields.get(3) == Some(&JValue::Int(1));
+        if !supervisor {
+            job_cancel(vm, &[parent, error])?;
+        }
+    }
+    let object = &mut vm.arena.objects[task.as_obj() as usize];
     if object.fields[1] != JValue::Int(1) {
-        object.fields[1] = JValue::Int(2);
+        object.fields[1] = JValue::Int(if cancelling { 1 } else { 2 });
         object.fields[2] = error;
         object.native = Some(Native::Deferred { value, error });
     }
     object.fields[4] = JValue::Null;
-    Ok(JValue::Int(1))
+    object.fields[5] = JValue::Null;
+    if children {
+        object.fields[1] = JValue::Int(if error.is_null_ref() { 4 } else { 3 });
+        let finalizer = vm
+            .alloc_native("Lapp/animecompanion/TaskFinalizer;", Native::Opaque)
+            .map_err(NatErr::Fatal)?;
+        vm.arena.objects[finalizer.as_obj() as usize].fields = vec![task, context];
+        vm.arena.objects[task.as_obj() as usize].fields[5] = finalizer;
+        super::coroutine_event_compat::schedule(
+            vm,
+            finalizer,
+            super::coroutine_event_compat::CHILDREN,
+            task,
+            0,
+        )?;
+        return Ok(());
+    }
+    super::coroutine_event_compat::untrack(vm, task)
 }
-pub(super) fn await_task(vm: &mut Vm, args: &[JValue]) -> R {
-    start_task(vm, &args[..1])?;
-    let fields = &vm.arena.objects[args[0].as_obj() as usize].fields;
-    if fields.len() == 5 && fields[1] == JValue::Int(1) {
+fn finalize_children(vm: &mut Vm, args: &[JValue]) -> R {
+    let task = vm.arena.objects[args[0].as_obj() as usize].fields[0];
+    let Some(Native::Deferred { value, error }) = vm.payload_of(task) else {
+        unreachable!()
+    };
+    let result = if error.is_null_ref() {
+        value
+    } else {
+        vm.alloc_native("Lkotlin/Result$Failure;", Native::ResultFailure(error))
+            .map_err(NatErr::Fatal)?
+    };
+    complete_task(vm, task, result)?;
+    Ok(JValue::Null)
+}
+pub(super) fn task_result(vm: &mut Vm, task: JValue) -> Result<Option<JValue>, NatErr> {
+    if task.is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    let fields = &vm.arena.objects[task.as_obj() as usize].fields;
+    if is_app_task(vm, task) && fields[1] == JValue::Int(1) {
         let cause = fields[2];
         return Err(NatErr::Throw(if cause.is_null_ref() {
             vm.throwable_of(
@@ -429,20 +550,47 @@ pub(super) fn await_task(vm: &mut Vm, args: &[JValue]) -> R {
             cause.as_obj()
         }));
     }
-    if fields.len() == 5 && fields[1] != JValue::Int(2) {
-        return Err(NatErr::Throw(vm.throwable_of(
-            "Ljava/lang/IllegalStateException;",
-            "Task is still running",
-        )));
+    if is_app_task(vm, task) && fields[1] != JValue::Int(2) {
+        return Ok(None);
     }
-    match vm.payload_of(args[0]) {
-        Some(Native::Deferred { value, error }) if error.is_null_ref() => Ok(value),
+    if !is_app_task(vm, task)
+        && fields.first() == Some(&JValue::Int(0))
+        && matches!(vm.payload_of(task), Some(Native::Deferred { .. }))
+    {
+        return Ok(None);
+    }
+    match vm.payload_of(task) {
+        Some(Native::Deferred { value, error }) if error.is_null_ref() => Ok(Some(value)),
         Some(Native::Deferred { error, .. }) => Err(NatErr::Throw(error.as_obj())),
         _ => Err(NatErr::Throw(vm.err_iae("Invalid deferred result"))),
     }
 }
+pub(super) fn await_task(vm: &mut Vm, args: &[JValue]) -> R {
+    start_task(vm, &args[..1])?;
+    let driving = super::coroutine_event_compat::driving(vm)?;
+    loop {
+        if let Some(value) = task_result(vm, args[0])? {
+            return Ok(value);
+        }
+        if let Some(continuation) = args.get(1).filter(|v| !v.is_null_ref() && driving) {
+            return super::coroutine_event_compat::schedule(
+                vm,
+                *continuation,
+                super::coroutine_event_compat::AWAIT,
+                args[0],
+                0,
+            );
+        }
+        if !super::coroutine_event_compat::pump(vm)? {
+            return Err(NatErr::Throw(vm.throwable_of(
+                "Ljava/lang/IllegalStateException;",
+                "Task suspended without an available completion event",
+            )));
+        }
+    }
+}
 pub(super) fn is_app_task(vm: &Vm, value: JValue) -> bool {
-    matches!(value,JValue::Obj(id) if vm.arena.objects[id as usize].fields.len()==5 && matches!(vm.arena.objects[id as usize].native,Some(Native::Deferred{..})))
+    matches!(value,JValue::Obj(id) if vm.arena.objects[id as usize].fields.len()==7 && matches!(vm.arena.objects[id as usize].native,Some(Native::Deferred{..})))
 }
 fn completed(vm: &mut Vm, args: &[JValue]) -> R {
     if args[0].is_null_ref() {
@@ -461,14 +609,50 @@ fn cancelled(vm: &mut Vm, args: &[JValue]) -> R {
     }
     let fields = &vm.arena.objects[args[0].as_obj() as usize].fields;
     Ok(JValue::Int(i32::from(
-        fields.get(1) == Some(&JValue::Int(1)) || fields.get(2).is_some_and(|v| !v.is_null_ref()),
+        matches!(fields.get(1), Some(JValue::Int(1 | 3)))
+            || fields.get(2).is_some_and(|v| !v.is_null_ref()),
     )))
 }
 fn join(vm: &mut Vm, args: &[JValue]) -> R {
     start_task(vm, &args[..1])?;
+    let driving = super::coroutine_event_compat::driving(vm)?;
+    if !join_ready(vm, args[0])? {
+        if let Some(continuation) = args.get(1).filter(|v| !v.is_null_ref() && driving) {
+            return super::coroutine_event_compat::schedule(
+                vm,
+                *continuation,
+                super::coroutine_event_compat::JOIN,
+                args[0],
+                0,
+            );
+        }
+        while !join_ready(vm, args[0])? {
+            if !super::coroutine_event_compat::pump(vm)? {
+                return Err(NatErr::Throw(vm.throwable_of(
+                    "Ljava/lang/IllegalStateException;",
+                    "Job suspended without an available completion event",
+                )));
+            }
+        }
+    }
     unit(vm)
 }
-fn unit(vm: &mut Vm) -> R {
+pub(super) fn join_ready(vm: &mut Vm, task: JValue) -> Result<bool, NatErr> {
+    if task.is_null_ref() {
+        return Err(NatErr::Throw(vm.err_npe()));
+    }
+    if is_app_task(vm, task) {
+        return Ok(!completed(vm, &[task])?.is_zero());
+    }
+    if matches!(vm.payload_of(task), Some(Native::Deferred { .. })) {
+        return Ok(vm.arena.objects[task.as_obj() as usize].fields.first() != Some(&JValue::Int(0)));
+    }
+    if is_type(vm, task, JOB)? {
+        return Ok(!completed(vm, &[task])?.is_zero());
+    }
+    Err(NatErr::Throw(vm.err_iae("Expected a job")))
+}
+pub(super) fn unit(vm: &mut Vm) -> R {
     singleton(vm, "Lkotlin/Unit;", "INSTANCE", "Lkotlin/Unit;")
 }
 fn run_blocking(vm: &mut Vm, args: &[JValue]) -> R {
@@ -478,6 +662,7 @@ fn run_blocking(vm: &mut Vm, args: &[JValue]) -> R {
         args[0]
     };
     let scope = create_scope(vm, &[context])?;
+    ensure_active(vm, scope)?;
     let context = scope_context(vm, scope)?;
     let previous = enter(vm, context)?;
     let result = super::continuation_compat::run_block(vm, args[1], scope, context);
@@ -488,6 +673,16 @@ fn delay(vm: &mut Vm, args: &[JValue]) -> R {
     let duration = args[0].as_long();
     if duration <= 0 {
         return unit(vm);
+    }
+    let driving = super::coroutine_event_compat::driving(vm)?;
+    if let Some(continuation) = args.get(1).filter(|v| !v.is_null_ref() && driving) {
+        return super::coroutine_event_compat::schedule(
+            vm,
+            *continuation,
+            super::coroutine_event_compat::DELAY,
+            JValue::Null,
+            duration,
+        );
     }
     let start = std::time::Instant::now();
     let context = current(vm)?;
@@ -509,27 +704,113 @@ fn delay(vm: &mut Vm, args: &[JValue]) -> R {
     unit(vm)
 }
 fn await_all(vm: &mut Vm, args: &[JValue]) -> R {
+    let driving = super::coroutine_event_compat::driving(vm)?;
     let values = match vm.payload_of(args[0]) {
         Some(Native::List(v) | Native::Set(v) | Native::Array(ArrayData::Obj(v))) => v,
-        _ => return Err(NatErr::Throw(vm.err_npe())),
+        _ => {
+            let iterator = super::continuation_compat::invoke(
+                vm,
+                args[0],
+                "iterator",
+                "()Ljava/util/Iterator;",
+                vec![],
+            )?;
+            let mut values = Vec::new();
+            while !super::continuation_compat::invoke(vm, iterator, "hasNext", "()Z", vec![])?
+                .is_zero()
+            {
+                charge(vm, values.len() + 1)?;
+                values.push(super::continuation_compat::invoke(
+                    vm,
+                    iterator,
+                    "next",
+                    "()Ljava/lang/Object;",
+                    vec![],
+                )?);
+            }
+            values
+        }
     };
     charge(vm, values.len())?;
+    for value in &values {
+        if is_app_task(vm, *value) {
+            start_task(vm, &[*value])?;
+        }
+    }
+    let list = vm
+        .alloc_native("Ljava/util/ArrayList;", Native::List(values))
+        .map_err(NatErr::Fatal)?;
+    loop {
+        if let Some(value) = all_results(vm, list)? {
+            return Ok(value);
+        }
+        if let Some(continuation) = args.get(1).filter(|v| !v.is_null_ref() && driving) {
+            return super::coroutine_event_compat::schedule(
+                vm,
+                *continuation,
+                super::coroutine_event_compat::ALL,
+                list,
+                0,
+            );
+        }
+        if !super::coroutine_event_compat::pump(vm)? {
+            return Err(NatErr::Throw(vm.throwable_of(
+                "Ljava/lang/IllegalStateException;",
+                "Tasks suspended without an available completion event",
+            )));
+        }
+    }
+}
+pub(super) fn all_results(vm: &mut Vm, list: JValue) -> Result<Option<JValue>, NatErr> {
+    let Some(Native::List(values)) = vm.payload_of(list) else {
+        return Err(NatErr::Throw(vm.err_iae("Expected deferred list")));
+    };
+    charge(vm, values.len())?;
+    let mut pending = false;
     let mut results = Vec::new();
     for value in values {
-        results.push(
-            vm.invoke_virtual_args(
-                value,
-                "await",
-                "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
-                vec![args[1]],
-            )
-            .map_err(|e| java(vm, e))?,
-        );
+        match task_result(vm, value)? {
+            Some(value) => results.push(value),
+            None => pending = true,
+        }
     }
-    vm.alloc_native("Ljava/util/ArrayList;", Native::List(results))
-        .map_err(NatErr::Fatal)
+    if pending {
+        Ok(None)
+    } else {
+        vm.alloc_native("Ljava/util/ArrayList;", Native::List(results))
+            .map(Some)
+            .map_err(NatErr::Fatal)
+    }
+}
+fn yield_task(vm: &mut Vm, args: &[JValue]) -> R {
+    if !super::coroutine_event_compat::driving(vm)? {
+        super::coroutine_event_compat::pump(vm)?;
+        return unit(vm);
+    }
+    super::coroutine_event_compat::schedule(
+        vm,
+        args[0],
+        super::coroutine_event_compat::DELAY,
+        JValue::Null,
+        0,
+    )
 }
 pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    vm.register_native(NativeEntry {
+        class: "Ljava/util/concurrent/CancellationException;",
+        name: "__marker",
+        sig: "()V",
+        instance: true,
+        f: super::abstract_function,
+    })?;
+    let cancellation = vm.ensure_class_by_desc("Ljava/util/concurrent/CancellationException;")?;
+    vm.classes[cancellation as usize].superclass =
+        Some(vm.ensure_class_by_desc("Ljava/lang/IllegalStateException;")?);
+    // Kotlin's timeout is cancellation, not an uncaught child failure.
+    let timeout_desc = vm.intern("Lkotlinx/coroutines/TimeoutCancellationException;");
+    if let Some(&timeout) = vm.class_by_desc.get(&timeout_desc) {
+        vm.classes[timeout as usize].superclass = Some(cancellation);
+    }
     let marker = super::kotlin_type_compat::marker;
     let context = marker(vm, CONTEXT);
     let element = marker(vm, ELEMENT);
@@ -606,6 +887,7 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         (JOB,"start","()Z",true,start_task),
         (JOB,"join","(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",true,join),
         (JOB,"cancel$default","(Lkotlinx/coroutines/Job;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V",false,job_cancel),
+        ("Lkotlinx/coroutines/Job$DefaultImpls;","cancel$default","(Lkotlinx/coroutines/Job;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V",false,job_cancel),
         (JOB,"cancel","(Ljava/util/concurrent/CancellationException;)V",true,job_cancel),
         ("Lkotlinx/coroutines/CoroutineScopeKt;","isActive","(Lkotlinx/coroutines/CoroutineScope;)Z",false,active),
         ("Lkotlinx/coroutines/CoroutineScopeKt;","coroutineScope","(Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,coroutine_scope),
@@ -613,6 +895,8 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         ("Lkotlinx/coroutines/AwaitKt;","awaitAll","([Lkotlinx/coroutines/Deferred;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,await_all),
         ("Lkotlinx/coroutines/DelayKt;","delay","(JLkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,delay),
         ("Lkotlinx/coroutines/DelayKt;","delay-VtjQ1oo","(JLkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,delay),
+        ("Lkotlinx/coroutines/YieldKt;","yield","(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",false,yield_task),
+        ("Lapp/animecompanion/TaskFinalizer;","resumeWith","(Ljava/lang/Object;)V",true,finalize_children),
         ("Lkotlinx/coroutines/BuildersKt;","runBlockingK","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;",false,run_blocking),
         ("Lkotlinx/coroutines/BuildersKt;","runBlockingK$default","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/lang/Object;",false,run_blocking),
         ("Lkotlinx/coroutines/BuildersKt;","runBlocking","(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;",false,run_blocking),
@@ -638,6 +922,7 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         super::multipart_compat::static_value(vm, class, name, class, value)?;
     }
     super::continuation_compat::install(vm)?;
+    super::coroutine_event_compat::install(vm)?;
     Ok(())
 }
 

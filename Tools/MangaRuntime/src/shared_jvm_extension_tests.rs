@@ -49,6 +49,7 @@ fn shared_jvm_extensions_load_their_real_factories_and_settings_without_network(
         "tachiyomi-es.lectorjpg-v1.6.50.apk",
         "tachiyomi-ja.linemanga-v1.6.1.apk",
         "tachiyomi-ru.nudemoon-v1.6.32.apk",
+        "tachiyomi-es.lectormonline-v1.6.4.apk",
     ] {
         let bytes = apk(name);
         for op in ["inspect", "settings"] {

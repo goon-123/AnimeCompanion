@@ -29,9 +29,91 @@ fn vm() -> Vm {
     kotlin_text_compat::install(&mut vm).unwrap();
     sequence_compat::install(&mut vm).unwrap();
     method_reflection_compat::install(&mut vm).unwrap();
+    reflection_compat::install(&mut vm).unwrap();
+    date_amount_compat::install(&mut vm).unwrap();
+    time_unit_compat::install(&mut vm).unwrap();
     property_reference_compat::install(&mut vm).unwrap();
+    browser_compat::install(&mut vm).unwrap();
     coroutine_compat::install(&mut vm).unwrap();
+    for entry in COROUTINE_BRIDGE {
+        vm.register_native(*entry).unwrap();
+    }
     vm
+}
+#[test]
+fn guest_field_reflection_and_time_unit_contracts_execute_real_call_sites() {
+    for name in [
+        "fieldContracts",
+        "timeUnitContracts",
+        "preciseTimeContracts",
+    ] {
+        let mut vm = vm();
+        assert_eq!(call(&mut vm, name, "()Z"), JValue::Int(1));
+    }
+}
+
+const COROUTINE_BRIDGE: &[NativeEntry] = &[
+    NativeEntry { class: "Lkotlinx/coroutines/BuildersKt;", name: "async$default", sig: "(Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/CoroutineContext;Lkotlinx/coroutines/CoroutineStart;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lkotlinx/coroutines/Deferred;", instance: false, f: coroutine_async },
+    NativeEntry { class: "Lkotlinx/coroutines/Deferred;", name: "await", sig: "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", instance: true, f: coroutine_await },
+];
+
+#[test]
+fn guest_cooperative_tasks_suspend_interleave_order_results_and_survive_gc() {
+    let mut vm = vm();
+    call(&mut vm, "prepareScheduled", "()V");
+    vm.gc(&[]);
+    let result = call(&mut vm, "finishScheduled", "()Ljava/lang/String;");
+    assert_eq!(vm.str_of_jvalue(result).as_deref(), Some("one|two"));
+    assert_eq!(
+        call(&mut vm, "waitsForLaunchedChild", "()Z"),
+        JValue::Int(1)
+    );
+    let result = call(&mut vm, "launchedChildResult", "()Ljava/lang/String;");
+    assert_eq!(vm.str_of_jvalue(result).as_deref(), Some("child finished"));
+    let result = call(&mut vm, "nestedChildCompletion", "()Ljava/lang/String;");
+    assert_eq!(vm.str_of_jvalue(result).as_deref(), Some("outer"));
+    let result = call(&mut vm, "nestedChildFailure", "()Ljava/lang/String;");
+    assert_eq!(
+        vm.str_of_jvalue(result).as_deref(),
+        Some("owned nested failure")
+    );
+    let result = call(&mut vm, "completableResults", "()Ljava/lang/String;");
+    assert_eq!(
+        vm.str_of_jvalue(result).as_deref(),
+        Some("owned completion")
+    );
+}
+#[test]
+fn unresumable_coroutines_and_fatal_limits_restore_state_and_discard_owned_events() {
+    let mut vm = vm();
+    let context = coroutine_compat::current(&mut vm).unwrap();
+    assert!(matches!(
+        vm.invoke_static(CLASS, "nonCompletingTask", "()V", vec![]),
+        Err(dexvm::vm::error::JvmError::Uncaught(_))
+    ));
+    assert_eq!(coroutine_compat::current(&mut vm).unwrap(), context);
+    assert!(!coroutine_event_compat::driving(&mut vm).unwrap());
+    assert!(!coroutine_event_compat::pump(&mut vm).unwrap());
+    call(&mut vm, "prepareScheduled", "()V");
+    vm.budget = 0;
+    assert!(matches!(
+        coroutine_event_compat::pump(&mut vm),
+        Err(NatErr::Fatal(dexvm::vm::error::JvmError::BudgetExceeded))
+    ));
+    assert_eq!(coroutine_compat::current(&mut vm).unwrap(), context);
+}
+#[test]
+fn guest_scheduled_failures_cancellation_finally_and_timeouts_are_not_empty_successes() {
+    for name in ["cancellationFinally", "timeoutAfterSuspension"] {
+        let mut vm = vm();
+        assert_eq!(call(&mut vm, name, "()Z"), JValue::Int(1));
+    }
+    let mut vm = vm();
+    let result = call(&mut vm, "scheduledFailure", "()Ljava/lang/String;");
+    assert_eq!(
+        vm.str_of_jvalue(result).as_deref(),
+        Some("owned scheduled failure")
+    );
 }
 
 #[test]
