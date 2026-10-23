@@ -34,6 +34,7 @@ public actor AnimeVisualsClient {
     public nonisolated static func publicTransport() -> URLSessionTransport {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false; configuration.httpCookieStorage = nil; configuration.urlCache = nil
+        configuration.urlCredentialStorage = nil
         return URLSessionTransport(session: URLSession(configuration: configuration))
     }
 

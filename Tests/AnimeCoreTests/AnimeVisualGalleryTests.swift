@@ -136,6 +136,7 @@ final class AnimeVisualGalleryTests: XCTestCase {
         let configuration = AnimeVisualsClient.publicTransport().session.configuration
         XCTAssertFalse(configuration.httpShouldSetCookies)
         XCTAssertNil(configuration.httpCookieStorage)
+        XCTAssertNil(configuration.urlCredentialStorage)
     }
 }
 
