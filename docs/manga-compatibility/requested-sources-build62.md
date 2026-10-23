@@ -55,6 +55,15 @@ checks hold movement, release, speed adjustment and disabling the gesture.
 Native iPhone/iPad execution requires hosted Xcode CI; local checks do not certify
 live website availability or all 42 MangaBall language identities.
 
+A separate live C-ABI check on 2026-10-23 UTC reached MangaBall's catalog (24
+entries), title/chapter refresh (352 chapters) and page list (9 pages). The first
+image request returned HTTP 403 from its image host. Toonily's catalog returned
+HTTP 403. Omega's homepage and API returned an HTML “Site Unavailable” response,
+including HTTP 200 for the API instead of JSON. These are observations from this
+environment, not a claim that the sites are globally down. Complete live reading
+for the three sources is therefore still unverified. The app's existing source
+website/session controls remain available for user-completed verification.
+
 The broader shared Java/Kotlin roadmap is approximately **94% complete**
 (engineering estimate, previously 93%). The extra date formatter closes a shared
 gap; the UI work does not count toward that percentage. Broader coroutine,
