@@ -6,6 +6,7 @@ import AnimeCore
 final class AppStore: ObservableObject {
     let aniList: AniListClient
     let exploreCache: ExploreCache
+    let visuals: AnimeVisualsClient
     let dubs = DubClient()
     let exploreDubs = ExploreDubStore()
     let news = NewsClient()
@@ -58,6 +59,9 @@ final class AppStore: ObservableObject {
         if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
         else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }
         exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()
+        visuals = phaseTwoPreview
+            ? AnimeVisualsClient(transport: VisualGalleryPreviewTransport(), directory: nil, minimumRequestInterval: 0)
+            : AnimeVisualsClient()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             includeAdult = false; automaticallyComplete = true
             airingProgressSource = .broadcast
@@ -79,6 +83,7 @@ final class AppStore: ObservableObject {
         #else
         aniList = AniListClient()
         exploreCache = ExploreCache()
+        visuals = AnimeVisualsClient()
         #endif
     }
 

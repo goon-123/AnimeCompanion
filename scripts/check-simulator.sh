@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader ]]; then
-  echo "Expected full, focused, weekly, fixes, streams, layout or reader test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals ]]; then
+  echo "Expected full, focused, weekly, fixes, streams, layout, reader or visuals test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -32,6 +32,11 @@ if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == lay
   screenshot_path="build/fixes-${device_family}-screenshots"
 fi
 diagnostic_path="build/fixes-${device_family}-diagnostics"
+if [[ "$test_scope" == visuals ]]; then
+  result_path="build/Visuals-${device_family}.xcresult"
+  screenshot_path="build/visuals-${device_family}-screenshots"
+  diagnostic_path="build/visuals-${device_family}-diagnostics"
+fi
 if [[ "$test_scope" == reader ]]; then
   result_path="build/Reader-${device_family}.xcresult"
   screenshot_path="build/reader-${device_family}-screenshots"
@@ -176,6 +181,9 @@ if [[ "$test_scope" == reader ]]; then
     -only-testing:AnimeCompanionUITests/MangaBrowsingUITests
     -only-testing:MangaRuntimeTests
   )
+fi
+if [[ "$test_scope" == visuals ]]; then
+  test_arguments=(-only-testing:AnimeCompanionUITests/NativeVisualGalleryUITests)
 fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
