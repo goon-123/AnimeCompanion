@@ -65,7 +65,7 @@ struct WebtoonCanvas: UIViewRepresentable {
         private var lastWidth: CGFloat = 0
         private var lastReport = 0.0
         private var displayLink: CADisplayLink?
-        private var lastTick = 0.0
+        private var motion = WebtoonScrollMotion()
         private weak var holdGesture: UILongPressGestureRecognizer?
         private var holding = false
         init(_ parent: WebtoonCanvas) { self.parent = parent }
@@ -108,13 +108,13 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         private func updateMotion() {
             if parent.scrollingAllowed && (parent.autoScroll || holding) && displayLink == nil {
-                lastTick = 0
+                motion.reset()
                 let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
                 link.add(to: .main, forMode: .common); displayLink = link
             } else if !parent.scrollingAllowed || (!parent.autoScroll && !holding) { stopMotion() }
         }
         private func stopMotion() {
-            displayLink?.invalidate(); displayLink = nil; lastTick = 0
+            displayLink?.invalidate(); displayLink = nil; motion.reset()
         }
         private func endHold() {
             guard holding else { return }
@@ -309,15 +309,18 @@ struct WebtoonCanvas: UIViewRepresentable {
             }
         }
         @objc private func tick(_ link: CADisplayLink) {
-            guard let scroll, parent.scrollingAllowed, parent.autoScroll || holding, !scroll.isDragging, !scroll.isDecelerating, !scroll.isZooming else { lastTick = 0; return }
+            guard let scroll, parent.scrollingAllowed, parent.autoScroll || holding, !scroll.isDragging, !scroll.isDecelerating, !scroll.isZooming else { motion.reset(); return }
             guard !pages.isEmpty, cells[index(at: max(0, scroll.contentOffset.y / scroll.zoomScale))]?.hasImage == true else {
                 endHold(); stopMotion(); parent.onAutoStop(); return
             }
-            let delta = lastTick == 0 ? 0 : min(0.05, link.timestamp - lastTick); lastTick = link.timestamp
             let maximum = max(0, scroll.contentSize.height - scroll.bounds.height)
-            let next = min(maximum, scroll.contentOffset.y + CGFloat(delta * parent.preferences.autoScrollSpeed))
-            scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: next), animated: false)
-            if next >= maximum - 0.5 { endHold(); stopMotion(); parent.onAutoStop(); report(force: true) }
+            // UIScrollView rounds offsets to physical pixels. Accumulate the
+            // fractional target instead of losing small steps at slow speeds
+            // or high refresh rates. Resync after an external layout/position change.
+            let next = motion.next(timestamp: link.timestamp, offset: Double(scroll.contentOffset.y),
+                speed: parent.preferences.autoScrollSpeed, maximum: Double(maximum))
+            scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: CGFloat(next)), animated: false)
+            if next >= Double(maximum) - 0.5 { endHold(); stopMotion(); parent.onAutoStop(); report(force: true) }
         }
         private func stopLoads() { tasks.values.forEach { $0.1.cancel() }; tasks.removeAll() }
         func stop() {
