@@ -52,7 +52,6 @@ struct ProgressControl: View {
         Task { do { try await action() } catch { self.error = error.localizedDescription } }
     }
 }
-
 struct TrackingFeedback: View {
     @EnvironmentObject private var store: AppStore
     let anime: Anime
@@ -155,41 +154,4 @@ struct TrackingEditorView: View {
             repeatCount: repeats == (original?.repeatCount ?? 0) ? nil : repeats)
         Task { do { try await store.save(anime: anime, edit: edit); dismiss() } catch { self.error = error.localizedDescription; saving = false } }
     }
-}
-
-struct CompactTrackingBar: View {
-    @EnvironmentObject private var store: AppStore
-    let anime: Anime
-    @State private var editing = false
-    @State private var settings = false
-    @State private var playback = false
-    @State private var error: String?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(anime.displayTitle).font(.caption.bold()).lineLimit(1)
-                    Text("AniList · \(store.entry(for: anime.id)?.status?.label ?? "Not tracked") · \(store.entry(for: anime.id)?.progressValue ?? 0)/\(anime.episodes.map(String.init) ?? "?")")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if store.isSignedIn {
-                    Button { Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } } } label: {
-                        Label("+1", systemImage: "checkmark").frame(minHeight: 44)
-                    }.buttonStyle(.bordered).disabled(busy || atEnd).accessibilityIdentifier("livechart-track-next")
-                    Button { editing = true } label: { Image(systemName: "pencil").frame(width: 44, height: 44) }
-                        .disabled(busy).accessibilityLabel("Edit AniList tracking").accessibilityIdentifier("livechart-track-edit")
-                } else { Button("Connect") { settings = true } }
-                Button { playback = true } label: { Image(systemName: "play.rectangle").frame(width: 44, height: 44) }
-                    .disabled(anime.status == "NOT_YET_RELEASED").accessibilityLabel("Watch in VidHub")
-            }
-            Text("Tracking uses AniList’s episode numbering.").font(.caption2).foregroundStyle(.secondary)
-            TrackingFeedback(anime: anime)
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
-        }.padding(12).background(.ultraThinMaterial)
-            .sheet(isPresented: $editing) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
-            .appSettingsSheet(isPresented: $settings)
-            .sheet(isPresented: $playback) { WatchAnimeView(anime: anime) }
-    }
-    private var busy: Bool { store.loadingLibrary || store.savedAt == nil || store.savingMedia.contains(anime.id) }
-    private var atEnd: Bool { anime.episodes.map { $0 > 0 && (store.entry(for: anime.id)?.progressValue ?? 0) >= $0 } ?? false }
 }

@@ -6,42 +6,6 @@ import FoundationNetworking
 #endif
 
 final class MetadataTrackingTests: XCTestCase {
-    func testLiveChartURLsValidateHostAndKeepSearchEncoding() throws {
-        XCTAssertEqual(LiveChartURL.animeID(LiveChartURL.anime(3418)), 3418)
-        for value in ["http://www.livechart.me/anime/1", "https://livechart.me.evil.test/anime/1", "https://user@livechart.me/anime/1", "https://www.livechart.me/anime/0", "https://www.livechart.me/anime/1/extra"] {
-            XCTAssertNil(LiveChartURL.animeID(try XCTUnwrap(URL(string: value))))
-        }
-        let title = "A&B + #1 / 日本語"
-        let parts = try XCTUnwrap(URLComponents(url: LiveChartURL.search(title), resolvingAgainstBaseURL: false))
-        XCTAssertEqual(parts.queryItems?.first?.value, title)
-        XCTAssertEqual(LiveChartURL.season(SeasonSelection(season: .fall, year: 2026)).path, "/fall-2026/tv")
-    }
-    func testMappingsRejectAmbiguousSeasonsMalformedRowsAndMissingIDs() throws {
-        let index = try LiveChartMappingIndex(tsv: Data("title\tanilist\tlivechart\nCowboy\t1\t3418\nAgain\t1\t3418\nSplit A\t10\t20\nSplit B\t11\t20\nConflict A\t30\t40\nConflict B\t30\t41\nUnknown\t50\t\nMalformed\textra\t99\t100\n".utf8))
-        XCTAssertEqual(index.liveChartID(aniListID: 1), 3418)
-        XCTAssertEqual(index.aniListID(liveChartID: 3418), 1)
-        XCTAssertNil(index.aniListID(liveChartID: 20))
-        XCTAssertNil(index.liveChartID(aniListID: 10))
-        XCTAssertNil(index.liveChartID(aniListID: 30))
-        XCTAssertNil(index.aniListID(liveChartID: 40))
-        XCTAssertNil(index.liveChartID(aniListID: 50))
-        XCTAssertNil(index.liveChartID(aniListID: 99))
-        XCTAssertThrowsError(try LiveChartMappingIndex(tsv: Data("<html>Verification required</html>".utf8)))
-    }
-    func testMappingDownloadsAreSharedAndContainNoAccountData() async throws {
-        let transport = MetadataTransport([.text("title\tanilist\tlivechart\nCowboy\t1\t3418\n")])
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tsv")
-        defer { try? FileManager.default.removeItem(at: path) }
-        let client = LiveChartClient(transport: transport, cacheFile: path)
-        async let forward = client.liveChartID(aniListID: 1)
-        async let reverse = client.aniListID(liveChartID: 3418)
-        let result = try await (forward, reverse)
-        XCTAssertEqual(result.0, 3418); XCTAssertEqual(result.1, 1)
-        let requests = await transport.recorded()
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization"))
-        XCTAssertEqual(requests.first?.url, LiveChartClient.mappingURL)
-    }
     func testAdultSwitchUsesFalseOrNoFilterForAllBrowseQueries() async throws {
         let page = #"{"data":{"Page":{"media":[]}}}"#
         let details = #"{"data":{"Media":{"id":1}}}"#

@@ -2,6 +2,39 @@ import XCTest
 
 final class WebtoonReaderUITests: XCTestCase {
     @MainActor
+    func testClearingHistoryRequiresConfirmationAndKeepsSavedMangaAndProgress() {
+        let app = launch()
+        openFirstTitle(app)
+        app.buttons["manga-save-title"].tap()
+        app.buttons["manga-read"].tap()
+        XCTAssertTrue(app.images["webtoon-page-image-0"].waitForExistence(timeout: 20))
+        app.scrollViews["webtoon-canvas"].swipeUp()
+        showControls(app); app.buttons["webtoon-close"].tap()
+        let progress = app.staticTexts["manga-reading-progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 10))
+        let savedProgress = progress.label
+        app.terminate(); app.launch(); app.appTab("Manga").tap()
+        let sections = app.segmentedControls["manga-hub-sections"]
+        XCTAssertTrue(sections.waitForExistence(timeout: 15)); sections.buttons["History"].tap()
+        let clear = app.buttons["manga-clear-history"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 10)); XCTAssertTrue(clear.isEnabled)
+        clear.tap(); app.buttons["Cancel"].tap()
+        XCTAssertTrue(clear.isEnabled, "Cancel must keep history")
+        clear.tap(); app.buttons["Clear history"].tap()
+        XCTAssertTrue(app.staticTexts["No reading history yet"].waitForExistence(timeout: 10))
+        XCTAssertFalse(clear.isEnabled)
+        capture("Cleared-History", app)
+        app.terminate(); app.launch(); app.appTab("Manga").tap()
+        XCTAssertTrue(sections.waitForExistence(timeout: 15)); sections.buttons["History"].tap()
+        XCTAssertTrue(app.staticTexts["No reading history yet"].waitForExistence(timeout: 10))
+        sections.buttons["Library"].tap()
+        let saved = app.buttons["manga-saved-title-0"]
+        XCTAssertTrue(saved.waitForExistence(timeout: 10)); saved.tap()
+        XCTAssertTrue(progress.waitForExistence(timeout: 10)); XCTAssertEqual(progress.label, savedProgress)
+        XCTAssertTrue(app.buttons["manga-save-title"].label.contains("In library"))
+        capture("Cleared-History-Keeps-Progress", app)
+    }
+    @MainActor
     func testHoldScrollingStopsOnReleaseAndSpeedCanBeChanged() {
         let app = launch()
         openFirstTitle(app)

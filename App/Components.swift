@@ -60,7 +60,6 @@ struct GenreTags: View {
                 HStack(spacing: 6) {
                     ForEach(uniqueGenres, id: \.self) { genre in
                         Button {
-                            store.metadataSource = .aniList
                             navigation.openGenre(genre)
                         } label: {
                             Text(genre).font(.caption.weight(.medium)).lineLimit(1).fixedSize()

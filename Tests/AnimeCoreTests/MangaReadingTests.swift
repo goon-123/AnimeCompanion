@@ -122,6 +122,48 @@ final class MangaReadingTests: XCTestCase {
         XCTAssertEqual(reloaded.record(t.id)?.positions.first, p)
         XCTAssertTrue(reloaded.pinnedSources.contains(t.source.id))
     }
+    func testClearHistoryKeepsSavedStoriesAndExactResumeProgressAcrossRestart() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MangaReadingStorage(directory: root), saved = title(), unsaved = title(url: "/unsaved")
+        let hidden = MangaTitleReference(source: MangaSourceReference(extensionID: "hidden", sourceID: "adult",
+            name: "Hidden", language: "en", homeURL: "https://example.com", adult: true), manga: SourceManga(url: "/hidden", title: "Hidden"))
+        let position = point(completed: true)
+        let before = try await storage.update { value in
+            value.save(saved, saved: true)
+            for title in [saved, unsaved, hidden] { value.record(title, position: position) }
+            value.pinnedSources.insert(saved.source.id); value.visitSource(saved.source.id)
+            value.preferences.autoScrollSpeed = 90
+        }
+        let cleared = try await storage.update { $0.clearHistory() }
+        XCTAssertGreaterThan(cleared.revision, before.revision)
+        let reloaded = try await MangaReadingStorage(directory: root).load()
+        XCTAssertTrue(reloaded.records.allSatisfy { $0.lastReadAt == nil })
+        XCTAssertEqual(reloaded.records.count, 3)
+        XCTAssertTrue(try XCTUnwrap(reloaded.record(saved.id)).saved)
+        XCTAssertFalse(try XCTUnwrap(reloaded.record(unsaved.id)).saved)
+        for title in [saved, unsaved, hidden] {
+            XCTAssertEqual(reloaded.record(title.id)?.positions, [position])
+            XCTAssertEqual(reloaded.record(title.id)?.lastChapterURL, position.chapterURL)
+        }
+        XCTAssertEqual(reloaded.pinnedSources, before.pinnedSources)
+        XCTAssertEqual(reloaded.recentSources, before.recentSources)
+        XCTAssertEqual(reloaded.preferences, before.preferences)
+        let nextPosition = point(at: 500)
+        let resumed = try await storage.update { $0.record(saved, position: nextPosition) }
+        XCTAssertEqual(resumed.record(saved.id)?.lastReadAt, Date(timeIntervalSince1970: 500))
+        XCTAssertNil(resumed.record(unsaved.id)?.lastReadAt)
+    }
+    func testClearHistoryIsSafeWhenEmptyOrRepeated() {
+        var state = MangaReadingState()
+        state.clearHistory(); XCTAssertTrue(state.records.isEmpty)
+        let saved = title()
+        state.save(saved, saved: true); state.record(saved, position: point())
+        state.clearHistory(); state.clearHistory()
+        XCTAssertTrue(state.record(saved.id)!.saved)
+        XCTAssertNil(state.record(saved.id)?.lastReadAt)
+        XCTAssertEqual(state.record(saved.id)?.positions.count, 1)
+    }
     func testCorruptStateAndFailedWritesKeepPreviousData() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -5,7 +5,6 @@ import AnimeCore
 @MainActor
 final class AppStore: ObservableObject {
     let aniList: AniListClient
-    let liveChart = LiveChartClient()
     let exploreCache: ExploreCache
     let dubs = DubClient()
     let exploreDubs = ExploreDubStore()
@@ -26,9 +25,6 @@ final class AppStore: ObservableObject {
     @Published var includeAdult = UserDefaults.standard.bool(forKey: "content.includeAdult") {
         didSet { UserDefaults.standard.set(includeAdult, forKey: "content.includeAdult") }
     }
-    @Published var metadataSource = MetadataSource(rawValue: UserDefaults.standard.string(forKey: "metadata.source") ?? "") ?? .aniList {
-        didSet { UserDefaults.standard.set(metadataSource.rawValue, forKey: "metadata.source") }
-    }
     @Published var automaticallyComplete = UserDefaults.standard.object(forKey: "tracking.automaticallyComplete") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticallyComplete, forKey: "tracking.automaticallyComplete") }
     }
@@ -41,6 +37,8 @@ final class AppStore: ObservableObject {
     @Published var lastTrackedAnime: Anime?
 
     init() {
+        // Retire the old website-metadata preference; all native tracking uses AniList.
+        UserDefaults.standard.removeObject(forKey: "metadata.source")
         // Apply the requested immersive default once; subsequent display choices stay saved.
         if !UserDefaults.standard.bool(forKey: "explore.poster.immersive-v2") {
             UserDefaults.standard.set(true, forKey: "explore.poster.fillScreen")
@@ -61,11 +59,10 @@ final class AppStore: ObservableObject {
         else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }
         exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
-            includeAdult = false; metadataSource = .aniList; automaticallyComplete = true
+            includeAdult = false; automaticallyComplete = true
             airingProgressSource = .broadcast
             // Property observers do not run for assignments during initialization.
             UserDefaults.standard.set(false, forKey: "content.includeAdult")
-            UserDefaults.standard.set(MetadataSource.aniList.rawValue, forKey: "metadata.source")
             UserDefaults.standard.set(true, forKey: "tracking.automaticallyComplete")
             UserDefaults.standard.set(AiringProgressSource.broadcast.rawValue, forKey: "library.airingProgressSource")
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")

@@ -19,23 +19,20 @@ final class MetadataTrackingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["library-entry-1"].exists)
     }
     @MainActor
-    func testLiveChartSourceSwitchKeepsAniListProgressAndNativeEditor() throws {
+    func testAniListOnlyDetailsKeepProgressAndNativeEditor() throws {
         let app = launchPreview()
         defer { reset(app) }
         openCowboy(app)
-        let picker = app.segmentedControls["metadata-source-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 15))
-        picker.buttons["LiveChart.me"].tap()
-        XCTAssertTrue(app.buttons["livechart-track-edit"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "8/26")).firstMatch.exists)
-        capture("LiveChart-AniList-Tracking")
-        app.buttons["livechart-track-edit"].tap()
+        XCTAssertFalse(app.segmentedControls["metadata-source-picker"].exists)
+        XCTAssertFalse(app.buttons["LiveChart.me"].exists)
+        let edit = app.buttons["tracking-edit"]
+        reveal(edit, app: app); edit.tap()
         XCTAssertTrue(app.textFields["tracking-episode-input"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.textFields["tracking-episode-input"].value as? String, "8")
         if UIDevice.current.userInterfaceIdiom == .pad { XCUIDevice.shared.orientation = .landscapeLeft }
         capture("Tracking-Editor")
         app.buttons["Cancel"].tap()
-        picker.buttons["AniList"].tap()
+        reveal(app.buttons["tracking-set-episode"], app: app)
         XCTAssertTrue(app.buttons["tracking-set-episode"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["tracking-set-episode"].label.contains("8 / 26"))
     }
@@ -58,7 +55,7 @@ final class MetadataTrackingUITests: XCTestCase {
     @MainActor private func launchPreview() -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-library-preview", "--ui-content-preview", "--ui-livechart-preview", "--ui-reset-content-preferences"]
+        app.launchArguments = ["--ui-library-preview", "--ui-content-preview", "--ui-reset-content-preferences"]
         app.launch()
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30))
         return app

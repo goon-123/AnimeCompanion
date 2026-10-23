@@ -12,7 +12,14 @@ struct ArtworkBitmap: @unchecked Sendable {
 /// Network access and ImageIO decoding run off the main actor. All screens share
 /// encoded bytes, while decoded variants are bounded by their actual bitmap cost.
 actor ArtworkPipeline {
-    static let shared = ArtworkPipeline()
+    static let shared: ArtworkPipeline = {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
+            return ArtworkPipeline(data: ArtworkDataClient(transport: CatalogArtworkPreviewTransport()))
+        }
+        #endif
+        return ArtworkPipeline()
+    }()
     private struct Key: Hashable, Sendable { let url: URL; let pixels: Int }
     private struct FlightKey: Hashable, Sendable { let image: Key; let refresh: Bool }
     private let data: ArtworkDataClient
@@ -102,14 +109,17 @@ struct ArtworkPhaseView<Content: View>: View {
 
 @MainActor
 struct ArtworkImage<Content: View, Placeholder: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let url: URL?
     var pointSize: CGFloat = 320
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
     var body: some View {
         ArtworkPhaseView(url: url, pointSize: pointSize) { phase in
-            if let image = phase.image { content(image) }
-            else { placeholder() }
+            ZStack {
+                placeholder().opacity(phase.image == nil ? 1 : 0)
+                if let image = phase.image { content(image).transition(.opacity) }
+            }.animation(.easeOut(duration: reduceMotion ? 0.12 : 0.32), value: phase.image != nil)
         }
     }
 }

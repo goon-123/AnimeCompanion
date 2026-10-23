@@ -163,6 +163,7 @@ fi
 if [[ "$test_scope" == layout ]]; then
   test_arguments=(
     -only-testing:AnimeCompanionUITests/TabletPresentationUITests
+    -only-testing:AnimeCompanionUITests/CatalogUpdatesUITests
     -only-testing:AnimeCompanionUITests/PhaseTwoNavigationUITests/testBrowseDetailRotationRetainsQueryResultsAndGenreNavigation
     -only-testing:AnimeCompanionUITests/SafariExtensionUITests
     -only-testing:AnimeCompanionUITests/MangaExtensionsUITests
