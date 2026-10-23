@@ -116,7 +116,7 @@ struct AnimeVisualsView: View {
                 Link(destination: url) { Label("Watch trailer", systemImage: "play.rectangle.fill").frame(minHeight: 44) }
                     .buttonStyle(.bordered).accessibilityIdentifier("visuals-watch-trailer")
             }
-            NavigationLink { AnimeDetailView(mediaID: anime.id) } label: { Label("Anime details", systemImage: "info.circle").frame(minHeight: 44) }
+            AnimeLink(id: anime.id) { Label("Anime details", systemImage: "info.circle").frame(minHeight: 44) }
                 .accessibilityIdentifier("visuals-anime-details")
         }.modifier(CatalogEntrance())
     }
