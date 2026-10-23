@@ -57,6 +57,7 @@ public final class RSSParser: NSObject, XMLParserDelegate {
     private var closedRSS = false
     private init(source: NewsSource) { self.source = source }
     public static func parse(_ data: Data, source: NewsSource = .animeNewsNetwork) throws -> [NewsArticle] {
+        guard data.count <= 2_000_000 else { throw ServiceError.message("The news feed is too large.") }
         let delegate = RSSParser(source: source)
         let parser = XMLParser(data: data)
         parser.shouldResolveExternalEntities = false
@@ -91,11 +92,21 @@ public final class RSSParser: NSObject, XMLParserDelegate {
         guard let raw = item["link"]?.trimmingCharacters(in: .whitespacesAndNewlines),
               let url = URL(string: raw), source.accepts(url),
               let title = item["title"]?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else { return }
+        var headlineID: Int?
+        if source == .liveChart {
+            guard let rawID = item["guid"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let id = URL(string: rawID), id.scheme == "https", id.user == nil, id.password == nil,
+                  id.port == nil || id.port == 443,
+                  ["livechart.me", "www.livechart.me"].contains(id.host?.lowercased() ?? ""),
+                  id.path.range(of: #"^/headlines/[1-9][0-9]*$"#, options: .regularExpression) != nil,
+                  let number = Int(id.lastPathComponent) else { return }
+            headlineID = number
+        }
         let date = Self.parseDate(item["pubDate"] ?? "")
         let image = imageURL
             ?? NewsImageMetadata.image(in: item["description"] ?? "", relativeTo: url, allowInline: true)
             ?? NewsImageMetadata.image(in: item["content:encoded"] ?? "", relativeTo: url, allowInline: true)
-        articles.append(NewsArticle(title: TextSanitizer.plain(title), url: url, publishedAt: date, imageURL: image, source: source))
+        articles.append(NewsArticle(title: TextSanitizer.plain(title), url: url, publishedAt: date, imageURL: image, source: source, headlineID: headlineID))
     }
     private static func parseDate(_ value: String) -> Date? {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0)
@@ -160,6 +171,9 @@ public actor NewsClient {
 
     public func thumbnail(for article: NewsArticle) async -> URL? {
         if let image = article.imageURL { return image }
+        // LiveChart supplies its own feed thumbnails. Do not fetch social/video
+        // pages just to look for image metadata when an enclosure is absent.
+        guard article.source != .liveChart else { return nil }
         guard article.source.accepts(article.url) else { return nil }
         if let (date, image) = images[article.id], Date().timeIntervalSince(date) < 7 * 86400 { return image }
         if let task = imageTasks[article.id] { return await task.value }

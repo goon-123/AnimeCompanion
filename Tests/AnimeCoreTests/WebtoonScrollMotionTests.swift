@@ -24,4 +24,16 @@ final class WebtoonScrollMotionTests: XCTestCase {
         XCTAssertEqual(motion.next(timestamp: 50.2, offset: 600, speed: 120, maximum: 1000), 624, accuracy: 0.001)
         XCTAssertEqual(motion.next(timestamp: 50.4, offset: 990, speed: 120, maximum: 1000), 1000)
     }
+    func testFastScrollingKeepsItsRateAndStopsAtChapterEnd() {
+        for rate in [30, 60, 120] {
+            var motion = WebtoonScrollMotion(), offset = 0.0
+            for frame in 0...rate {
+                offset = motion.next(timestamp: Double(frame) / Double(rate), offset: offset, speed: 1200, maximum: 5000)
+            }
+            XCTAssertEqual(offset, 1200, accuracy: 0.001)
+            XCTAssertEqual(motion.next(timestamp: 2, offset: 4950, speed: 1200, maximum: 5000), 5000)
+            motion.reset()
+            XCTAssertEqual(motion.next(timestamp: 20, offset: 5000, speed: 1200, maximum: 5000), 5000)
+        }
+    }
 }

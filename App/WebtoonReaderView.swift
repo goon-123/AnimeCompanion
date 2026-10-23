@@ -246,9 +246,7 @@ struct WebtoonReaderView: View {
             Button { adjustSpeed(-15) } label: { Image(systemName: "minus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed <= WebtoonPreferences.scrollSpeedRange.lowerBound)
                 .accessibilityLabel("Scroll slower").accessibilityIdentifier("webtoon-scroll-slower")
-            Text("\(Int(preferences.autoScrollSpeed)) pt/s").font(.caption.monospacedDigit().bold())
-                .accessibilityLabel("Scroll speed").accessibilityValue("\(Int(preferences.autoScrollSpeed)) points per second")
-                .accessibilityIdentifier("webtoon-scroll-speed")
+            WebtoonSpeedMenu(speed: $preferences.autoScrollSpeed)
             Button { adjustSpeed(15) } label: { Image(systemName: "plus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed >= WebtoonPreferences.scrollSpeedRange.upperBound)
                 .accessibilityLabel("Scroll faster").accessibilityIdentifier("webtoon-scroll-faster")
@@ -314,15 +312,32 @@ private struct WebtoonSettingsView: View {
                     Toggle("Hold to scroll", isOn: $preferences.holdToScroll).accessibilityIdentifier("webtoon-hold-to-scroll")
                     Toggle("Auto-scroll", isOn: $autoScroll).accessibilityIdentifier("webtoon-auto-scroll")
                     VStack(alignment: .leading) {
-                        LabeledContent("Scroll speed", value: "\(Int(preferences.autoScrollSpeed)) pt/s")
+                        LabeledContent("Scroll speed") { WebtoonSpeedMenu(speed: $preferences.autoScrollSpeed) }
                         Slider(value: $preferences.autoScrollSpeed, in: WebtoonPreferences.scrollSpeedRange, step: 5)
                             .accessibilityLabel("Scroll speed").accessibilityIdentifier("webtoon-scroll-speed-slider")
                     }
                     Toggle("Keep screen awake", isOn: $preferences.keepAwake)
                 } header: { Text("Reading") }
-                footer: { Text("Hold to scroll stops when you lift your finger. Auto-scroll keeps moving until paused. Both stop for a drag, chapter change, app switch or chapter end.") }
+                footer: { Text("Tap the speed for presets, or use the slider for 15–1,200 pt/s. Hold to scroll stops when you lift your finger. Auto-scroll keeps moving until paused. Both stop for a drag, chapter change, app switch or chapter end.") }
             }.navigationTitle("Webtoon reader").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent)
+    }
+}
+
+private struct WebtoonSpeedMenu: View {
+    @Binding var speed: Double
+    var body: some View {
+        Menu {
+            ForEach([45, 120, 240, 480, 720, 1200], id: \.self) { value in
+                Button("\(value) pt/s") { speed = Double(value) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(Int(speed)) pt/s").monospacedDigit()
+                Image(systemName: "chevron.down").font(.caption2)
+            }.font(.caption.bold()).frame(minHeight: 44)
+        }.accessibilityLabel("Scroll speed").accessibilityValue("\(Int(speed)) points per second")
+            .accessibilityIdentifier("webtoon-scroll-speed")
     }
 }

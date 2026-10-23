@@ -258,12 +258,13 @@ public enum DubAvailability: String, Sendable {
 }
 
 public enum NewsSource: String, CaseIterable, Codable, Sendable {
-    case animeNewsNetwork, crunchyroll, animeCorner
+    case animeNewsNetwork, crunchyroll, animeCorner, liveChart
     public var label: String {
         switch self {
         case .animeNewsNetwork: return "Anime News Network"
         case .crunchyroll: return "Crunchyroll"
         case .animeCorner: return "Anime Corner"
+        case .liveChart: return "LiveChart.me"
         }
     }
     public var feedURL: URL {
@@ -271,15 +272,20 @@ public enum NewsSource: String, CaseIterable, Codable, Sendable {
         case .animeNewsNetwork: return URL(string: "https://www.animenewsnetwork.com/news/rss.xml")!
         case .crunchyroll: return URL(string: "https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss")!
         case .animeCorner: return URL(string: "https://animecorner.me/feed/")!
+        case .liveChart: return URL(string: "https://www.livechart.me/feeds/headlines")!
         }
     }
     public func accepts(_ url: URL) -> Bool {
-        guard url.scheme == "https", url.user == nil, url.password == nil, let host = url.host?.lowercased() else { return false }
+        guard url.scheme == "https", url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443, let host = url.host?.lowercased() else { return false }
         let domain: String
         switch self {
         case .animeNewsNetwork: domain = "animenewsnetwork.com"
         case .crunchyroll: domain = "crunchyroll.com"
         case .animeCorner: domain = "animecorner.me"
+        // LiveChart curates links to publishers, official sites and videos.
+        // The RSS parser additionally requires a LiveChart headline GUID.
+        case .liveChart: return SeanimeNetworkPolicy.publicHost(host) != nil
         }
         return host == domain || host.hasSuffix("." + domain)
     }
@@ -291,18 +297,23 @@ public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
     public let publishedAt: Date?
     public let imageURL: URL?
     public let source: NewsSource
+    public let headlineID: Int?
     public var id: String {
+        if source == .liveChart, let headlineID {
+            return "https://www.livechart.me/headlines/\(headlineID)"
+        }
         guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url.absoluteString }
         parts.fragment = nil
         let query = parts.queryItems?.filter { !$0.name.hasPrefix("utm_") && $0.name != "fbclid" }
         parts.queryItems = query?.isEmpty == false ? query : nil
         return parts.url?.absoluteString ?? url.absoluteString
     }
-    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork) {
+    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork, headlineID: Int? = nil) {
         self.title = title; self.url = url; self.publishedAt = publishedAt; self.imageURL = imageURL; self.source = source
+        self.headlineID = headlineID
     }
     public func withImage(_ image: URL?) -> Self {
-        Self(title: title, url: url, publishedAt: publishedAt, imageURL: image ?? imageURL, source: source)
+        Self(title: title, url: url, publishedAt: publishedAt, imageURL: image ?? imageURL, source: source, headlineID: headlineID)
     }
 }
 
