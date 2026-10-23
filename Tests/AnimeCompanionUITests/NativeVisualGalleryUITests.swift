@@ -29,6 +29,16 @@ final class NativeVisualGalleryUITests: XCTestCase {
         viewer.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45)).press(forDuration: 0.05,
             thenDragTo: viewer.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.45)))
         waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])
+        let enlarged = app.images["Rudeus"]
+        XCTAssertTrue(enlarged.waitForExistence(timeout: 10))
+        enlarged.pinch(withScale: 2, velocity: 1)
+        let zoomed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Zoomed in"), object: enlarged)
+        XCTAssertEqual(XCTWaiter.wait(for: [zoomed], timeout: 5), .completed)
+        enlarged.swipeLeft()
+        waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])
+        enlarged.doubleTap()
+        let fitted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Fit to screen"), object: enlarged)
+        XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 5), .completed)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])

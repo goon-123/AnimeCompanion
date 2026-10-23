@@ -82,11 +82,12 @@ private struct ZoomableAnimeArtwork: View {
                             .scaleEffect(scale).offset(offset)
                             .gesture(MagnificationGesture().onChanged { value in scale = min(6, max(1, startScale * value)) }
                                 .onEnded { _ in startScale = scale; if scale == 1 { offset = .zero; startOffset = .zero } })
-                            .simultaneousGesture(DragGesture().onChanged { value in
+                            .highPriorityGesture(DragGesture().onChanged { value in
                                 if scale > 1 { offset = CGSize(width: startOffset.width + value.translation.width, height: startOffset.height + value.translation.height) }
-                            }.onEnded { _ in startOffset = offset })
+                            }.onEnded { _ in startOffset = offset }, including: scale > 1 ? .all : .subviews)
                             .onTapGesture(count: 2) { withAnimation { scale = scale > 1 ? 1 : 2.5; startScale = scale; offset = .zero; startOffset = .zero } }
                             .accessibilityLabel(preview.title)
+                            .accessibilityValue(scale > 1 ? "Zoomed in" : "Fit to screen")
                     case .failure:
                         VStack(spacing: 16) {
                             ContentUnavailableView("Image unavailable", systemImage: "photo", description: Text("Please try loading this image again."))
