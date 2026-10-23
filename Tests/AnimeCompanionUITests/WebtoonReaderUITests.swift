@@ -11,7 +11,7 @@ final class WebtoonReaderUITests: XCTestCase {
         let canvas = app.scrollViews["webtoon-canvas"]
         app.buttons["webtoon-scroll-slower"].tap()
         app.buttons["webtoon-scroll-slower"].tap()
-        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].label, "15 pt/s")
+        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].value as? String, "15 points per second")
         let initial = image.frame.minY
         canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 1.6)
         let slowDistance = initial - image.frame.minY
@@ -25,7 +25,7 @@ final class WebtoonReaderUITests: XCTestCase {
         wait(for: [stopped], timeout: 3)
         showControls(app)
         for _ in 0..<7 { app.buttons["webtoon-scroll-faster"].tap() }
-        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].label, "120 pt/s")
+        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].value as? String, "120 points per second")
         let beforeFast = image.frame.minY
         canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 1.6)
         XCTAssertGreaterThan(beforeFast - image.frame.minY, slowDistance * 2)

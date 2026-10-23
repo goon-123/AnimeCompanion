@@ -247,7 +247,8 @@ struct WebtoonReaderView: View {
                 .disabled(preferences.autoScrollSpeed <= WebtoonPreferences.scrollSpeedRange.lowerBound)
                 .accessibilityLabel("Scroll slower").accessibilityIdentifier("webtoon-scroll-slower")
             Text("\(Int(preferences.autoScrollSpeed)) pt/s").font(.caption.monospacedDigit().bold())
-                .accessibilityLabel("Scroll speed").accessibilityIdentifier("webtoon-scroll-speed")
+                .accessibilityLabel("Scroll speed").accessibilityValue("\(Int(preferences.autoScrollSpeed)) points per second")
+                .accessibilityIdentifier("webtoon-scroll-speed")
             Button { adjustSpeed(15) } label: { Image(systemName: "plus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed >= WebtoonPreferences.scrollSpeedRange.upperBound)
                 .accessibilityLabel("Scroll faster").accessibilityIdentifier("webtoon-scroll-faster")
