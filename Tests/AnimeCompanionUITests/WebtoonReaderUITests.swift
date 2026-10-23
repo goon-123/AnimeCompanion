@@ -18,8 +18,15 @@ final class WebtoonReaderUITests: XCTestCase {
         XCTAssertTrue(sections.waitForExistence(timeout: 15)); sections.buttons["History"].tap()
         let clear = app.buttons["manga-clear-history"]
         XCTAssertTrue(clear.waitForExistence(timeout: 10)); XCTAssertTrue(clear.isEnabled)
-        clear.tap(); app.buttons["Cancel"].tap()
+        clear.tap()
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+        else {
+            // iPad action popovers omit Cancel and dismiss on an outside tap.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.18)).tap()
+        }
         XCTAssertTrue(clear.isEnabled, "Cancel must keep history")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "The Glass Harbor")).firstMatch.exists,
+                      "Dismissal must keep the history entry")
         clear.tap(); app.buttons["Clear history"].tap()
         XCTAssertTrue(app.staticTexts["No reading history yet"].waitForExistence(timeout: 10))
         XCTAssertFalse(clear.isEnabled)

@@ -7,7 +7,7 @@ struct AnimeUpdatesLinks: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) { links }
             VStack(alignment: .leading, spacing: 10) { links }
-        }.accessibilityIdentifier("detail-updates-links")
+        }
     }
     @ViewBuilder private var links: some View {
         NavigationLink { AnimeReleaseInfoView(anime: anime) } label: { label("Schedule", symbol: "calendar") }
@@ -25,12 +25,14 @@ struct AnimeUpdatesLinks: View {
 }
 
 private struct AnimeReleaseInfoView: View {
+    @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
     let anime: Anime
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if store.isVisible(anime) {
                 Text(anime.displayTitle).font(.title2.bold())
                 DetailCard(title: "Original broadcast") {
                     if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
@@ -44,6 +46,7 @@ private struct AnimeReleaseInfoView: View {
                     loading: dubs.loading, error: dubs.notice)
                 Button { navigation.selectedTab = .schedule } label: { Label("Open the weekly schedule", systemImage: "calendar") }
                     .buttonStyle(.bordered).accessibilityIdentifier("detail-weekly-schedule")
+                } else { ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash") }
             }.padding(18).readableContent(width: 940)
         }.background(Theme.background).navigationTitle("Schedule").navigationBarTitleDisplayMode(.inline)
             .accessibilityIdentifier("anime-release-info")
@@ -63,7 +66,7 @@ struct AnimeVisualsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let anime {
-                    if store.isVisible(anime) {
+                    if store.isVisible(details ?? anime) {
                         titleVisuals(details ?? anime)
                         if let detailError { NoticeView(message: detailError) { Task { await loadDetails(anime, refresh: true) } } }
                     }

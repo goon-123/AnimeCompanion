@@ -151,7 +151,7 @@ struct AppTabs: View {
                 .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
             AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
                 .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
-            NavigationStack { NewsView() }
+            NavigationStack { NewsView().animeNavigation() }
                 .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }.onChange(of: navigation.selectedTab) { _, tab in
             if tab == .schedule {

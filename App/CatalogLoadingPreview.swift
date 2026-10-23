@@ -4,6 +4,8 @@ import AnimeCore
 
 /// Owned, delayed artwork makes catalog arrival testable without any public service.
 struct CatalogArtworkPreviewTransport: HTTPTransport {
+    @MainActor private static var poster: Data?
+    @MainActor private static var banner: Data?
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url, url.host == "catalog-preview.invalid" else { throw ArtworkError.invalidURL }
         try await Task.sleep(for: .milliseconds(350))
@@ -14,9 +16,10 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
     }
     @MainActor private static func artwork(_ url: URL) -> Data {
         let wide = url.path.contains("banner")
+        if let cached = wide ? banner : poster { return cached }
         let size = CGSize(width: wide ? 1100 : 600, height: wide ? 450 : 900)
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
-        return UIGraphicsImageRenderer(size: size, format: format).pngData { context in
+        let data = UIGraphicsImageRenderer(size: size, format: format).pngData { context in
             let cg = context.cgContext
             let colors = [UIColor(red: 0.09, green: 0.16, blue: 0.28, alpha: 1).cgColor,
                           UIColor(red: 0.45, green: 0.33, blue: 0.55, alpha: 1).cgColor]
@@ -32,6 +35,8 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
                 .font: UIFont.systemFont(ofSize: wide ? 35 : 46, weight: .bold), .foregroundColor: UIColor.white
             ])
         }
+        if wide { banner = data } else { poster = data }
+        return data
     }
 }
 #endif

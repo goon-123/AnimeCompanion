@@ -7,7 +7,6 @@ struct ExploreView: View {
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.animeSplitPresentation) private var usesSplit
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
@@ -30,8 +29,9 @@ struct ExploreView: View {
             if catalog.state.response == nil {
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.top, geometry.safeAreaInsets.top + 24).padding() }
                 else {
-                    ExploreLoadingSkeleton(featuredHeight: featuredHeight(in: geometry))
-                        .frame(width: geometry.size.width).clipped().transition(.opacity)
+                    ExploreLoadingSkeleton(featuredHeight: featuredHeight(in: geometry), availableWidth: geometry.size.width,
+                        posterWidth: min(CGFloat(min(360, max(120, posters.shelfWidth))), geometry.size.width * 0.85))
+                        .frame(width: geometry.size.width).clipped()
                 }
             } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -70,7 +70,6 @@ struct ExploreView: View {
             }
             }
           }.accessibilityIdentifier("explore-scroll")
-              .animation(.easeOut(duration: reduceMotion ? 0.12 : 0.3), value: loadedKey != nil)
               .ignoresSafeArea(.container, edges: .top)
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()

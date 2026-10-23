@@ -185,7 +185,7 @@ struct DiscoveryBrowseView: View {
                 .focused($searching).onSubmit { searching = false }.accessibilityIdentifier("discovery-search")
             if !filters.search.isEmpty { Button { filters.search = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear category search") }
         }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
-            .contentShape(Rectangle()).onTapGesture { searching = true }
+            .contentShape(Rectangle()).simultaneousGesture(TapGesture().onEnded { searching = true })
     }
     private func chip(_ label: String, selected: Bool) -> some View {
         Text(label).font(.subheadline.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 11)

@@ -50,6 +50,10 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
             var details = Self.media(variables["id"] as? Int ?? 1)
             if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
                 details["trailer"] = ["id": "owned-preview", "site": "youtube"]
+                if details["id"] as? Int == 1 {
+                    var related = Self.media(5); related["type"] = "ANIME"
+                    details["relations"] = ["edges": [["relationType": "SEQUEL", "node": related]]]
+                }
             }
             payload = ["Media": details]
         }

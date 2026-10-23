@@ -24,6 +24,15 @@ struct NewsView: View {
     }
 
     var body: some View {
+        Group {
+            if let anime, !store.isVisible(anime) {
+                ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash")
+            } else { headlines }
+        }.navigationTitle(anime == nil ? "Anime News" : "Headlines")
+            .task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
+            .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
+    }
+    private var headlines: some View {
         List {
             if anime == nil {
                 Section("Discover") {
@@ -68,8 +77,6 @@ struct NewsView: View {
                 if !unavailable.isEmpty { Text("Temporarily unavailable: " + unavailable.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
             }
         }.accessibilityIdentifier("news-list").scrollContentBackground(.hidden).readableContent().background(Theme.background)
-            .navigationTitle(anime == nil ? "Anime News" : "Headlines").task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
-            .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
     }
     private func open(_ article: NewsArticle) {
         var updated = history; updated.record(article)
@@ -77,6 +84,7 @@ struct NewsView: View {
         selected = article
     }
     private func load(refresh: Bool = false) async {
+        guard anime.map({ store.isVisible($0) }) ?? true else { return }
         guard !loading else { return }; loading = true; error = nil
         defer { loading = false }
         do {

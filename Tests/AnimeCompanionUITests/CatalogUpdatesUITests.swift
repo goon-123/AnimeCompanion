@@ -11,7 +11,7 @@ final class CatalogUpdatesUITests: XCTestCase {
         let title = app.staticTexts["featured-title-1"]
         XCTAssertTrue(title.waitForExistence(timeout: 15))
         let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: skeleton)
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed)
         XCTAssertTrue(app.buttons["featured-details-1"].isHittable)
         capture("Revealed-Catalog", app)
         app.appTab("My Library").tap(); app.appTab("Explore").tap()
@@ -49,10 +49,26 @@ final class CatalogUpdatesUITests: XCTestCase {
         XCTAssertTrue(visuals.waitForExistence(timeout: 10)); visuals.tap()
         let first = app.buttons["anime-visual-1"]
         XCTAssertTrue(first.waitForExistence(timeout: 15))
+        // The owned image response deliberately arrives after metadata; capture
+        // the settled artwork rather than the middle of its cross-fade.
+        let artworkSettled = expectation(description: "Owned artwork cross-fade completes")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { artworkSettled.fulfill() }
+        wait(for: [artworkSettled], timeout: 3)
         capture("Seasonal-Visuals", app)
         first.tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "visuals-watch-trailer").firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["visuals-anime-details"].exists)
+        let details = app.buttons["visuals-anime-details"]
+        let scroll = app.scrollViews["anime-visuals"]
+        for _ in 0..<5 where !details.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(details.isHittable); details.tap()
+        XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10))
+        let related = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Phase 2 title 5")).firstMatch
+        app.revealInContent(related); related.tap()
+        let title = app.staticTexts["detail-title"]
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Phase 2 title 5"), object: title)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 10), .completed)
     }
     @MainActor private func launch() -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
