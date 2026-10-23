@@ -12,7 +12,7 @@ struct AnimeUpdatesLinks: View {
     @ViewBuilder private var links: some View {
         NavigationLink { AnimeReleaseInfoView(anime: anime) } label: { label("Schedule", symbol: "calendar") }
             .accessibilityIdentifier("detail-open-schedule")
-        NavigationLink { AnimeVisualsView(anime: anime) } label: { label("Visuals", symbol: "photo.on.rectangle") }
+        NavigationLink(value: AnimeVisualsRoute(anime: anime)) { label("Visuals", symbol: "photo.on.rectangle") }
             .accessibilityIdentifier("detail-open-visuals")
         NavigationLink { NewsView(anime: anime) } label: { label("Headlines", symbol: "newspaper") }
             .accessibilityIdentifier("detail-open-headlines")
@@ -82,7 +82,7 @@ struct AnimeVisualsView: View {
                     if !media.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 240), spacing: 16)], alignment: .leading, spacing: 22) {
                             ForEach(media) { item in
-                                NavigationLink { AnimeVisualsView(anime: item) } label: {
+                                NavigationLink(value: AnimeVisualsRoute(anime: item)) {
                                     VStack(alignment: .leading, spacing: 8) {
                                         GeometryReader { geometry in AnimeCover(anime: item, width: geometry.size.width) }
                                             .aspectRatio(1 / 1.45, contentMode: .fit)

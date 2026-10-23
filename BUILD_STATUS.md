@@ -8,7 +8,7 @@ Meaningful Core regressions cover the four character cards, malformed markup, fu
 
 Live-source limitation: this environment cannot inspect LiveChart pages because automated access is blocked; the public gallery contract is evidenced by AnymeX source, not a current live-page replay. A direct Jikan request for MAL 59193 returned HTTP 503 here. Owned fixtures do not certify either public service or prove that all four actual Mushoku Tensei character images currently load on a device. The PR retains that manual acceptance check explicitly.
 
-The first native compile identified an inherited build-64 News binding error (`$navigation.news.path` traversed a constant). News now uses the existing full-width AnimeTabPane, which directly observes its TabNavigationState and binds the published path. The native gallery journey includes News → Visuals → viewer → anime details. Hosted checks rerun after this correction.
+The first native compile identified an inherited build-64 News binding error (`$navigation.news.path` traversed a constant). News now uses the existing full-width AnimeTabPane, which directly observes its TabNavigationState and binds the published path. Gallery entries also use a typed AnimeVisualsRoute throughout the stack, so opening anime details does not mix value navigation with direct view pushes. At the preceding commit, the iPhone journey passed character cards, pagination, swiping, pinch zoom, panning and fallback; its final anime-details transition exposed this routing issue. The assertion is retained and both device journeys rerun. The visuals scope now includes the existing simulator crash watcher.
 
 Shared Java/Kotlin roadmap estimate remains **approximately 94%**, unchanged by this artwork feature.
 
