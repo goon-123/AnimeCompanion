@@ -36,7 +36,7 @@ struct NewsView: View {
         List {
             if anime == nil {
                 Section("Discover") {
-                    NavigationLink { AnimeVisualsView() } label: { Label("Visuals", systemImage: "photo.on.rectangle") }
+                    NavigationLink(value: AnimeVisualsRoute(anime: nil)) { Label("Visuals", systemImage: "photo.on.rectangle") }
                         .accessibilityIdentifier("news-open-visuals")
                     Button { navigation.selectedTab = .schedule } label: { Label("Release schedules", systemImage: "calendar") }
                         .accessibilityIdentifier("news-open-schedule")

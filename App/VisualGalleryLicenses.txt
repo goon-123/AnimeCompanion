@@ -1,0 +1,40 @@
+SwiftSoup 2.14.3 — https://github.com/scinfu/SwiftSoup
+The MIT License
+
+Copyright (c) 2009-2025 Jonathan Hedley <https://jsoup.org/>
+Copyright (c) 2016-2025 Nabil Chatbi (Swift port)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Gallery contract reference: AnymeX
+https://github.com/RyanYuuki/AnymeX/blob/7d092307d76c77731e4ce41c0c474ac0d9bd7962/lib/widgets/anime/visuals/visuals_popup.dart
+
+The Swift gallery client and views are independently implemented. AnymeX is
+acknowledged for documenting the public LiveChart gallery attribute contract.
+Its software is MIT licensed, Copyright (c) 2024 Ryan _.
+
+AnimeAPI mapping data — https://github.com/nattadasu/animeApi
+Contains information from AnimeAPI, which is made available under ODbL 1.0
+and DbCL 1.0. The downloaded mapping database is not modified or redistributed
+with the application. Individual matches are formatted for display.
+https://opendatacommons.org/licenses/odbl/1-0/
+https://opendatacommons.org/licenses/dbcl/1-0/
+
+Images and their captions/credits remain the property of their respective
+copyright owners. Software licenses do not grant ownership of artwork.

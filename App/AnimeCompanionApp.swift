@@ -55,6 +55,7 @@ enum Theme {
 }
 
 struct AnimeRoute: Identifiable, Hashable { let id: Int }
+struct AnimeVisualsRoute: Hashable { let anime: Anime? }
 struct MangaSearchRoute: Hashable {
     let id = UUID()
     let titles: [String]
@@ -151,8 +152,7 @@ struct AppTabs: View {
                 .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
             AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
                 .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
-            NavigationStack(path: $navigation.news.path) { NewsView().animeNavigation() }
-                .environment(\.animeSplitPresentation, false)
+            AnimeTabPane(state: navigation.news, layout: .fullWidth) { NewsView().animeNavigation() }
                 .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }.onChange(of: navigation.selectedTab) { _, tab in
             if tab == .schedule {
@@ -265,6 +265,9 @@ struct AnimeNavigation: ViewModifier {
         content.navigationDestination(for: AnimeRoute.self) {
             AnimeDetailView(mediaID: $0.id).id($0.id).environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
         }
+            .navigationDestination(for: AnimeVisualsRoute.self) { route in
+                AnimeVisualsView(anime: route.anime).id(route.anime?.id ?? 0)
+            }
             .navigationDestination(for: DiscoveryRoute.self) { route in
                 DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
                     // Replacing a path with the same destination type otherwise reuses its

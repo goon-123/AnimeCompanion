@@ -215,6 +215,21 @@ private struct AboutSettingsView: View {
                 Text("Data is matched by IDs and formatted for display; no source records are edited.").font(.caption).foregroundStyle(.secondary)
                 Link("Report inaccurate dub data", destination: URL(string: "https://github.com/Joelis57/MyDubList/issues/new/choose")!)
             }
+            Section("Artwork galleries") {
+                Text("LiveChart visual galleries, MyAnimeList pictures through Jikan, and AniList artwork. Image copyrights belong to their respective owners.").font(.caption)
+                Link("LiveChart.me", destination: URL(string: "https://www.livechart.me")!)
+                Link("Jikan · MyAnimeList pictures", destination: URL(string: "https://jikan.moe")!)
+                Link("AnimeAPI · ID mapping data", destination: URL(string: "https://github.com/nattadasu/animeApi")!)
+                Text("Contains information from AnimeAPI, available under ODbL 1.0 and DbCL 1.0. The source mapping data is not modified.").font(.caption).foregroundStyle(.secondary)
+                Link("Mapping database license · ODbL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
+                Link("Mapping contents license · DbCL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/dbcl/1-0/")!)
+                NavigationLink("Artwork software credits") {
+                    ScrollView {
+                        Text((Bundle.main.url(forResource: "VisualGalleryLicenses", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "License notices are unavailable in this build.")
+                            .font(.caption.monospaced()).textSelection(.enabled).padding()
+                    }.navigationTitle("Artwork credits").navigationBarTitleDisplayMode(.inline)
+                }
+            }
             Section("News") {
                 Link("Anime News Network", destination: URL(string: "https://www.animenewsnetwork.com")!)
                 Link("Crunchyroll", destination: URL(string: "https://www.crunchyroll.com/news")!)

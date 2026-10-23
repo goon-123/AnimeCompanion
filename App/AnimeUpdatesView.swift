@@ -12,7 +12,7 @@ struct AnimeUpdatesLinks: View {
     @ViewBuilder private var links: some View {
         NavigationLink { AnimeReleaseInfoView(anime: anime) } label: { label("Schedule", symbol: "calendar") }
             .accessibilityIdentifier("detail-open-schedule")
-        NavigationLink { AnimeVisualsView(anime: anime) } label: { label("Visuals", symbol: "photo.on.rectangle") }
+        NavigationLink(value: AnimeVisualsRoute(anime: anime)) { label("Visuals", symbol: "photo.on.rectangle") }
             .accessibilityIdentifier("detail-open-visuals")
         NavigationLink { NewsView(anime: anime) } label: { label("Headlines", symbol: "newspaper") }
             .accessibilityIdentifier("detail-open-headlines")
@@ -60,6 +60,8 @@ struct AnimeVisualsView: View {
     @State private var preview: AnimeImagePreview?
     @State private var details: Anime?
     @State private var detailError: String?
+    @State private var gallery: AnimeVisualGallery?
+    @State private var loadingGallery = false
     private let season = SeasonSelection.current()
     private var media: [Anime] { AnimeUpdates.visuals(in: catalog.state.response, includeAdult: store.includeAdult) }
     var body: some View {
@@ -80,7 +82,7 @@ struct AnimeVisualsView: View {
                     if !media.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 240), spacing: 16)], alignment: .leading, spacing: 22) {
                             ForEach(media) { item in
-                                NavigationLink { AnimeVisualsView(anime: item) } label: {
+                                NavigationLink(value: AnimeVisualsRoute(anime: item)) {
                                     VStack(alignment: .leading, spacing: 8) {
                                         GeometryReader { geometry in AnimeCover(anime: item, width: geometry.size.width) }
                                             .aspectRatio(1 / 1.45, contentMode: .fit)
@@ -97,39 +99,93 @@ struct AnimeVisualsView: View {
         }.background(Theme.background).navigationTitle("Visuals").navigationBarTitleDisplayMode(.inline)
             .accessibilityIdentifier("anime-visuals")
             .task(id: "\(anime?.id ?? 0)-\(store.includeAdult)") {
-                if let anime { await loadDetails(anime) } else { await load() }
+                if let anime { await loadTitle(anime) } else { await load() }
             }
-            .refreshable { if let anime { await loadDetails(anime, refresh: true) } else { await load(refresh: true) } }
-            .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
+            .refreshable { if let anime { await loadTitle(anime, refresh: true) } else { await load(refresh: true) } }
+            .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0, gallery: previews) }
+            .onChange(of: store.includeAdult) { _, _ in
+                if let anime, !store.isVisible(details ?? anime) { preview = nil; gallery = nil }
+            }
+    }
+    private var previews: [AnimeImagePreview] {
+        (gallery?.images ?? anime.map(AnimeVisualGallery.aniListImages) ?? []).map {
+            AnimeImagePreview(url: $0.imageURL, title: $0.title, credit: $0.copyright, source: $0.source.label)
+        }
     }
     private func titleVisuals(_ anime: Anime) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             Text(anime.displayTitle).font(.title2.bold())
-            Text("Artwork supplied by AniList. Tap an image to expand it.").font(.caption).foregroundStyle(.secondary)
-            if let url = anime.coverURL {
-                artwork(url, title: anime.displayTitle + " · Poster", height: 420)
+            Text("Tap artwork to expand it, swipe between images, or pinch to zoom.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                AnimeLink(id: anime.id) { Label("Anime details", systemImage: "info.circle").frame(minHeight: 44) }
+                    .accessibilityIdentifier("visuals-anime-details")
+                if let trailer = anime.trailer, let url = trailer.url {
+                    Link(destination: url) { Label("Watch trailer", systemImage: "play.rectangle.fill").frame(minHeight: 44) }
+                        .buttonStyle(.bordered).accessibilityIdentifier("visuals-watch-trailer")
+                }
+            }.font(.subheadline)
+            if loadingGallery {
+                ProgressView(gallery == nil ? "Loading more artwork…" : "Refreshing artwork…")
+                    .accessibilityIdentifier("visuals-loading")
             }
-            if let raw = anime.bannerImage, let url = URL(string: raw) {
-                artwork(url, title: anime.displayTitle + " · Banner", height: 220)
+            if let notice = gallery?.notice {
+                Label(notice, systemImage: gallery?.isStale == true ? "clock.arrow.circlepath" : "info.circle")
+                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("visuals-notice")
             }
-            if let trailer = anime.trailer, let url = trailer.url {
-                Link(destination: url) { Label("Watch trailer", systemImage: "play.rectangle.fill").frame(minHeight: 44) }
-                    .buttonStyle(.bordered).accessibilityIdentifier("visuals-watch-trailer")
+            let images = gallery?.images ?? AnimeVisualGallery.aniListImages(anime)
+            HStack {
+                Text("\(images.count) images").font(.headline).accessibilityIdentifier("visuals-image-count")
+                Spacer()
+                if !loadingGallery {
+                    Button { Task { await loadGallery(anime, refresh: true) } } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }
+                        .accessibilityLabel("Refresh artwork").accessibilityIdentifier("visuals-refresh")
+                }
             }
-            AnimeLink(id: anime.id) { Label("Anime details", systemImage: "info.circle").frame(minHeight: 44) }
-                .accessibilityIdentifier("visuals-anime-details")
+            if images.isEmpty && !loadingGallery { ContentUnavailableView("No artwork available", systemImage: "photo") }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 300), spacing: 16)], alignment: .leading, spacing: 18) {
+                ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
+                    artwork(image, index: index)
+                }
+            }
         }.modifier(CatalogEntrance())
     }
-    private func artwork(_ url: URL, title: String, height: CGFloat) -> some View {
-        Button { preview = AnimeImagePreview(url: url, title: title) } label: {
-            ArtworkImage(url: url, pointSize: 700) { $0.resizable().scaledToFit() } placeholder: { Theme.surface }
-                .frame(maxWidth: .infinity).frame(height: height).clipShape(RoundedRectangle(cornerRadius: 16))
-        }.buttonStyle(.plain).accessibilityLabel("Expand \(title)")
+    private func artwork(_ image: AnimeVisual, index: Int) -> some View {
+        Button {
+            preview = AnimeImagePreview(url: image.imageURL, title: image.title, credit: image.copyright, source: image.source.label)
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                GeometryReader { geometry in
+                    ArtworkImage(url: image.thumbnailURL, pointSize: 600) { $0.resizable().scaledToFit() } placeholder: { Theme.surface }
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                }.aspectRatio(2.0 / 3, contentMode: .fit)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(image.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    Text(image.source.label).font(.caption).foregroundStyle(.secondary)
+                    if let copyright = image.copyright { Text(copyright).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            }.background(Theme.surface).clipShape(RoundedRectangle(cornerRadius: 14)).foregroundStyle(.primary)
+        }.buttonStyle(.plain).accessibilityLabel("Expand \(image.title), \(image.source.label)")
+            .accessibilityIdentifier("visual-card-\(image.source.rawValue)-\(index)")
+    }
+    @MainActor private func loadTitle(_ anime: Anime, refresh: Bool = false) async {
+        async let metadata: Void = loadDetails(anime, refresh: refresh)
+        async let artwork: Void = loadGallery(anime, refresh: refresh)
+        _ = await (metadata, artwork)
+    }
+    @MainActor private func loadGallery(_ anime: Anime, refresh: Bool = false) async {
+        guard store.isVisible(anime) else { gallery = nil; return }
+        let includeAdult = store.includeAdult
+        loadingGallery = true
+        defer { loadingGallery = false }
+        let value = await store.visuals.gallery(for: anime, refresh: refresh)
+        guard !Task.isCancelled, store.includeAdult == includeAdult, store.isVisible(details ?? anime) else { return }
+        gallery = value
     }
     private func load(refresh: Bool = false) async {
         await catalog.load(selection: season, includeAdult: store.includeAdult, api: store.aniList, cache: store.exploreCache, refresh: refresh)
     }
-    private func loadDetails(_ anime: Anime, refresh: Bool = false) async {
+    @MainActor private func loadDetails(_ anime: Anime, refresh: Bool = false) async {
         guard store.isVisible(anime) else { details = nil; return }
         detailError = nil
         let includeAdult = store.includeAdult

@@ -1,3 +1,17 @@
+## Native LiveChart artwork galleries — build 65
+
+Version 0.25.18. Per-title Visuals now loads the LiveChart gallery into a native adaptive grid, with full-size expansion, horizontal paging, previous/next controls, captions, available copyright credits and pinch/double-tap zoom. AniList artwork remains available; a missing mapping or denied/unavailable page uses MyAnimeList pictures through Jikan when possible and explains the fallback. Standard next-page links stay within the same title. Partial pagination and failed refreshes retain useful images and are labeled. LiveChart is an artwork source only; native tracking stays on AniList.
+
+Match the unmodified public AnimeAPI index by unambiguous AniList/LiveChart IDs and reject contradictory MAL IDs. The current index distinguishes AniList 178789 / MAL 59193 / LiveChart 12735 from the later part, AniList 217434 / MAL 65077 / LiveChart 13827. Gallery metadata uses a bounded disk/memory cache, concurrent requests coalesce, and denied/rate-limited hosts observe a cooldown. Public requests use an isolated cookie-free session and never copy browser authentication or evade access restrictions. SwiftSoup 2.14.3 is pinned; software/data credits are bundled and visible in Settings.
+
+Meaningful Core regressions cover the four character cards, malformed markup, full-size versus thumbnail URLs, caption credits, hostile URLs, pagination, conflicting season mappings, concurrent requests, credential absence, denied-source fallback, disk restart, failed-refresh preservation and partial galleries. New dedicated iPhone/iPad UI checks use clearly labeled owned drawings and the production HTML/JSON parser, client, image pipeline, grid and viewer. Hosted results are recorded on the PR; there is no Swift/Xcode toolchain in this local environment.
+
+Live-source limitation: this environment cannot inspect LiveChart pages because automated access is blocked; the public gallery contract is evidenced by AnymeX source, not a current live-page replay. A direct Jikan request for MAL 59193 returned HTTP 503 here. Owned fixtures do not certify either public service or prove that all four actual Mushoku Tensei character images currently load on a device. The PR retains that manual acceptance check explicitly.
+
+The first native compile identified an inherited build-64 News binding error (`$navigation.news.path` traversed a constant). News now uses the existing full-width AnimeTabPane, which directly observes its TabNavigationState and binds the published path. Gallery entries also use a typed AnimeVisualsRoute throughout the stack, so opening anime details does not mix value navigation with direct view pushes. At the preceding commit, the iPhone journey passed character cards, pagination, swiping, pinch zoom, panning and fallback; its final anime-details transition exposed this routing issue. The assertion is retained and both device journeys rerun. The visuals scope now includes the existing simulator crash watcher.
+
+Shared Java/Kotlin roadmap estimate remains **approximately 94%**, unchanged by this artwork feature.
+
 ## Fluid catalogs, manga history and native anime updates — build 64
 
 Version 0.25.17. Replace the empty Explore startup with a stable catalog skeleton, fade/glide the featured panel and shelves into place once, and cross-fade downloaded artwork. Cached refreshes keep existing content visible. Reduce Motion removes the entrance movement and shortens the fade.
