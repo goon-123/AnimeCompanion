@@ -1,3 +1,15 @@
+## Poster navigation, LiveChart headlines and faster reading — build 66
+
+Version 0.25.19. The large Explore poster opens the series through the shared phone/iPad navigation route. Remove the featured expand icon and image modal; keep separate Watch, details and Library actions. Artwork viewing on details and in Visuals remains available.
+
+Add LiveChart.me's public headlines RSS feed to the native News list and source picker. The feed has been identified in public GitHub clients, and its GUID/external-link/enclosure/date contract is evidenced by an existing public XML fixture. Implement independently with neutral owned tests, without copying news text or images into the repository. Require a LiveChart headline GUID before accepting external public HTTPS links; retain the other sources' domain restrictions. No social/video HTML thumbnail requests are made for LiveChart entries without feed images. LiveChart automated access is blocked here, so current live delivery remains a device check.
+
+Raise both reader scrolling modes from 240 to **1,200 pt/s**, with quick preset menus and the settings slider. Keep saved choices, fine plus/minus controls, release/pause behavior and the existing elapsed-time motion calculation. Extend the existing persistence bounds and high-speed/chapter-end regressions.
+
+Follow the agreed manual-testing workflow: ordinary CI still runs Core, runtime, resource and Release IPA checks. The longer simulator UI suites require the workflow-dispatch `run_ui_tests` option; they are available but not run automatically. Existing UI expectations follow the new poster action and speed menu. Local source/resource/diff checks and hosted compile/Core results are recorded on the PR; this environment has no Swift/Xcode toolchain. Manual checks: poster → correct series/back/swipe; News → LiveChart.me headlines and thumbnail/source opening; reader → fast preset, release/pause and saved speed after reopening.
+
+References: [headline client endpoint](https://github.com/lkaijie/ani-sched-api/blob/9d14472436539fbecd5f35b7c66aa73f6fc4f915/ani_sched/config.py), [RSS schema sample](https://github.com/hunt-g/nyaa-torrent-search-py/blob/4ca65b697cf3475d66e539d466ac4671ffa60906/src/feeds/livechart.xml). Shared Java/Kotlin roadmap estimate remains **approximately 94%**, unchanged by this batch.
+
 ## Native LiveChart artwork galleries — build 65
 
 Version 0.25.18. Per-title Visuals now loads the LiveChart gallery into a native adaptive grid, with full-size expansion, horizontal paging, previous/next controls, captions, available copyright credits and pinch/double-tap zoom. AniList artwork remains available; a missing mapping or denied/unavailable page uses MyAnimeList pictures through Jikan when possible and explains the fallback. Standard next-page links stay within the same title. Partial pagination and failed refreshes retain useful images and are labeled. LiveChart is an artwork source only; native tracking stays on AniList.

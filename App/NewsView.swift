@@ -52,7 +52,7 @@ struct NewsView: View {
                     Text("All sources").tag("all")
                     ForEach(NewsSource.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
                 }.accessibilityIdentifier("news-sources")
-                Text("Anime News Network · Crunchyroll · Anime Corner").font(.caption).foregroundStyle(.secondary)
+                Text(NewsSource.allCases.map(\.label).joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
             }
             if anime == nil { Section("Popular \(period.label.lowercased())") {
                 Picker("Popular news period", selection: $periodValue) {

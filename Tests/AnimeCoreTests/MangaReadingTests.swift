@@ -99,7 +99,7 @@ final class MangaReadingTests: XCTestCase {
         var p = WebtoonPreferences(); p.sidePadding = .infinity; p.autoScrollSpeed = -100; p.normalize()
         XCTAssertEqual(p.sidePadding, 0); XCTAssertEqual(p.autoScrollSpeed, 15)
         p.autoScrollSpeed = 10000; p.normalize()
-        XCTAssertEqual(p.autoScrollSpeed, 240)
+        XCTAssertEqual(p.autoScrollSpeed, 1200)
     }
     func testExistingReaderPreferencesGainHoldScrollingWithoutLosingSavedChoices() throws {
         let legacy = Data(#"{"background":"paper","sidePadding":0.08,"autoScrollSpeed":90,"keepAwake":false}"#.utf8)
@@ -109,7 +109,7 @@ final class MangaReadingTests: XCTestCase {
         XCTAssertEqual(restored.autoScrollSpeed, 90)
         XCTAssertFalse(restored.keepAwake)
         XCTAssertTrue(restored.holdToScroll)
-        var changed = restored; changed.holdToScroll = false; changed.autoScrollSpeed = 180
+        var changed = restored; changed.holdToScroll = false; changed.autoScrollSpeed = 1200
         XCTAssertEqual(try JSONDecoder().decode(WebtoonPreferences.self, from: JSONEncoder().encode(changed)), changed)
     }
     func testReadingStateSurvivesRestartWithFavoritesPinAndExactStripPosition() async throws {

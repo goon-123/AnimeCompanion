@@ -63,7 +63,70 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(articles[0].imageURL?.absoluteString, "https://a.storyblok.com/cover.png")
         XCTAssertEqual(articles[0].id, "https://crunchyroll.com/news/a")
     }
-    func testNewsKeepsWorkingWhenOnePublisherFails() async throws {
+    func testLiveChartRSSReadsCuratedExternalLinksDatesAndThumbnails() throws {
+        let rss = """
+        <rss version="2.0"><channel>
+          <item><guid>https://www.livechart.me/headlines/900001</guid>
+          <link>https://www.youtube.com/watch?v=owned&amp;utm_source=feed</link>
+          <title>Owned anime &amp; new visual</title>
+          <enclosure url="https://u.livechart.me/headline/900001/thumbnail/owned.jpg?style=large&amp;format=jpg" type="image/jpeg"/>
+          <pubDate>Fri, 23 Oct 2026 13:00:00 +0000</pubDate></item>
+        </channel></rss>
+        """
+        let article = try XCTUnwrap(RSSParser.parse(Data(rss.utf8), source: .liveChart).first)
+        XCTAssertEqual(article.title, "Owned anime & new visual")
+        XCTAssertEqual(article.source, .liveChart)
+        XCTAssertEqual(article.url.host, "www.youtube.com")
+        XCTAssertEqual(article.id, "https://www.livechart.me/headlines/900001")
+        XCTAssertEqual(article.imageURL?.absoluteString, "https://u.livechart.me/headline/900001/thumbnail/owned.jpg?style=large&format=jpg")
+        XCTAssertEqual(article.publishedAt, SourceDates.parse("2026-10-23T13:00:00Z"))
+    }
+    func testLiveChartRequiresHeadlineGUIDAndRejectsUnsafeDestinations() throws {
+        let pairs = [
+            ("https://www.livechart.me/headlines/1", "https://official.example.com/news/one"),
+            ("https://www.livechart.me.attacker.example/headlines/2", "https://official.example.com/news/two"),
+            ("https://www.livechart.me/anime/3", "https://official.example.com/news/three"),
+            ("", "https://official.example.com/news/four"),
+            ("https://www.livechart.me/headlines/5", "javascript:alert(1)"),
+            ("https://www.livechart.me/headlines/6", "https://127.0.0.1/private"),
+            ("https://www.livechart.me/headlines/7", "https://localhost/private"),
+            ("https://www.livechart.me/headlines/8", "https://user:password@official.example.com/private"),
+            ("https://www.livechart.me/headlines/9", "https://official.example.com:8080/private")
+        ]
+        let items = pairs.map { "<item><guid>\($0.0)</guid><link>\($0.1)</link><title>Owned headline</title></item>" }.joined()
+        let articles = try RSSParser.parse(Data("<rss><channel>\(items)</channel></rss>".utf8), source: .liveChart)
+        XCTAssertEqual(articles.map(\.url.absoluteString), ["https://official.example.com/news/one"])
+        XCTAssertFalse(NewsSource.animeCorner.accepts(URL(string: "https://official.example.com/news/one")!))
+    }
+    func testLiveChartHeadlineIdentitySurvivesSharedLinksImagesAndSavedHistory() throws {
+        let items = [900001, 900002, 900001].map {
+            "<item><guid>https://www.livechart.me/headlines/\($0)</guid><title>Owned headline \($0)</title><link>https://official.example.com/</link></item>"
+        }.joined()
+        let articles = try RSSParser.parse(Data("<rss><channel>\(items)</channel></rss>".utf8), source: .liveChart)
+        XCTAssertEqual(Set(articles.map(\.id)), Set(["https://www.livechart.me/headlines/900001", "https://www.livechart.me/headlines/900002"]))
+        let original = try XCTUnwrap(articles.first)
+        let enriched = original.withImage(URL(string: "https://u.livechart.me/headline/owned.jpg"))
+        XCTAssertEqual(enriched.id, original.id)
+        XCTAssertEqual(try JSONDecoder().decode(NewsArticle.self, from: JSONEncoder().encode(enriched)), enriched)
+        let legacy = Data(#"{"title":"Saved story","url":"https://animecorner.me/owned","source":"animeCorner"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(NewsArticle.self, from: legacy).headlineID)
+    }
+    func testNewsIncludesLiveChartAndDoesNotFetchSocialPagesForMissingThumbnails() async throws {
+        let rss = "<rss><channel><item><guid>https://www.livechart.me/headlines/900002</guid><title>Owned headline</title><link>https://www.youtube.com/watch?v=owned</link></item></channel></rss>"
+        let transport = FeedTransport([NewsSource.liveChart.feedURL: (200, rss)])
+        let client = NewsClient(transport: transport)
+        let snapshot = try await client.snapshot()
+        XCTAssertEqual(snapshot.articles.map(\.source), [.liveChart])
+        XCTAssertEqual(snapshot.unavailableSources, ["Anime Corner", "Anime News Network", "Crunchyroll"])
+        let article = try XCTUnwrap(snapshot.articles.first)
+        let before = await transport.requestCount()
+        let thumbnail = await client.thumbnail(for: article)
+        XCTAssertNil(thumbnail)
+        let after = await transport.requestCount()
+        XCTAssertEqual(before, 4)
+        XCTAssertEqual(after, before)
+    }
+    func testNewsKeepsWorkingWhenPublishersFail() async throws {
         let ann = "<rss><channel><item><title>ANN</title><link>https://www.animenewsnetwork.com/news/a</link></item></channel></rss>"
         let cr = "<rss><channel><item><title>CR</title><link>https://crunchyroll.com/news/b</link><media:thumbnail xmlns:media=\"http://search.yahoo.com/mrss/\" url=\"https://a.storyblok.com/b.jpg\"/></item></channel></rss>"
         let client = NewsClient(transport: FeedTransport([
@@ -72,7 +135,7 @@ final class FeatureTests: XCTestCase {
         ]))
         let snapshot = try await client.snapshot()
         XCTAssertEqual(Set(snapshot.articles.map(\.source)), Set([.animeNewsNetwork, .crunchyroll]))
-        XCTAssertEqual(snapshot.unavailableSources, ["Anime Corner"])
+        XCTAssertEqual(snapshot.unavailableSources, ["Anime Corner", "LiveChart.me"])
         XCTAssertEqual(snapshot.articles.first(where: { $0.source == .crunchyroll })?.imageURL?.host, "a.storyblok.com")
     }
     func testPopularNewsUsesLocalOpensWithinTheSelectedPeriod() {
@@ -112,8 +175,11 @@ final class FeatureTests: XCTestCase {
 
 private actor FeedTransport: HTTPTransport {
     let feeds: [URL: (Int, String)]
+    private var count = 0
     init(_ feeds: [URL: (Int, String)]) { self.feeds = feeds }
+    func requestCount() -> Int { count }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        count += 1
         guard let url = request.url, let (status, body) = feeds[url] else { throw ServiceError.invalidResponse }
         return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }

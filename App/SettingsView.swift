@@ -234,6 +234,7 @@ private struct AboutSettingsView: View {
                 Link("Anime News Network", destination: URL(string: "https://www.animenewsnetwork.com")!)
                 Link("Crunchyroll", destination: URL(string: "https://www.crunchyroll.com/news")!)
                 Link("Anime Corner", destination: URL(string: "https://animecorner.me")!)
+                Link("LiveChart.me headlines", destination: NewsSource.liveChart.feedURL)
             }
             Section("Manga extensions") {
                 Link("Keiyoushi repository", destination: URL(string: "https://keiyoushi.github.io")!)

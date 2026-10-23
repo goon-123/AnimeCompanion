@@ -49,7 +49,6 @@ private struct FeaturedAnimePanel: View {
     let anime: Anime
     let topInset: CGFloat
     let background: PosterAccent
-    @State private var preview: AnimeImagePreview?
     @State private var showTracking = false
     @State private var showSettings = false
     @State private var showPlayback = false
@@ -68,7 +67,6 @@ private struct FeaturedAnimePanel: View {
                     .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
-            .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
@@ -76,11 +74,12 @@ private struct FeaturedAnimePanel: View {
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         let banner = anime.bannerImage.flatMap(URL.init(string:))
         let url = wide ? (banner ?? anime.coverURL) : anime.coverURL
-        return ArtworkImage(url: url, pointSize: max(width, height)) { image in image.resizable().scaledToFill() }
-            placeholder: { background.color }
-            .frame(width: width, height: height, alignment: wide ? .center : .top).clipped().contentShape(Rectangle())
-            .onTapGesture { if let url = anime.coverURL { preview = AnimeImagePreview(url: url, title: anime.displayTitle) } }
-            .accessibilityHidden(true)
+        return AnimeLink(id: anime.id) {
+            ArtworkImage(url: url, pointSize: max(width, height)) { image in image.resizable().scaledToFill() }
+                placeholder: { background.color }
+                .frame(width: width, height: height, alignment: wide ? .center : .top).clipped().contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel("View \(anime.displayTitle)")
+            .accessibilityHint("Opens series details").accessibilityIdentifier("featured-poster-\(anime.id)")
     }
     private var information: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -89,12 +88,6 @@ private struct FeaturedAnimePanel: View {
                     .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
                     .accessibilityIdentifier("featured-title-\(anime.id)")
                 DiscoveryAiringDot(anime: anime, identifierPrefix: "featured").padding(.top, 12)
-                if let url = anime.coverURL {
-                    Button { preview = AnimeImagePreview(url: url, title: anime.displayTitle) } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 44, height: 44)
-                    }.buttonStyle(.plain).accessibilityLabel("Expand featured artwork")
-                        .accessibilityIdentifier("featured-expand-\(anime.id)")
-                }
             }
             HStack(spacing: 12) {
                 if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").foregroundStyle(.yellow) }

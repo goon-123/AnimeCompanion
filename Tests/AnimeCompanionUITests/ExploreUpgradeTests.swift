@@ -4,7 +4,7 @@ import UIKit
 /// Exercises the new poster layout and saved filters on both native device families.
 final class ExploreUpgradeTests: XCTestCase {
     @MainActor
-    func testFeaturedPosterPagingExpansionDetailsAndTabletRotation() throws {
+    func testFeaturedPosterPagingOpensSeriesDetailsAndKeepsTabletRotation() throws {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication(); app.launch()
@@ -19,11 +19,13 @@ final class ExploreUpgradeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "featured-genres-\(id)").firstMatch.exists)
         XCTAssertTrue(app.staticTexts["featured-dub-\(id)"].exists)
         capture("Featured-Poster-Portrait")
-        reveal(app.buttons["featured-expand-\(id)"], in: app, upward: false)
-        app.buttons["featured-expand-\(id)"].tap()
-        XCTAssertTrue(app.buttons["Close enlarged image"].waitForExistence(timeout: 15))
-        capture("Featured-Expanded-Artwork")
-        app.buttons["Close enlarged image"].tap()
+        let poster = app.buttons["featured-poster-\(id)"]
+        reveal(poster, in: app, upward: false)
+        poster.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.22)).tap()
+        XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))
+        XCTAssertFalse(app.buttons["Close enlarged image"].exists)
+        capture("Featured-Poster-Opens-Series")
+        app.returnToBrowsing()
         reveal(app.buttons["featured-details-\(id)"], in: app)
         app.buttons["featured-details-\(id)"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 35))

@@ -81,7 +81,7 @@ public struct MangaReadingRecord: Codable, Identifiable, Sendable {
 
 public struct WebtoonPreferences: Codable, Equatable, Sendable {
     public enum Background: String, Codable, CaseIterable, Sendable { case black, charcoal, paper }
-    public static let scrollSpeedRange = 15.0...240.0
+    public static let scrollSpeedRange = 15.0...1200.0
     public var background = Background.black
     public var sidePadding = 0.0
     public var autoScrollSpeed = 45.0
