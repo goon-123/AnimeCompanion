@@ -1,3 +1,15 @@
+## Fluid catalogs, manga history and native anime updates — build 64
+
+Version 0.25.17. Replace the empty Explore startup with a stable catalog skeleton, fade/glide the featured panel and shelves into place once, and cross-fade downloaded artwork. Cached refreshes keep existing content visible. Reduce Motion removes the entrance movement and shortens the fade.
+
+Add a confirmed Clear Manga History action under Manga → History. It clears every recent-reading timestamp, including hidden/filtered titles, and Continue reading. Saved titles, exact chapter positions/read flags, pinned/recent sources and reader preferences are kept. The mutation uses the existing atomic store; a failed write does not publish a cleared state.
+
+Remove the LiveChart metadata/tracker picker, website browser, ID-mapping client and settings option. Existing selections are retired; AniList tracking/progress stays native. Add Schedule, Visuals and Headlines shortcuts on anime details. Schedule reuses the native broadcast/dub data; Visuals displays AniList posters/banners and available trailers; Headlines conservatively matches title aliases in the current publisher feeds. News also opens the seasonal/upcoming artwork gallery. These are native equivalents, not a scraped LiveChart feed or a complete visual/news archive.
+
+Offline coverage includes persisted history clearing and preservation, content filtering/deduplication, headline alias/boundary matching, a deliberately delayed catalog/artwork fixture, native update navigation and a confirmed history-clear/cancel/relaunch journey. Hosted Core runs 327 tests (5 skipped, no failures), Rust runs 221 tests and the universal IPA builds. Device checks now pass the startup reveal and native Schedule/Visuals/Headlines links on iPhone and iPad, and the history-clear/cancel/relaunch flow passes on iPad after the first iPhone pass. The loading skeleton fits the viewport and retains independent accessibility identities. The fixture reuses its owned bitmaps rather than repeatedly generating them on the UI thread. News uses the app's bound navigation path and typed anime routes, including related titles; the extra navigation check is rerunning. The existing iPad search keyboard-focus regression remains unresolved and is recorded separately on the PR. Current native results are recorded there.
+
+Shared Java/Kotlin roadmap estimate remains **94%**; this batch changes app presentation and local reading history, not shared-runtime coverage.
+
 ## Consistent reader scroll speed — build 63
 
 Version 0.25.16. Build 62 was merged as PR #43. Its source bridge and all 71 native runtime tests passed on iPhone and iPad; iPhone reader checks passed. The iPad reader test exposed slow-speed motion being lost between display frames.

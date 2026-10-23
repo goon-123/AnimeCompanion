@@ -10,6 +10,8 @@ struct MangaHubView: View {
     @State private var language = "en"
     @State private var manage = false
     @State private var choseInitialSection = false
+    @State private var confirmClearHistory = false
+    @State private var clearingHistory = false
     private var sources: [MangaSourceReference] {
         extensions.state.installations.filter { $0.enabled && (showMature || !$0.descriptor.adult) }.flatMap { entry in
             entry.sources.map { MangaSourceReference(installation: entry, source: $0) }
@@ -48,6 +50,15 @@ struct MangaHubView: View {
                 }
             }
             .sheet(isPresented: $manage) { MangaExtensionSheet() }
+            .confirmationDialog("Clear manga history?", isPresented: $confirmClearHistory, titleVisibility: .visible) {
+                Button("Clear history", role: .destructive) {
+                    clearingHistory = true
+                    Task { await reading.clearHistory(); clearingHistory = false }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Removes all titles from History and Continue reading, including hidden titles. Saved stories and chapter progress are kept.")
+            }
             .task {
                 await reading.load()
                 if !choseInitialSection {
@@ -150,6 +161,12 @@ struct MangaHubView: View {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 16) {
             pageHeading("Recently read", subtitle: "Pick up where you left off, in any source.")
+            Button(role: .destructive) { confirmClearHistory = true } label: {
+                Label(clearingHistory ? "Clearing history…" : "Clear manga history", systemImage: "trash")
+                    .font(.subheadline.weight(.medium)).frame(minHeight: 44)
+            }.disabled(clearingHistory || reading.unreadable || !reading.state.records.contains { $0.lastReadAt != nil })
+                .accessibilityIdentifier("manga-clear-history")
+                .accessibilityHint("Asks for confirmation. Saved titles and reading progress are kept.")
             if history.isEmpty { ContentUnavailableView("No reading history yet", systemImage: "clock", description: Text("The chapters you read will appear here.")) }
             ForEach(history) { record in
                 NavigationLink { MangaTitleDetailView(title: record.title) } label: {

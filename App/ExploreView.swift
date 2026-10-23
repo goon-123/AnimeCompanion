@@ -14,7 +14,6 @@ struct ExploreView: View {
     @State private var showSettings = false
     @State private var showDisplay = false
     @State private var showDubFilters = false
-    @State private var liveChartPage: URL?
     private var posters = PosterPreferences(.explore)
     private var seasonal: [Anime] { catalog.state.response?.seasonal.media ?? [] }
     private var trending: [Anime] { catalog.state.response?.trending.media ?? [] }
@@ -26,19 +25,21 @@ struct ExploreView: View {
 
     var body: some View {
         GeometryReader { geometry in
-          if store.metadataSource == .liveChart {
-            LiveChartBrowserView(startURL: liveChartPage ?? LiveChartURL.season(selection))
-                .id(liveChartPage ?? LiveChartURL.season(selection))
-          } else {
           ScrollView {
+            if catalog.state.response == nil {
+                if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.top, geometry.safeAreaInsets.top + 24).padding() }
+                else {
+                    ExploreLoadingSkeleton(featuredHeight: featuredHeight(in: geometry), availableWidth: geometry.size.width,
+                        posterWidth: min(CGFloat(min(360, max(120, posters.shelfWidth))), geometry.size.width * 0.85))
+                        .frame(width: geometry.size.width).clipped()
+                }
+            } else {
             VStack(alignment: .leading, spacing: 0) {
                 if !featured.isEmpty {
                     FeaturedAnimeCarousel(anime: featured,
-                        height: CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
-                            viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
-                            fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
-                            splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0),
+                        height: featuredHeight(in: geometry),
                         topInset: geometry.safeAreaInsets.top, background: $posterBackground)
+                        .modifier(CatalogEntrance())
                 }
                 LazyVStack(alignment: .leading, spacing: 26) {
                 if dubFilters.selection.isActive && !dubs.loaded {
@@ -51,9 +52,11 @@ struct ExploreView: View {
                     }.padding(.horizontal)
                 }
                 shelf(.trending, anime: trending, availableWidth: geometry.size.width)
+                    .modifier(CatalogEntrance(delay: 0.05))
                 shelf(.seasonal, anime: seasonal, availableWidth: geometry.size.width)
+                    .modifier(CatalogEntrance(delay: 0.10))
                 shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
-                if loading && loadedKey == nil { ProgressView("Loading Explore…").frame(maxWidth: .infinity).padding(40) }
+                    .modifier(CatalogEntrance(delay: 0.15))
                 if let savedCatalogDate {
                     HStack(spacing: 6) {
                         if loading { ProgressView().controlSize(.mini) }
@@ -65,9 +68,9 @@ struct ExploreView: View {
                     .padding(.bottom, 24).readableContent(width: 1280)
                     .frame(maxWidth: .infinity).background(Theme.background)
             }
+            }
           }.accessibilityIdentifier("explore-scroll")
               .ignoresSafeArea(.container, edges: .top)
-          }
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
@@ -76,10 +79,7 @@ struct ExploreView: View {
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
             .sheet(isPresented: $showSeasons) { seasonPicker }
-            .task(id: "\(selection.label)-\(store.includeAdult)-\(store.metadataSource.rawValue)") {
-                if store.metadataSource == .aniList { await load() }
-            }
-            .onChange(of: selection) { _, _ in liveChartPage = nil }
+            .task(id: "\(selection.label)-\(store.includeAdult)") { await load() }
             .task { await dubs.load(using: store.dubs) }
             .refreshable {
                 async let metadata: Void = load(refresh: true)
@@ -88,14 +88,8 @@ struct ExploreView: View {
             }
     }
     private var floatingSearch: some View {
-        Group {
-            if store.metadataSource == .aniList {
-                NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
-                    searchIcon
-                }
-            } else {
-                Button { liveChartPage = LiveChartURL.search("") } label: { searchIcon }
-            }
+        NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
+            searchIcon
         }.buttonStyle(.plain).accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
             .accessibilityHint("Touch and hold for seasons, filters, display options and settings.")
             .contextMenu {
@@ -108,6 +102,12 @@ struct ExploreView: View {
                 Button { showSettings = true } label: { Label("Account and settings", systemImage: "gearshape") }
                     .accessibilityIdentifier("explore-settings")
             }
+    }
+    private func featuredHeight(in geometry: GeometryProxy) -> CGFloat {
+        CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
+            viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
+            fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
+            splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0)
     }
     private var searchIcon: some View {
         Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))

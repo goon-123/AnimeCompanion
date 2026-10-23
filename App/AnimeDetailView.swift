@@ -23,13 +23,8 @@ struct AnimeDetailView: View {
     @State private var episodeLimit = 24
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
-    @State private var liveChartMediaID: Int?
 
     var body: some View {
-        Group {
-          if store.metadataSource == .liveChart, let anime, store.isVisible(anime) {
-            LiveChartAnimeView(anime: anime) { liveChartMediaID = $0.id }
-          } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
@@ -43,6 +38,7 @@ struct AnimeDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         watchButton(anime)
                         FindMangaButton(anime: anime)
+                        AnimeUpdatesLinks(anime: anime)
                         if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         progress(anime)
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
@@ -66,15 +62,12 @@ struct AnimeDetailView: View {
                 }
             }
         }.accessibilityIdentifier("anime-detail-scroll").background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
-          }
-        }.navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top, spacing: 0) { MetadataSourcePicker().padding(.horizontal, 16).padding(.vertical, 10).background(.ultraThinMaterial) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
                 }
             }
-            .task(id: "\(mediaID)-\(store.includeAdult)-\(store.metadataSource.rawValue)") { await load() }.refreshable { await load(refresh: true) }
+            .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }.refreshable { await load(refresh: true) }
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(item: $playbackRequest) { request in
                 if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
@@ -279,7 +272,7 @@ struct AnimeDetailView: View {
     }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let requestedAdult = store.includeAdult
-        let targetID = liveChartMediaID ?? mediaID
+        let targetID = mediaID
         if anime?.id != targetID { anime = nil }
         if let anime, !store.isVisible(anime) { error = nil; return }
         loading = true; error = nil

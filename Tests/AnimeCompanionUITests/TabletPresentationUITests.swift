@@ -23,7 +23,14 @@ final class TabletPresentationUITests: XCTestCase {
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let search = app.textFields["discovery-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
-        search.tap(); search.typeText("Phase\n")
+        // Confirm focus after rotation rather than sending keys to an unfocused
+        // field; a second direct tap still has to open the real native keyboard.
+        for _ in 0..<3 {
+            search.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap()
+            if app.keyboards.firstMatch.waitForExistence(timeout: 3) { break }
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "Category search must receive keyboard focus")
+        search.typeText("Phase\n")
         let entry = app.buttons["discovery-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         app.revealInContent(entry); entry.tap()

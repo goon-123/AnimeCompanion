@@ -19,6 +19,10 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         }
         if id == 5 { result["format"] = "MOVIE"; result["episodes"] = 1 }
         if id == 990106 { result["status"] = "NOT_YET_RELEASED" }
+        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
+            result["coverImage"] = ["extraLarge": "https://catalog-preview.invalid/poster/\(id).png", "color": "#243B59"]
+            result["bannerImage"] = "https://catalog-preview.invalid/banner/\(id).png"
+        }
         return result
     }
     static func library() throws -> [LibraryEntry] {
@@ -34,12 +38,25 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         try Task.checkCancellation()
         let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
         let query = body?["query"] as? String ?? ""
+        if query.contains("query Explore"), ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
+            try await Task.sleep(for: .seconds(5))
+        }
         let variables = body?["variables"] as? [String: Any] ?? [:]
         let page = variables["page"] as? Int ?? 1
         let ids = variables["ids"] as? [Int] ?? Array(((page - 1) * 24 + 1)...(page * 24))
         let result: [String: Any] = ["media": ids.map(Self.media), "pageInfo": ["hasNextPage": page < 2]]
         let payload: [String: Any]
-        if query.contains("query Details") { payload = ["Media": Self.media(variables["id"] as? Int ?? 1)] }
+        if query.contains("query Details") {
+            var details = Self.media(variables["id"] as? Int ?? 1)
+            if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
+                details["trailer"] = ["id": "owned-preview", "site": "youtube"]
+                if details["id"] as? Int == 1 {
+                    var related = Self.media(5); related["type"] = "ANIME"
+                    details["relations"] = ["edges": [["relationType": "SEQUEL", "node": related]]]
+                }
+            }
+            payload = ["Media": details]
+        }
         else if query.contains("query Explore") { payload = ["seasonal": result, "trending": result, "upcoming": result] }
         else { payload = ["Page": result] }
         guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil) else { throw ServiceError.invalidResponse }

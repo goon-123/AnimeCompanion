@@ -121,6 +121,10 @@ public struct MangaReadingState: Codable, Sendable {
         guard let i = records.firstIndex(where: { $0.id == title.id }) else { return }
         records[i].title = title
     }
+    /// Hide recent-reading entries without deleting saved titles or resume positions.
+    public mutating func clearHistory() {
+        for index in records.indices { records[index].lastReadAt = nil }
+    }
     public mutating func record(_ title: MangaTitleReference, position: MangaReadingPosition) {
         guard !position.chapterURL.isEmpty, position.pageCount > 0 else { return }
         let i = ensure(title)

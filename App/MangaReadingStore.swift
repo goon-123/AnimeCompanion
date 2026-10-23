@@ -49,6 +49,7 @@ final class MangaReadingStore: ObservableObject {
         }
     }
     func preferences(_ preferences: WebtoonPreferences) async { await change { $0.preferences = preferences } }
+    func clearHistory() async { await change { $0.clearHistory() } }
     private func change(_ mutation: @escaping @Sendable (inout MangaReadingState) -> Void) async {
         guard !unreadable else { return }
         do {

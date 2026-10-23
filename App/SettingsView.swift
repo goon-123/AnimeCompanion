@@ -153,11 +153,6 @@ private struct BrowsingSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Default metadata source", selection: $store.metadataSource) {
-                    ForEach(MetadataSource.allCases) { Text($0.label).tag($0) }
-                }.accessibilityIdentifier("settings-metadata-source")
-            } header: { Text("Metadata") } footer: { Text("Your progress always saves to AniList, whichever source you browse.") }
-            Section {
                 Toggle("Show adult anime (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
             } header: { Text("Content") } footer: {
                 Text("Applies to native browsing, search, library, schedules and known adult providers. Hidden entries stay in AniList. External websites use their own filters.")
@@ -206,14 +201,11 @@ private struct AboutSettingsView: View {
     var body: some View {
         Form {
             Section("Anime Companion") {
-                Text("LiveChart & AniList tracking")
+                Text("Anime discovery & AniList tracking")
                 Text("Broadcast times and dub dates may change. Times use your device timezone. Japanese broadcasts do not guarantee local subtitle availability.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Metadata & lists") {
                 Link("AniList", destination: URL(string: "https://anilist.co")!)
-                Link("LiveChart.me", destination: URL(string: "https://www.livechart.me")!)
-                Link("ID matching · AnimeAPI / Anime Offline Database", destination: URL(string: "https://github.com/nattadasu/animeApi")!)
-                Link("Mapping license · ODbL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
             }
             Section("English dub data") {
                 Link("AniSchedule by RockinChaos", destination: DubProvider.current.repositoryURL)

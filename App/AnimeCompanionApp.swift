@@ -151,7 +151,8 @@ struct AppTabs: View {
                 .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
             AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
                 .tabItem { Label("Schedule", systemImage: "calendar") }.tag(AppTab.schedule)
-            NavigationStack { NewsView() }
+            NavigationStack(path: $navigation.news.path) { NewsView().animeNavigation() }
+                .environment(\.animeSplitPresentation, false)
                 .tabItem { Label("News", systemImage: "newspaper") }.tag(AppTab.news)
         }.onChange(of: navigation.selectedTab) { _, tab in
             if tab == .schedule {
@@ -262,7 +263,7 @@ struct AnimeLink<Content: View>: View {
 struct AnimeNavigation: ViewModifier {
     func body(content: Content) -> some View {
         content.navigationDestination(for: AnimeRoute.self) {
-            AnimeDetailView(mediaID: $0.id).environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
+            AnimeDetailView(mediaID: $0.id).id($0.id).environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
         }
             .navigationDestination(for: DiscoveryRoute.self) { route in
                 DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
