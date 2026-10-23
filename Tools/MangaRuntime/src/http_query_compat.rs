@@ -5,6 +5,19 @@ use dexvm::vm::object::Native;
 use dexvm::vm::{NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
+fn url_equals(vm: &mut Vm, args: &[JValue]) -> R {
+    let equal = matches!((vm.payload_of(args[0]),vm.payload_of(args[1])),
+        (Some(Native::HttpUrl(a)),Some(Native::HttpUrl(b))) if a==b);
+    Ok(JValue::Int(i32::from(equal)))
+}
+fn url_hash(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::HttpUrl(url)) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    Ok(JValue::Int(url.encode_utf16().fold(0i32, |h, c| {
+        h.wrapping_mul(31).wrapping_add(i32::from(c))
+    })))
+}
 
 fn builder_init(vm: &mut Vm, args: &[JValue]) -> R {
     // The core mutators operate on serialized components. Both required
@@ -191,6 +204,22 @@ fn names(vm: &mut Vm, args: &[JValue]) -> R {
         .map_err(NatErr::Fatal)
 }
 pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
+    for (name, sig, f) in [
+        (
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            url_equals as dexvm::vm::NativeFn,
+        ),
+        ("hashCode", "()I", url_hash),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lokhttp3/HttpUrl;",
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
     for (name, sig, f) in [
         ("<init>", "()V", builder_init as dexvm::vm::NativeFn),
         ("build", "()Lokhttp3/HttpUrl;", builder_build),

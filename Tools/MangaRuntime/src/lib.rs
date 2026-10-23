@@ -47,6 +47,7 @@ mod kotlin_text_compat;
 mod kotlin_type_compat;
 mod local_date_compat;
 mod locale_compat;
+mod manga_wire;
 mod method_reflection_compat;
 mod multipart_compat;
 mod okio_compat;
@@ -55,6 +56,9 @@ mod property_reference_compat;
 mod reflection_annotations;
 mod reflection_compat;
 mod regex_compat;
+mod request_body_compat;
+#[cfg(test)]
+mod requested_source_tests;
 mod sequence_compat;
 mod serialization_compat;
 mod serialization_elements_compat;
@@ -662,6 +666,14 @@ fn default_http_agent() -> String {
 struct MangaInput {
     url: String,
     title: String,
+    author: String,
+    artist: String,
+    description: String,
+    genre: String,
+    status: i32,
+    #[serde(rename = "thumbnailURL")]
+    thumbnail_url: String,
+    memo: Option<String>,
 }
 #[derive(Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -734,13 +746,15 @@ fn chapters_json(ext: &mut Keiyoushi, list: Vec<Chapter>) -> Result<Value, Strin
         .collect::<Vec<_>>()))
 }
 
-fn modern_book(ext: &mut Keiyoushi, src: &Source, manga: &Manga) -> Result<Value, String> {
+fn modern_book(
+    ext: &mut Keiyoushi,
+    src: &Source,
+    manga: &MangaInput,
+    details: bool,
+    chapters: bool,
+) -> Result<Value, String> {
     use dexvm::vm::object::Native;
-    let update = ext.manga_update_coro(src, manga, true, true).map_err(|e| {
-        #[cfg(test)]
-        eprintln!("Manga update trace: {:?}", ext.ctx().vm().trace_ring);
-        ext.describe_error(&e)
-    })?;
+    let update = manga_wire::update(ext, src, manga, details, chapters)?;
     let m = ext
         .ctx()
         .invoke_on(
@@ -750,29 +764,14 @@ fn modern_book(ext: &mut Keiyoushi, src: &Source, manga: &Manga) -> Result<Value
             &[],
         )
         .map_err(|e| ext.describe_error(&e))?;
-    let data = match ext.ctx().vm().payload_of(m) {
-        Some(Native::SManga {
-            title,
-            author,
-            artist,
-            description,
-            genre,
-            status,
-            thumbnail_url,
-            url,
-            ..
-        }) => manga_json(Manga {
-            title,
-            author: author.unwrap_or_default(),
-            artist: artist.unwrap_or_default(),
-            description: description.unwrap_or_default(),
-            genre: genre.unwrap_or_default(),
-            status,
-            thumbnail_url,
-            url,
-        }),
-        _ => return Err("The source returned invalid title details.".into()),
+    let data = if details {
+        manga_wire::title(ext, m)?
+    } else {
+        Value::Null
     };
+    if !chapters {
+        return Ok(json!({"manga":data,"chapters":[]}));
+    }
     let list = ext
         .ctx()
         .invoke_on(update.as_obj(), "getChapters", "()Ljava/util/List;", &[])
@@ -1143,6 +1142,7 @@ where
     json_serializer_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     serialization_elements_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     http_query_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
+    request_body_compat::install(ext.ctx().vm()).map_err(|e| e.to_string())?;
     for (name, sig, f) in [
         (
             "decodeSequentially",
@@ -1250,6 +1250,21 @@ where
     if command.op == "settings" {
         return source_settings::definitions(&mut ext, src);
     }
+    if command.modern {
+        match command.op.as_str() {
+            "popular" | "latest" | "search" => return manga_wire::browse(&mut ext, src, &command),
+            "book" => return modern_book(&mut ext, src, &command.manga, true, true),
+            "details" => {
+                return modern_book(&mut ext, src, &command.manga, true, false)
+                    .map(|mut b| b["manga"].take())
+            }
+            "chapters" => {
+                return modern_book(&mut ext, src, &command.manga, false, true)
+                    .map(|mut b| b["chapters"].take())
+            }
+            _ => {}
+        }
+    }
     let manga = Manga {
         url: command.manga.url,
         title: command.manga.title,
@@ -1266,21 +1281,17 @@ where
             Ok(json!({"bodyBase64":STANDARD.encode(data)}))
         }
         "book" => {
-            if command.modern {
-                modern_book(&mut ext, src, &manga)
-            } else {
-                let details = ext
-                    .manga_details(src, &manga)
-                    .map_err(|e| ext.describe_error(&e))?;
-                let chapters = ext
-                    .chapters(src, &manga)
-                    .map_err(|e| ext.describe_error(&e))?;
-                if chapters.len() > 10000 {
-                    return Err("This title has too many chapters.".into());
-                }
-                let chapters = chapters_json(&mut ext, chapters)?;
-                Ok(json!({"manga":manga_json(details),"chapters":chapters}))
+            let details = ext
+                .manga_details(src, &manga)
+                .map_err(|e| ext.describe_error(&e))?;
+            let chapters = ext
+                .chapters(src, &manga)
+                .map_err(|e| ext.describe_error(&e))?;
+            if chapters.len() > 10000 {
+                return Err("This title has too many chapters.".into());
             }
+            let chapters = chapters_json(&mut ext, chapters)?;
+            Ok(json!({"manga":manga_json(details),"chapters":chapters}))
         }
         "popular" | "latest" | "search" => {
             let result = match (command.op.as_str(), command.modern) {

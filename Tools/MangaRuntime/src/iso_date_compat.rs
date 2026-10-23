@@ -11,6 +11,7 @@ const FORMATTER: &str = "Ljava/time/format/DateTimeFormatter;";
 const LOCAL: &str = "Ljava/time/LocalDateTime;";
 const ZONED: &str = "Ljava/time/ZonedDateTime;";
 pub(super) const PATTERN: &str = "ac:ISO_DATE_TIME";
+const LOCAL_PATTERN: &str = "ac:ISO_LOCAL_DATE_TIME";
 struct Parsed {
     wall: i64,
     remainder: i32,
@@ -85,7 +86,7 @@ fn parse(text: &str) -> Option<Parsed> {
         zone,
     })
 }
-fn parsed(vm: &mut Vm, text: JValue) -> Result<Parsed, NatErr> {
+fn parsed(vm: &mut Vm, text: JValue, formatter: JValue) -> Result<Parsed, NatErr> {
     let text = vm
         .str_of_jvalue(text)
         .ok_or_else(|| NatErr::Throw(vm.err_npe()))?;
@@ -97,6 +98,11 @@ fn parsed(vm: &mut Vm, text: JValue) -> Result<Parsed, NatErr> {
         return Err(parse_error(vm));
     }
     let value = parse(&text).ok_or_else(|| parse_error(vm))?;
+    if matches!(vm.payload_of(formatter),Some(Native::DateFormatter{pattern,..}) if pattern==LOCAL_PATTERN)
+        && (value.offset.is_some() || value.zone.is_some())
+    {
+        return Err(parse_error(vm));
+    }
     if let Some(zone) = &value.zone {
         super::date_zone_compat::of_id(vm, zone).map_err(|e| match e {
             NatErr::Throw(_) => parse_error(vm),
@@ -106,14 +112,14 @@ fn parsed(vm: &mut Vm, text: JValue) -> Result<Parsed, NatErr> {
     Ok(value)
 }
 pub(super) fn is_iso(vm: &Vm, formatter: JValue) -> bool {
-    matches!(vm.payload_of(formatter),Some(Native::DateFormatter{pattern,..}) if pattern == PATTERN)
+    matches!(vm.payload_of(formatter),Some(Native::DateFormatter{pattern,..}) if pattern == PATTERN || pattern == LOCAL_PATTERN)
 }
 pub(super) fn local_date(vm: &mut Vm, args: &[JValue]) -> R {
-    let value = parsed(vm, args[0])?;
+    let value = parsed(vm, args[0], args[1])?;
     super::local_date_compat::from_day(vm, value.wall.div_euclid(86_400_000))
 }
 pub(super) fn local_datetime(vm: &mut Vm, args: &[JValue]) -> R {
-    let p = parsed(vm, args[0])?;
+    let p = parsed(vm, args[0], args[1])?;
     local(vm, p.wall, p.remainder)
 }
 pub(super) fn local(vm: &mut Vm, wall: i64, remainder: i32) -> R {
@@ -124,7 +130,7 @@ pub(super) fn local(vm: &mut Vm, wall: i64, remainder: i32) -> R {
     Ok(result)
 }
 pub(super) fn zoned_datetime(vm: &mut Vm, args: &[JValue]) -> R {
-    let p = parsed(vm, args[0])?;
+    let p = parsed(vm, args[0], args[1])?;
     let default_zone = vm.arena.objects[args[1].as_obj() as usize]
         .fields
         .get(1)
@@ -229,7 +235,8 @@ pub(super) fn format(vm: &mut Vm, args: &[JValue]) -> R {
         text.push('.');
         text.push_str(format!("{nano:09}").trim_end_matches('0'));
     }
-    if let Some(offset) = offset {
+    let local_only = matches!(vm.payload_of(args[0]),Some(Native::DateFormatter{pattern,..}) if pattern==LOCAL_PATTERN);
+    if let Some(offset) = offset.filter(|_| !local_only) {
         if offset == 0 {
             text.push('Z');
         } else {
@@ -318,16 +325,21 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
     let id = vm.ensure_class_by_desc(unsupported)?;
     vm.classes[id as usize].superclass =
         Some(vm.ensure_class_by_desc("Ljava/time/DateTimeException;")?);
-    let value = vm.alloc_native(
-        FORMATTER,
-        Native::DateFormatter {
-            pattern: PATTERN.into(),
-            zone: String::new(),
-        },
-    )?;
-    vm.arena.objects[value.as_obj() as usize].fields =
-        vec![JValue::Int(1), JValue::Null, JValue::Null];
-    super::multipart_compat::static_value(vm, FORMATTER, "ISO_DATE_TIME", FORMATTER, value)?;
+    for (name, pattern) in [
+        ("ISO_DATE_TIME", PATTERN),
+        ("ISO_LOCAL_DATE_TIME", LOCAL_PATTERN),
+    ] {
+        let value = vm.alloc_native(
+            FORMATTER,
+            Native::DateFormatter {
+                pattern: pattern.into(),
+                zone: String::new(),
+            },
+        )?;
+        vm.arena.objects[value.as_obj() as usize].fields =
+            vec![JValue::Int(1), JValue::Null, JValue::Null];
+        super::multipart_compat::static_value(vm, FORMATTER, name, FORMATTER, value)?;
+    }
     for class in [LOCAL, ZONED] {
         vm.register_native(NativeEntry {
             class,
@@ -361,4 +373,46 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), JvmError> {
         f: to_local_datetime,
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn local_iso_retains_nanos_and_rejects_offsets_regions_and_invalid_dates() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        let formatter = vm
+            .alloc_native(
+                FORMATTER,
+                Native::DateFormatter {
+                    pattern: LOCAL_PATTERN.into(),
+                    zone: String::new(),
+                },
+            )
+            .unwrap();
+        vm.arena.objects[formatter.as_obj() as usize].fields =
+            vec![JValue::Int(1), JValue::Null, JValue::Null];
+        let text = vm.alloc_string("2024-02-29T12:34:56.123456789");
+        let value = local_datetime(&mut vm, &[text, formatter]).unwrap();
+        assert_eq!(nano(&mut vm, &[value]).unwrap().as_int(), 123_456_789);
+        let rendered = format(&mut vm, &[formatter, value]).unwrap();
+        assert_eq!(
+            vm.str_of_jvalue(rendered).as_deref(),
+            Some("2024-02-29T12:34:56.123456789")
+        );
+        for text in [
+            "2024-02-29T12:34:56Z",
+            "2024-02-29T12:34:56+01:00",
+            "2024-02-29T12:34:56Z[UTC]",
+            "2023-02-29T12:34:56",
+            "2024-02-29T12:34:60",
+            "2024-02-29T12:34:56.1234567890",
+        ] {
+            let text = vm.alloc_string(text);
+            assert!(matches!(
+                local_datetime(&mut vm, &[text, formatter]),
+                Err(NatErr::Throw(_))
+            ));
+        }
+    }
 }

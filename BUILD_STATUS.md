@@ -1,3 +1,13 @@
+## Requested source fixes, manga hub and hold scrolling — build 62
+
+Version 0.25.15. Preserve each extension's bounded title metadata across catalog, saved-title and fresh-runtime refresh operations. Fix Toonily's URL value equality, MangaBall's Kotlin ByteArray request-body defaults, ISO_LOCAL_DATE_TIME parsing/formatting and callback interface loading. All three requested APKs now complete catalog/details/dated chapters/ordered pages/image-byte flows against neutral owned responses. MangaBall evidence covers its English identity (index 8), not all 42 identities.
+
+Refresh the manga hub with a continue-reading rail, saved cover grid, history cards and adaptive pinned/recent source cards. Add hold-to-scroll (release to stop), quick speed controls, a 15–240 pt/s settings slider and a saved gesture preference. Preserve existing reader preferences and accessibility/navigation routes.
+
+Local validation and native CI results are recorded in the PR. The [build-62 evidence](docs/manga-compatibility/requested-sources-build62.md) explains the exact APKs, source fixes, reader behavior and verification limits. Shared Java/Kotlin roadmap estimate: **93% → 94%**; broader coroutine/reflection/collection/date work remains. Controlled responses do not certify live website availability.
+
+Build 61 was merged as PR #42. Its source-image header fix is retained: an extension's absent Referer is not silently added back.
+
 ## Constructor reflection and ISO date resolution — build 60
 
 Version 0.25.13. Add actual constructor lookup/invocation, declared/public executable enumeration, access overrides, parameter/declaring-class/modifier/varargs metadata and Java equality/hash contracts. Declared exception types are decoded from real bounded DEX Throws annotations. Abstract/enum construction, wrong arguments and guest failures remain errors; VM budget/depth errors are never wrapped as guest exceptions. Reflection now lays out long/double arguments in Dalvik word slots, and Float/Double boxing interprets raw register bits correctly. Cached loaded Class objects remain GC roots; wrapper TYPE objects provide canonical primitive method metadata.

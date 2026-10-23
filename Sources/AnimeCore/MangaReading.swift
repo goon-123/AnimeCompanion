@@ -81,14 +81,26 @@ public struct MangaReadingRecord: Codable, Identifiable, Sendable {
 
 public struct WebtoonPreferences: Codable, Equatable, Sendable {
     public enum Background: String, Codable, CaseIterable, Sendable { case black, charcoal, paper }
+    public static let scrollSpeedRange = 15.0...240.0
     public var background = Background.black
     public var sidePadding = 0.0
     public var autoScrollSpeed = 45.0
+    public var holdToScroll = true
     public var keepAwake = true
     public init() {}
     public mutating func normalize() {
         sidePadding = sidePadding.isFinite ? min(0.12, max(0, sidePadding)) : 0
-        autoScrollSpeed = autoScrollSpeed.isFinite ? min(140, max(15, autoScrollSpeed)) : 45
+        autoScrollSpeed = autoScrollSpeed.isFinite ? min(Self.scrollSpeedRange.upperBound, max(Self.scrollSpeedRange.lowerBound, autoScrollSpeed)) : 45
+    }
+    private enum CodingKeys: String, CodingKey { case background, sidePadding, autoScrollSpeed, holdToScroll, keepAwake }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        background = try c.decodeIfPresent(Background.self, forKey: .background) ?? .black
+        sidePadding = try c.decodeIfPresent(Double.self, forKey: .sidePadding) ?? 0
+        autoScrollSpeed = try c.decodeIfPresent(Double.self, forKey: .autoScrollSpeed) ?? 45
+        holdToScroll = try c.decodeIfPresent(Bool.self, forKey: .holdToScroll) ?? true
+        keepAwake = try c.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? true
+        normalize()
     }
 }
 

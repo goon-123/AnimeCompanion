@@ -20,11 +20,13 @@ struct WebtoonCanvas: UIViewRepresentable {
     let jump: WebtoonJump?
     let preferences: WebtoonPreferences
     let autoScroll: Bool
+    let scrollingAllowed: Bool
     let hasNext: Bool
     let loader: @Sendable (SourceMangaImage) async throws -> Data
     let onPosition: (Int, Double, Bool) -> Void
     let onTap: () -> Void
     let onDrag: () -> Void
+    let onHoldChanged: (Bool) -> Void
     let onAutoStop: () -> Void
     let onNext: () -> Void
 
@@ -64,6 +66,8 @@ struct WebtoonCanvas: UIViewRepresentable {
         private var lastReport = 0.0
         private var displayLink: CADisplayLink?
         private var lastTick = 0.0
+        private weak var holdGesture: UILongPressGestureRecognizer?
+        private var holding = false
         init(_ parent: WebtoonCanvas) { self.parent = parent }
         func attach(_ scroll: WebtoonScrollView) {
             self.scroll = scroll; scroll.addSubview(content); content.addSubview(end)
@@ -72,12 +76,18 @@ struct WebtoonCanvas: UIViewRepresentable {
             tap.delegate = self; tap.cancelsTouchesInView = false; scroll.addGestureRecognizer(tap)
             let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
             double.numberOfTapsRequired = 2; double.delegate = self; scroll.addGestureRecognizer(double); tap.require(toFail: double)
+            let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
+            hold.minimumPressDuration = 0.35; hold.allowableMovement = 18
+            hold.delegate = self; hold.cancelsTouchesInView = false
+            scroll.addGestureRecognizer(hold); holdGesture = hold
+            tap.require(toFail: hold); double.require(toFail: hold)
             end.action = { [weak self] in self?.parent.onNext() }
         }
         func update(_ value: WebtoonCanvas) {
             let preferencesChanged = parent.preferences != value.preferences
             parent = value
             if chapter != value.chapterKey || pages != value.pages {
+                endHold()
                 stopLoads(); generation = UUID()
                 cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
                 chapter = value.chapterKey; pages = value.pages; ratios = Array(repeating: 1.7, count: pages.count)
@@ -91,12 +101,29 @@ struct WebtoonCanvas: UIViewRepresentable {
                 applyPending(); window()
             }
             end.button.setTitle(value.hasNext ? "Next chapter" : "Back to chapters", for: .normal)
-            if value.autoScroll && displayLink == nil {
+            holdGesture?.isEnabled = value.scrollingAllowed && value.preferences.holdToScroll
+            if !value.scrollingAllowed || !value.preferences.holdToScroll { endHold() }
+            updateMotion()
+            window()
+        }
+        private func updateMotion() {
+            if parent.scrollingAllowed && (parent.autoScroll || holding) && displayLink == nil {
                 lastTick = 0
                 let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
                 link.add(to: .main, forMode: .common); displayLink = link
-            } else if !value.autoScroll { displayLink?.invalidate(); displayLink = nil; lastTick = 0 }
-            window()
+            } else if !parent.scrollingAllowed || (!parent.autoScroll && !holding) { stopMotion() }
+        }
+        private func stopMotion() {
+            displayLink?.invalidate(); displayLink = nil; lastTick = 0
+        }
+        private func endHold() {
+            guard holding else { return }
+            holding = false; stopMotion()
+            // A sheet, scene change or chapter update can cancel a recognizer
+            // during updateUIView. Publish its UI state on the next run loop.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }; self.parent.onHoldChanged(self.holding)
+            }
         }
         private func columnWidth(_ scroll: UIScrollView) -> CGFloat {
             min(820, scroll.bounds.width * CGFloat(1 - parent.preferences.sidePadding * 2))
@@ -241,13 +268,35 @@ struct WebtoonCanvas: UIViewRepresentable {
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { content }
         func scrollViewDidScroll(_ scrollView: UIScrollView) { guard !layingOut else { return }; window(); report() }
         func scrollViewDidZoom(_ scrollView: UIScrollView) { guard !layingOut else { return }; window(); report(force: true) }
-        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { pending = nil; parent.onDrag() }
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { pending = nil; endHold(); stopMotion(); parent.onDrag() }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { endHold(); stopMotion(); parent.onDrag() }
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) { if !decelerate { report(force: true) } }
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { report(force: true) }
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             var view = touch.view
             while let current = view { if current is UIControl { return false }; view = current.superview }
             return true
+        }
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            if recognizer === holdGesture {
+                return parent.scrollingAllowed && parent.preferences.holdToScroll && !UIAccessibility.isVoiceOverRunning && scroll?.isDragging == false && scroll?.isZooming == false
+            }
+            return true
+        }
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            (recognizer === holdGesture && other === scroll?.panGestureRecognizer) || (other === holdGesture && recognizer === scroll?.panGestureRecognizer)
+        }
+        @objc private func held(_ recognizer: UILongPressGestureRecognizer) {
+            switch recognizer.state {
+            case .began:
+                guard parent.scrollingAllowed, parent.preferences.holdToScroll, let scroll, !scroll.isDragging, !scroll.isZooming else { return }
+                scroll.setContentOffset(scroll.contentOffset, animated: false)
+                pending = nil; holding = true
+                parent.onHoldChanged(true); updateMotion()
+            case .ended, .cancelled, .failed:
+                endHold()
+            default: break
+            }
         }
         @objc private func tapped() { parent.onTap() }
         @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
@@ -260,19 +309,19 @@ struct WebtoonCanvas: UIViewRepresentable {
             }
         }
         @objc private func tick(_ link: CADisplayLink) {
-            guard let scroll, parent.autoScroll, !scroll.isDragging, !scroll.isDecelerating, !scroll.isZooming else { lastTick = 0; return }
+            guard let scroll, parent.scrollingAllowed, parent.autoScroll || holding, !scroll.isDragging, !scroll.isDecelerating, !scroll.isZooming else { lastTick = 0; return }
             guard !pages.isEmpty, cells[index(at: max(0, scroll.contentOffset.y / scroll.zoomScale))]?.hasImage == true else {
-                lastTick = 0; parent.onAutoStop(); return
+                endHold(); stopMotion(); parent.onAutoStop(); return
             }
             let delta = lastTick == 0 ? 0 : min(0.05, link.timestamp - lastTick); lastTick = link.timestamp
             let maximum = max(0, scroll.contentSize.height - scroll.bounds.height)
             let next = min(maximum, scroll.contentOffset.y + CGFloat(delta * parent.preferences.autoScrollSpeed))
             scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: next), animated: false)
-            if next >= maximum - 0.5 { parent.onAutoStop(); report(force: true) }
+            if next >= maximum - 0.5 { endHold(); stopMotion(); parent.onAutoStop(); report(force: true) }
         }
         private func stopLoads() { tasks.values.forEach { $0.1.cancel() }; tasks.removeAll() }
         func stop() {
-            displayLink?.invalidate(); displayLink = nil; stopLoads()
+            endHold(); stopMotion(); stopLoads()
             cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
             scroll?.delegate = nil; scroll?.onSizeChange = nil
         }

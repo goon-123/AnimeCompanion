@@ -18,10 +18,10 @@ enum MangaRuntime {
         try await run(apk, command: ["op": mode, "source": source.index, "modern": modern, "query": query, "page": page], networking: true, sourceID: source.id, settings: settings)
     }
     static func details(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> SourceManga {
-        try await run(apk, command: ["op": "details", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
+        try await run(apk, command: ["op": "details", "source": source.index, "modern": modern, "manga": mangaInput(manga)], networking: true, sourceID: source.id, settings: settings)
     }
     static func chapters(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> [SourceMangaChapter] {
-        try await run(apk, command: ["op": "chapters", "source": source.index, "modern": modern, "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
+        try await run(apk, command: ["op": "chapters", "source": source.index, "modern": modern, "manga": mangaInput(manga)], networking: true, sourceID: source.id, settings: settings)
     }
     static func pages(_ apk: Data, source: MangaRuntimeSource, modern: Bool, chapter: SourceMangaChapter, settings: MangaSourceSettings = .init()) async throws -> [SourceMangaImage] {
         try await run(apk, command: ["op": "pages", "source": source.index, "modern": modern, "chapter": chapterInput(chapter)], networking: true, sourceID: source.id, settings: settings)
@@ -32,9 +32,16 @@ enum MangaRuntime {
         if let memo = chapter.memo { input["memo"] = memo }
         return input
     }
+    static func mangaInput(_ manga: SourceManga) -> [String: Any] {
+        var input: [String: Any] = ["url": manga.url, "title": manga.title, "author": manga.author,
+            "artist": manga.artist, "description": manga.description, "genre": manga.genre,
+            "status": manga.status, "thumbnailURL": manga.thumbnailURL]
+        if let memo = manga.memo { input["memo"] = memo }
+        return input
+    }
     static func book(_ apk: Data, source: MangaRuntimeSource, modern: Bool, manga: SourceManga, settings: MangaSourceSettings = .init()) async throws -> MangaBook {
         try await run(apk, command: ["op": "book", "source": source.index, "modern": modern,
-                                    "manga": ["url": manga.url, "title": manga.title]], networking: true, sourceID: source.id, settings: settings)
+                                    "manga": mangaInput(manga)], networking: true, sourceID: source.id, settings: settings)
     }
     static func image(_ apk: Data, source: MangaRuntimeSource, modern: Bool, image: SourceMangaImage, settings: MangaSourceSettings = .init()) async throws -> Data {
         let response: MangaImageEnvelope = try await run(apk, command: ["op": "image", "source": source.index, "modern": modern,

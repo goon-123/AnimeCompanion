@@ -138,10 +138,13 @@ public struct SourceManga: Codable, Equatable, Identifiable, Sendable {
     public let genre: String
     public let status: Int
     public let thumbnailURL: String
+    /// Opaque extension data needed to refresh a title in a fresh runtime.
+    public let memo: String?
     public init(url: String, title: String, author: String = "", artist: String = "", description: String = "",
-                genre: String = "", status: Int = 0, thumbnailURL: String = "") {
+                genre: String = "", status: Int = 0, thumbnailURL: String = "", memo: String? = nil) {
         self.url = url; self.title = title; self.author = author; self.artist = artist
         self.description = description; self.genre = genre; self.status = status; self.thumbnailURL = thumbnailURL
+        self.memo = memo
     }
     public func merging(_ details: SourceManga) -> SourceManga {
         SourceManga(url: url, title: details.title.isEmpty ? title : details.title,
@@ -150,7 +153,8 @@ public struct SourceManga: Codable, Equatable, Identifiable, Sendable {
                     description: details.description.isEmpty ? description : details.description,
                     genre: details.genre.isEmpty ? genre : details.genre,
                     status: details.status == 0 ? status : details.status,
-                    thumbnailURL: details.thumbnailURL.isEmpty ? thumbnailURL : details.thumbnailURL)
+                    thumbnailURL: details.thumbnailURL.isEmpty ? thumbnailURL : details.thumbnailURL,
+                    memo: details.memo ?? memo)
     }
 }
 public struct SourceMangaPage: Codable, Sendable {
