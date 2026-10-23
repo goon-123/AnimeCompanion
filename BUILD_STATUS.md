@@ -1,3 +1,11 @@
+## Consistent reader scroll speed — build 63
+
+Version 0.25.16. Build 62 was merged as PR #43. Its source bridge and all 71 native runtime tests passed on iPhone and iPad; iPhone reader checks passed. The iPad reader test exposed slow-speed motion being lost between display frames.
+
+Keep fractional scroll targets across frames rather than repeatedly adding tiny steps to a rounded UIKit offset. Use elapsed display time while bounding long pauses, reset the clock on stop, and follow external position changes. Add deterministic tests across 20/30/60/120 Hz and 2×/3× display scales, plus speed changes, release/reset, position jumps and chapter-end bounds. The native hold/release/speed test now holds long enough to measure slow scrolling reliably. Hosted verification is recorded in the follow-up PR.
+
+The shared Java/Kotlin estimate remains **94%**; this change affects reader pacing.
+
 ## Requested source fixes, manga hub and hold scrolling — build 62
 
 Version 0.25.15. Preserve each extension's bounded title metadata across catalog, saved-title and fresh-runtime refresh operations. Fix Toonily's URL value equality, MangaBall's Kotlin ByteArray request-body defaults, ISO_LOCAL_DATE_TIME parsing/formatting and callback interface loading. All three requested APKs now complete catalog/details/dated chapters/ordered pages/image-byte flows against neutral owned responses. MangaBall evidence covers its English identity (index 8), not all 42 identities.
