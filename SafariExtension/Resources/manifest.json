@@ -3,7 +3,7 @@
   "name": "Anime Companion – VidHub",
   "short_name": "Safari → VidHub",
   "description": "Detect website videos and open supported streams in VidHub with a tap.",
-  "version": "0.25.14",
+  "version": "0.25.15",
   "browser_specific_settings": { "safari": { "strict_min_version": "18.0" } },
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],

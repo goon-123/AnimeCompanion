@@ -2,6 +2,45 @@ import XCTest
 
 final class WebtoonReaderUITests: XCTestCase {
     @MainActor
+    func testHoldScrollingStopsOnReleaseAndSpeedCanBeChanged() {
+        let app = launch()
+        openFirstTitle(app)
+        app.buttons["manga-read"].tap()
+        let image = app.images["webtoon-page-image-0"]
+        XCTAssertTrue(image.waitForExistence(timeout: 20))
+        let canvas = app.scrollViews["webtoon-canvas"]
+        app.buttons["webtoon-scroll-slower"].tap()
+        app.buttons["webtoon-scroll-slower"].tap()
+        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].value as? String, "15 points per second")
+        let initial = image.frame.minY
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 1.6)
+        let slowDistance = initial - image.frame.minY
+        XCTAssertGreaterThan(slowDistance, 8, "Holding a page must scroll it")
+        let released = image.frame.minY
+        let stopped = expectation(description: "Releasing the hold stops motion")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            XCTAssertEqual(image.frame.minY, released, accuracy: 3)
+            stopped.fulfill()
+        }
+        wait(for: [stopped], timeout: 3)
+        showControls(app)
+        for _ in 0..<7 { app.buttons["webtoon-scroll-faster"].tap() }
+        XCTAssertEqual(app.staticTexts["webtoon-scroll-speed"].value as? String, "120 points per second")
+        let beforeFast = image.frame.minY
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 1.6)
+        XCTAssertGreaterThan(beforeFast - image.frame.minY, slowDistance * 2)
+        showControls(app)
+        app.buttons["webtoon-settings"].tap()
+        XCTAssertTrue(app.switches["webtoon-hold-to-scroll"].waitForExistence(timeout: 10))
+        if !app.switches["webtoon-hold-to-scroll"].isHittable { app.swipeUp() }
+        app.switches["webtoon-hold-to-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        app.navigationBars["Webtoon reader"].buttons["Done"].tap()
+        let disabled = image.frame.minY
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 1.4)
+        XCTAssertEqual(image.frame.minY, disabled, accuracy: 3)
+        capture("Hold-Scroll-Controls", app)
+    }
+    @MainActor
     func testChapterRuntimeErrorIdentifiesSourceAndCanRetry() {
         let app = launch(chapterFailure: true)
         openFirstTitle(app)

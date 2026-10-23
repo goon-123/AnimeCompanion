@@ -50,15 +50,9 @@ fn json_node(value: Value, depth: usize) -> Result<JsonVal, String> {
         ),
     })
 }
-pub(super) fn pages(
-    ext: &mut Keiyoushi,
-    src: &Source,
-    input: &ChapterInput,
-) -> Result<Value, String> {
-    let memo = match &input.memo {
-        None => ext
-            .ctx()
-            .vm()
+pub(super) fn decode_memo(vm: &mut Vm, text: Option<&str>) -> Result<JValue, String> {
+    Ok(match text {
+        None => vm
             .alloc_native(
                 "Lkotlinx/serialization/json/JsonObject;",
                 Native::Json(JsonVal::Object(vec![])),
@@ -74,15 +68,20 @@ pub(super) fn pages(
                 return Err("Source chapter metadata must be an object.".into());
             }
             let value = json_node(value, 0)?;
-            ext.ctx()
-                .vm()
-                .alloc_native(
-                    "Lkotlinx/serialization/json/JsonObject;",
-                    Native::Json(value),
-                )
-                .map_err(|e| e.to_string())?
+            vm.alloc_native(
+                "Lkotlinx/serialization/json/JsonObject;",
+                Native::Json(value),
+            )
+            .map_err(|e| e.to_string())?
         }
-    };
+    })
+}
+pub(super) fn pages(
+    ext: &mut Keiyoushi,
+    src: &Source,
+    input: &ChapterInput,
+) -> Result<Value, String> {
+    let memo = decode_memo(ext.ctx().vm(), input.memo.as_deref())?;
     let number = input.chapter_number.unwrap_or(-1.0);
     if !number.is_finite() {
         return Err("Invalid source chapter number.".into());

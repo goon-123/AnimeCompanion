@@ -4,6 +4,27 @@
   "meaning": "Exact APK/version and source-index evidence from passing owned-fixture tests. No live verification is implied.",
   "fixtures": [
     {
+      "name": "tachiyomi-en.omegascans-v1.6.52.apk",
+      "sha256": "f63427eb1b468dc45210913f6c10637e98895d9f1b7d59ac6bc73a9d04b18743",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/23345ef/tachiyomi-en.omegascans-v1.6.52.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.omegascans",
+      "cases": [{"test":"requested_source_tests::omega_owned_reading_flow","stages":["popular","details","chapters","pages","images"],"sources":[0]}]
+    },
+    {
+      "name": "tachiyomi-en.toonily-v1.6.72.apk",
+      "sha256": "3cfefdaa4b798ef303b16d9d09c69b227ad76caa9ed13cdef495b42020af46b5",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/e97033f/tachiyomi-en.toonily-v1.6.72.apk",
+      "package": "eu.kanade.tachiyomi.extension.en.toonily",
+      "cases": [{"test":"requested_source_tests::toonily_owned_reading_flow","stages":["popular","details","chapters","pages","images"],"sources":[0]}]
+    },
+    {
+      "name": "tachiyomi-all.mangaball-v1.6.5.apk",
+      "sha256": "b5fd0a8f5b5c99e346e8d4b639dffa50cbad9756e939cb32dba3fac21ae4857b",
+      "url": "https://github.com/keiyoushi/extensions/releases/download/e97033f/tachiyomi-all.mangaball-v1.6.5.apk",
+      "package": "eu.kanade.tachiyomi.extension.all.mangaball",
+      "cases": [{"test":"requested_source_tests::mangaball_owned_reading_flow","stages":["popular","details","chapters","pages","images"],"sources":[8]}]
+    },
+    {
       "name": "tachiyomi-ru.senkuro-v1.6.0.apk",
       "sha256": "85f79e81b858697454273c409c05564c914d83e930b7916e63fcec323b42b8f7",
       "url": "https://github.com/keiyoushi/extensions/releases/download/06f6d69/tachiyomi-ru.senkuro-v1.6.0.apk",

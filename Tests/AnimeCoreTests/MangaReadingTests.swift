@@ -82,11 +82,13 @@ final class MangaReadingTests: XCTestCase {
         XCTAssertEqual(MangaChapterSequence.nextToRead(chapters, record: state.record(t.id))?.url, "/chapter/3")
     }
     func testMetadataRefreshPreservesSourceIdentityAndUsefulExistingFields() {
-        let original = SourceManga(url: "stable-id", title: "Story", author: "Writer", thumbnailURL: "https://example.com/a.jpg")
+        let original = SourceManga(url: "stable-id", title: "Story", author: "Writer", thumbnailURL: "https://example.com/a.jpg", memo: #"{"id":"owned"}"#)
         let details = SourceManga(url: "", title: "Updated", description: "Description", status: 2)
         let merged = original.merging(details)
         XCTAssertEqual(merged.url, "stable-id"); XCTAssertEqual(merged.title, "Updated")
         XCTAssertEqual(merged.author, "Writer"); XCTAssertEqual(merged.thumbnailURL, original.thumbnailURL)
+        XCTAssertEqual(merged.memo, original.memo)
+        XCTAssertEqual(merged.merging(SourceManga(url: "", title: "", memo: "{}")).memo, "{}")
     }
     func testPreferencesAndRecentSourcesHaveUsefulBounds() {
         var state = MangaReadingState()
@@ -96,6 +98,19 @@ final class MangaReadingTests: XCTestCase {
         XCTAssertEqual(Set(state.recentSources).count, 20)
         var p = WebtoonPreferences(); p.sidePadding = .infinity; p.autoScrollSpeed = -100; p.normalize()
         XCTAssertEqual(p.sidePadding, 0); XCTAssertEqual(p.autoScrollSpeed, 15)
+        p.autoScrollSpeed = 10000; p.normalize()
+        XCTAssertEqual(p.autoScrollSpeed, 240)
+    }
+    func testExistingReaderPreferencesGainHoldScrollingWithoutLosingSavedChoices() throws {
+        let legacy = Data(#"{"background":"paper","sidePadding":0.08,"autoScrollSpeed":90,"keepAwake":false}"#.utf8)
+        let restored = try JSONDecoder().decode(WebtoonPreferences.self, from: legacy)
+        XCTAssertEqual(restored.background, .paper)
+        XCTAssertEqual(restored.sidePadding, 0.08)
+        XCTAssertEqual(restored.autoScrollSpeed, 90)
+        XCTAssertFalse(restored.keepAwake)
+        XCTAssertTrue(restored.holdToScroll)
+        var changed = restored; changed.holdToScroll = false; changed.autoScrollSpeed = 180
+        XCTAssertEqual(try JSONDecoder().decode(WebtoonPreferences.self, from: JSONEncoder().encode(changed)), changed)
     }
     func testReadingStateSurvivesRestartWithFavoritesPinAndExactStripPosition() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

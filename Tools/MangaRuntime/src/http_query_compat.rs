@@ -5,6 +5,24 @@ use dexvm::vm::object::Native;
 use dexvm::vm::{NatErr, NativeEntry, Vm};
 use dexvm::JValue;
 type R = Result<JValue, NatErr>;
+fn url_equals(vm: &mut Vm, args: &[JValue]) -> R {
+    if !vm.object_class(args[1]).is_some_and(|class| {
+        vm.str_of(vm.classes[class as usize].descriptor) == "Lokhttp3/HttpUrl;"
+    }) {
+        return Ok(JValue::Int(0));
+    }
+    let equal = matches!((vm.payload_of(args[0]),vm.payload_of(args[1])),
+        (Some(Native::HttpUrl(a)),Some(Native::HttpUrl(b))) if a==b);
+    Ok(JValue::Int(i32::from(equal)))
+}
+fn url_hash(vm: &mut Vm, args: &[JValue]) -> R {
+    let Some(Native::HttpUrl(url)) = vm.payload_of(args[0]) else {
+        return Err(NatErr::Throw(vm.err_npe()));
+    };
+    Ok(JValue::Int(url.encode_utf16().fold(0i32, |h, c| {
+        h.wrapping_mul(31).wrapping_add(i32::from(c))
+    })))
+}
 
 fn builder_init(vm: &mut Vm, args: &[JValue]) -> R {
     // The core mutators operate on serialized components. Both required
@@ -192,6 +210,22 @@ fn names(vm: &mut Vm, args: &[JValue]) -> R {
 }
 pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
     for (name, sig, f) in [
+        (
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            url_equals as dexvm::vm::NativeFn,
+        ),
+        ("hashCode", "()I", url_hash),
+    ] {
+        vm.register_native(NativeEntry {
+            class: "Lokhttp3/HttpUrl;",
+            name,
+            sig,
+            instance: true,
+            f,
+        })?;
+    }
+    for (name, sig, f) in [
         ("<init>", "()V", builder_init as dexvm::vm::NativeFn),
         ("build", "()Lokhttp3/HttpUrl;", builder_build),
         ("toString", "()Ljava/lang/String;", builder_string),
@@ -257,6 +291,52 @@ pub fn install(vm: &mut Vm) -> Result<(), JvmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn separate_url_objects_compare_by_value_and_share_hashes() {
+        let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();
+        install(&mut vm).unwrap();
+        let a = vm
+            .alloc_native(
+                "Lokhttp3/HttpUrl;",
+                Native::HttpUrl("https://owned.example/story".into()),
+            )
+            .unwrap();
+        let b = vm
+            .alloc_native(
+                "Lokhttp3/HttpUrl;",
+                Native::HttpUrl("https://owned.example/story".into()),
+            )
+            .unwrap();
+        let other = vm
+            .alloc_native(
+                "Lokhttp3/HttpUrl;",
+                Native::HttpUrl("https://owned.example/other".into()),
+            )
+            .unwrap();
+        let builder = vm
+            .alloc_native(
+                "Lokhttp3/HttpUrl$Builder;",
+                Native::HttpUrl("https://owned.example/story".into()),
+            )
+            .unwrap();
+        assert_eq!(
+            vm.invoke_virtual_args(a, "equals", "(Ljava/lang/Object;)Z", vec![b])
+                .unwrap()
+                .as_int(),
+            1
+        );
+        let ah = vm.invoke_virtual(a, "hashCode", "()I").unwrap();
+        let bh = vm.invoke_virtual(b, "hashCode", "()I").unwrap();
+        assert_eq!(ah.as_int(), bh.as_int());
+        for value in [other, builder, JValue::Null] {
+            assert_eq!(
+                vm.invoke_virtual_args(a, "equals", "(Ljava/lang/Object;)Z", vec![value])
+                    .unwrap()
+                    .as_int(),
+                0
+            );
+        }
+    }
     #[test]
     fn fresh_builders_require_both_components_and_build_immutable_urls() {
         let mut vm = Vm::new(vec![], Box::new(std::io::sink())).unwrap();

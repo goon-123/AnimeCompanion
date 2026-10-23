@@ -64,16 +64,22 @@ struct MangaHubView: View {
     private var library: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                if let recent = history.first {
+                pageHeading("Your next chapter", subtitle: "Keep the stories you love close.")
+                if !history.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Continue reading").font(.title3.bold())
-                        NavigationLink { MangaTitleDetailView(title: recent.title) } label: { continueCard(recent) }.buttonStyle(.plain)
+                        sectionHeading("Continue reading", count: min(history.count, 8))
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 14) {
+                                ForEach(history.prefix(8)) { recent in
+                                    NavigationLink { MangaTitleDetailView(title: recent.title) } label: {
+                                        continueCard(recent).frame(width: 310)
+                                    }.buttonStyle(.plain)
+                                }
+                            }.scrollTargetLayout()
+                        }.scrollIndicators(.hidden).scrollTargetBehavior(.viewAligned)
                     }
                 }
-                HStack {
-                    Text("Your library").font(.title3.bold())
-                    Spacer(); Text("\(saved.count) titles").font(.subheadline).foregroundStyle(.secondary)
-                }
+                sectionHeading("Saved stories", count: saved.count)
                 if saved.isEmpty {
                     ContentUnavailableView {
                         Label(query.isEmpty ? "Your next story belongs here" : "No matching titles", systemImage: "books.vertical")
@@ -88,12 +94,44 @@ struct MangaHubView: View {
                         }
                     }
                 }
-            }.padding(18)
+                discoverCard
+            }.padding(18).frame(maxWidth: 1100).frame(maxWidth: .infinity)
         }.accessibilityIdentifier("manga-library")
+    }
+    private func pageHeading(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.title2.bold()).foregroundStyle(.white)
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+        }.padding(.top, 4)
+    }
+    private func sectionHeading(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title).font(.headline)
+            Spacer()
+            Text("\(count)").font(.caption.weight(.semibold)).monospacedDigit()
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.white.opacity(0.08), in: Capsule()).foregroundStyle(.secondary)
+        }
+    }
+    private var discoverCard: some View {
+        NavigationLink(value: MangaSearchRoute(titles: [])) {
+            HStack(spacing: 14) {
+                Image(systemName: "sparkle.magnifyingglass").font(.title2)
+                    .frame(width: 48, height: 48).background(MangaStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Find your next story").font(.headline)
+                    Text("Search across your installed sources").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.subheadline.bold())
+            }.foregroundStyle(MangaStyle.accent).padding(16)
+                .background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 20))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(MangaStyle.accent.opacity(0.18)))
+        }.buttonStyle(.plain).accessibilityIdentifier("manga-discover-stories")
     }
     private func continueCard(_ record: MangaReadingRecord) -> some View {
         HStack(spacing: 16) {
-            MangaCover(title: record.title, width: 96).frame(width: 96, height: 138).clipShape(RoundedRectangle(cornerRadius: 12))
+            MangaCover(title: record.title, width: 84).frame(width: 84, height: 126).clipShape(RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 8) {
                 Text(record.title.manga.title).font(.headline).lineLimit(2)
                 Text(record.title.source.name).font(.caption).foregroundStyle(.secondary)
@@ -101,13 +139,17 @@ struct MangaHubView: View {
                     Text(point.chapterName).font(.subheadline).foregroundStyle(MangaStyle.accent)
                     Text(point.completed ? "Chapter finished" : "Page \(point.pageIndex + 1) of \(point.pageCount)")
                         .font(.caption).foregroundStyle(.secondary)
+                    ProgressView(value: point.completed ? 1 : Double(point.pageIndex + 1) / Double(max(point.pageCount, 1)))
+                        .tint(MangaStyle.accent).accessibilityLabel("Chapter progress")
                 }
                 Label("Continue", systemImage: "arrow.right").font(.subheadline.bold())
             }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(12).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 18))
+        }.padding(14).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 20))
     }
     private var historyList: some View {
-        List {
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 16) {
+            pageHeading("Recently read", subtitle: "Pick up where you left off, in any source.")
             if history.isEmpty { ContentUnavailableView("No reading history yet", systemImage: "clock", description: Text("The chapters you read will appear here.")) }
             ForEach(history) { record in
                 NavigationLink { MangaTitleDetailView(title: record.title) } label: {
@@ -121,26 +163,32 @@ struct MangaHubView: View {
                             }
                             if let date = record.lastReadAt { Text(date, style: .relative).font(.caption).foregroundStyle(.secondary) }
                         }
-                    }.padding(.vertical, 4)
-                }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+                    }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 18))
+                }.buttonStyle(.plain)
             }
-        }.scrollContentBackground(.hidden).accessibilityIdentifier("manga-history")
+          }.padding(18).frame(maxWidth: 1100).frame(maxWidth: .infinity)
+        }.accessibilityIdentifier("manga-history")
     }
     private var sourceList: some View {
-        List {
-            Section {
-                HStack {
-                    Label("Read on your terms", systemImage: "rectangle.portrait.on.rectangle.portrait")
-                    Spacer(); Text("WEBTOON").font(.caption2.bold()).foregroundStyle(MangaStyle.accent)
-                }
-                Text("Choose an installed source, find a story, and keep scrolling.").font(.subheadline).foregroundStyle(.secondary)
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 24) {
+            pageHeading("Explore your sources", subtitle: "Browse a favorite or discover something new.")
+            discoverCard
+            HStack {
+                Label("\(sources.count) available", systemImage: "square.stack.3d.up")
+                    .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
                 Picker("Language", selection: $language) {
                     Text("All languages").tag("")
                     ForEach(Array(Set(extensions.state.installations.flatMap(\.sources).map(\.language) + ["en"])).filter { $0 != "all" }.sorted(), id: \.self) {
                         Text(Locale.current.localizedString(forLanguageCode: $0) ?? $0.uppercased()).tag($0)
                     }
-                }
-            }
+                }.pickerStyle(.menu).tint(MangaStyle.accent)
+                    .accessibilityIdentifier("manga-source-language")
+            }.padding(12).background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 14))
             if extensions.loading { ProgressView("Loading sources…") }
             else if extensions.state.installations.isEmpty {
                 ContentUnavailableView {
@@ -154,14 +202,24 @@ struct MangaHubView: View {
                 let pinned = sources.filter { reading.state.pinnedSources.contains($0.id) }
                 let recent = reading.state.recentSources.compactMap { id in sources.first { $0.id == id && !reading.state.pinnedSources.contains(id) } }
                 let others = sources.filter { !reading.state.pinnedSources.contains($0.id) && !recent.contains($0) }
-                if !pinned.isEmpty { Section("Pinned") { ForEach(pinned) { sourceRow($0) } } }
-                if !recent.isEmpty { Section("Recently used") { ForEach(recent) { sourceRow($0) } } }
-                if !others.isEmpty { Section("Sources") { ForEach(others) { sourceRow($0) } } }
+                if !pinned.isEmpty { sourceGroup("Pinned", items: pinned) }
+                if !recent.isEmpty { sourceGroup("Recently used", items: recent) }
+                if !others.isEmpty { sourceGroup("All sources", items: others) }
             }
-            Section {
-                Button { manage = true } label: { Label("Manage extensions", systemImage: "puzzlepiece.extension") }
-            } footer: { Text("Source compatibility is experimental. Mature source collections follow the setting in Extensions.") }
-        }.scrollContentBackground(.hidden).accessibilityIdentifier("manga-sources")
+            Button { manage = true } label: {
+                Label("Manage extensions", systemImage: "puzzlepiece.extension")
+                    .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(14)
+            }.buttonStyle(.bordered).clipShape(RoundedRectangle(cornerRadius: 14))
+          }.padding(18).frame(maxWidth: 1100).frame(maxWidth: .infinity)
+        }.accessibilityIdentifier("manga-sources")
+    }
+    private func sourceGroup(_ title: String, items: [MangaSourceReference]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeading(title, count: items.count)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 270, maximum: 520), spacing: 12)], spacing: 12) {
+                ForEach(items) { sourceRow($0) }
+            }
+        }
     }
     private func sourceRow(_ source: MangaSourceReference) -> some View {
         HStack(spacing: 12) {
@@ -173,13 +231,17 @@ struct MangaHubView: View {
                         Text(source.language == "all" ? "Multilingual" : Locale.current.localizedString(forLanguageCode: source.language) ?? source.language)
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                }.padding(.vertical, 6)
-            }.accessibilityIdentifier("manga-source-\(source.sourceID)")
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+                }.padding(.vertical, 8).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("manga-source-\(source.sourceID)")
             Button { Task { await reading.pin(source) } } label: {
                 Image(systemName: reading.state.pinnedSources.contains(source.id) ? "pin.fill" : "pin")
                     .foregroundStyle(reading.state.pinnedSources.contains(source.id) ? MangaStyle.accent : .secondary)
-            }.buttonStyle(.borderless).accessibilityLabel(reading.state.pinnedSources.contains(source.id) ? "Unpin source" : "Pin source")
-        }
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityLabel(reading.state.pinnedSources.contains(source.id) ? "Unpin source" : "Pin source")
+        }.padding(.leading, 14).padding(.trailing, 6)
+            .background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 18))
     }
 }
 

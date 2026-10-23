@@ -32,6 +32,9 @@ while read -r release file; do
       "https://github.com/keiyoushi/extensions/releases/download/$release/$file" -o "$fixture_dir/$file"
   fi
 done <<'PINS'
+23345ef tachiyomi-en.omegascans-v1.6.52.apk
+e97033f tachiyomi-en.toonily-v1.6.72.apk
+e97033f tachiyomi-all.mangaball-v1.6.5.apk
 8ef06cd-0 tachiyomi-all.mangadex-v1.6.0.apk
 7363e42 tachiyomi-all.mangafire-v1.6.34.apk
 4217666-0 tachiyomi-en.asurascans-v1.6.69.apk
@@ -90,6 +93,9 @@ python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 expected = {
+    'tachiyomi-en.omegascans-v1.6.52.apk': 'f63427eb1b468dc45210913f6c10637e98895d9f1b7d59ac6bc73a9d04b18743',
+    'tachiyomi-en.toonily-v1.6.72.apk': '3cfefdaa4b798ef303b16d9d09c69b227ad76caa9ed13cdef495b42020af46b5',
+    'tachiyomi-all.mangaball-v1.6.5.apk': 'b5fd0a8f5b5c99e346e8d4b639dffa50cbad9756e939cb32dba3fac21ae4857b',
     'tachiyomi-ru.senkuro-v1.6.0.apk': '85f79e81b858697454273c409c05564c914d83e930b7916e63fcec323b42b8f7',
     'tachiyomi-ru.senkognito-v1.6.0.apk': '33064a7cf823632d380b7d4c5617e2b71ba48ca013b9bb915e2a592ff624b0a9',
     'tachiyomi-en.mangapill-v1.4.9.apk': 'a89cedebe600d4545625b59022b4f241d8416c245916cb451476aaa954451b5c',
