@@ -1,0 +1,256 @@
+import XCTest
+@testable import AnimeCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
+/// Neutral, owned metadata. No real tokens, libraries, book text or cover bytes.
+final class MangaBakaTests: XCTestCase {
+    private let record = #"{"id":81,"type":"manhwa","status":"releasing","content_rating":"safe","rating":82.5,"titles":[{"language":"ja","title":"Native","is_primary":true},{"language":"en","title":"Alternate","is_primary":false},{"language":"en","title":"Paper Moon","is_primary":true}],"description":"A <b>gentle</b> adventure.","published":{"start_date":"2024-07-01"},"cover":{"x350":"https://cdn.mangabaka.dev/owned-cover.jpg"},"authors":["Owned Author"],"total_chapters":20}"#
+    private func series(_ json: String) throws -> MangaBakaSeries { try JSONDecoder().decode(MangaBakaSeries.self, from: Data(json.utf8)) }
+    private func page(_ record: String, next: String = "null", count: Int = 1, page: Int = 1) -> String {
+        "{\"status\":200,\"data\":[\(record)],\"pagination\":{\"count\":\(count),\"page\":\(page),\"next\":\(next)}}"
+    }
+    private func client(_ transport: MBTestTransport, directory: URL? = nil) -> MangaBakaClient {
+        MangaBakaClient(transport: transport, directory: directory, minimumRequestInterval: 0)
+    }
+    private func key(_ kind: MangaBakaCredential.Kind = .apiKey) throws -> MangaBakaCredential {
+        try MangaBakaCredential(kind: kind, secret: "owned-test-credential")
+    }
+    func testFormatsAndVerifiedSortKeys() {
+        XCTAssertEqual(MangaBakaFormat.allCases.map(\.rawValue), ["manga", "novel", "manhwa", "manhua", "oel", "other"])
+        XCTAssertEqual(MangaBakaShelf.recentlyAdded.sort, "latest")
+        XCTAssertEqual(MangaBakaShelf.popular.sort, "popularity_asc")
+        XCTAssertEqual(MangaBakaShelf.topRated.sort, "score_desc")
+    }
+    func testV2TitlesCoverMetadataAndPlainSynopsis() throws {
+        let item = try series(record)
+        XCTAssertEqual(item.id, 81); XCTAssertEqual(item.displayTitle, "Paper Moon")
+        XCTAssertEqual(item.year, 2024); XCTAssertEqual(item.totalChapters, 20)
+        XCTAssertEqual(item.coverURL?.host, "cdn.mangabaka.dev")
+        XCTAssertFalse(item.synopsis.contains("<b>")); XCTAssertEqual(item.searchTitles.first, "Paper Moon")
+        XCTAssertEqual(item.websiteURL.absoluteString, "https://mangabaka.org/81")
+    }
+    func testLegacyDetailsNestedCoverAndNumericStrings() throws {
+        let item = try series(#"{"id":"81","title":"Owned title","content_rating":"safe","cover":{"x250":{"x1":"https://cdn.mangabaka.dev/legacy.jpg"}},"year":"2020","total_chapters":"31.5","final_volume":"8","genres":["fantasy",{"id":2,"name":"adventure"}],"source":{"anilist":{"id":10},"my_anime_list":{"id":null}}}"#)
+        XCTAssertEqual(item.displayTitle, "Owned title"); XCTAssertEqual(item.coverURL?.lastPathComponent, "legacy.jpg")
+        XCTAssertEqual(item.year, 2020); XCTAssertEqual(item.totalChapters, 31.5); XCTAssertEqual(item.finalVolume, 8)
+        XCTAssertEqual(item.genres.map(\.name), ["fantasy", "adventure"]); XCTAssertEqual(item.providers, ["AniList"])
+    }
+    func testRecommendationAliasesAndWrappedSeries() throws {
+        let item = try series(#"{"series_id":81,"title":"Owned recommendation","media_type":"novel","cover_image":"https://cdn.mangabaka.dev/recommendation.jpg","published_year":2023,"content_rating":"safe"}"#)
+        XCTAssertEqual(item.type, "novel"); XCTAssertEqual(item.year, 2023); XCTAssertNotNil(item.coverURL)
+        XCTAssertEqual(try series("{\"series\":\(record)}").id, 81)
+    }
+    func testContentFilteringFailsClosedForUnknownRatings() throws {
+        for rating in ["safe", "suggestive", "erotica", "pornographic", "unknown"] {
+            let item = try series("{\"id\":1,\"content_rating\":\"\(rating)\"}")
+            XCTAssertEqual(item.isVisible(includeAdult: false), ["safe", "suggestive"].contains(rating))
+            XCTAssertTrue(item.isVisible(includeAdult: true))
+        }
+        XCTAssertFalse(try series(#"{"id":1}"#).isVisible(includeAdult: false))
+    }
+    func testMalformedIdentityAndUnsafeArtwork() throws {
+        for json in [#"{"id":0}"#, #"{"id":-1}"#, #"{"title":"No identity"}"#] { XCTAssertThrowsError(try series(json)) }
+        for url in ["http://cdn.mangabaka.dev/a.jpg", "https://localhost/a.jpg", "https://127.0.0.1/a.jpg", "https://reader:secret@example.com/a.jpg", "https://example.com:444/a.jpg"] {
+            XCTAssertNil(MangaBakaSeries.publicURL(url))
+        }
+        XCTAssertNotNil(MangaBakaSeries.publicURL("https://cdn.mangabaka.dev/a.jpg"))
+    }
+    func testBrowseEncodingRatingsFormatsAndPagination() throws {
+        let url = MangaBakaClient.browseURL(.init(shelf: .topRated, format: .novel, status: "completed"), page: 2, limit: 30, includeAdult: false)
+        let q = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(q.filter { $0.name == "content_rating" }.compactMap(\.value), ["safe", "suggestive"])
+        XCTAssertTrue(q.contains(.init(name: "type", value: "novel"))); XCTAssertTrue(q.contains(.init(name: "page", value: "2")))
+        XCTAssertTrue(q.contains(.init(name: "status", value: "completed"))); XCTAssertTrue(q.contains(.init(name: "sort_by", value: "score_desc")))
+        XCTAssertTrue(q.contains(.init(name: "rating_lower", value: "1")))
+    }
+    func testSearchUsesRelevanceAndEncodesReservedText() throws {
+        let url = MangaBakaClient.browseURL(.init(text: "  Moon & stars + 1  "), page: 1, limit: 24, includeAdult: false)
+        let q = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(q.first { $0.name == "q" }?.value, "Moon & stars + 1")
+        XCTAssertNil(q.first { $0.name == "sort_by" })
+    }
+    func testCuratedQueriesAndNewReleaseDate() throws {
+        let gems = MangaBakaClient.browseURL(.init(shelf: .hiddenGems), page: 1, limit: 100, includeAdult: false)
+        let q = try XCTUnwrap(URLComponents(url: gems, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertTrue(gems.path.hasSuffix("/hidden-gems"))
+        XCTAssertEqual(q.filter { $0.name == "not_content_rating" }.compactMap(\.value), ["erotica", "pornographic"])
+        let release = MangaBakaClient.browseURL(.init(shelf: .newReleases), page: 1, limit: 24, includeAdult: false, now: Date(timeIntervalSince1970: 1_735_689_600))
+        XCTAssertTrue(release.absoluteString.contains("published_start_date_lower=2024-01-02"))
+    }
+    func testPaginationDoesNotTrustRemoteNextURL() throws {
+        let decoded = try JSONDecoder().decode(MangaBakaPage<MangaBakaSeries>.self, from: Data(page(record, next: "\"https://attacker.example/steal\"", count: 200, page: 3).utf8))
+        XCTAssertTrue(decoded.hasNext); XCTAssertEqual(decoded.total, 200); XCTAssertEqual(decoded.page, 3)
+        let next = MangaBakaClient.browseURL(.init(), page: decoded.page + 1, limit: 24, includeAdult: false)
+        XCTAssertEqual(next.host, "api.mangabaka.org"); XCTAssertTrue(next.absoluteString.contains("page=4"))
+    }
+    func testPublicRequestsCoalesceAndHaveNoCredentials() async throws {
+        let transport = MBTestTransport([.json(page(record))]), api = client(transport)
+        async let a = api.browse(.init(), includeAdult: false)
+        async let b = api.browse(.init(), includeAdult: false)
+        let results = try await (a, b)
+        XCTAssertEqual(results.0.items.first?.id, results.1.items.first?.id)
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization")); XCTAssertNil(requests.first?.value(forHTTPHeaderField: "X-API-Key"))
+        let session = MangaBakaClient.publicSession()
+        XCTAssertNil(session.configuration.httpCookieStorage); XCTAssertNil(session.configuration.urlCredentialStorage)
+        session.invalidateAndCancel()
+    }
+    func testPublicCacheSurvivesRestartAndExcludesAccountData() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = MBTestTransport([.json(page(record)), .json(#"{"data":{"id":"owned-user-id","nickname":"Private Name"}}"#)])
+        let first = client(transport, directory: directory)
+        _ = try await first.browse(.init(), includeAdult: false); _ = try await first.profile(key())
+        let bytes = try Data(contentsOf: directory.appendingPathComponent("catalog.json"))
+        let stored = String(decoding: bytes, as: UTF8.self)
+        XCTAssertFalse(stored.contains("Private Name")); XCTAssertFalse(stored.contains("owned-test-credential")); XCTAssertFalse(stored.contains("/my/"))
+        let unused = MBTestTransport([]), restarted = client(unused, directory: directory)
+        let cached = try await restarted.browse(.init(), includeAdult: false)
+        XCTAssertEqual(cached.items.first?.id, 81)
+        let requests = await unused.recorded(); XCTAssertTrue(requests.isEmpty)
+    }
+    func testFailedRefreshPreservesLastGoodPublicCache() async throws {
+        let transport = MBTestTransport([.json(page(record)), .json("{}", status: 503)]), api = client(transport)
+        _ = try await api.browse(.init(), includeAdult: false)
+        do { _ = try await api.browse(.init(), includeAdult: false, refresh: true); XCTFail("Expected server failure") } catch { XCTAssertEqual(error as? MangaBakaError, .http(503)) }
+        let retained = try await api.browse(.init(), includeAdult: false); XCTAssertEqual(retained.items.first?.id, 81)
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 2)
+    }
+    func testMalformedPublicPayloadIsNotReused() async throws {
+        let transport = MBTestTransport([.json(#"{"data":"unexpected"}"#), .json(page(record))]), api = client(transport)
+        do { _ = try await api.browse(.init(), includeAdult: false); XCTFail("Expected schema error") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+        let recovered = try await api.browse(.init(), includeAdult: false); XCTAssertEqual(recovered.items.count, 1)
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 2)
+    }
+    func testRateLimitDoesNotRetryOrSpendMoreRequests() async throws {
+        let transport = MBTestTransport([.json("{}", status: 429, headers: ["Retry-After": "120"])]), api = client(transport)
+        for _ in 0..<2 {
+            do { _ = try await api.browse(.init(), includeAdult: false); XCTFail("Expected cooldown") }
+            catch { guard let service = error as? MangaBakaError, case .rateLimited(let seconds) = service else { return XCTFail("Wrong error") }; XCTAssertGreaterThan(seconds, 0) }
+        }
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+    }
+    func testPrivateHeadersAndLibraryPayload() async throws {
+        let entry = "{\"series_id\":81,\"Series\":\(record),\"state\":\"reading\",\"progress_chapter\":\"3.5\",\"progress_volume\":2,\"rating\":\"80\",\"is_private\":false,\"note\":\"Owned note\"}"
+        let transport = MBTestTransport([.json(#"{"data":{"id":"owned-user","preferred_username":"reader","rating_steps":5}}"#), .json(page(entry))]), api = client(transport)
+        let profile = try await api.profile(key(.oauth)), library = try await api.library(key(), page: 2, state: "reading")
+        XCTAssertEqual(profile.name, "reader"); XCTAssertEqual(profile.ratingSteps, 5)
+        XCTAssertEqual(library.items.first?.chapter, 3.5); XCTAssertEqual(library.items.first?.isPrivate, false)
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer owned-test-credential")
+        XCTAssertNil(requests[0].value(forHTTPHeaderField: "X-API-Key"))
+        XCTAssertEqual(requests[1].value(forHTTPHeaderField: "X-API-Key"), "owned-test-credential")
+        XCTAssertNil(requests[1].value(forHTTPHeaderField: "Authorization")); XCTAssertTrue(requests[1].url!.absoluteString.contains("state=reading"))
+    }
+    func testLibraryIdentitiesAreValidatedBeforeEditing() throws {
+        let bad = "{\"series_id\":82,\"series\":\(record),\"state\":\"reading\"}"
+        XCTAssertThrowsError(try JSONDecoder().decode(MangaBakaLibraryEntry.self, from: Data(bad.utf8)))
+        let entry = try JSONDecoder().decode(MangaBakaLibraryEntry.self, from: Data(#"{"state":"reading","progress_chapter":0}"#.utf8))
+        XCTAssertEqual(try entry.attaching(series(record)).id, 81)
+    }
+    func testMissingEntryIsNotConfusedWithAuthenticationFailure() async throws {
+        let transport = MBTestTransport([.json("{}", status: 404), .json("{}", status: 401)]), api = client(transport)
+        let missing = try await api.entry(id: 81, credential: key()); XCTAssertNil(missing)
+        do { _ = try await api.entry(id: 81, credential: key()); XCTFail("Expected authentication error") } catch { XCTAssertEqual(error as? MangaBakaError, .unauthorized) }
+    }
+    func testLegacyLibraryPagesWithoutPaginationStillLoadTheRest() async throws {
+        let records = (1...40).map { "{\"series\":{\"id\":\($0),\"title\":\"Owned \($0)\",\"content_rating\":\"safe\"},\"state\":\"reading\"}" }.joined(separator: ",")
+        let transport = MBTestTransport([.json("{\"data\":[\(records)]}"), .json(#"{"data":[]}"#)]), api = client(transport)
+        let first = try await api.library(key(), page: 1, state: nil)
+        XCTAssertTrue(first.hasNext); XCTAssertNil(first.total)
+        let second = try await api.library(key(), page: 2, state: nil)
+        XCTAssertFalse(second.hasNext); XCTAssertEqual(second.page, 2)
+    }
+    func testWritesUseCorrectMethodsAndExplicitNullsWithoutOtherFields() async throws {
+        let transport = MBTestTransport([.json(#"{"status":201,"data":true}"#, status: 201), .json(#"{"data":true}"#), .json("", status: 204)]), api = client(transport)
+        let update = try MangaBakaLibraryUpdate(state: "reading", chapter: 0, volume: 1.5, rating: nil, note: nil, isPrivate: false)
+        try await api.save(id: 81, update: update, existing: false, credential: key())
+        try await api.save(id: 81, update: update, existing: true, credential: key())
+        try await api.remove(id: 81, credential: key())
+        let requests = await transport.recorded(); XCTAssertEqual(requests.map(\.httpMethod), ["POST", "PUT", "DELETE"])
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requests[1].httpBody!) as? [String: Any])
+        XCTAssertEqual(body["progress_chapter"] as? Int, 0); XCTAssertEqual(body["progress_volume"] as? Double, 1.5)
+        XCTAssertTrue(body["rating"] is NSNull); XCTAssertTrue(body["note"] is NSNull)
+        XCTAssertNil(body["start_date"]); XCTAssertNil(body["finish_date"]); XCTAssertNil(body["lists"])
+        XCTAssertEqual(body["is_private"] as? Bool, false)
+    }
+    func testRejectedWritesNeverAutomaticallyRetry() async throws {
+        let transport = MBTestTransport([.json("{}", status: 403)]), api = client(transport)
+        let update = try MangaBakaLibraryUpdate(state: "reading", chapter: 1, volume: nil, rating: nil, note: nil, isPrivate: true)
+        do { try await api.save(id: 81, update: update, existing: false, credential: key()); XCTFail("Expected scope error") } catch { XCTAssertEqual(error as? MangaBakaError, .http(403)) }
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+    }
+    func testProgressAndCredentialsValidateInput() throws {
+        for value in [-1.0, Double.infinity, Double.nan] {
+            XCTAssertThrowsError(try MangaBakaLibraryUpdate(state: "reading", chapter: value, volume: nil, rating: nil, note: nil, isPrivate: true))
+        }
+        XCTAssertThrowsError(try MangaBakaLibraryUpdate(state: "invalid", chapter: nil, volume: nil, rating: nil, note: nil, isPrivate: true))
+        XCTAssertThrowsError(try MangaBakaLibraryUpdate(state: "reading", chapter: nil, volume: nil, rating: 101, note: nil, isPrivate: true))
+        XCTAssertThrowsError(try MangaBakaCredential(kind: .apiKey, secret: "x\r\nInjected: secret"))
+        XCTAssertThrowsError(try JSONDecoder().decode(MangaBakaCredential.self, from: Data(#"{"kind":"apiKey","secret":""}"#.utf8)))
+        let original = try key(); XCTAssertEqual(try JSONDecoder().decode(MangaBakaCredential.self, from: JSONEncoder().encode(original)), original)
+    }
+    func testOAuthURLAndBoundCallback() throws {
+        let date = Date(timeIntervalSince1970: 1000)
+        let url = try MangaBakaOAuth.authorize(clientID: "owned-app", state: "owned-state", challenge: "owned-challenge")
+        let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(url.host, "mangabaka.org"); XCTAssertTrue(query.contains(.init(name: "code_challenge_method", value: "S256")))
+        XCTAssertTrue(query.contains(.init(name: "redirect_uri", value: "animecompanion://oauth/mangabaka")))
+        let callback = URL(string: "animecompanion://oauth/mangabaka?code=owned-code&state=owned-state&iss=https%3A%2F%2Fmangabaka.org%2Fauth")!
+        XCTAssertEqual(try MangaBakaOAuth.code(from: callback, expectedState: "owned-state", startedAt: date, now: date.addingTimeInterval(30)), "owned-code")
+        XCTAssertThrowsError(try MangaBakaOAuth.code(from: callback, expectedState: "wrong", startedAt: date, now: date))
+        XCTAssertThrowsError(try MangaBakaOAuth.code(from: callback, expectedState: "owned-state", startedAt: date, now: date.addingTimeInterval(601)))
+    }
+    func testOAuthRejectsUnrelatedDuplicateAndErrorCallbacks() {
+        let date = Date()
+        for value in ["animecompanion://oauth/wrong?code=c&state=s", "https://oauth/mangabaka?code=c&state=s", "animecompanion://oauth/mangabaka?code=c&state=s&state=s", "animecompanion://oauth/mangabaka?code=c&state=s&iss=https://attacker.example", "animecompanion://oauth/mangabaka?error=denied&state=s", "animecompanion://oauth/mangabaka?code=c&state=s#fragment"] {
+            XCTAssertThrowsError(try MangaBakaOAuth.code(from: URL(string: value)!, expectedState: "s", startedAt: date, now: date))
+        }
+    }
+    func testTokenExchangeAndRefreshRotation() async throws {
+        let transport = MBTestTransport([.json(#"{"access_token":"owned-access","refresh_token":"owned-refresh","expires_in":3600}"#), .json(#"{"access_token":"owned-renewed","refresh_token":"owned-rotated","expires_in":7200}"#)]), api = client(transport)
+        let credential = try await api.exchange(code: "owned+code&value", verifier: "owned-verifier", clientID: "owned-app")
+        XCTAssertFalse(credential.needsRefresh()); XCTAssertEqual(credential.refreshToken, "owned-refresh")
+        let renewed = try await api.refresh(credential); XCTAssertEqual(renewed.secret, "owned-renewed"); XCTAssertEqual(renewed.refreshToken, "owned-rotated")
+        let requests = await transport.recorded(), body = String(decoding: requests[0].httpBody!, as: UTF8.self)
+        XCTAssertTrue(body.contains("code=owned%2Bcode%26value")); XCTAssertTrue(body.contains("code_verifier=owned-verifier"))
+        XCTAssertNil(requests[0].value(forHTTPHeaderField: "X-API-Key")); XCTAssertNil(requests[0].value(forHTTPHeaderField: "Authorization"))
+        XCTAssertTrue(String(decoding: requests[1].httpBody!, as: UTF8.self).contains("grant_type=refresh_token"))
+    }
+    func testPrivateRecommendationsAreNotCachedOrReplacedByPopular() async throws {
+        let transport = MBTestTransport([.json("{\"results\":[\(record)]}"), .json(#"{"results":[]}"#)]), api = client(transport)
+        let a = try await api.recommendations(key(), includeAdult: false), b = try await api.recommendations(key(), includeAdult: false)
+        XCTAssertEqual(a.count, 1); XCTAssertTrue(b.isEmpty)
+        do { _ = try await api.browse(.init(shelf: .recommended), includeAdult: false); XCTFail("Cannot fake recommendations") } catch {}
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 2)
+    }
+    func testWrongDetailIdentityAndRedirectedResponsesAreRejected() async throws {
+        let transport = MBTestTransport([.json("{\"data\":\(record)}"), .json(page(record), responseURL: URL(string: "https://attacker.example/redirect")!)]), api = client(transport)
+        do { _ = try await api.details(id: 82); XCTFail("Wrong series") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+        do { _ = try await api.browse(.init(), includeAdult: false); XCTFail("Unexpected redirect") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+    }
+}
+
+private actor MBTestTransport: HTTPTransport {
+    struct Response: Sendable {
+        let body: String
+        let status: Int
+        let headers: [String: String]
+        let url: URL?
+        static func json(_ body: String, status: Int = 200, headers: [String: String] = [:], responseURL: URL? = nil) -> Self {
+            Self(body: body, status: status, headers: headers, url: responseURL)
+        }
+    }
+    private var queue: [Response]
+    private var requests: [URLRequest] = []
+    init(_ responses: [Response]) { queue = responses }
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        guard !queue.isEmpty else { throw MangaBakaError.message("Unexpected owned test request") }
+        let next = queue.removeFirst()
+        return (Data(next.body.utf8), HTTPURLResponse(url: next.url ?? request.url!, statusCode: next.status, httpVersion: nil, headerFields: next.headers)!)
+    }
+    func recorded() -> [URLRequest] { requests }
+}

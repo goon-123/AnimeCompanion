@@ -3,6 +3,25 @@ import XCTest
 
 /// Opt-in checks against the same public clients used by the app. Ordinary unit tests stay offline.
 final class LiveServiceTests: XCTestCase {
+    func testMangaBakaPublicCatalog() async throws {
+        try requireLiveServices()
+        let api = MangaBakaClient(directory: nil)
+        let trending = try await api.browse(.init(shelf: .trending), limit: 3, includeAdult: false)
+        XCTAssertFalse(trending.items.isEmpty)
+        XCTAssertTrue(trending.items.allSatisfy { $0.isVisible(includeAdult: false) })
+        let details = try await api.details(id: 1)
+        XCTAssertEqual(details.id, 1); XCTAssertEqual(details.type, "manhwa")
+        XCTAssertFalse(details.displayTitle.isEmpty); XCTAssertNotNil(details.coverURL)
+        XCTAssertFalse(details.genres.isEmpty)
+        for shelf in [MangaBakaShelf.rising, .hiddenGems, .recentlyAdded, .newReleases] {
+            let page = try await api.browse(.init(shelf: shelf), limit: 2, includeAdult: false)
+            XCTAssertFalse(page.items.isEmpty, shelf.label)
+        }
+        let novels = try await api.browse(.init(format: .novel), page: 2, limit: 2, includeAdult: false)
+        XCTAssertFalse(novels.items.isEmpty); XCTAssertTrue(novels.items.allSatisfy { $0.type == "novel" })
+        let search = try await api.browse(.init(text: "DICE"), limit: 10, includeAdult: false)
+        XCTAssertFalse(search.items.isEmpty)
+    }
     private func requireLiveServices() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["ANIMECOMPANION_LIVE_SERVICES"] == "1",
                           "Set ANIMECOMPANION_LIVE_SERVICES=1 to check public providers.")
