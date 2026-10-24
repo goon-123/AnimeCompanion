@@ -23,6 +23,71 @@ final class MangaBakaTests: XCTestCase {
         XCTAssertEqual(MangaBakaShelf.popular.sort, "popularity_asc")
         XCTAssertEqual(MangaBakaShelf.topRated.sort, "score_desc")
     }
+    func testGenreTagAndContentRatingFiltersComposeWithSearchAndPaging() throws {
+        let query = MangaBakaQuery(format: .manga, text: "Moon & stars", genres: [.init(value: "science_fiction", label: "Sci-Fi")],
+            tags: [.init(id: 42, name: "space_travel")], excludedTags: [.init(id: 91, name: "time_loop")], contentRatings: [.suggestive])
+        let url = MangaBakaClient.browseURL(query, page: 3, limit: 30, includeAdult: true)
+        XCTAssertEqual(url.path, "/v1/series/search")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        for item in [URLQueryItem(name: "genre", value: "science_fiction"), .init(name: "tag", value: "42"),
+                     .init(name: "tag_not", value: "91"), .init(name: "page", value: "3"), .init(name: "content_rating", value: "suggestive")] {
+            XCTAssertTrue(items.contains(item))
+        }
+        XCTAssertEqual(items.filter { $0.name == "content_rating" }.count, 1)
+        let filteredShelf = MangaBakaClient.browseURL(.init(shelf: .hiddenGems, tags: query.tags), page: 1, limit: 24, includeAdult: false)
+        XCTAssertTrue(filteredShelf.path.hasSuffix("/search"))
+        let ratingOnly = MangaBakaClient.browseURL(.init(contentRatings: [.suggestive]), page: 1, limit: 24, includeAdult: false)
+        XCTAssertEqual(ratingOnly.path, "/v2/series/search")
+    }
+    func testMatureOnlyFilterDoesNotFallBackToUnfilteredSearch() async throws {
+        let query = MangaBakaQuery(contentRatings: [.erotica])
+        XCTAssertTrue(query.allowedRatings(includeAdult: false).isEmpty)
+        let transport = MBTestTransport([]), api = client(transport)
+        do { _ = try await api.browse(query, includeAdult: false); XCTFail("Must not broaden an unavailable rating") } catch {}
+        let requests = await transport.recorded(); XCTAssertTrue(requests.isEmpty)
+        XCTAssertFalse(query.includes(try series(record), includeAdult: true))
+    }
+    func testTaxonomyAndDetailedTagsRetainHierarchyAndLabels() async throws {
+        let transport = MBTestTransport([.json(#"{"data":[{"value":"science_fiction","label":"Sci-Fi"}]}"#),
+            .json(#"{"data":[{"id":42,"name":"space_travel","name_path":"Themes > Science > Space Travel","description":"A <b>journey</b>.","is_spoiler":true,"is_implied":true,"weight":3}]}"#)])
+        let api = client(transport)
+        let genres = try await api.genres(), tags = try await api.tags()
+        XCTAssertEqual(genres.first?.value, "science_fiction"); XCTAssertEqual(genres.first?.label, "Sci-Fi")
+        XCTAssertEqual(tags.first?.id, 42); XCTAssertEqual(tags.first?.category, "Themes")
+        XCTAssertEqual(tags.first?.path, "Themes > Science > Space Travel")
+        XCTAssertEqual(tags.first?.description, "A journey."); XCTAssertEqual(tags.first?.weight, 3)
+        XCTAssertEqual(tags.first?.isSpoiler, true); XCTAssertEqual(tags.first?.isImplied, true)
+        let detail = try series(#"{"id":81,"tags":["space_travel"],"published":{"start_date":"2020-01-01","end_date":"2022-03-01"},"publishers":[{"name":"Owned Press"}],"is_licensed":true}"#)
+        XCTAssertEqual(detail.tags.first?.name, "space_travel"); XCTAssertEqual(detail.publishedEnd, "2022-03-01")
+        XCTAssertTrue(detail.isLicensed); XCTAssertEqual(detail.publishers.first?.name, "Owned Press")
+        let weighted = try series(#"{"id":81,"tags_v2":[{"id":42,"name":"space_travel","name_path":"Themes > Space","weight":"core","implied_by_tag_ids":[1]}],"popularity":{"global":{"current":10}},"source":{"anilist":{"id":1,"rating_normalized":85}}}"#)
+        XCTAssertEqual(weighted.tags.first?.weightLabel, "core"); XCTAssertEqual(weighted.tags.first?.isImplied, true)
+        XCTAssertEqual(weighted.popularityRank, 10); XCTAssertEqual(weighted.sourceRatings.first?.score, 85)
+    }
+    func testCoversUseFullImagesAndValidateSeriesBeforeShowing() async throws {
+        let image = #"{"id":5,"series_id":81,"type":"volume","index":"2","language":"en","content_rating":"safe","image":{"raw":{"url":"https://cdn.mangabaka.dev/full.jpg"},"x350":{"x1":"https://cdn.mangabaka.dev/thumb.jpg"}}}"#
+        let transport = MBTestTransport([.json(page(image)), .json(page(image))]), api = client(transport)
+        let covers = try await api.covers(id: 81)
+        XCTAssertEqual(covers.items.first?.thumbnailURL?.lastPathComponent, "thumb.jpg")
+        XCTAssertEqual(covers.items.first?.fullURL?.lastPathComponent, "full.jpg")
+        XCTAssertEqual(covers.items.first?.caption, "Volume 2 · EN")
+        XCTAssertEqual(covers.items.first?.isVisible(includeAdult: false), true)
+        do { _ = try await api.covers(id: 82); XCTFail("Wrong title's artwork") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+    }
+    func testRecommendationKindsUseRealEndpointsAndDropDuplicatesAndHiddenTitles() async throws {
+        let other = #"{"id":82,"title":"Another story","content_rating":"safe"}"#
+        let hidden = #"{"id":83,"title":"Hidden story","content_rating":"erotica"}"#
+        let payload = "{\"data\":[{\"series\":\(other),\"relationship\":\"sequel\",\"shared_tags_total\":12,\"shared_users\":70},{\"series\":\(other)},{\"series\":\(hidden)},{\"series\":\(record)}]}"
+        let transport = MBTestTransport(Array(repeating: .json(payload), count: 3)), api = client(transport)
+        for kind in MangaBakaRelatedKind.allCases {
+            let result = try await api.related(id: 81, kind: kind, includeAdult: false)
+            XCTAssertEqual(result.map(\.id), [82]); XCTAssertEqual(result.first?.relationship, "sequel")
+            XCTAssertEqual(result.first?.sharedTags, 12); XCTAssertEqual(result.first?.sharedReaders, 70)
+        }
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/series/81/relationships", "/v2/series/81/similar", "/v2/series/81/readers-also-like"])
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
+    }
     func testV2TitlesCoverMetadataAndPlainSynopsis() throws {
         let item = try series(record)
         XCTAssertEqual(item.id, 81); XCTAssertEqual(item.displayTitle, "Paper Moon")

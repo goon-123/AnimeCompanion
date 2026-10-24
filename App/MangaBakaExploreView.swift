@@ -100,6 +100,12 @@ struct MangaBakaCard: View {
             if let rating = series.rating, rating > 0 {
                 Label("\(rating, specifier: "%.0f")%", systemImage: "star.fill").font(.caption).foregroundStyle(.yellow)
             } else { Text(series.status.capitalized).font(.caption).foregroundStyle(.secondary) }
+            HStack(spacing: 5) {
+                if let year = series.year { Text(String(year)) }
+                if let chapters = series.totalChapters { Text(chapters.formatted() + " ch.") }
+            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(series.status.capitalized + " · " + (series.contentRating?.capitalized ?? "Unrated"))
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
         }.frame(width: width, alignment: .leading).contentShape(Rectangle())
     }
 }
@@ -128,11 +134,11 @@ struct MangaBakaShelfView: View {
                             NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaCard(series: series) }.buttonStyle(.plain)
                         }
                     }.padding(.horizontal, 20)
-                }.modifier(CatalogEntrance())
+                }
             } else if loading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(0..<5) { _ in RoundedRectangle(cornerRadius: 14).fill(Theme.surface).frame(width: 142, height: 245) }
+                        ForEach(0..<5) { _ in RoundedRectangle(cornerRadius: 14).fill(Theme.surface).frame(width: 142, height: 300) }
                     }.padding(.horizontal, 20)
                 }.disabled(true).accessibilityLabel("Loading " + shelf.label)
             } else if error == nil {
@@ -184,14 +190,17 @@ struct MangaBakaExploreView: View {
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 30) {
+            // This is a bounded set of sections. Keep their layout alive while
+            // scrolling; the long horizontal title rows still load cards lazily.
+            VStack(alignment: .leading, spacing: 30) {
                 header
                 if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(includeAdult: preferences.includeAdult) }) {
                     NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain)
-                        .padding(.horizontal, 20).modifier(CatalogEntrance())
+                        .padding(.horizontal, 20)
                 }
                 if account.connected { MangaBakaPersonalShelf() }
                 formats
+                genres
                 ForEach(MangaBakaHomeModel.shelves, id: \.self) { shelf in
                     MangaBakaShelfView(shelf: shelf, items: (model.items[shelf] ?? []).filter { $0.isVisible(includeAdult: preferences.includeAdult) },
                         loading: model.loading.contains(shelf), error: model.errors[shelf], retry: {
@@ -202,7 +211,15 @@ struct MangaBakaExploreView: View {
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
-            .refreshable { await model.load(api: account.api, adult: preferences.includeAdult, refresh: true) }
+            .task(id: "\(account.connected)-\(account.revision)-\(preferences.includeAdult)") {
+                await account.loadRecommendations(includeAdult: preferences.includeAdult)
+            }
+            .task { await account.loadTaxonomy() }
+            .refreshable {
+                async let catalog: Void = model.load(api: account.api, adult: preferences.includeAdult, refresh: true)
+                async let personal: Void = account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true)
+                _ = await (catalog, personal)
+            }
     }
     private var header: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -213,6 +230,31 @@ struct MangaBakaExploreView: View {
                     .font(.subheadline).foregroundStyle(.secondary).padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 17))
             }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-search")
         }.padding(.horizontal, 20)
+    }
+    private var genres: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NavigationLink { MangaBakaTaxonomyView() } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Explore genres & tags").font(.title2.bold())
+                        Text("Explore every genre, tag & content rating").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(); Image(systemName: "tag").font(.title2)
+                }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
+            }.buttonStyle(.plain).padding(.horizontal, 20)
+            if !account.catalogGenres.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 9) {
+                        ForEach(account.catalogGenres.prefix(16)) { genre in
+                            NavigationLink(value: MangaBakaBrowseRoute(query: .init(genres: [genre]))) {
+                                Text(genre.label).font(.subheadline.weight(.medium)).padding(.horizontal, 15).padding(.vertical, 10)
+                                    .background(.white.opacity(0.07), in: Capsule())
+                            }.buttonStyle(.plain)
+                        }
+                    }.padding(.horizontal, 20)
+                }
+            }
+        }
     }
     private func hero(_ series: MangaBakaSeries) -> some View {
         HStack(alignment: .center, spacing: 18) {
@@ -257,21 +299,13 @@ struct MangaBakaExploreView: View {
 private struct MangaBakaPersonalShelf: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
-    @State private var items: [MangaBakaSeries] = []
-    @State private var loading = true
-    @State private var error: String?
-    @State private var retry = 0
     var body: some View {
-        MangaBakaShelfView(shelf: .recommended, items: items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
-            loading: loading, error: error, retry: { retry += 1 })
-            .task(id: "\(account.revision)-\(preferences.includeAdult)-\(retry)") {
-                loading = true; error = nil; items = []
-                defer { loading = false }
-                do {
-                    let result = try await account.recommendations(includeAdult: preferences.includeAdult)
-                    try Task.checkCancellation(); items = result
-                } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        MangaBakaShelfView(shelf: .recommended,
+            items: account.recommendationState.items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
+            loading: account.recommendationState.loading, error: account.recommendationState.error, retry: {
+                Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
             }
+        )
     }
 }
 

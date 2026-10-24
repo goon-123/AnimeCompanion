@@ -22,7 +22,12 @@ function harness(config = {}) {
       async query() { return config.getTabs?.() || []; },
       async sendMessage(id, message, options) { delivered.push({ id, message, options }); return config.onTabMessage?.(id, message, options); }
     },
-    scripting: { async executeScript(value) { injected.push(value); } }
+    scripting: { async executeScript(value) { injected.push(value); return config.onInject?.(value); } }
+  };
+  if (config.noSessionStorage) delete browser.storage.session;
+  if (config.brokenSessionStorage) browser.storage.session = {
+    async get() { throw new Error("Session area unavailable"); },
+    async set() { throw new Error("Session area unavailable"); }
   };
   const context = vm.createContext({ browser, URL, TextEncoder, console, Date, Promise });
   vm.runInContext(script("core.js"), context);

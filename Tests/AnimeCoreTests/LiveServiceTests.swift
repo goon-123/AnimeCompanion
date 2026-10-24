@@ -3,6 +3,36 @@ import XCTest
 
 /// Opt-in checks against the same public clients used by the app. Ordinary unit tests stay offline.
 final class LiveServiceTests: XCTestCase {
+    func testMangaBakaDiscoveryDetails() async throws {
+        try requireLiveServices()
+        let api = MangaBakaClient(directory: nil)
+        let genres = try await api.genres(), tags = try await api.tags()
+        XCTAssertFalse(genres.isEmpty); XCTAssertFalse(tags.isEmpty)
+        XCTAssertTrue(tags.contains { $0.path.contains(" > ") })
+        let details = try await api.details(id: 1)
+        XCTAssertFalse(details.tags.isEmpty)
+        print("Checking MangaBaka cover pagination")
+        let covers = try await api.covers(id: 1)
+        XCTAssertFalse(covers.items.isEmpty)
+        XCTAssertTrue(covers.items.contains { $0.fullURL != nil })
+        for kind in MangaBakaRelatedKind.allCases {
+            print("Checking MangaBaka " + kind.rawValue)
+            _ = try await api.related(id: 1, kind: kind, includeAdult: false)
+        }
+        if let genre = genres.first {
+            print("Checking MangaBaka genre query")
+            let result = try await api.browse(.init(genres: [genre], contentRatings: [.safe]), limit: 2, includeAdult: false)
+            XCTAssertTrue(result.items.allSatisfy { $0.contentRating == "safe" && $0.genres.contains { $0.name == genre.value } })
+        }
+        if let tag = tags.first {
+            print("Checking MangaBaka tag query")
+            _ = try await api.browse(.init(tags: [tag]), limit: 2, includeAdult: false)
+        }
+        print("Checking MangaBaka excluded tag and single content rating")
+        if let tag = tags.first { _ = try await api.browse(.init(excludedTags: [tag]), limit: 2, includeAdult: false) }
+        let safe = try await api.browse(.init(contentRatings: [.safe]), limit: 2, includeAdult: false)
+        XCTAssertTrue(safe.items.allSatisfy { $0.contentRating == "safe" })
+    }
     func testMangaBakaPublicCatalog() async throws {
         try requireLiveServices()
         let api = MangaBakaClient(directory: nil)

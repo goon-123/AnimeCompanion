@@ -11,6 +11,7 @@
   let shadow = null;
   let displayedKey = "";
   let pickerOpen = false;
+  let manualCandidateURL = "";
   const dismissed = new Set();
   const control = extra => window.postMessage({ channel: V.CHANNEL, type: "control", ...extra }, "*");
   const send = value => browser.runtime.sendMessage(value);
@@ -23,9 +24,11 @@
     const changed = enabled !== next.enabled;
     state = next; enabled = next.enabled;
     if (changed) control({ enabled });
-    if (!enabled || !next.options.autoPrompt) { remove(); return; }
+    if (!enabled) { manualCandidateURL = ""; remove(); return; }
     if (!topFrame) return;
-    const candidate = next.candidates.find(x => x.automatic && !dismissed.has(key(x)));
+    const manual = next.candidates.find(x => x.url === manualCandidateURL);
+    if (!manual && !next.options.autoPrompt) { remove(); return; }
+    const candidate = manual || next.candidates.find(x => x.automatic && !dismissed.has(key(x)));
     if (!candidate) { remove(); return; }
     if (displayedKey === key(candidate) && hostElement?.isConnected) {
       // Keep the link's timestamp current without moving focus or rebuilding UI.
@@ -45,11 +48,11 @@
     control({ command: "pause" });
     send({ type: "ac-pause" }).catch(() => {});
   }
-  function dismiss(candidate) { dismissed.add(key(candidate)); remove(); }
+  function dismiss(candidate) { manualCandidateURL = ""; dismissed.add(key(candidate)); remove(); }
   function openLink(candidate, label = "Open in VidHub") {
     const link = element("a", label, "open");
     link.href = V.launchURL(candidate); link.dataset.open = "true";
-    link.addEventListener("click", () => { pause(); dismissed.add(key(candidate)); setTimeout(remove, 100); });
+    link.addEventListener("click", () => { pause(); manualCandidateURL = ""; dismissed.add(key(candidate)); setTimeout(remove, 100); });
     return link;
   }
   function show(candidate) {
@@ -112,6 +115,10 @@
     if (message?.type === "ac-state") apply(message.state);
     if (message?.type === "ac-options-changed") reload();
     if (message?.type === "ac-refresh") { reload(); control({ command: "refresh" }); }
+    if (message?.type === "ac-show-on-page" && topFrame && enabled && V.networkURL(message.candidate?.url)) {
+      manualCandidateURL = message.candidate.url;
+      show(message.candidate);
+    }
     if (message?.type === "ac-pause-videos") { for (const video of document.querySelectorAll("video")) if (!video.paused) video.pause(); control({ command: "pause" }); }
     // Do not await reload's state request: the background serializes mutations.
     // An immediate acknowledgment prevents a settings-update/message deadlock.

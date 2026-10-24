@@ -37,7 +37,15 @@ function render(state) {
     const link = document.createElement("a"); link.className = "open"; link.href = V.launchURL(candidate);
     link.textContent = "Open in VidHub";
     link.addEventListener("click", () => { send({ type: "ac-pause" }).catch(() => {}); });
-    row.append(title, meta, name, link); fragment.append(row);
+    const onPage = document.createElement("button"); onPage.className = "on-page";
+    onPage.textContent = "Open from webpage";
+    onPage.addEventListener("click", async () => {
+      try {
+        await send({ type: "ac-show-on-page", url: candidate.url });
+        window.close();
+      } catch { error("Allow access to the page, scan again, then try Open from webpage."); }
+    });
+    row.append(title, meta, name, link, onPage); fragment.append(row);
   }
   $("streams").replaceChildren(fragment);
 }
@@ -62,7 +70,10 @@ browser.runtime.onMessage.addListener(message => { if (message?.type === "ac-sta
 window.addEventListener("pagehide", () => { disposed = true; });
 (async () => {
   try {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    let [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tab && !V.networkURL(tab.url)) {
+      try { tab = await browser.tabs.get(tab.id); } catch { /* Render the access instructions below. */ }
+    }
     if (!tab || !V.networkURL(tab.url)) {
       $("status").textContent = "Open an HTTP or HTTPS website in Safari to find videos.";
       for (const id of ["scan", "site-enabled"]) $(id).disabled = true;

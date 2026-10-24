@@ -55,12 +55,28 @@ public struct MangaBakaQuery: Hashable, Sendable {
     public var format: MangaBakaFormat?
     public var text: String
     public var status: String?
-    public init(shelf: MangaBakaShelf = .popular, format: MangaBakaFormat? = nil, text: String = "", status: String? = nil) {
+    public var genres: [MangaBakaGenre]
+    public var tags: [MangaBakaTag]
+    public var excludedTags: [MangaBakaTag]
+    public var contentRatings: Set<MangaBakaContentRating>
+    public init(shelf: MangaBakaShelf = .popular, format: MangaBakaFormat? = nil, text: String = "", status: String? = nil,
+                genres: [MangaBakaGenre] = [], tags: [MangaBakaTag] = [], excludedTags: [MangaBakaTag] = [],
+                contentRatings: Set<MangaBakaContentRating> = []) {
         self.shelf = shelf; self.format = format; self.text = text; self.status = status
+        self.genres = genres; self.tags = tags; self.excludedTags = excludedTags; self.contentRatings = contentRatings
+    }
+    public var hasFacets: Bool { !genres.isEmpty || !tags.isEmpty || !excludedTags.isEmpty || !contentRatings.isEmpty }
+    public var filterCount: Int { genres.count + tags.count + excludedTags.count + contentRatings.count + (format == nil ? 0 : 1) + (status == nil ? 0 : 1) }
+    public func allowedRatings(includeAdult: Bool) -> [MangaBakaContentRating] {
+        MangaBakaContentRating.allCases.filter { (includeAdult || !$0.isMature) && (contentRatings.isEmpty || contentRatings.contains($0)) }
+    }
+    public func includes(_ series: MangaBakaSeries, includeAdult: Bool) -> Bool {
+        guard series.isVisible(includeAdult: includeAdult) else { return false }
+        return contentRatings.isEmpty || series.contentRating.flatMap(MangaBakaContentRating.init(rawValue:)).map(contentRatings.contains) == true
     }
 }
 
-private enum MBKey: String, CodingKey {
+enum MBKey: String, CodingKey {
     case id, title, titles, language, traits, cover, raw, url, x1, x150, x250, x350, authors, artists, description, year
     case type, status, rating, genres, tags, name, source, links, data, results, pagination, next, page, count, limit
     case series, legacySeries = "Series", state, note, picture, nickname, published
@@ -70,9 +86,14 @@ private enum MBKey: String, CodingKey {
     case coverImage = "cover_image", mediaType = "media_type", publishedYear = "published_year", genresV2 = "genres_v2"
     case seriesID = "series_id", chapter = "progress_chapter", volume = "progress_volume", isPrivate = "is_private"
     case updatedAt = "updated_at", preferredUsername = "preferred_username", ratingSteps = "rating_steps"
+    case value, label, image, index, category, relationship, relation, score, weight, implied, spoiler, publishers
+    case endDate = "end_date", isLicensed = "is_licensed", tagsV2 = "tags_v2", linksV2 = "links_v2"
+    case namePath = "name_path", parentID = "parent_id", isSpoiler = "is_spoiler", isImplied = "is_implied"
+    case impliedBy = "implied_by_tag_ids", isExplicit = "is_explicit", sharedTags = "shared_tags_total", sharedUsers = "shared_users", matchedRelated = "matched_related"
+    case ratingNormalized = "rating_normalized", popularity, global, current
 }
 
-private extension KeyedDecodingContainer {
+extension KeyedDecodingContainer {
     func mbString(_ key: Key) -> String? {
         if let value = try? decode(String.self, forKey: key) { return value }
         if let value = try? decode(Int.self, forKey: key) { return String(value) }
@@ -102,7 +123,7 @@ public struct MangaBakaTitle: Decodable, Hashable, Sendable {
     }
 }
 
-private struct MBCoverValue: Decodable, Hashable, Sendable {
+struct MBCoverValue: Decodable, Hashable, Sendable {
     let value: String?
     init(from decoder: Decoder) throws {
         if let text = try? decoder.singleValueContainer().decode(String.self) { value = text; return }
@@ -110,20 +131,52 @@ private struct MBCoverValue: Decodable, Hashable, Sendable {
         value = c.mbString(.x1) ?? c.mbString(.url)
     }
 }
-private struct MBCover: Decodable, Hashable, Sendable {
+struct MBCover: Decodable, Hashable, Sendable {
     let x150: MBCoverValue?, x250: MBCoverValue?, x350: MBCoverValue?, raw: MBCoverValue?
 }
 private struct MBProvider: Decodable {
     let present: Bool
-    init(from decoder: Decoder) throws { present = try decoder.container(keyedBy: MBKey.self).mbString(.id) != nil }
+    let rating: Double?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: MBKey.self)
+        present = c.mbString(.id) != nil; rating = c.mbNumber(.ratingNormalized)
+    }
 }
 public struct MangaBakaTag: Decodable, Hashable, Sendable {
     public let id: Int?
     public let name: String
+    public let path: String
+    public let description: String
+    public let isSpoiler: Bool
+    public let isImplied: Bool
+    public let weight: Double?
+    public let weightLabel: String?
+    public var category: String { path.contains(" > ") ? String(path.components(separatedBy: " > ").first ?? "Other") : "Other" }
+    public var label: String { name.replacingOccurrences(of: "_", with: " ").capitalized }
+    public init(id: Int? = nil, name: String, path: String? = nil, description: String = "",
+                isSpoiler: Bool = false, isImplied: Bool = false, weight: Double? = nil, weightLabel: String? = nil) {
+        self.id = id; self.name = name; self.path = path ?? name; self.description = description
+        self.isSpoiler = isSpoiler; self.isImplied = isImplied; self.weight = weight; self.weightLabel = weightLabel
+    }
+    public func withMetadata(_ reference: Self) -> Self {
+        .init(id: id ?? reference.id, name: name, path: path == name ? reference.path : path,
+            description: description.isEmpty ? reference.description : description,
+            isSpoiler: isSpoiler || reference.isSpoiler, isImplied: isImplied,
+            weight: weight, weightLabel: weightLabel)
+    }
     public init(from decoder: Decoder) throws {
-        if let text = try? decoder.singleValueContainer().decode(String.self) { id = nil; name = text; return }
+        if let text = try? decoder.singleValueContainer().decode(String.self) {
+            id = nil; name = text; path = text; description = ""; isSpoiler = false; isImplied = false; weight = nil; weightLabel = nil; return
+        }
         let c = try decoder.container(keyedBy: MBKey.self)
         id = c.mbInt(.id); name = c.mbString(.name) ?? ""
+        path = c.mbString(.namePath) ?? name
+        description = TextSanitizer.plain(c.mbString(.description) ?? "")
+        isSpoiler = (try? c.decode(Bool.self, forKey: .isSpoiler)) ?? (try? c.decode(Bool.self, forKey: .spoiler)) ?? false
+        let impliedIDs = (try? c.decode([Int].self, forKey: .impliedBy)) ?? []
+        isImplied = (try? c.decode(Bool.self, forKey: .isImplied)) ?? (try? c.decode(Bool.self, forKey: .implied)) ?? !impliedIDs.isEmpty
+        weight = c.mbNumber(.weight)
+        weightLabel = c.mbString(.weight)
     }
 }
 
@@ -144,7 +197,14 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public let finalVolume: Double?
     public let links: [String]
     public let genres: [MangaBakaTag]
+    public let tags: [MangaBakaTag]
+    public let publishedStart: String?
+    public let publishedEnd: String?
+    public let isLicensed: Bool
+    public let publishers: [MangaBakaPublisher]
     public let providers: [String]
+    public let sourceRatings: [MangaBakaSourceRating]
+    public let popularityRank: Int?
     private let cover: MBCover?
     private let coverImage: String?
 
@@ -167,11 +227,22 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         totalChapters = c.mbNumber(.totalChapters); finalVolume = c.mbNumber(.finalVolume)
         links = (try? c.decode([String].self, forKey: .links)) ?? []
         genres = (try? c.decode([MangaBakaTag].self, forKey: .genres)) ?? (try? c.decode([MangaBakaTag].self, forKey: .genresV2)) ?? []
+        tags = (try? c.decode([MangaBakaTag].self, forKey: .tagsV2)) ?? (try? c.decode([MangaBakaTag].self, forKey: .tags)) ?? []
+        publishedStart = published?.mbString(.startDate); publishedEnd = published?.mbString(.endDate)
+        isLicensed = (try? c.decode(Bool.self, forKey: .isLicensed)) ?? ["true", "1"].contains(c.mbString(.isLicensed) ?? "")
+        publishers = (try? c.decode([MangaBakaPublisher].self, forKey: .publishers)) ?? []
         cover = (try? c.decode(MBCover.self, forKey: .cover)) ?? (try? c.decode(MBCover.self, forKey: .coverImage))
         coverImage = c.mbString(.coverImage)
         let sources = (try? c.decode([String: MBProvider].self, forKey: .source)) ?? [:]
         let labels = ["anilist": "AniList", "anime_planet": "Anime-Planet", "anime_news_network": "Anime News Network", "kitsu": "Kitsu", "manga_updates": "MangaUpdates", "my_anime_list": "MyAnimeList", "shikimori": "Shikimori"]
         providers = sources.filter { $0.value.present }.keys.map { labels[$0] ?? $0 }.sorted()
+        sourceRatings = sources.keys.sorted().compactMap { key in
+            guard let provider = sources[key], provider.present, let score = provider.rating, (0...100).contains(score) else { return nil }
+            return MangaBakaSourceRating(provider: labels[key] ?? key, score: score)
+        }
+        let popularity = try? c.nestedContainer(keyedBy: MBKey.self, forKey: .popularity)
+        let global = try? popularity?.nestedContainer(keyedBy: MBKey.self, forKey: .global)
+        popularityRank = global?.mbInt(.current) ?? popularity?.mbInt(.global)
     }
     public var displayTitle: String {
         for language in ["en", "ja-Latn", "ja", "ko-Latn", "ko", "zh-Latn", "zh"] {
@@ -183,6 +254,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public var formatLabel: String { MangaBakaFormat(rawValue: type)?.label ?? type.capitalized }
     public var websiteURL: URL { URL(string: "https://mangabaka.org/\(id)")! }
     public var coverURL: URL? { [cover?.x350?.value, cover?.x250?.value, cover?.x150?.value, cover?.raw?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
+    public var fullCoverURL: URL? { [cover?.raw?.value, cover?.x350?.value, cover?.x250?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
     public var searchTitles: [String] {
         var seen = Set<String>()
         return Array(([displayTitle, title, nativeTitle ?? ""] + titles.map(\.title)).filter {

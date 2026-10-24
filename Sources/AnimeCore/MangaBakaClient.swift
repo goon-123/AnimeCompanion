@@ -45,13 +45,17 @@ public actor MangaBakaClient {
     }
     public static func browseURL(_ query: MangaBakaQuery, page: Int, limit: Int, includeAdult: Bool, now: Date = Date()) -> URL {
         let searching = !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        var path = "/v2/series/search"
-        let curated = !searching && query.format == nil && query.status == nil
+        // /v1/genres and /v1/tags supply the legacy facet vocabulary. The v2
+        // search schema rejects `genre`; use its supported v1 search contract
+        // for taxonomy filters while retaining v2 for the other catalog rails.
+        let taxonomyFilters = !query.genres.isEmpty || !query.tags.isEmpty || !query.excludedTags.isEmpty
+        var path = taxonomyFilters ? "/v1/series/search" : "/v2/series/search"
+        let curated = !searching && query.format == nil && query.status == nil && !query.hasFacets
         if curated && query.shelf == .rising { path = "/v2/series/discover/rising" }
         if curated && query.shelf == .hiddenGems { path = "/v2/series/discover/hidden-gems" }
         var c = URLComponents(string: "https://api.mangabaka.org" + path)!
         var items = [URLQueryItem(name: "limit", value: String(min(100, max(1, limit))))]
-        let ratings = includeAdult ? ["safe", "suggestive", "erotica", "pornographic"] : ["safe", "suggestive"]
+        let ratings = query.allowedRatings(includeAdult: includeAdult).map(\.rawValue)
         if path.hasSuffix("/hidden-gems") {
             if !includeAdult {
                 for rating in ["erotica", "pornographic"] { items.append(.init(name: "not_content_rating", value: rating)) }
@@ -65,6 +69,9 @@ public actor MangaBakaClient {
             if searching { items.append(.init(name: "q", value: String(query.text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)))) }
             if let format = query.format { items.append(.init(name: "type", value: format.rawValue)) }
             if let status = query.status { items.append(.init(name: "status", value: status)) }
+            for genre in query.genres { items.append(.init(name: "genre", value: genre.value)) }
+            for tag in query.tags { if let id = tag.id { items.append(.init(name: "tag", value: String(id))) } }
+            for tag in query.excludedTags { if let id = tag.id { items.append(.init(name: "tag_not", value: String(id))) } }
             if query.shelf == .topRated { items.append(.init(name: "rating_lower", value: "1")) }
             if query.shelf == .newReleases {
                 let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]
@@ -76,10 +83,41 @@ public actor MangaBakaClient {
     }
     public func browse(_ query: MangaBakaQuery, page: Int = 1, limit: Int = 24, includeAdult: Bool, refresh: Bool = false) async throws -> MangaBakaPage<MangaBakaSeries> {
         guard query.shelf != .recommended else { throw MangaBakaError.message("Connect MangaBaka to load personal recommendations.") }
+        guard !query.allowedRatings(includeAdult: includeAdult).isEmpty else { throw MangaBakaError.message("Enable mature titles or choose another content rating.") }
         let url = Self.browseURL(query, page: page, limit: limit, includeAdult: includeAdult)
         let data = try await publicData(url, refresh: refresh)
         do { return try decode(MangaBakaPage<MangaBakaSeries>.self, data) }
         catch { cache[url] = nil; trimCache(); throw error }
+    }
+    public func genres(refresh: Bool = false) async throws -> [MangaBakaGenre] {
+        let bytes = try await publicData(api("/v1/genres"), refresh: refresh)
+        return try decode(MBEnvelope<[MangaBakaGenre]>.self, bytes).data.filter { !$0.value.isEmpty }
+    }
+    public func tags(refresh: Bool = false) async throws -> [MangaBakaTag] {
+        let bytes = try await publicData(api("/v1/tags"), refresh: refresh)
+        return try decode(MBEnvelope<[MangaBakaTag]>.self, bytes).data.filter { $0.id != nil && !$0.name.isEmpty }
+    }
+    public func covers(id: Int, page: Int = 1, refresh: Bool = false) async throws -> MangaBakaPage<MangaBakaCoverImage> {
+        guard id > 0 else { throw MangaBakaError.invalidResponse }
+        var c = URLComponents(url: api("/v1/series/\(id)/images"), resolvingAgainstBaseURL: false)!
+        c.queryItems = [.init(name: "page", value: String(max(1, page))), .init(name: "limit", value: "40")]
+        let bytes = try await publicData(c.url!, refresh: refresh)
+        let result = try decode(MangaBakaPage<MangaBakaCoverImage>.self, bytes)
+        guard result.items.allSatisfy({ $0.seriesID == nil || $0.seriesID == id }) else { throw MangaBakaError.invalidResponse }
+        return result
+    }
+    public func related(id: Int, kind: MangaBakaRelatedKind, includeAdult: Bool, refresh: Bool = false) async throws -> [MangaBakaRelatedSeries] {
+        guard id > 0 else { throw MangaBakaError.invalidResponse }
+        let version = kind == .relationships ? "v1" : "v2"
+        var c = URLComponents(url: api("/\(version)/series/\(id)/\(kind.rawValue)"), resolvingAgainstBaseURL: false)!
+        c.queryItems = [.init(name: "limit", value: "24")]
+        for rating in MangaBakaQuery().allowedRatings(includeAdult: includeAdult) {
+            c.queryItems?.append(.init(name: "content_rating", value: rating.rawValue))
+        }
+        let bytes = try await publicData(c.url!, refresh: refresh)
+        let list = try decode(MBEnvelope<[MangaBakaRelatedSeries]>.self, bytes).data
+        var seen = Set<Int>()
+        return list.filter { $0.id != id && $0.series.isVisible(includeAdult: includeAdult) && seen.insert($0.id).inserted }
     }
     public func details(id: Int, refresh: Bool = false) async throws -> MangaBakaSeries {
         guard id > 0 else { throw MangaBakaError.invalidResponse }
@@ -195,7 +233,8 @@ public actor MangaBakaClient {
                        forHTTPHeaderField: credential.kind == .oauth ? "Authorization" : "X-API-Key")
         }
         let (data, response) = try await transport.data(for: r)
-        guard response.url == url, data.count <= 4_000_000 else { throw MangaBakaError.invalidResponse }
+        let byteLimit = url.path == "/v1/tags" ? 16_000_000 : 4_000_000
+        guard response.url == url, data.count <= byteLimit else { throw MangaBakaError.invalidResponse }
         switch response.statusCode {
         case 200..<300: return data
         case 401: throw MangaBakaError.unauthorized

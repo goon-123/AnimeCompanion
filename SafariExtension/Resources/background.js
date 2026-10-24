@@ -4,13 +4,21 @@ const Video = globalThis.ACVideo;
 const CACHE_KEY = "safariVideoTabs";
 const OPTIONS_KEY = "safariVideoOptions";
 let work = Promise.resolve();
+let memoryTabs = {};
+let sessionUnavailable = false;
 function serial(task) {
   const next = work.then(task, task);
   work = next.catch(() => {});
   return next;
 }
 async function settings() { return Video.options((await browser.storage.local.get(OPTIONS_KEY))[OPTIONS_KEY]); }
-async function cache() { return (await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] || {}; }
+async function cache() {
+  // A missing/unavailable session area must not disable detection altogether.
+  // The fallback is deliberately memory-only, never storage.local.
+  if (sessionUnavailable) return memoryTabs;
+  try { return (await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] || memoryTabs; }
+  catch { sessionUnavailable = true; return memoryTabs; }
+}
 async function saveCache(tabs) {
   const ordered = Object.keys(tabs).sort((a, b) => tabs[b].updatedAt - tabs[a].updatedAt);
   for (const id of ordered.slice(12)) delete tabs[id];
@@ -20,7 +28,11 @@ async function saveCache(tabs) {
     if (!oldest) break;
     delete tabs[oldest];
   }
-  await browser.storage.session.set({ [CACHE_KEY]: tabs });
+  memoryTabs = tabs;
+  if (!sessionUnavailable) {
+    try { await browser.storage.session.set({ [CACHE_KEY]: tabs }); }
+    catch { sessionUnavailable = true; }
+  }
 }
 function tabID(message, sender) {
   const id = sender.tab?.id ?? message.tabId;
@@ -28,8 +40,13 @@ function tabID(message, sender) {
   return id;
 }
 async function currentURL(id, sender = {}) {
-  const tab = sender.tab?.id === id ? sender.tab : await browser.tabs.get(id);
-  return Video.networkURL(tab.url) || "";
+  // Safari may supply only the sender tab's ID. Its URL can also be stale
+  // after an SPA navigation; always prefer the current top-level tab.
+  try {
+    const tab = await browser.tabs.get(id);
+    if (typeof tab?.url === "string" && tab.url) return Video.networkURL(tab.url) || "";
+  } catch { /* A granted content script may still have sender metadata. */ }
+  return sender.tab?.id === id ? Video.networkURL(sender.tab.url) || "" : "";
 }
 async function snapshot(id, sender = {}) {
   const prefs = await settings();
@@ -63,14 +80,32 @@ async function receiveReport(message, sender) {
   return { enabled: true };
 }
 async function scan(id) {
-  try { await browser.tabs.sendMessage(id, { type: "ac-refresh" }); }
-  catch {
-    // The toolbar may grant access after the page has already loaded. Install
-    // both worlds on demand; declarative scripts handle subsequent pages.
-    const target = { tabId: id, allFrames: true };
+  let refreshed = false;
+  try { await browser.tabs.sendMessage(id, { type: "ac-refresh" }); refreshed = true; } catch {}
+  // An isolated script can acknowledge a scan while its MAIN-world observer
+  // is absent (permission granted late, or an earlier injection failed).
+  // Reinstall both idempotent scripts, then request a new report.
+  const target = { tabId: id, allFrames: true };
+  async function install(target) {
     await browser.scripting.executeScript({ target, world: "MAIN", files: ["core.js", "observer.js"] });
     await browser.scripting.executeScript({ target, files: ["core.js", "content.js"] });
   }
+  try {
+    await install(target);
+  } catch (error) {
+    // A frame without website permission must not prevent repairing the page.
+    try { await install({ tabId: id }); }
+    catch { if (!refreshed) throw error; }
+  }
+  await browser.tabs.sendMessage(id, { type: "ac-refresh" });
+}
+async function showOnPage(message, sender) {
+  const id = tabID(message, sender);
+  const state = await snapshot(id, sender);
+  const candidate = state.candidates.find(item => item.url === message.url);
+  if (!state.enabled || !candidate) throw new Error("Scan this page again to refresh the video link.");
+  await browser.tabs.sendMessage(id, { type: "ac-show-on-page", candidate }, { frameId: 0 });
+  return { ok: true };
 }
 async function updateOptions(message, sender) {
   const prefs = await settings();
@@ -103,6 +138,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "ac-get-state": return serial(() => snapshot(tabID(message, sender), sender));
     case "ac-set-options": return serial(() => updateOptions(message, sender));
     case "ac-scan": return scan(tabID(message, sender)).then(() => ({ ok: true }));
+    case "ac-show-on-page": return serial(() => showOnPage(message, sender));
     case "ac-pause": return browser.tabs.sendMessage(tabID(message, sender), { type: "ac-pause-videos" }).catch(() => {});
     default: return undefined;
   }
