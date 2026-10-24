@@ -24,6 +24,11 @@ function harness(config = {}) {
     },
     scripting: { async executeScript(value) { injected.push(value); } }
   };
+  if (config.noSessionStorage) delete browser.storage.session;
+  if (config.brokenSessionStorage) browser.storage.session = {
+    async get() { throw new Error("Session area unavailable"); },
+    async set() { throw new Error("Session area unavailable"); }
+  };
   const context = vm.createContext({ browser, URL, TextEncoder, console, Date, Promise });
   vm.runInContext(script("core.js"), context);
   vm.runInContext(script("background.js"), context);

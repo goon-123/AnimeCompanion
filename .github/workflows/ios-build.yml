@@ -17,6 +17,15 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  mangabaka-contracts:
+    name: MangaBaka public discovery contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public taxonomy, covers and recommendation contracts
+        run: python3 scripts/check-mangabaka-contracts.py
   manga-runtime:
     name: Build on-device manga runtime
     runs-on: macos-15
