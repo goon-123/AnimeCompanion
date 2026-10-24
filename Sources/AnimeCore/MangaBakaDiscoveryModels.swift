@@ -27,10 +27,14 @@ public struct MangaBakaGenre: Decodable, Hashable, Identifiable, Sendable {
 }
 
 public struct MangaBakaPublisher: Decodable, Hashable, Sendable {
+    public let id: Int?
     public let name: String
+    public init(id: Int? = nil, name: String) { self.id = id; self.name = name }
     public init(from decoder: Decoder) throws {
-        if let name = try? decoder.singleValueContainer().decode(String.self) { self.name = name; return }
-        name = try decoder.container(keyedBy: MBKey.self).mbString(.name) ?? ""
+        if let name = try? decoder.singleValueContainer().decode(String.self) { id = nil; self.name = name; return }
+        let c = try decoder.container(keyedBy: MBKey.self)
+        id = c.mbInt(.id).flatMap { $0 > 0 ? $0 : nil }
+        name = c.mbString(.name) ?? ""
     }
 }
 

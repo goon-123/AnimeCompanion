@@ -10,6 +10,7 @@
   let hostElement = null;
   let shadow = null;
   let displayedKey = "";
+  let displayedMethod = "";
   let pickerOpen = false;
   let manualCandidateURL = "";
   const dismissed = new Set();
@@ -30,9 +31,12 @@
     if (!manual && !next.options.autoPrompt) { remove(); return; }
     const candidate = manual || next.candidates.find(x => x.automatic && !dismissed.has(key(x)));
     if (!candidate) { remove(); return; }
-    if (displayedKey === key(candidate) && hostElement?.isConnected) {
+    if (displayedKey === key(candidate) && displayedMethod === next.options.handoff && hostElement?.isConnected) {
       // Keep the link's timestamp current without moving focus or rebuilding UI.
-      if (!pickerOpen) { const link = shadow.querySelector("a[data-open]"); if (link) link.href = V.launchURL(candidate); }
+      for (const link of shadow.querySelectorAll("a[data-open]")) {
+        const current = next.candidates.find(item => item.url === link.dataset.stream);
+        if (current) link.href = V.launchURL(current, link.dataset.method);
+      }
       return;
     }
     show(candidate);
@@ -49,14 +53,15 @@
     send({ type: "ac-pause" }).catch(() => {});
   }
   function dismiss(candidate) { manualCandidateURL = ""; dismissed.add(key(candidate)); remove(); }
-  function openLink(candidate, label = "Open in VidHub") {
+  function openLink(candidate, label = "Open in VidHub", method = state.options.handoff) {
     const link = element("a", label, "open");
-    link.href = V.launchURL(candidate); link.dataset.open = "true";
+    link.href = V.launchURL(candidate, method); link.dataset.open = "true";
+    link.dataset.stream = candidate.url; link.dataset.method = method;
     link.addEventListener("click", () => { pause(); manualCandidateURL = ""; dismissed.add(key(candidate)); setTimeout(remove, 100); });
     return link;
   }
   function show(candidate) {
-    remove(); displayedKey = key(candidate);
+    remove(); displayedKey = key(candidate); displayedMethod = state.options.handoff;
     hostElement = document.createElement("div");
     hostElement.setAttribute("data-animecompanion-vidhub", "");
     hostElement.style.cssText = "all:initial!important;position:fixed!important;bottom:calc(16px + env(safe-area-inset-bottom))!important;right:16px!important;left:16px!important;max-width:390px!important;margin-left:auto!important;z-index:2147483647!important;color-scheme:dark!important;";
@@ -82,6 +87,10 @@
     close.addEventListener("click", () => dismiss(candidate)); header.append(close); card.append(header);
     card.append(element("p", candidate.title));
     card.append(openLink(candidate));
+    const alternate = state.options.handoff === "resume" ? "compatible" : "resume";
+    const other = openLink(candidate, alternate === "compatible" ? "Try compatibility opener" : "Try resume opener", alternate);
+    other.style.cssText = "background:transparent;color:#bce5fa;font-size:12px;padding:8px;min-height:36px";
+    card.append(other);
     const footer = element("footer");
     const choose = element("button", "Choose stream"); choose.type = "button";
     choose.addEventListener("click", () => {
@@ -99,7 +108,12 @@
     disable.addEventListener("click", () => {
       send({ type: "ac-set-options", siteEnabled: false }).then(() => { enabled = false; control({ enabled: false }); remove(); }).catch(() => { disable.textContent = "Try again"; });
     });
-    footer.append(choose, disable); card.append(footer); shadow.append(card);
+    const copy = element("button", "Copy link"); copy.type = "button";
+    copy.addEventListener("click", async () => {
+      try { await V.copyURL(candidate.url); copy.textContent = "Link copied"; }
+      catch { copy.textContent = "Copy unavailable"; }
+    });
+    footer.append(choose, copy, disable); card.append(footer); shadow.append(card);
     (document.body || document.documentElement).append(hostElement);
   }
   function reload() {

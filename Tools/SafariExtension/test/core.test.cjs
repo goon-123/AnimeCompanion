@@ -15,22 +15,30 @@ test("MAIN-world installation does not overwrite a website's CommonJS module exp
   assert.equal(typeof context.ACVideo.launchURL, "function");
 });
 
-test("VidHub handoff preserves signed query strings, Unicode titles, and the current position", () => {
+test("compatible and resume handoffs preserve the exact signed media URL without a webpage filename override", () => {
   const video = { url: "https://cdn.example/video.mp4?signature=a+b%2Fc==&expires=123&name=part%201", title: "Señor & friends + episode 4", position: 142.9 };
-  const link = V.launchURL(video);
-  const values = Object.fromEntries(new URL(link).searchParams);
-  assert.equal(values.url, video.url);
-  assert.equal(values.filename, video.title);
-  assert.equal(values.position, "142");
-  assert.equal(link.includes("Se%C3%B1or%20%26%20friends%20%2B"), true);
-  assert.equal(values["x-success"], undefined, "Safari videos must not write anime tracking callbacks");
+  for (const method of ["compatible", "resume"]) {
+    const link = new URL(V.launchURL(video, method));
+    const values = Object.fromEntries(link.searchParams);
+    assert.equal(values.url, video.url);
+    assert.equal(link.pathname, method === "resume" ? "/play" : "/open");
+    assert.equal(values.position, method === "resume" ? "142" : undefined);
+    assert.equal(values.filename, undefined);
+    assert.equal(values["x-success"], undefined, "Safari videos must not write anime tracking callbacks");
+    assert.deepEqual([...link.searchParams.keys()].sort(), method === "resume" ? ["position", "url"] : ["url"]);
+  }
+  assert.equal(new URL(V.launchURL(video)).pathname, "/open");
 });
 test("browser-only and executable addresses cannot be passed to VidHub", () => {
   for (const url of ["blob:https://site.example/id", "javascript:alert(1)", "data:video/mp4;base64,AA", "file:///private/video.mp4", "open-vidhub://x-callback-url/play", "", "x".repeat(17000)]) {
     assert.equal(V.networkURL(url), null);
     assert.throws(() => V.launchURL({ url }));
   }
-  for (const position of [NaN, Infinity, -4]) assert.equal(new URL(V.launchURL({ url: "https://site.example/video", position })).searchParams.get("position"), "0");
+  for (const position of [NaN, Infinity, -4]) assert.equal(new URL(V.launchURL({ url: "https://site.example/video", position }, "resume")).searchParams.get("position"), "0");
+});
+test("old and invalid preferences migrate to compatible opening while explicit resume remains available", () => {
+  for (const prefs of [undefined, null, {}, { handoff: "javascript:bad" }]) assert.equal(V.options(prefs).handoff, "compatible");
+  assert.equal(V.options({ handoff: "resume" }).handoff, "resume");
 });
 test("HLS, DASH, extensionless video responses, and direct sources are recognized without listing transport chunks", () => {
   assert.equal(V.kind("https://cdn.example/stream", "application/vnd.apple.mpegurl; charset=utf8"), "HLS");

@@ -45,7 +45,9 @@ if __name__ == "__main__":
     genres = request("/v1/genres")
     tags = request("/v1/tags")
     assert genres and tags, "Taxonomy must be available"
-    request("/v1/series/1")
+    example = request("/v1/series/1")
+    batch = request("/v1/series/batch", [("id", "1"), ("id", "2")])
+    assert batch and all(item.get("id") in (1, 2) for item in batch), "Batch series identities must match the request"
     request("/v1/series/1/images", [("limit", "40"), ("page", "1")])
     ratings = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "24")]
     for path in ["/v1/series/1/relationships", "/v2/series/1/similar", "/v2/series/1/readers-also-like"]:
@@ -56,4 +58,8 @@ if __name__ == "__main__":
     request("/v1/series/search", base + [("tag_not", str(tags[0]["id"]))])
     single_rating = [(key, value) for key, value in base if key != "content_rating"] + [("content_rating", "safe")]
     request("/v2/series/search", single_rating)
+    publisher = next((item for item in example.get("publishers", []) if item.get("name")), None)
+    assert publisher, "Example series must expose a publisher"
+    request("/v1/series/search", single_rating + [("publisher", publisher["name"])])
+    request("/v2/series/search", single_rating + [("publisher_id", "4874")])
     print("MangaBaka discovery contracts reachable", flush=True)

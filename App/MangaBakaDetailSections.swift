@@ -4,9 +4,9 @@ import AnimeCore
 struct MangaBakaSeriesTags: View {
     @EnvironmentObject private var account: MangaBakaStore
     let series: MangaBakaSeries
-    @State private var expanded = false
-    @State private var spoilers = false
-    @State private var implied = false
+    @State private var expanded = true
+    @State private var spoilers = true
+    @State private var implied = true
     @State private var information: String?
     private var tags: [MangaBakaTag] {
         var seen = Set<String>()

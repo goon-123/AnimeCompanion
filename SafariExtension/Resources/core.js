@@ -8,7 +8,8 @@
   const CHANNEL = "animecompanion.video.v1";
   const MAX_AGE = 60 * 60 * 1000;
   const MAX_URL = 16384;
-  const DEFAULTS = Object.freeze({ enabled: true, autoPrompt: true, disabledHosts: [] });
+  const DEFAULTS = Object.freeze({ enabled: true, autoPrompt: true, handoff: "compatible", disabledHosts: [] });
+  const SAMPLE_URL = "https://developer.mozilla.org/shared-assets/videos/flower.mp4";
   const text = (value, limit = 180) => typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, limit) : "";
   const position = value => Number.isFinite(value) ? Math.min(31536000, Math.max(0, value)) : 0;
   function networkURL(value, base) {
@@ -41,6 +42,7 @@
     return {
       enabled: value.enabled !== false,
       autoPrompt: value.autoPrompt !== false,
+      handoff: value.handoff === "resume" ? "resume" : "compatible",
       disabledHosts: [...new Set((Array.isArray(value.disabledHosts) ? value.disabledHosts : [])
         .filter(x => typeof x === "string" && x.length <= 253 && /^[a-z0-9.:[\]-]+$/i.test(x))
         .map(x => x.toLowerCase()))].slice(0, 500)
@@ -117,13 +119,32 @@
     result.candidates = [...choices.values()].sort((a, b) => b.score - a.score || b.seenAt - a.seenAt).slice(0, 40);
     return result;
   }
-  function launchURL(candidate) {
+  function launchURL(candidate, method = "compatible") {
     const url = networkURL(candidate?.url);
     if (!url) throw new Error("This video does not have an accessible stream URL.");
     // RFC 3986 encoding, rather than form encoding (+), preserves signed links
     // and works with native URLQueryItem parsing. Encode every value once.
-    const fields = { url, position: String(Math.floor(position(candidate.position))), filename: text(candidate.title) || filename(url), "x-source": "Anime Companion Safari" };
-    return "open-vidhub://x-callback-url/play?" + Object.entries(fields).map(([key, value]) => encodeURIComponent(key) + "=" + encodeURIComponent(value)).join("&");
+    // Safari does not need tracking callbacks. Use VidHub's minimal Apple
+    // compatibility opener by default; resume is an explicit alternative.
+    // Do not override the media filename with an arbitrary webpage title.
+    const resume = method === "resume";
+    const fields = resume ? { url, position: String(Math.floor(position(candidate.position))) } : { url };
+    return "open-vidhub://x-callback-url/" + (resume ? "play" : "open") + "?"
+      + Object.entries(fields).map(([key, value]) => encodeURIComponent(key) + "=" + encodeURIComponent(value)).join("&");
   }
-  return Object.freeze({ CHANNEL, MAX_AGE, MAX_URL, DEFAULTS, text, position, networkURL, host, kind, options, allowed, cleanReport, state, launchURL });
+  async function copyURL(value) {
+    const url = networkURL(value);
+    if (!url) throw new Error("No stream link to copy.");
+    try {
+      if (globalThis.navigator?.clipboard?.writeText) { await navigator.clipboard.writeText(url); return; }
+    } catch { /* Safari may require its user-gesture clipboard fallback. */ }
+    const doc = globalThis.document;
+    if (!doc?.body) throw new Error("Copy is unavailable on this page.");
+    const input = doc.createElement("textarea"); input.value = url; input.readOnly = true;
+    input.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+    doc.body.append(input); input.select();
+    try { if (!doc.execCommand("copy")) throw new Error("Copy is unavailable on this page."); }
+    finally { input.remove(); }
+  }
+  return Object.freeze({ CHANNEL, MAX_AGE, MAX_URL, DEFAULTS, SAMPLE_URL, text, position, networkURL, host, kind, options, allowed, cleanReport, state, launchURL, copyURL });
 });
