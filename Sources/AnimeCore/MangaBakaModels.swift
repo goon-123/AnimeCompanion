@@ -89,6 +89,8 @@ enum MBKey: String, CodingKey {
     case value, label, image, index, category, relationship, relation, score, weight, implied, spoiler, publishers
     case endDate = "end_date", isLicensed = "is_licensed", tagsV2 = "tags_v2", linksV2 = "links_v2"
     case namePath = "name_path", parentID = "parent_id", isSpoiler = "is_spoiler", isImplied = "is_implied"
+    case impliedBy = "implied_by_tag_ids", isExplicit = "is_explicit", sharedTags = "shared_tags_total", sharedUsers = "shared_users", matchedRelated = "matched_related"
+    case ratingNormalized = "rating_normalized", popularity, global, current
 }
 
 extension KeyedDecodingContainer {
@@ -134,7 +136,11 @@ struct MBCover: Decodable, Hashable, Sendable {
 }
 private struct MBProvider: Decodable {
     let present: Bool
-    init(from decoder: Decoder) throws { present = try decoder.container(keyedBy: MBKey.self).mbString(.id) != nil }
+    let rating: Double?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: MBKey.self)
+        present = c.mbString(.id) != nil; rating = c.mbNumber(.ratingNormalized)
+    }
 }
 public struct MangaBakaTag: Decodable, Hashable, Sendable {
     public let id: Int?
@@ -144,23 +150,33 @@ public struct MangaBakaTag: Decodable, Hashable, Sendable {
     public let isSpoiler: Bool
     public let isImplied: Bool
     public let weight: Double?
+    public let weightLabel: String?
     public var category: String { path.contains(" > ") ? String(path.components(separatedBy: " > ").first ?? "Other") : "Other" }
     public var label: String { name.replacingOccurrences(of: "_", with: " ").capitalized }
-    public init(id: Int? = nil, name: String, path: String? = nil) {
-        self.id = id; self.name = name; self.path = path ?? name; description = ""
-        isSpoiler = false; isImplied = false; weight = nil
+    public init(id: Int? = nil, name: String, path: String? = nil, description: String = "",
+                isSpoiler: Bool = false, isImplied: Bool = false, weight: Double? = nil, weightLabel: String? = nil) {
+        self.id = id; self.name = name; self.path = path ?? name; self.description = description
+        self.isSpoiler = isSpoiler; self.isImplied = isImplied; self.weight = weight; self.weightLabel = weightLabel
+    }
+    public func withMetadata(_ reference: Self) -> Self {
+        .init(id: id ?? reference.id, name: name, path: path == name ? reference.path : path,
+            description: description.isEmpty ? reference.description : description,
+            isSpoiler: isSpoiler || reference.isSpoiler, isImplied: isImplied,
+            weight: weight, weightLabel: weightLabel)
     }
     public init(from decoder: Decoder) throws {
         if let text = try? decoder.singleValueContainer().decode(String.self) {
-            id = nil; name = text; path = text; description = ""; isSpoiler = false; isImplied = false; weight = nil; return
+            id = nil; name = text; path = text; description = ""; isSpoiler = false; isImplied = false; weight = nil; weightLabel = nil; return
         }
         let c = try decoder.container(keyedBy: MBKey.self)
         id = c.mbInt(.id); name = c.mbString(.name) ?? ""
         path = c.mbString(.namePath) ?? name
         description = TextSanitizer.plain(c.mbString(.description) ?? "")
         isSpoiler = (try? c.decode(Bool.self, forKey: .isSpoiler)) ?? (try? c.decode(Bool.self, forKey: .spoiler)) ?? false
-        isImplied = (try? c.decode(Bool.self, forKey: .isImplied)) ?? (try? c.decode(Bool.self, forKey: .implied)) ?? false
+        let impliedIDs = (try? c.decode([Int].self, forKey: .impliedBy)) ?? []
+        isImplied = (try? c.decode(Bool.self, forKey: .isImplied)) ?? (try? c.decode(Bool.self, forKey: .implied)) ?? !impliedIDs.isEmpty
         weight = c.mbNumber(.weight)
+        weightLabel = c.mbString(.weight)
     }
 }
 
@@ -187,6 +203,8 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public let isLicensed: Bool
     public let publishers: [MangaBakaPublisher]
     public let providers: [String]
+    public let sourceRatings: [MangaBakaSourceRating]
+    public let popularityRank: Int?
     private let cover: MBCover?
     private let coverImage: String?
 
@@ -218,6 +236,13 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         let sources = (try? c.decode([String: MBProvider].self, forKey: .source)) ?? [:]
         let labels = ["anilist": "AniList", "anime_planet": "Anime-Planet", "anime_news_network": "Anime News Network", "kitsu": "Kitsu", "manga_updates": "MangaUpdates", "my_anime_list": "MyAnimeList", "shikimori": "Shikimori"]
         providers = sources.filter { $0.value.present }.keys.map { labels[$0] ?? $0 }.sorted()
+        sourceRatings = sources.keys.sorted().compactMap { key in
+            guard let provider = sources[key], provider.present, let score = provider.rating, (0...100).contains(score) else { return nil }
+            return MangaBakaSourceRating(provider: labels[key] ?? key, score: score)
+        }
+        let popularity = try? c.nestedContainer(keyedBy: MBKey.self, forKey: .popularity)
+        let global = try? popularity?.nestedContainer(keyedBy: MBKey.self, forKey: .global)
+        popularityRank = global?.mbInt(.current) ?? popularity?.mbInt(.global)
     }
     public var displayTitle: String {
         for language in ["en", "ja-Latn", "ja", "ko-Latn", "ko", "zh-Latn", "zh"] {
@@ -229,6 +254,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public var formatLabel: String { MangaBakaFormat(rawValue: type)?.label ?? type.capitalized }
     public var websiteURL: URL { URL(string: "https://mangabaka.org/\(id)")! }
     public var coverURL: URL? { [cover?.x350?.value, cover?.x250?.value, cover?.x150?.value, cover?.raw?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
+    public var fullCoverURL: URL? { [cover?.raw?.value, cover?.x350?.value, cover?.x250?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
     public var searchTitles: [String] {
         var seen = Set<String>()
         return Array(([displayTitle, title, nativeTitle ?? ""] + titles.map(\.title)).filter {

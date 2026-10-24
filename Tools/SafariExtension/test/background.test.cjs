@@ -26,6 +26,24 @@ test("manual scan reinstalls a missing page observer even when the isolated scri
   assert.ok(h.injected[0].files.includes("observer.js"));
   assert.ok(h.delivered.filter(x => x.message.type === "ac-refresh").length >= 2);
 });
+test("a denied iframe does not prevent a manual scan from repairing the top page", async () => {
+  const h = harness({ onInject: value => { if (value.target.allFrames) throw new Error("No frame permission"); } });
+  await h.dispatch({ type: "ac-scan", tabId: 12 });
+  assert.equal(h.injected.length, 3);
+  assert.equal(h.injected[1].target.allFrames, undefined);
+  assert.ok(h.injected[1].files.includes("observer.js"));
+});
+test("a session write failure cannot make a successful scan read stale stored data", async () => {
+  const h = harness();
+  h.browser.storage.session.set = async () => { throw new Error("Storage quota"); };
+  await h.dispatch({ type: "ac-report", report: report() }, sender);
+  assert.equal((await h.dispatch({ type: "ac-get-state", tabId: 12 })).candidates.length, 1);
+});
+test("navigation to an unsupported page cannot fall back to an old sender URL", async () => {
+  const h = harness({ getTab: id => ({ id, url: "about:blank" }) });
+  const result = await h.dispatch({ type: "ac-report", report: report() }, sender);
+  assert.equal(result.enabled, false);
+});
 test("unavailable session storage falls back to bounded memory without persisting URLs", async () => {
   for (const config of [{ noSessionStorage: true }, { brokenSessionStorage: true }]) {
     const h = harness(config);

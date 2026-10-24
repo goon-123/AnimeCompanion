@@ -11,6 +11,8 @@ The Safari web extension is embedded in AnimeCompanion and first shipped in 0.17
 
 The toolbar popup provides global detection and automatic-prompt switches, per-website exclusion/re-enable, a reset for website preferences, and a manual scan/stream picker. Dismissing a prompt suppresses it for that video for the current page lifetime. New videos can prompt again. Opening is always an explicit tap and may also show iOS's confirmation for opening another app.
 
+Build 69 repairs recovery with partial/stale Safari sender-tab URLs and a missing MAIN-world observer. **Scan again** reinstalls both idempotent scripts even if an isolated script was already acknowledging messages. **Open from webpage** places the selected stream's launch link in the top-level page; close the extension menu and tap that link. This also works for embedded media and manual-only mode. It does not turn on automatic prompts. A session-storage failure uses a bounded memory cache, never persistent URL storage; rescanning rebuilds that cache after a background restart.
+
 ## Detection and handoff
 
 - Declarative MAIN-world and isolated scripts run at document start in permitted HTTP(S) frames. Safari 18's `content_scripts.world` support is required; `match_about_blank` also covers inherited player frames on Safari 18.4 and later. The toolbar can inject the scripts after website access was granted to an already-loaded page.

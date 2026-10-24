@@ -100,6 +100,12 @@ struct MangaBakaCard: View {
             if let rating = series.rating, rating > 0 {
                 Label("\(rating, specifier: "%.0f")%", systemImage: "star.fill").font(.caption).foregroundStyle(.yellow)
             } else { Text(series.status.capitalized).font(.caption).foregroundStyle(.secondary) }
+            HStack(spacing: 5) {
+                if let year = series.year { Text(String(year)) }
+                if let chapters = series.totalChapters { Text(chapters.formatted() + " ch.") }
+            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(series.status.capitalized + " · " + (series.contentRating?.capitalized ?? "Unrated"))
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
         }.frame(width: width, alignment: .leading).contentShape(Rectangle())
     }
 }
@@ -132,7 +138,7 @@ struct MangaBakaShelfView: View {
             } else if loading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(0..<5) { _ in RoundedRectangle(cornerRadius: 14).fill(Theme.surface).frame(width: 142, height: 245) }
+                        ForEach(0..<5) { _ in RoundedRectangle(cornerRadius: 14).fill(Theme.surface).frame(width: 142, height: 300) }
                     }.padding(.horizontal, 20)
                 }.disabled(true).accessibilityLabel("Loading " + shelf.label)
             } else if error == nil {
@@ -192,6 +198,7 @@ struct MangaBakaExploreView: View {
                 }
                 if account.connected { MangaBakaPersonalShelf() }
                 formats
+                genres
                 ForEach(MangaBakaHomeModel.shelves, id: \.self) { shelf in
                     MangaBakaShelfView(shelf: shelf, items: (model.items[shelf] ?? []).filter { $0.isVisible(includeAdult: preferences.includeAdult) },
                         loading: model.loading.contains(shelf), error: model.errors[shelf], retry: {
@@ -202,6 +209,7 @@ struct MangaBakaExploreView: View {
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
+            .task { await account.loadTaxonomy() }
             .refreshable { await model.load(api: account.api, adult: preferences.includeAdult, refresh: true) }
     }
     private var header: some View {
@@ -213,6 +221,31 @@ struct MangaBakaExploreView: View {
                     .font(.subheadline).foregroundStyle(.secondary).padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 17))
             }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-search")
         }.padding(.horizontal, 20)
+    }
+    private var genres: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NavigationLink { MangaBakaTaxonomyView() } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Explore genres & tags").font(.title2.bold())
+                        Text("Explore every genre, tag & content rating").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(); Image(systemName: "tag").font(.title2)
+                }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
+            }.buttonStyle(.plain).padding(.horizontal, 20)
+            if !account.catalogGenres.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 9) {
+                        ForEach(account.catalogGenres.prefix(16)) { genre in
+                            NavigationLink(value: MangaBakaBrowseRoute(query: .init(genres: [genre]))) {
+                                Text(genre.label).font(.subheadline.weight(.medium)).padding(.horizontal, 15).padding(.vertical, 10)
+                                    .background(.white.opacity(0.07), in: Capsule())
+                            }.buttonStyle(.plain)
+                        }
+                    }.padding(.horizontal, 20)
+                }
+            }
+        }
     }
     private func hero(_ series: MangaBakaSeries) -> some View {
         HStack(alignment: .center, spacing: 18) {

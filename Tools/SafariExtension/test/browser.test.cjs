@@ -45,7 +45,7 @@ before(async () => {
   browser = await webkit.launch({ headless: true });
 });
 after(async () => { await browser?.close(); server?.close(); embedServer?.close(); });
-async function setup(route = "/direct") {
+async function setup(route = "/direct", config = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const frameIDs = new Map();
@@ -54,6 +54,11 @@ async function setup(route = "/direct") {
   page.on("pageerror", value => errors.push(value.message));
   const h = harness({
     getTab: id => ({ id, url: page.url() }),
+    async onInject(value) {
+      for (const frame of page.frames().filter(frame => !frame.isDetached())) {
+        for (const name of value.files) await frame.evaluate(code => { (0, eval)(code); }, script(name));
+      }
+    },
     async onTabMessage(id, message, options) {
       const targets = page.frames().filter(frame => !frame.isDetached() && (options?.frameId === undefined || (frame === page.mainFrame() ? 0 : frameIDs.get(frame)) === options.frameId));
       await Promise.all(targets.map(frame => frame.evaluate(value => { for (const fn of globalThis.__acListeners || []) fn(value); }, message).catch(() => {})));
@@ -68,7 +73,7 @@ async function setup(route = "/direct") {
     globalThis.__acListeners=[];
     globalThis.browser={runtime:{sendMessage:value=>window.extensionSend(value),onMessage:{addListener:fn=>__acListeners.push(fn)}}};
   `;
-  await context.addInitScript({ content: stub + script("core.js") + script("observer.js") + script("content.js") });
+  await context.addInitScript({ content: stub + script("core.js") + (config.observer === false ? "" : script("observer.js")) + script("content.js") });
   await page.goto(origin + route);
   return { context, page, h, errors, async state() { return h.dispatch({ type: "ac-get-state", tabId: 1 }); } };
 }
@@ -106,6 +111,43 @@ test("a real playing video produces one prompt, carries the current timestamp, a
     await t.page.waitForSelector("[data-animecompanion-vidhub]", { state: "detached" });
     await new Promise(resolve => setTimeout(resolve, 2000));
     assert.equal(await t.page.locator("[data-animecompanion-vidhub]").count(), 0);
+    assert.deepEqual(t.errors, []);
+  } finally { await t.context.close(); }
+});
+test("manual scan repairs an absent observer even though a content script acknowledges messages", async () => {
+  const t = await setup("/direct", { observer: false });
+  try {
+    await t.page.click("#play");
+    assert.equal((await t.state()).candidates.length, 0);
+    await t.h.dispatch({ type: "ac-scan", tabId: 1 });
+    await waitFor(async () => (await t.state()).candidates.some(x => x.playing), "Scan did not restore the missing page observer");
+    assert.deepEqual(t.errors, []);
+  } finally { await t.context.close(); }
+});
+test("manual-only mode can hand an embedded stream to a real link on the parent webpage", async () => {
+  const t = await setup("/parent");
+  try {
+    const frame = t.page.frames().find(frame => frame.url().startsWith(embedOrigin));
+    await frame.click("#play");
+    await waitFor(async () => (await t.state()).candidates.some(x => x.playing), "No embedded stream");
+    await t.h.dispatch({ type: "ac-set-options", tabId: 1, autoPrompt: false });
+    await t.page.waitForSelector("[data-animecompanion-vidhub]", { state: "detached" });
+    await t.page.evaluate(() => {
+      const original = Element.prototype.attachShadow; globalThis.__acTestRoots = [];
+      Element.prototype.attachShadow = function (...args) { const root = Reflect.apply(original, this, args); __acTestRoots.push(root); return root; };
+    });
+    const candidate = (await t.state()).candidates[0];
+    await t.h.dispatch({ type: "ac-show-on-page", tabId: 1, url: candidate.url });
+    await t.page.waitForSelector("[data-animecompanion-vidhub]");
+    const url = new URL(await promptLink(t.page));
+    assert.equal(url.searchParams.get("url"), candidate.url);
+    assert.equal(url.protocol, "open-vidhub:");
+    assert.equal((await t.state()).options.autoPrompt, false);
+    await t.page.evaluate(() => {
+      const link = __acTestRoots.find(root => root.host.isConnected).querySelector("a[data-open]");
+      link.addEventListener("click", event => event.preventDefault()); link.click();
+    });
+    await frame.waitForFunction(() => document.querySelector("video").paused);
     assert.deepEqual(t.errors, []);
   } finally { await t.context.close(); }
 });

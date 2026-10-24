@@ -90,6 +90,11 @@ final class MangaBakaStore: ObservableObject {
     @Published var accountError: String?
     @Published var libraryError: String?
     @Published var notice: String?
+    @Published private(set) var catalogGenres: [MangaBakaGenre] = []
+    @Published private(set) var catalogTags: [MangaBakaTag] = []
+    @Published private(set) var loadingTaxonomy = false
+    @Published private(set) var taxonomyError: String?
+    private var tagsByName: [String: MangaBakaTag] = [:]
     private var credential: MangaBakaCredential?
     private var refreshTask: Task<MangaBakaCredential, Error>?
     private var generation = UUID()
@@ -106,6 +111,23 @@ final class MangaBakaStore: ObservableObject {
         let stored = (UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return stored.isEmpty ? bundledClientID : stored
+    }
+    func resolvedTag(_ tag: MangaBakaTag) -> MangaBakaTag {
+        tagsByName[tag.name.lowercased()].map { tag.withMetadata($0) } ?? tag
+    }
+    func loadTaxonomy(refresh: Bool = false) async {
+        guard !loadingTaxonomy, refresh || catalogTags.isEmpty || catalogGenres.isEmpty else { return }
+        loadingTaxonomy = true; taxonomyError = nil
+        defer { loadingTaxonomy = false }
+        var failures: [String] = []
+        do { catalogGenres = try await api.genres(refresh: refresh).sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending } }
+        catch { failures.append("Genres: " + error.localizedDescription) }
+        do {
+            let values = try await api.tags(refresh: refresh).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            tagsByName = Dictionary(values.map { ($0.name.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+            catalogTags = values
+        } catch { failures.append("Tags: " + error.localizedDescription) }
+        taxonomyError = failures.isEmpty ? nil : failures.joined(separator: "\n")
     }
     func restore() async {
         guard !restored else { return }; restored = true

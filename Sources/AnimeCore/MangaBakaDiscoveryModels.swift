@@ -1,5 +1,10 @@
 import Foundation
 
+public struct MangaBakaSourceRating: Hashable, Sendable {
+    public let provider: String
+    public let score: Double
+}
+
 public enum MangaBakaContentRating: String, CaseIterable, Codable, Hashable, Sendable {
     case safe, suggestive, erotica, pornographic
     public var label: String { rawValue.capitalized }
@@ -36,6 +41,7 @@ public struct MangaBakaCoverImage: Decodable, Hashable, Identifiable, Sendable {
     public let language: String
     public let index: String
     public let note: String?
+    public let contentRating: String?
     private let image: MBCover?
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
@@ -43,6 +49,7 @@ public struct MangaBakaCoverImage: Decodable, Hashable, Identifiable, Sendable {
         id = value; seriesID = c.mbInt(.seriesID)
         type = c.mbString(.type) ?? "cover"; language = c.mbString(.language) ?? ""
         index = c.mbString(.index) ?? ""; note = c.mbString(.note)
+        contentRating = c.mbString(.contentRating)
         image = try c.decodeIfPresent(MBCover.self, forKey: .image)
     }
     public var thumbnailURL: URL? { [image?.x350?.value, image?.x250?.value, image?.x150?.value, image?.raw?.value].compactMap { $0 }.compactMap(MangaBakaSeries.publicURL).first }
@@ -51,6 +58,7 @@ public struct MangaBakaCoverImage: Decodable, Hashable, Identifiable, Sendable {
         let title = index.isEmpty ? type.capitalized : type.capitalized + " " + index
         return language.isEmpty ? title : title + " · " + language.uppercased()
     }
+    public func isVisible(includeAdult: Bool) -> Bool { includeAdult || ["safe", "suggestive"].contains(contentRating ?? "") }
 }
 
 public enum MangaBakaRelatedKind: String, CaseIterable, Hashable, Sendable {
@@ -70,10 +78,15 @@ public enum MangaBakaRelatedKind: String, CaseIterable, Hashable, Sendable {
 public struct MangaBakaRelatedSeries: Decodable, Hashable, Identifiable, Sendable {
     public let series: MangaBakaSeries
     public let relationship: String?
+    public let sharedTags: Int?
+    public let sharedReaders: Int?
+    public let matchedRelated: Bool
     public var id: Int { series.id }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
         series = try c.decode(MangaBakaSeries.self, forKey: .series)
         relationship = c.mbString(.relationship) ?? c.mbString(.relation) ?? c.mbString(.type)
+        sharedTags = c.mbInt(.sharedTags); sharedReaders = c.mbInt(.sharedUsers)
+        matchedRelated = (try? c.decode(Bool.self, forKey: .matchedRelated)) ?? false
     }
 }

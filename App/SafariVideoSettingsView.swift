@@ -20,6 +20,10 @@ struct SafariVideoSettingsView: View {
                 Label("Website preferences", systemImage: "globe")
                 Text("Use Not on this site to disable detection for that website. Re-enable it from the extension’s menu, or reset website preferences there.")
             }.font(.subheadline)
+            Section("If a video does not open") {
+                Text("Open the extension in Safari and tap Scan again to restore detection on the current page, including embedded players.")
+                Text("If Open in VidHub does nothing in the extension menu, choose Open from webpage. Close the menu and tap the Open in VidHub button on the page.")
+            }.font(.subheadline)
             Section("Playback compatibility") {
                 Text("Works with accessible video files and streaming playlists. Some websites use protected playback, browser-only video, or links that require their login session; those may need Safari’s player.")
                 Text("Safari videos do not change your anime watch progress. Detected links stay on this device during the browsing session and are only handed to VidHub when you tap Open.")

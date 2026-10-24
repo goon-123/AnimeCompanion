@@ -91,7 +91,7 @@ public actor MangaBakaClient {
     }
     public func tags(refresh: Bool = false) async throws -> [MangaBakaTag] {
         let bytes = try await publicData(api("/v1/tags"), refresh: refresh)
-        return Array(try decode(MBEnvelope<[MangaBakaTag]>.self, bytes).data.filter { $0.id != nil && !$0.name.isEmpty }.prefix(30_000))
+        return try decode(MBEnvelope<[MangaBakaTag]>.self, bytes).data.filter { $0.id != nil && !$0.name.isEmpty }
     }
     public func covers(id: Int, page: Int = 1, refresh: Bool = false) async throws -> MangaBakaPage<MangaBakaCoverImage> {
         guard id > 0 else { throw MangaBakaError.invalidResponse }

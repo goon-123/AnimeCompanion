@@ -5,6 +5,7 @@ const CACHE_KEY = "safariVideoTabs";
 const OPTIONS_KEY = "safariVideoOptions";
 let work = Promise.resolve();
 let memoryTabs = {};
+let sessionUnavailable = false;
 function serial(task) {
   const next = work.then(task, task);
   work = next.catch(() => {});
@@ -14,8 +15,9 @@ async function settings() { return Video.options((await browser.storage.local.ge
 async function cache() {
   // A missing/unavailable session area must not disable detection altogether.
   // The fallback is deliberately memory-only, never storage.local.
+  if (sessionUnavailable) return memoryTabs;
   try { return (await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] || memoryTabs; }
-  catch { return memoryTabs; }
+  catch { sessionUnavailable = true; return memoryTabs; }
 }
 async function saveCache(tabs) {
   const ordered = Object.keys(tabs).sort((a, b) => tabs[b].updatedAt - tabs[a].updatedAt);
@@ -27,7 +29,10 @@ async function saveCache(tabs) {
     delete tabs[oldest];
   }
   memoryTabs = tabs;
-  try { await browser.storage.session.set({ [CACHE_KEY]: tabs }); } catch { /* A fresh page scan can rebuild memory state. */ }
+  if (!sessionUnavailable) {
+    try { await browser.storage.session.set({ [CACHE_KEY]: tabs }); }
+    catch { sessionUnavailable = true; }
+  }
 }
 function tabID(message, sender) {
   const id = sender.tab?.id ?? message.tabId;
@@ -39,8 +44,7 @@ async function currentURL(id, sender = {}) {
   // after an SPA navigation; always prefer the current top-level tab.
   try {
     const tab = await browser.tabs.get(id);
-    const url = Video.networkURL(tab?.url);
-    if (url) return url;
+    if (typeof tab?.url === "string" && tab.url) return Video.networkURL(tab.url) || "";
   } catch { /* A granted content script may still have sender metadata. */ }
   return sender.tab?.id === id ? Video.networkURL(sender.tab.url) || "" : "";
 }
@@ -82,11 +86,16 @@ async function scan(id) {
   // is absent (permission granted late, or an earlier injection failed).
   // Reinstall both idempotent scripts, then request a new report.
   const target = { tabId: id, allFrames: true };
-  try {
+  async function install(target) {
     await browser.scripting.executeScript({ target, world: "MAIN", files: ["core.js", "observer.js"] });
     await browser.scripting.executeScript({ target, files: ["core.js", "content.js"] });
+  }
+  try {
+    await install(target);
   } catch (error) {
-    if (!refreshed) throw error;
+    // A frame without website permission must not prevent repairing the page.
+    try { await install({ tabId: id }); }
+    catch { if (!refreshed) throw error; }
   }
   await browser.tabs.sendMessage(id, { type: "ac-refresh" });
 }

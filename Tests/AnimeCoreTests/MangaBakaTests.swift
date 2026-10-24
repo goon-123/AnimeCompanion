@@ -57,24 +57,29 @@ final class MangaBakaTests: XCTestCase {
         let detail = try series(#"{"id":81,"tags":["space_travel"],"published":{"start_date":"2020-01-01","end_date":"2022-03-01"},"publishers":[{"name":"Owned Press"}],"is_licensed":true}"#)
         XCTAssertEqual(detail.tags.first?.name, "space_travel"); XCTAssertEqual(detail.publishedEnd, "2022-03-01")
         XCTAssertTrue(detail.isLicensed); XCTAssertEqual(detail.publishers.first?.name, "Owned Press")
+        let weighted = try series(#"{"id":81,"tags_v2":[{"id":42,"name":"space_travel","name_path":"Themes > Space","weight":"core","implied_by_tag_ids":[1]}],"popularity":{"global":{"current":10}},"source":{"anilist":{"id":1,"rating_normalized":85}}}"#)
+        XCTAssertEqual(weighted.tags.first?.weightLabel, "core"); XCTAssertEqual(weighted.tags.first?.isImplied, true)
+        XCTAssertEqual(weighted.popularityRank, 10); XCTAssertEqual(weighted.sourceRatings.first?.score, 85)
     }
     func testCoversUseFullImagesAndValidateSeriesBeforeShowing() async throws {
-        let image = #"{"id":5,"series_id":81,"type":"volume","index":"2","language":"en","image":{"raw":{"url":"https://cdn.mangabaka.dev/full.jpg"},"x350":{"x1":"https://cdn.mangabaka.dev/thumb.jpg"}}}"#
+        let image = #"{"id":5,"series_id":81,"type":"volume","index":"2","language":"en","content_rating":"safe","image":{"raw":{"url":"https://cdn.mangabaka.dev/full.jpg"},"x350":{"x1":"https://cdn.mangabaka.dev/thumb.jpg"}}}"#
         let transport = MBTestTransport([.json(page(image)), .json(page(image))]), api = client(transport)
         let covers = try await api.covers(id: 81)
         XCTAssertEqual(covers.items.first?.thumbnailURL?.lastPathComponent, "thumb.jpg")
         XCTAssertEqual(covers.items.first?.fullURL?.lastPathComponent, "full.jpg")
         XCTAssertEqual(covers.items.first?.caption, "Volume 2 · EN")
+        XCTAssertEqual(covers.items.first?.isVisible(includeAdult: false), true)
         do { _ = try await api.covers(id: 82); XCTFail("Wrong title's artwork") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
     }
     func testRecommendationKindsUseRealEndpointsAndDropDuplicatesAndHiddenTitles() async throws {
         let other = #"{"id":82,"title":"Another story","content_rating":"safe"}"#
         let hidden = #"{"id":83,"title":"Hidden story","content_rating":"erotica"}"#
-        let payload = "{\"data\":[{\"series\":\(other),\"relationship\":\"sequel\"},{\"series\":\(other)},{\"series\":\(hidden)},{\"series\":\(record)}]}"
+        let payload = "{\"data\":[{\"series\":\(other),\"relationship\":\"sequel\",\"shared_tags_total\":12,\"shared_users\":70},{\"series\":\(other)},{\"series\":\(hidden)},{\"series\":\(record)}]}"
         let transport = MBTestTransport(Array(repeating: .json(payload), count: 3)), api = client(transport)
         for kind in MangaBakaRelatedKind.allCases {
             let result = try await api.related(id: 81, kind: kind, includeAdult: false)
             XCTAssertEqual(result.map(\.id), [82]); XCTAssertEqual(result.first?.relationship, "sequel")
+            XCTAssertEqual(result.first?.sharedTags, 12); XCTAssertEqual(result.first?.sharedReaders, 70)
         }
         let requests = await transport.recorded()
         XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/series/81/relationships", "/v2/series/81/similar", "/v2/series/81/readers-also-like"])
