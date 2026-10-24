@@ -116,6 +116,7 @@ struct MangaBakaShelfView: View {
     var loading = false
     var error: String?
     var retry: (() -> Void)?
+    var emptyMessage: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -125,6 +126,11 @@ struct MangaBakaShelfView: View {
                     NavigationLink(value: MangaBakaBrowseRoute(query: .init(shelf: shelf))) {
                         Label("See all", systemImage: "chevron.right").font(.subheadline).labelStyle(.titleAndIcon)
                     }.buttonStyle(.plain).foregroundStyle(.secondary)
+                } else if loading {
+                    ProgressView().controlSize(.small)
+                } else if let retry {
+                    Button(action: retry) { Label("Refresh", systemImage: "arrow.clockwise") }
+                        .font(.subheadline).accessibilityLabel("Refresh manga recommendations")
                 }
             }.padding(.horizontal, 20)
             if !items.isEmpty {
@@ -142,8 +148,12 @@ struct MangaBakaShelfView: View {
                     }.padding(.horizontal, 20)
                 }.disabled(true).accessibilityLabel("Loading " + shelf.label)
             } else if error == nil {
-                Text(shelf == .recommended ? "Recommendations appear as MangaBaka learns what you enjoy." : "No titles match your content settings.")
+                Text(emptyMessage ?? "No titles match your content settings.")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
+                if shelf == .recommended {
+                    Link("View recommendations on MangaBaka", destination: URL(string: "https://mangabaka.org/my/recommendations")!)
+                        .font(.subheadline).padding(.horizontal, 20)
+                }
             }
             if let error { NoticeView(message: error, action: retry).padding(.horizontal, 20) }
         }
@@ -213,6 +223,12 @@ struct MangaBakaExploreView: View {
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
             .task(id: "\(account.connected)-\(account.revision)-\(preferences.includeAdult)") {
                 await account.loadRecommendations(includeAdult: preferences.includeAdult)
+                // Retry a temporarily empty warm profile once while this page
+                // stays open. Navigation cancels the delay, not the shared fetch.
+                if account.recommendationState.canRetryEmptyResult {
+                    do { try await Task.sleep(for: .seconds(31)) } catch { return }
+                    await account.loadRecommendations(includeAdult: preferences.includeAdult)
+                }
             }
             .task { await account.loadTaxonomy() }
             .refreshable {
@@ -304,7 +320,7 @@ private struct MangaBakaPersonalShelf: View {
             items: account.recommendationState.items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
             loading: account.recommendationState.loading, error: account.recommendationState.error, retry: {
                 Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
-            }
+            }, emptyMessage: account.recommendationState.emptyMessage
         )
     }
 }

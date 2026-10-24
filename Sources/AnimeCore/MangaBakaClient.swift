@@ -8,6 +8,22 @@ private final class MBNoRedirects: NSObject, URLSessionTaskDelegate, @unchecked 
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 private struct MBEnvelope<Value: Decodable>: Decodable { let data: Value }
+private struct MBRecommendationRecord: Decodable {
+    let series: MangaBakaSeries?
+    init(from decoder: Decoder) throws { series = try? MangaBakaSeries(from: decoder) }
+}
+private struct MBRecommendationResponse: Decodable {
+    let items: [MangaBakaSeries]
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: MBKey.self)
+        // This beta endpoint uses `results`; `data` is a supported alternative,
+        // not a reason to discard a populated results array.
+        let records = try c.decodeIfPresent([MBRecommendationRecord].self, forKey: .results)
+            ?? c.decode([MBRecommendationRecord].self, forKey: .data)
+        items = records.compactMap(\.series)
+        guard records.isEmpty || !items.isEmpty else { throw MangaBakaError.invalidResponse }
+    }
+}
 private struct MBToken: Decodable {
     let access_token: String
     let refresh_token: String?
@@ -153,7 +169,35 @@ public actor MangaBakaClient {
         var c = URLComponents(url: api("/v1/my/series/recommendations"), resolvingAgainstBaseURL: false)!
         c.queryItems = [.init(name: "limit", value: "24")]
         for rating in includeAdult ? ["safe", "suggestive", "erotica", "pornographic"] : ["safe", "suggestive"] { c.queryItems?.append(.init(name: "content_rating", value: rating)) }
-        return try decode(MangaBakaPage<MangaBakaSeries>.self, await request(c.url!, credential: credential)).items
+        let records = try decode(MBRecommendationResponse.self, await request(c.url!, credential: credential)).items
+        var seen = Set<Int>()
+        let unique = Array(records.filter { seen.insert($0.id).inserted }.prefix(24))
+        // Lean recommendation records may omit the catalog content rating.
+        // Resolve it before applying the allow-list, rather than silently
+        // dropping every otherwise valid recommendation.
+        let unknown = unique.filter { MangaBakaContentRating(rawValue: $0.contentRating ?? "") == nil }
+        guard !includeAdult, !unknown.isEmpty else { return unique }
+        let resolved = try await details(ids: unknown.map(\.id))
+        let byID = Dictionary(resolved.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let hydrated = unique.compactMap { item -> MangaBakaSeries? in
+            if MangaBakaContentRating(rawValue: item.contentRating ?? "") != nil { return item }
+            return byID[item.id] ?? item
+        }
+        return hydrated
+    }
+    public func recommendationStatus(_ credential: MangaBakaCredential) async throws -> MangaBakaRecommendationStatus {
+        try decode(MangaBakaRecommendationStatus.self, await request(api("/v1/my/series/recommendations/status"), credential: credential))
+    }
+    public func details(ids: [Int]) async throws -> [MangaBakaSeries] {
+        let wanted = Set(ids.filter { $0 > 0 }.prefix(24))
+        guard !wanted.isEmpty else { return [] }
+        var c = URLComponents(url: api("/v1/series/batch"), resolvingAgainstBaseURL: false)!
+        c.queryItems = wanted.sorted().map { URLQueryItem(name: "id", value: String($0)) }
+        // IDs may come from a private recommendation feed. Send no credentials
+        // to this public endpoint and do not persist that grouped ID list.
+        let records = try decode(MBEnvelope<[MangaBakaSeries]>.self, await request(c.url!)).data
+        guard records.allSatisfy({ wanted.contains($0.id) }) else { throw MangaBakaError.invalidResponse }
+        return records
     }
     public func save(id: Int, update: MangaBakaLibraryUpdate, existing: Bool, credential: MangaBakaCredential) async throws {
         guard id > 0 else { throw MangaBakaError.invalidResponse }

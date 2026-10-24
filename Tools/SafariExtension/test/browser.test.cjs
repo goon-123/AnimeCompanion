@@ -91,6 +91,7 @@ async function promptLink(page) {
 test("a real playing video produces one prompt, carries the current timestamp, and dismisses without repeated prompts", async () => {
   const t = await setup();
   try {
+    await t.h.dispatch({ type: "ac-set-options", tabId: 1, handoff: "resume" });
     // A root wrapper added before UI creation permits test inspection without
     // weakening the extension's closed shadow root in production.
     await t.page.evaluate(() => {
@@ -230,6 +231,11 @@ test("the toolbar stream picker saves manual-only mode and site exclusions", asy
     await popup.goto(origin + "/popup.html");
     await popup.waitForSelector("a.open");
     assert.equal(new URL(await popup.locator("a.open").first().getAttribute("href")).protocol, "open-vidhub:");
+    assert.equal(new URL(await popup.locator("a.open").first().getAttribute("href")).pathname, "/open");
+    await popup.locator("#handoff").selectOption("resume");
+    await waitFor(async () => (await t.state()).options.handoff === "resume", "Resume opener did not save");
+    await waitFor(async () => new URL(await popup.locator("a.open").first().getAttribute("href")).pathname === "/play", "Selected opener did not update the link");
+    assert.equal(new URL(await popup.locator("a.alternate").first().getAttribute("href")).pathname, "/open");
     await popup.locator("#prompts").uncheck();
     await waitFor(async () => (await t.state()).options.autoPrompt === false, "Manual-only preference did not save");
     await popup.screenshot({ path: path.join(artifacts, "stream-picker.png") });
@@ -237,4 +243,33 @@ test("the toolbar stream picker saves manual-only mode and site exclusions", asy
     await waitFor(async () => (await t.state()).enabled === false, "Site exclusion did not save");
     assert.equal(JSON.stringify(t.h.stores.local).includes("token="), false);
   } finally { await popupContext.close(); await t.context.close(); }
+});
+
+test("both handoffs decode to a real playable stream with signed query bytes intact", async () => {
+  const t = await setup();
+  try {
+    await t.page.evaluate(() => {
+      const original = Element.prototype.attachShadow; globalThis.__acTestRoots = [];
+      Element.prototype.attachShadow = function (...args) { const root = Reflect.apply(original, this, args); __acTestRoots.push(root); return root; };
+    });
+    await t.page.click("#play");
+    await t.page.waitForSelector("[data-animecompanion-vidhub]");
+    const links = await t.page.evaluate(() => Array.from(__acTestRoots.find(root => root.host.isConnected)
+      .querySelectorAll("a[data-open]"), link => link.href));
+    assert.deepEqual(links.map(link => new URL(link).pathname), ["/open", "/play"]);
+    for (const link of links) {
+      const media = new URL(link).searchParams.get("url");
+      assert.equal(media, origin + "/video.webm?token=a%2Bb&part=1");
+      const response = await t.context.request.get(media);
+      assert.equal(response.status(), 200);
+      assert.equal(response.headers()["content-type"], "video/webm");
+      assert.deepEqual(await response.body(), fixture);
+      const player = await t.context.newPage();
+      await player.goto(origin + "/direct");
+      await player.evaluate(async url => { const video = document.querySelector("video"); video.src = url; await video.play(); }, media);
+      await player.waitForFunction(() => document.querySelector("video").currentTime > 0);
+      await player.close();
+    }
+    assert.deepEqual(t.errors, []);
+  } finally { await t.context.close(); }
 });

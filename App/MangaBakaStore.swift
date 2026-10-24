@@ -204,8 +204,14 @@ final class MangaBakaStore: ObservableObject {
             }
             do {
                 let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
+                var status: MangaBakaRecommendationStatus?
+                if result.isEmpty {
+                    // Readiness is supplementary: an unavailable status endpoint
+                    // must not erase a successful recommendation response.
+                    status = try? await api.recommendationStatus(validCredential())
+                }
                 try Task.checkCancellation()
-                recommendationState.complete(result, for: attempt)
+                recommendationState.complete(result, for: attempt, status: status)
             } catch is CancellationError {} catch {
                 if !Task.isCancelled { recommendationState.fail(error.localizedDescription, for: attempt) }
             }

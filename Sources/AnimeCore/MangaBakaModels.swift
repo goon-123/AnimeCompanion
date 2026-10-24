@@ -218,7 +218,8 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         id = value; title = c.mbString(.title) ?? c.mbString(.romanizedTitle) ?? ""
         nativeTitle = c.mbString(.nativeTitle); titles = (try? c.decode([MangaBakaTitle].self, forKey: .titles)) ?? []
         type = c.mbString(.type) ?? c.mbString(.mediaType) ?? "other"; status = c.mbString(.status) ?? "unknown"
-        contentRating = c.mbString(.contentRating); rating = c.mbNumber(.rating)
+        contentRating = c.mbString(.contentRating)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        rating = c.mbNumber(.rating)
         synopsis = TextSanitizer.plain(c.mbString(.description) ?? "")
         let published = try? c.nestedContainer(keyedBy: MBKey.self, forKey: .published)
         year = c.mbInt(.year) ?? c.mbInt(.publishedYear) ?? published?.mbString(.startDate).flatMap { Int($0.prefix(4)) }

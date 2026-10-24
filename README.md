@@ -1,5 +1,13 @@
 # Anime Companion
 
+### MangaBaka recommendation recovery & VidHub compatibility (0.25.25 / build 72)
+
+MangaBaka recommendations prefer the endpoint’s `results` array, skip individual malformed records and resolve missing content ratings through a credential-free, uncached public batch lookup before local filtering. Empty results expire after 30 seconds, with one automatic retry for a temporarily empty warm profile while Explore stays open. For you now has a Refresh button, a link to the website and specific empty-state messages. The service’s own readiness endpoint distinguishes an unfinished/stale profile from unavailable results; failed readiness probes do not erase successful feed responses. Private recommendation data and grouped lookup IDs remain memory-only.
+
+Safari uses VidHub’s minimal compatible Apple opener by default. Resume playback remains selectable, each stream offers the alternate opener, and Copy stream link plus a public sample-video test help isolate a provider URL failure from a VidHub failure. Signed query strings remain intact; arbitrary webpage titles no longer override the media filename. Reload Safari webpages after updating. Browser checks verify the generated URLs and playback of their decoded media URL; they do not establish playback inside the installed VidHub app. Some providers require browser cookies/referrers or protected playback, which the URL handoff cannot supply.
+
+Series entries show spoiler/implied tags and the full tag list by default. Links is expandable and lists every distinct supported URL; Find a reading source sits immediately below Add to My Library. See the PR for hosted Core, live batch-contract, WebKit and Release IPA validation. Private account recommendations and native VidHub playback still need a device check; longer simulator suites remain opt-in.
+
 ### Recommendation requests survive navigation (0.25.24 / build 71)
 
 Finish the For you lifecycle fix by letting the account own its in-flight recommendation request. Opening a title, switching tabs or leaving/reopening Explore no longer cancels work that another appearance is waiting for. Concurrent callers await the shared request. Changing accounts, library revisions or content settings still cancels and invalidates older work; private cards remain memory-only. Build 70's stable scrolling layout, retained cards during refresh and seven lifecycle regressions are included. Hosted validation and the unsigned IPA are linked from the follow-up PR; actual phone/iPad scrolling remains a device check.

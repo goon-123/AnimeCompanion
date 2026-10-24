@@ -11,6 +11,8 @@ final class LiveServiceTests: XCTestCase {
         XCTAssertTrue(tags.contains { $0.path.contains(" > ") })
         let details = try await api.details(id: 1)
         XCTAssertFalse(details.tags.isEmpty)
+        let batch = try await api.details(ids: [1, 2])
+        XCTAssertFalse(batch.isEmpty); XCTAssertTrue(batch.allSatisfy { [1, 2].contains($0.id) })
         print("Checking MangaBaka cover pagination")
         let covers = try await api.covers(id: 1)
         XCTAssertFalse(covers.items.isEmpty)

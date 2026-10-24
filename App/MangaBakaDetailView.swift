@@ -10,6 +10,7 @@ struct MangaBakaDetailView: View {
     @State private var editing = false
     @State private var signingIn = false
     @State private var expanding = false
+    @State private var linksExpanded = false
     @State private var refreshToken = 0
     @State private var preview: AnimeImagePreview?
     private var entry: MangaBakaLibraryEntry? { account.entries[series.id] }
@@ -22,13 +23,13 @@ struct MangaBakaDetailView: View {
                         MangaBakaBadges(series: series)
                         jumpLinks(proxy)
                         actions
+                        readingSource
                         if let notice = account.notice { Text(notice).font(.subheadline).foregroundStyle(.mint) }
                         if let error { NoticeView(message: error) { Task { await reload(refresh: true) } } }
                         story
                         metadata
                         sourceRatings
                         MangaBakaSeriesTags(series: series).id("tags")
-                        readingSource
                         officialLinks
                         MangaBakaCoverGallery(series: series, refreshToken: refreshToken).id("covers")
                         ForEach(MangaBakaRelatedKind.allCases, id: \.self) { kind in
@@ -160,13 +161,24 @@ struct MangaBakaDetailView: View {
         }
     }
     private var officialLinks: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Links").font(.headline)
+        DisclosureGroup(isExpanded: $linksExpanded) {
             Link(destination: series.websiteURL) { Label("View on MangaBaka", systemImage: "arrow.up.right.square") }
-            ForEach(Array(series.links.compactMap(MangaBakaSeries.publicURL).prefix(40).enumerated()), id: \.offset) { _, url in
-                Link(url.host ?? "Related site", destination: url).font(.subheadline)
+                .padding(.vertical, 6)
+            ForEach(officialURLs, id: \.self) { url in
+                Link(destination: url) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(url.host ?? "Related site").font(.subheadline)
+                        Text(url.absoluteString).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5)
+                }
             }
+        } label: {
+            Text("Links (\(officialURLs.count + 1))").font(.headline)
         }
+    }
+    private var officialURLs: [URL] {
+        var seen: Set<URL> = [series.websiteURL]
+        return series.links.compactMap(MangaBakaSeries.publicURL).filter { seen.insert($0).inserted }
     }
     private func reload(refresh: Bool = false) async {
         error = nil

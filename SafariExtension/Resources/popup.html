@@ -14,14 +14,16 @@
     <section class="preferences" aria-label="Playback preferences">
       <label><span>Video detection</span><input type="checkbox" id="enabled" role="switch"></label>
       <label><span>Ask when a video plays</span><input type="checkbox" id="prompts" role="switch"></label>
+      <label><span>VidHub opener</span><select id="handoff"><option value="compatible">Compatible</option><option value="resume">Resume playback</option></select></label>
       <label><span id="site-label">Allow this website</span><input type="checkbox" id="site-enabled" role="switch"></label>
     </section>
     <div class="section-title"><h2>Detected streams</h2><button type="button" id="scan">Scan again</button></div>
     <p id="status" role="status" aria-live="polite">Looking for videos…</p>
     <div id="streams" aria-label="Detected video streams"></div>
-    <p class="help">Start the video first. For embedded players, allow access to the player’s website too. Protected or login-dependent streams may need Safari.</p>
+    <p class="help">Compatible starts at the beginning; Resume playback includes your current position. Reload the webpage after updating this extension. For embedded players, allow access to the player’s website too.</p>
+    <details class="help"><summary>VidHub shows a playback error?</summary><p>Try the other opener below the stream. Copy stream link lets you test the exact URL in VidHub’s URL player. Some streams require the website’s login, cookies or referrer and may only work in Safari.</p><a id="test-vidhub">Test VidHub with a public sample</a></details>
     <p id="error" role="alert" hidden></p>
   </main>
-  <footer><button type="button" id="reset">Reset website preferences</button><span>Links stay on this device until you open VidHub.</span></footer>
+  <footer><button type="button" id="reset">Reset website preferences</button><span>Detected streams stay on this device until you choose to open or copy a link.</span></footer>
 </body>
 </html>

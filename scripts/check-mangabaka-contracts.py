@@ -46,6 +46,8 @@ if __name__ == "__main__":
     tags = request("/v1/tags")
     assert genres and tags, "Taxonomy must be available"
     request("/v1/series/1")
+    batch = request("/v1/series/batch", [("id", "1"), ("id", "2")])
+    assert batch and all(item.get("id") in (1, 2) for item in batch), "Batch series identities must match the request"
     request("/v1/series/1/images", [("limit", "40"), ("page", "1")])
     ratings = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "24")]
     for path in ["/v1/series/1/relationships", "/v2/series/1/similar", "/v2/series/1/readers-also-like"]:

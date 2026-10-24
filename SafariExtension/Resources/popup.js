@@ -14,15 +14,19 @@ function render(state) {
   $("enabled").checked = state.options.enabled;
   $("prompts").checked = state.options.autoPrompt;
   $("prompts").disabled = !state.options.enabled;
+  $("handoff").value = state.options.handoff;
+  $("test-vidhub").href = V.launchURL({ url: V.SAMPLE_URL }, state.options.handoff);
   $("site-enabled").checked = !state.options.disabledHosts.includes(state.host);
   $("site-enabled").disabled = !state.host || !state.options.enabled;
   $("scan").disabled = !state.enabled;
   $("reset").disabled = state.options.disabledHosts.length === 0;
   $("status").textContent = !state.host ? "Open a website in Safari to find videos." : !state.options.enabled ? "Video detection is turned off." : !state.enabled ? "Detection is off for this website." : state.candidates.length ? `${state.candidates.length} stream${state.candidates.length === 1 ? "" : "s"} found` : "No playable link found yet. Start a video, then scan again.";
-  const nextKey = JSON.stringify(state.candidates.map(x => [x.url, x.title, x.kind, x.playing, x.filename]));
+  const nextKey = JSON.stringify([state.options.handoff, state.candidates.map(x => [x.url, x.title, x.kind, x.playing, x.filename])]);
   if (layoutKey === nextKey) {
-    const links = $("streams").querySelectorAll("a.open");
-    state.candidates.forEach((candidate, index) => { if (links[index]) links[index].href = V.launchURL(candidate); });
+    for (const link of $("streams").querySelectorAll("a[data-stream]")) {
+      const candidate = state.candidates.find(x => x.url === link.dataset.stream);
+      if (candidate) link.href = V.launchURL(candidate, link.dataset.method);
+    }
     return;
   }
   layoutKey = nextKey;
@@ -34,9 +38,20 @@ function render(state) {
     const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = candidate.kind + (candidate.playing ? " · Playing" : "");
     meta.append(badge, document.createTextNode(" · " + candidate.host));
     const name = document.createElement("p"); name.textContent = candidate.filename;
-    const link = document.createElement("a"); link.className = "open"; link.href = V.launchURL(candidate);
+    const link = document.createElement("a"); link.className = "open"; link.href = V.launchURL(candidate, state.options.handoff);
+    link.dataset.stream = candidate.url; link.dataset.method = state.options.handoff;
     link.textContent = "Open in VidHub";
     link.addEventListener("click", () => { send({ type: "ac-pause" }).catch(() => {}); });
+    const alternative = document.createElement("a"); alternative.className = "alternate";
+    alternative.dataset.stream = candidate.url; alternative.dataset.method = state.options.handoff === "resume" ? "compatible" : "resume";
+    alternative.href = V.launchURL(candidate, alternative.dataset.method);
+    alternative.textContent = alternative.dataset.method === "compatible" ? "Try compatibility opener" : "Try resume opener";
+    alternative.addEventListener("click", () => { send({ type: "ac-pause" }).catch(() => {}); });
+    const copy = document.createElement("button"); copy.className = "copy"; copy.textContent = "Copy stream link";
+    copy.addEventListener("click", async () => {
+      try { await V.copyURL(candidate.url); copy.textContent = "Stream link copied"; error(""); }
+      catch { error("Copy failed. Allow clipboard access, or try Copy link from the webpage prompt."); }
+    });
     const onPage = document.createElement("button"); onPage.className = "on-page";
     onPage.textContent = "Open from webpage";
     onPage.addEventListener("click", async () => {
@@ -45,7 +60,7 @@ function render(state) {
         window.close();
       } catch { error("Allow access to the page, scan again, then try Open from webpage."); }
     });
-    row.append(title, meta, name, link, onPage); fragment.append(row);
+    row.append(title, meta, name, link, alternative, copy, onPage); fragment.append(row);
   }
   $("streams").replaceChildren(fragment);
 }
@@ -63,6 +78,7 @@ async function update(value) {
 }
 $("enabled").addEventListener("change", () => update({ enabled: $("enabled").checked }));
 $("prompts").addEventListener("change", () => update({ autoPrompt: $("prompts").checked }));
+$("handoff").addEventListener("change", () => update({ handoff: $("handoff").value }));
 $("site-enabled").addEventListener("change", () => update({ siteEnabled: $("site-enabled").checked }));
 $("reset").addEventListener("click", () => update({ resetSites: true }));
 $("scan").addEventListener("click", scan);

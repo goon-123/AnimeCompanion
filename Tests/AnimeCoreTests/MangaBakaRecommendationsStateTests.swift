@@ -102,4 +102,33 @@ final class MangaBakaRecommendationsStateTests: XCTestCase {
         XCTAssertNil(state.begin(account: account, revision: revision, includeAdult: false))
         XCTAssertNotNil(state.begin(account: account, revision: revision, includeAdult: false, refresh: true))
     }
+    func testAnEmptyResponseExpiresWhileScrollingReusesLoadedCards() throws {
+        let now = Date(timeIntervalSince1970: 10_000)
+        var state = MangaBakaRecommendationsState()
+        let first = try XCTUnwrap(state.begin(account: account, revision: revision, includeAdult: false, now: now))
+        state.complete([], for: first, now: now); state.finish(first)
+        XCTAssertTrue(state.canRetryEmptyResult)
+        XCTAssertNil(state.begin(account: account, revision: revision, includeAdult: false, now: now.addingTimeInterval(29)))
+        let retry = try XCTUnwrap(state.begin(account: account, revision: revision, includeAdult: false, now: now.addingTimeInterval(31)))
+        state.complete([try series(81)], for: retry, now: now.addingTimeInterval(31)); state.finish(retry)
+        XCTAssertNil(state.begin(account: account, revision: revision, includeAdult: false, now: now.addingTimeInterval(60)))
+        _ = try XCTUnwrap(state.begin(account: account, revision: revision, includeAdult: false, now: now.addingTimeInterval(332)))
+        XCTAssertEqual(state.items.map(\.id), [81])
+    }
+    func testEmptyMessagesDistinguishNotLoadedServiceReadinessAndContentFiltering() throws {
+        var state = MangaBakaRecommendationsState()
+        XCTAssertTrue(state.emptyMessage.contains("haven’t loaded"))
+        let first = try XCTUnwrap(state.begin(account: account, revision: revision, includeAdult: false))
+        let cold = try JSONDecoder().decode(MangaBakaRecommendationStatus.self,
+            from: Data(#"{"cold_start":true,"profile_stale":false,"library_count":2}"#.utf8))
+        state.complete([], for: first, status: cold); state.finish(first)
+        XCTAssertFalse(state.canRetryEmptyResult)
+        XCTAssertTrue(state.emptyMessage.contains("building")); XCTAssertTrue(state.emptyMessage.contains("2 titles"))
+        let next = try XCTUnwrap(state.begin(account: account, revision: revision, includeAdult: false, refresh: true))
+        state.complete([try series(82, rating: "erotica")], for: next); state.finish(next)
+        XCTAssertFalse(state.canRetryEmptyResult)
+        XCTAssertTrue(state.emptyMessage.contains("content settings"))
+        state.reset()
+        XCTAssertFalse(state.hasResult); XCTAssertNil(state.status); XCTAssertEqual(state.receivedCount, 0)
+    }
 }

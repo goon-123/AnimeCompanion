@@ -291,6 +291,62 @@ final class MangaBakaTests: XCTestCase {
         do { _ = try await api.browse(.init(shelf: .recommended), includeAdult: false); XCTFail("Cannot fake recommendations") } catch {}
         let requests = await transport.recorded(); XCTAssertEqual(requests.count, 2)
     }
+    func testRecommendationsPreferResultsAndDoNotLoseValidRecordsToOneMalformedItem() async throws {
+        let payload = "{\"data\":[],\"results\":[null,{\"unexpected\":true},{\"series\":\(record)},\(record)]}"
+        let transport = MBTestTransport([.json(payload)]), api = client(transport)
+        let result = try await api.recommendations(key(.oauth), includeAdult: false)
+        XCTAssertEqual(result.map(\.id), [81])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer owned-test-credential")
+    }
+    func testLeanRecommendationsResolveContentRatingBeforeLocalFilteringWithoutForwardingCredentials() async throws {
+        let lean = #"{"results":[{"series_id":81,"title":"First story"},{"series_id":82,"title":"Second story"}]}"#
+        let details = #"{"data":[{"id":82,"title":"Second story","content_rating":"erotica"},{"id":81,"title":"First story","content_rating":" Safe "}]}"#
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = MBTestTransport([.json(lean), .json(details)]), api = client(transport, directory: directory)
+        let result = try await api.recommendations(key(.oauth), includeAdult: false)
+        XCTAssertEqual(result.map(\.id), [81, 82]); XCTAssertEqual(result.first?.contentRating, "safe")
+        var state = MangaBakaRecommendationsState()
+        let attempt = try XCTUnwrap(state.begin(account: UUID(), revision: UUID(), includeAdult: false))
+        state.complete(result, for: attempt); state.finish(attempt)
+        XCTAssertEqual(state.items.map(\.id), [81])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/my/series/recommendations", "/v1/series/batch"])
+        XCTAssertEqual(URLComponents(url: requests[1].url!, resolvingAgainstBaseURL: false)?.queryItems?.map(\.value), ["81", "82"])
+        XCTAssertNil(requests[1].value(forHTTPHeaderField: "Authorization")); XCTAssertNil(requests[1].value(forHTTPHeaderField: "X-API-Key"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("catalog.json").path), "Private recommendations and their grouped lookup must stay memory-only")
+    }
+    func testUnresolvedRecommendationsRemainDiagnosableInsteadOfClaimingAColdProfile() async throws {
+        let transport = MBTestTransport([.json(#"{"results":[{"series_id":81,"title":"Owned story"}]}"#), .json(#"{"data":[]}"#)])
+        let result = try await client(transport).recommendations(key(), includeAdult: false)
+        var state = MangaBakaRecommendationsState()
+        let attempt = try XCTUnwrap(state.begin(account: UUID(), revision: UUID(), includeAdult: false))
+        state.complete(result, for: attempt); state.finish(attempt)
+        XCTAssertTrue(state.items.isEmpty); XCTAssertEqual(state.unverifiedCount, 1)
+        XCTAssertTrue(state.emptyMessage.contains("missing content details"))
+    }
+    func testMalformedRecommendationsAndWrongBatchIdentitiesAreNotSuccessfulEmptyResults() async throws {
+        let bad = MBTestTransport([.json(#"{"results":[null,{"missing_id":81}]}"#)])
+        do { _ = try await client(bad).recommendations(key(), includeAdult: false); XCTFail("Not an empty profile") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+        let mismatch = MBTestTransport([.json(#"{"data":[{"id":999,"title":"Wrong series","content_rating":"safe"}]}"#)])
+        do { _ = try await client(mismatch).details(ids: [81]); XCTFail("Wrong series must not hydrate a recommendation") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+    }
+    func testRecommendationReadinessAcceptsBothEnvelopesAndAlwaysUsesPrivateAuthentication() async throws {
+        let transport = MBTestTransport([.json(#"{"data":{"cold_start":true,"profile_stale":false,"library_count":0}}"#),
+            .json(#"{"cold_start":false,"profile_stale":true,"library_count":42}"#)])
+        let api = client(transport)
+        let first = try await api.recommendationStatus(key(.oauth)), second = try await api.recommendationStatus(key())
+        XCTAssertEqual(first.coldStart, true); XCTAssertEqual(first.libraryCount, 0)
+        XCTAssertEqual(second.profileStale, true); XCTAssertEqual(second.libraryCount, 42)
+        let requests = await transport.recorded()
+        XCTAssertTrue(requests.allSatisfy { $0.url?.path == "/v1/my/series/recommendations/status" })
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer owned-test-credential")
+        XCTAssertEqual(requests[1].value(forHTTPHeaderField: "X-API-Key"), "owned-test-credential")
+    }
     func testWrongDetailIdentityAndRedirectedResponsesAreRejected() async throws {
         let transport = MBTestTransport([.json("{\"data\":\(record)}"), .json(page(record), responseURL: URL(string: "https://attacker.example/redirect")!)]), api = client(transport)
         do { _ = try await api.details(id: 82); XCTFail("Wrong series") } catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
