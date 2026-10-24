@@ -144,6 +144,11 @@ struct MangaBakaFilterSheet: View {
                     ForEach(draft.tags, id: \.self) { tag in selectedRow(tag.label, excluded: false) { draft.tags.removeAll { $0.id == tag.id } } }
                     ForEach(draft.excludedTags, id: \.self) { tag in selectedRow(tag.label, excluded: true) { draft.excludedTags.removeAll { $0.id == tag.id } } }
                 }
+                if let publisher = draft.publisher {
+                    Section("Publisher") {
+                        selectedRow(publisher.name, excluded: false) { draft.publisher = nil }
+                    }
+                }
                 Section("Format & publication") {
                     Picker("Format", selection: $draft.format) {
                         Text("All formats").tag(MangaBakaFormat?.none)

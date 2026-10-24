@@ -59,14 +59,16 @@ public struct MangaBakaQuery: Hashable, Sendable {
     public var tags: [MangaBakaTag]
     public var excludedTags: [MangaBakaTag]
     public var contentRatings: Set<MangaBakaContentRating>
+    public var publisher: MangaBakaPublisher?
     public init(shelf: MangaBakaShelf = .popular, format: MangaBakaFormat? = nil, text: String = "", status: String? = nil,
                 genres: [MangaBakaGenre] = [], tags: [MangaBakaTag] = [], excludedTags: [MangaBakaTag] = [],
-                contentRatings: Set<MangaBakaContentRating> = []) {
+                contentRatings: Set<MangaBakaContentRating> = [], publisher: MangaBakaPublisher? = nil) {
         self.shelf = shelf; self.format = format; self.text = text; self.status = status
         self.genres = genres; self.tags = tags; self.excludedTags = excludedTags; self.contentRatings = contentRatings
+        self.publisher = publisher
     }
-    public var hasFacets: Bool { !genres.isEmpty || !tags.isEmpty || !excludedTags.isEmpty || !contentRatings.isEmpty }
-    public var filterCount: Int { genres.count + tags.count + excludedTags.count + contentRatings.count + (format == nil ? 0 : 1) + (status == nil ? 0 : 1) }
+    public var hasFacets: Bool { !genres.isEmpty || !tags.isEmpty || !excludedTags.isEmpty || !contentRatings.isEmpty || publisher != nil }
+    public var filterCount: Int { genres.count + tags.count + excludedTags.count + contentRatings.count + (format == nil ? 0 : 1) + (status == nil ? 0 : 1) + (publisher == nil ? 0 : 1) }
     public func allowedRatings(includeAdult: Bool) -> [MangaBakaContentRating] {
         MangaBakaContentRating.allCases.filter { (includeAdult || !$0.isMature) && (contentRatings.isEmpty || contentRatings.contains($0)) }
     }
@@ -218,7 +220,8 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         id = value; title = c.mbString(.title) ?? c.mbString(.romanizedTitle) ?? ""
         nativeTitle = c.mbString(.nativeTitle); titles = (try? c.decode([MangaBakaTitle].self, forKey: .titles)) ?? []
         type = c.mbString(.type) ?? c.mbString(.mediaType) ?? "other"; status = c.mbString(.status) ?? "unknown"
-        contentRating = c.mbString(.contentRating); rating = c.mbNumber(.rating)
+        contentRating = c.mbString(.contentRating)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        rating = c.mbNumber(.rating)
         synopsis = TextSanitizer.plain(c.mbString(.description) ?? "")
         let published = try? c.nestedContainer(keyedBy: MBKey.self, forKey: .published)
         year = c.mbInt(.year) ?? c.mbInt(.publishedYear) ?? published?.mbString(.startDate).flatMap { Int($0.prefix(4)) }

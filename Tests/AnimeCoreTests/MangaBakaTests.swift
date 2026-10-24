@@ -47,6 +47,31 @@ final class MangaBakaTests: XCTestCase {
         let requests = await transport.recorded(); XCTAssertTrue(requests.isEmpty)
         XCTAssertFalse(query.includes(try series(record), includeAdult: true))
     }
+    func testPublisherIdentityAndLegacyNameFiltersComposeWithoutBecomingTitleSearch() throws {
+        let publisher = try JSONDecoder().decode(MangaBakaPublisher.self, from: Data(#"{"id":"19","name":"Owned & Other Press"}"#.utf8))
+        XCTAssertEqual(publisher.id, 19)
+        let byID = MangaBakaQuery(shelf: .hiddenGems, format: .manga, text: "Moon", status: "completed",
+            genres: [.init(value: "fantasy", label: "Fantasy")], contentRatings: [.safe], publisher: publisher)
+        XCTAssertTrue(byID.hasFacets); XCTAssertEqual(byID.filterCount, 5)
+        let url = MangaBakaClient.browseURL(byID, page: 2, limit: 30, includeAdult: false)
+        XCTAssertEqual(url.path, "/v1/series/search")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        for item in [URLQueryItem(name: "publisher_id", value: "19"), .init(name: "genre", value: "fantasy"),
+            .init(name: "q", value: "Moon"), .init(name: "type", value: "manga"), .init(name: "status", value: "completed"),
+            .init(name: "page", value: "2"), .init(name: "content_rating", value: "safe")] {
+            XCTAssertTrue(items.contains(item))
+        }
+        XCTAssertFalse(items.contains { $0.name == "publisher" })
+        let legacy = MangaBakaQuery(publisher: .init(name: "Owned & Other Press"))
+        let named = MangaBakaClient.browseURL(legacy, page: 3, limit: 24, includeAdult: false)
+        XCTAssertEqual(named.path, "/v1/series/search")
+        let namedItems = try XCTUnwrap(URLComponents(url: named, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertTrue(namedItems.contains(.init(name: "publisher", value: "Owned & Other Press")))
+        XCTAssertFalse(namedItems.contains { $0.name == "q" || $0.name == "publisher_id" })
+        let modern = MangaBakaClient.browseURL(.init(publisher: publisher), page: 1, limit: 24, includeAdult: false)
+        XCTAssertEqual(modern.path, "/v2/series/search")
+        XCTAssertNotEqual(legacy, MangaBakaQuery(publisher: publisher))
+    }
     func testTaxonomyAndDetailedTagsRetainHierarchyAndLabels() async throws {
         let transport = MBTestTransport([.json(#"{"data":[{"value":"science_fiction","label":"Sci-Fi"}]}"#),
             .json(#"{"data":[{"id":42,"name":"space_travel","name_path":"Themes > Science > Space Travel","description":"A <b>journey</b>.","is_spoiler":true,"is_implied":true,"weight":3}]}"#)])
@@ -290,6 +315,62 @@ final class MangaBakaTests: XCTestCase {
         XCTAssertEqual(a.count, 1); XCTAssertTrue(b.isEmpty)
         do { _ = try await api.browse(.init(shelf: .recommended), includeAdult: false); XCTFail("Cannot fake recommendations") } catch {}
         let requests = await transport.recorded(); XCTAssertEqual(requests.count, 2)
+    }
+    func testRecommendationsPreferResultsAndDoNotLoseValidRecordsToOneMalformedItem() async throws {
+        let payload = "{\"data\":[],\"results\":[null,{\"unexpected\":true},{\"series\":\(record)},\(record)]}"
+        let transport = MBTestTransport([.json(payload)]), api = client(transport)
+        let result = try await api.recommendations(key(.oauth), includeAdult: false)
+        XCTAssertEqual(result.map(\.id), [81])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer owned-test-credential")
+    }
+    func testLeanRecommendationsResolveContentRatingBeforeLocalFilteringWithoutForwardingCredentials() async throws {
+        let lean = #"{"results":[{"series_id":81,"title":"First story"},{"series_id":82,"title":"Second story"}]}"#
+        let details = #"{"data":[{"id":82,"title":"Second story","content_rating":"erotica"},{"id":81,"title":"First story","content_rating":" Safe "}]}"#
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = MBTestTransport([.json(lean), .json(details)]), api = client(transport, directory: directory)
+        let result = try await api.recommendations(key(.oauth), includeAdult: false)
+        XCTAssertEqual(result.map(\.id), [81, 82]); XCTAssertEqual(result.first?.contentRating, "safe")
+        var state = MangaBakaRecommendationsState()
+        let attempt = try XCTUnwrap(state.begin(account: UUID(), includeAdult: false))
+        state.complete(result, for: attempt); state.finish(attempt)
+        XCTAssertEqual(state.items.map(\.id), [81])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/my/series/recommendations", "/v1/series/batch"])
+        XCTAssertEqual(URLComponents(url: requests[1].url!, resolvingAgainstBaseURL: false)?.queryItems?.map(\.value), ["81", "82"])
+        XCTAssertNil(requests[1].value(forHTTPHeaderField: "Authorization")); XCTAssertNil(requests[1].value(forHTTPHeaderField: "X-API-Key"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("catalog.json").path), "Private recommendations and their grouped lookup must stay memory-only")
+    }
+    func testUnresolvedRecommendationsRemainDiagnosableInsteadOfClaimingAColdProfile() async throws {
+        let transport = MBTestTransport([.json(#"{"results":[{"series_id":81,"title":"Owned story"}]}"#), .json(#"{"data":[]}"#)])
+        let result = try await client(transport).recommendations(key(), includeAdult: false)
+        var state = MangaBakaRecommendationsState()
+        let attempt = try XCTUnwrap(state.begin(account: UUID(), includeAdult: false))
+        state.complete(result, for: attempt); state.finish(attempt)
+        XCTAssertTrue(state.items.isEmpty); XCTAssertEqual(state.unverifiedCount, 1)
+        XCTAssertTrue(state.emptyMessage.contains("missing content details"))
+    }
+    func testMalformedRecommendationsAndWrongBatchIdentitiesAreNotSuccessfulEmptyResults() async throws {
+        let bad = MBTestTransport([.json(#"{"results":[null,{"missing_id":81}]}"#)])
+        do { _ = try await client(bad).recommendations(key(), includeAdult: false); XCTFail("Not an empty profile") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+        let mismatch = MBTestTransport([.json(#"{"data":[{"id":999,"title":"Wrong series","content_rating":"safe"}]}"#)])
+        do { _ = try await client(mismatch).details(ids: [81]); XCTFail("Wrong series must not hydrate a recommendation") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+    }
+    func testRecommendationReadinessAcceptsBothEnvelopesAndAlwaysUsesPrivateAuthentication() async throws {
+        let transport = MBTestTransport([.json(#"{"data":{"cold_start":true,"profile_stale":false,"library_count":0}}"#),
+            .json(#"{"cold_start":false,"profile_stale":true,"library_count":42}"#)])
+        let api = client(transport)
+        let first = try await api.recommendationStatus(key(.oauth)), second = try await api.recommendationStatus(key())
+        XCTAssertEqual(first.coldStart, true); XCTAssertEqual(first.libraryCount, 0)
+        XCTAssertEqual(second.profileStale, true); XCTAssertEqual(second.libraryCount, 42)
+        let requests = await transport.recorded()
+        XCTAssertTrue(requests.allSatisfy { $0.url?.path == "/v1/my/series/recommendations/status" })
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer owned-test-credential")
+        XCTAssertEqual(requests[1].value(forHTTPHeaderField: "X-API-Key"), "owned-test-credential")
     }
     func testWrongDetailIdentityAndRedirectedResponsesAreRejected() async throws {
         let transport = MBTestTransport([.json("{\"data\":\(record)}"), .json(page(record), responseURL: URL(string: "https://attacker.example/redirect")!)]), api = client(transport)

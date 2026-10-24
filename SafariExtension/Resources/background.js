@@ -111,6 +111,7 @@ async function updateOptions(message, sender) {
   const prefs = await settings();
   if (typeof message.enabled === "boolean") prefs.enabled = message.enabled;
   if (typeof message.autoPrompt === "boolean") prefs.autoPrompt = message.autoPrompt;
+  if (["compatible", "resume"].includes(message.handoff)) prefs.handoff = message.handoff;
   if (message.resetSites === true) prefs.disabledHosts = [];
   if (typeof message.siteEnabled === "boolean") {
     const name = Video.host(await currentURL(tabID(message, sender), sender));
