@@ -1,5 +1,9 @@
 # Anime Companion
 
+### Recommendation requests survive navigation (0.25.24 / build 71)
+
+Finish the For you lifecycle fix by letting the account own its in-flight recommendation request. Opening a title, switching tabs or leaving/reopening Explore no longer cancels work that another appearance is waiting for. Concurrent callers await the shared request. Changing accounts, library revisions or content settings still cancels and invalidates older work; private cards remain memory-only. Build 70's stable scrolling layout, retained cards during refresh and seven lifecycle regressions are included. Hosted validation and the unsigned IPA are linked from the follow-up PR; actual phone/iPad scrolling remains a device check.
+
 ### Stable MangaBaka recommendations (0.25.23 / build 70)
 
 Keep **For you** recommendations in the account's in-memory store rather than a scrolling section. Scrolling away and back no longer clears the cards or starts another request. Returning from details reuses the loaded result; refreshes and library changes retain existing cards until their replacement arrives. Account disconnect/switch clears private recommendations, and mature-content changes filter them immediately. Pull to refresh updates both the public shelves and personal recommendations.

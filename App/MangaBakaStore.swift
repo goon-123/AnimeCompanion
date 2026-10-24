@@ -98,6 +98,7 @@ final class MangaBakaStore: ObservableObject {
     private var tagsByName: [String: MangaBakaTag] = [:]
     private var credential: MangaBakaCredential?
     private var refreshTask: Task<MangaBakaCredential, Error>?
+    private var recommendationTask: Task<Void, Never>?
     private var generation = UUID()
     private var libraryGeneration = UUID()
     private var restored = false
@@ -167,6 +168,7 @@ final class MangaBakaStore: ObservableObject {
         } catch { accountError = error.localizedDescription }
     }
     private func clearLibrary() {
+        recommendationTask?.cancel(); recommendationTask = nil
         recommendationState.reset()
         libraryGeneration = UUID(); library = []; entries = [:]; libraryState = nil; libraryPage = 0
         loadingLibrary = false; hasMoreLibrary = false; libraryTotal = nil; libraryError = nil
@@ -185,17 +187,31 @@ final class MangaBakaStore: ObservableObject {
         return renewed
     }
     func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
-        guard connected, !Task.isCancelled,
-              let attempt = recommendationState.begin(account: generation, revision: revision,
-                  includeAdult: includeAdult, refresh: refresh) else { return }
-        defer { recommendationState.finish(attempt) }
-        do {
-            let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
-            try Task.checkCancellation()
-            recommendationState.complete(result, for: attempt)
-        } catch is CancellationError {} catch {
-            if !Task.isCancelled { recommendationState.fail(error.localizedDescription, for: attempt) }
+        guard connected, !Task.isCancelled else { return }
+        guard let attempt = recommendationState.begin(account: generation, revision: revision,
+            includeAdult: includeAdult, refresh: refresh) else {
+            await recommendationTask?.value
+            return
         }
+        recommendationTask?.cancel()
+        // The account owns this work. A disappearing screen must not cancel a
+        // request that the next screen appearance will reuse.
+        let work = Task {
+            defer {
+                if recommendationState.isCurrent(attempt) {
+                    recommendationState.finish(attempt); recommendationTask = nil
+                }
+            }
+            do {
+                let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
+                try Task.checkCancellation()
+                recommendationState.complete(result, for: attempt)
+            } catch is CancellationError {} catch {
+                if !Task.isCancelled { recommendationState.fail(error.localizedDescription, for: attempt) }
+            }
+        }
+        recommendationTask = work
+        await work.value
     }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }
