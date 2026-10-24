@@ -1,5 +1,11 @@
 # Anime Companion
 
+### Stable MangaBaka recommendations (0.25.23 / build 70)
+
+Keep **For you** recommendations in the account's in-memory store rather than a scrolling section. Scrolling away and back no longer clears the cards or starts another request. Returning from details reuses the loaded result; refreshes and library changes retain existing cards until their replacement arrives. Account disconnect/switch clears private recommendations, and mature-content changes filter them immediately. Pull to refresh updates both the public shelves and personal recommendations.
+
+The bounded set of Explore sections now keeps its layout alive while horizontal title rows remain lazy. Manga shelves and the spotlight no longer replay a hidden entrance animation on scrolling. Lifecycle regressions cover repeated appearances, in-flight deduplication, refresh/failure/cancellation, changed library revisions, account isolation and content settings. Hosted Core and Release results are recorded on the PR; phone/iPad scrolling still needs device acceptance. Longer simulator suites remain opt-in.
+
 ### Safari repair & deeper MangaBaka exploration (0.25.22 / build 69)
 
 Safari video detection now resolves the current top-level tab even when Safari omits or supplies stale sender URLs. Manual scans reinstall both script worlds before requesting fresh media reports, and unavailable session storage falls back to bounded memory without persisting video URLs. The stream picker also offers **Open from webpage**: it puts an explicit VidHub link on the page, including for an embedded player and when automatic prompts are off. The final tap still goes directly to VidHub's documented `/play` URL. Reload a page after updating the extension; retain/sign the bundled Safari extension when sideloading.

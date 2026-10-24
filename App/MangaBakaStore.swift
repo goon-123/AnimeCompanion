@@ -81,6 +81,7 @@ final class MangaBakaStore: ObservableObject {
     @Published private(set) var connecting = false
     @Published private(set) var profile: MangaBakaProfile?
     @Published private(set) var revision = UUID()
+    @Published private(set) var recommendationState = MangaBakaRecommendationsState()
     @Published private(set) var library: [MangaBakaLibraryEntry] = []
     @Published private(set) var entries: [Int: MangaBakaLibraryEntry] = [:]
     @Published private(set) var loadingLibrary = false
@@ -166,6 +167,7 @@ final class MangaBakaStore: ObservableObject {
         } catch { accountError = error.localizedDescription }
     }
     private func clearLibrary() {
+        recommendationState.reset()
         libraryGeneration = UUID(); library = []; entries = [:]; libraryState = nil; libraryPage = 0
         loadingLibrary = false; hasMoreLibrary = false; libraryTotal = nil; libraryError = nil
     }
@@ -182,11 +184,18 @@ final class MangaBakaStore: ObservableObject {
         try MangaBakaKeychain.save(renewed); credential = renewed
         return renewed
     }
-    func recommendations(includeAdult: Bool) async throws -> [MangaBakaSeries] {
-        let attempt = generation
-        let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
-        guard generation == attempt else { throw CancellationError() }
-        return result.filter { $0.isVisible(includeAdult: includeAdult) }
+    func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
+        guard connected, !Task.isCancelled,
+              let attempt = recommendationState.begin(account: generation, revision: revision,
+                  includeAdult: includeAdult, refresh: refresh) else { return }
+        defer { recommendationState.finish(attempt) }
+        do {
+            let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
+            try Task.checkCancellation()
+            recommendationState.complete(result, for: attempt)
+        } catch is CancellationError {} catch {
+            if !Task.isCancelled { recommendationState.fail(error.localizedDescription, for: attempt) }
+        }
     }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }

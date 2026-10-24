@@ -134,7 +134,7 @@ struct MangaBakaShelfView: View {
                             NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaCard(series: series) }.buttonStyle(.plain)
                         }
                     }.padding(.horizontal, 20)
-                }.modifier(CatalogEntrance())
+                }
             } else if loading {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
@@ -190,11 +190,13 @@ struct MangaBakaExploreView: View {
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 30) {
+            // This is a bounded set of sections. Keep their layout alive while
+            // scrolling; the long horizontal title rows still load cards lazily.
+            VStack(alignment: .leading, spacing: 30) {
                 header
                 if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(includeAdult: preferences.includeAdult) }) {
                     NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain)
-                        .padding(.horizontal, 20).modifier(CatalogEntrance())
+                        .padding(.horizontal, 20)
                 }
                 if account.connected { MangaBakaPersonalShelf() }
                 formats
@@ -209,8 +211,15 @@ struct MangaBakaExploreView: View {
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
+            .task(id: "\(account.connected)-\(account.revision)-\(preferences.includeAdult)") {
+                await account.loadRecommendations(includeAdult: preferences.includeAdult)
+            }
             .task { await account.loadTaxonomy() }
-            .refreshable { await model.load(api: account.api, adult: preferences.includeAdult, refresh: true) }
+            .refreshable {
+                async let catalog: Void = model.load(api: account.api, adult: preferences.includeAdult, refresh: true)
+                async let personal: Void = account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true)
+                _ = await (catalog, personal)
+            }
     }
     private var header: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -290,21 +299,13 @@ struct MangaBakaExploreView: View {
 private struct MangaBakaPersonalShelf: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
-    @State private var items: [MangaBakaSeries] = []
-    @State private var loading = true
-    @State private var error: String?
-    @State private var retry = 0
     var body: some View {
-        MangaBakaShelfView(shelf: .recommended, items: items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
-            loading: loading, error: error, retry: { retry += 1 })
-            .task(id: "\(account.revision)-\(preferences.includeAdult)-\(retry)") {
-                loading = true; error = nil; items = []
-                defer { loading = false }
-                do {
-                    let result = try await account.recommendations(includeAdult: preferences.includeAdult)
-                    try Task.checkCancellation(); items = result
-                } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        MangaBakaShelfView(shelf: .recommended,
+            items: account.recommendationState.items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
+            loading: account.recommendationState.loading, error: account.recommendationState.error, retry: {
+                Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
             }
+        )
     }
 }
 

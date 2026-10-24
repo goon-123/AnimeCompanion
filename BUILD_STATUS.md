@@ -1,3 +1,9 @@
+## Stable MangaBaka For you shelf — build 70
+
+Version 0.25.23. The recommendation row previously owned a `.task` inside a vertical lazy section and cleared its cards whenever that task restarted. Move the request to the Explore screen and retain its state in the account store. Completed and concurrent identical requests are skipped, including successful empty results. Explicit refresh and library-revision updates preserve existing cards; cancellation is retryable and failures retain the last result with a retry action. Account disconnect/switch clears recommendations and rejects late results. Content-policy changes immediately filter cards and invalidate older requests. Private recommendations remain memory-only.
+
+Use an eager stack for the small fixed set of vertical Explore sections while retaining lazy horizontal cards, and remove the manga section entrance opacity animation to keep scrolling sections visible. Pull to refresh also refreshes personal recommendations. Seven owned Core regressions exercise the actual lifecycle state, including rapid repeated appearances, stale requests, cancellation, refresh errors and account/content isolation. Hosted Core and iOS Release validation are pending on the PR; this workspace has no Swift/Xcode toolchain. Manual acceptance: open Manga & Novels, scroll For you offscreen and back repeatedly, open/back from a title, refresh, and check iPhone/iPad plus mature-content changes. Longer simulator suites remain opt-in.
+
 ## Safari repair & deeper MangaBaka exploration — build 69
 
 Version 0.25.22. Recover Safari detection with partial/stale sender tab metadata, reinstall missing observers during manual scans, and tolerate unavailable session storage with a memory-only cache. Add an explicit page-based handoff from the stream picker for manual/embedded playback, without changing auto-prompt preferences or attaching anime tracking callbacks.
