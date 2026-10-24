@@ -45,7 +45,11 @@ public actor MangaBakaClient {
     }
     public static func browseURL(_ query: MangaBakaQuery, page: Int, limit: Int, includeAdult: Bool, now: Date = Date()) -> URL {
         let searching = !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        var path = "/v2/series/search"
+        // /v1/genres and /v1/tags supply the legacy facet vocabulary. The v2
+        // search schema rejects `genre`; use its supported v1 search contract
+        // for taxonomy filters while retaining v2 for the other catalog rails.
+        let taxonomyFilters = !query.genres.isEmpty || !query.tags.isEmpty || !query.excludedTags.isEmpty
+        var path = taxonomyFilters ? "/v1/series/search" : "/v2/series/search"
         let curated = !searching && query.format == nil && query.status == nil && !query.hasFacets
         if curated && query.shelf == .rising { path = "/v2/series/discover/rising" }
         if curated && query.shelf == .hiddenGems { path = "/v2/series/discover/hidden-gems" }

@@ -27,6 +27,7 @@ final class MangaBakaTests: XCTestCase {
         let query = MangaBakaQuery(format: .manga, text: "Moon & stars", genres: [.init(value: "science_fiction", label: "Sci-Fi")],
             tags: [.init(id: 42, name: "space_travel")], excludedTags: [.init(id: 91, name: "time_loop")], contentRatings: [.suggestive])
         let url = MangaBakaClient.browseURL(query, page: 3, limit: 30, includeAdult: true)
+        XCTAssertEqual(url.path, "/v1/series/search")
         let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
         for item in [URLQueryItem(name: "genre", value: "science_fiction"), .init(name: "tag", value: "42"),
                      .init(name: "tag_not", value: "91"), .init(name: "page", value: "3"), .init(name: "content_rating", value: "suggestive")] {
@@ -35,6 +36,8 @@ final class MangaBakaTests: XCTestCase {
         XCTAssertEqual(items.filter { $0.name == "content_rating" }.count, 1)
         let filteredShelf = MangaBakaClient.browseURL(.init(shelf: .hiddenGems, tags: query.tags), page: 1, limit: 24, includeAdult: false)
         XCTAssertTrue(filteredShelf.path.hasSuffix("/search"))
+        let ratingOnly = MangaBakaClient.browseURL(.init(contentRatings: [.suggestive]), page: 1, limit: 24, includeAdult: false)
+        XCTAssertEqual(ratingOnly.path, "/v2/series/search")
     }
     func testMatureOnlyFilterDoesNotFallBackToUnfilteredSearch() async throws {
         let query = MangaBakaQuery(contentRatings: [.erotica])

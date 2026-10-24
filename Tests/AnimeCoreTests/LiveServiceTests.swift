@@ -21,12 +21,17 @@ final class LiveServiceTests: XCTestCase {
         }
         if let genre = genres.first {
             print("Checking MangaBaka genre query")
-            _ = try await api.browse(.init(genres: [genre], contentRatings: [.safe]), limit: 2, includeAdult: false)
+            let result = try await api.browse(.init(genres: [genre], contentRatings: [.safe]), limit: 2, includeAdult: false)
+            XCTAssertTrue(result.items.allSatisfy { $0.contentRating == "safe" && $0.genres.contains { $0.name == genre.value } })
         }
         if let tag = tags.first {
             print("Checking MangaBaka tag query")
             _ = try await api.browse(.init(tags: [tag]), limit: 2, includeAdult: false)
         }
+        print("Checking MangaBaka excluded tag and single content rating")
+        if let tag = tags.first { _ = try await api.browse(.init(excludedTags: [tag]), limit: 2, includeAdult: false) }
+        let safe = try await api.browse(.init(contentRatings: [.safe]), limit: 2, includeAdult: false)
+        XCTAssertTrue(safe.items.allSatisfy { $0.contentRating == "safe" })
     }
     func testMangaBakaPublicCatalog() async throws {
         try requireLiveServices()

@@ -51,6 +51,9 @@ if __name__ == "__main__":
     for path in ["/v1/series/1/relationships", "/v2/series/1/similar", "/v2/series/1/readers-also-like"]:
         request(path, ratings)
     base = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "2"), ("page", "1"), ("sort_by", "popularity_asc")]
-    request("/v2/series/search", base + [("genre", genres[0]["value"])])
-    request("/v2/series/search", base + [("tag", str(tags[0]["id"]))])
+    request("/v1/series/search", base + [("genre", genres[0]["value"])])
+    request("/v1/series/search", base + [("tag", str(tags[0]["id"]))])
+    request("/v1/series/search", base + [("tag_not", str(tags[0]["id"]))])
+    single_rating = [(key, value) for key, value in base if key != "content_rating"] + [("content_rating", "safe")]
+    request("/v2/series/search", single_rating)
     print("MangaBaka discovery contracts reachable", flush=True)
