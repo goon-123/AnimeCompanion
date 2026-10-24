@@ -51,7 +51,7 @@ struct MangaBakaBrowseView: View {
     private var key: MBBrowseKey { .init(query: query, adult: preferences.includeAdult) }
     private var visible: [MangaBakaSeries] { model.items.filter { query.includes($0, includeAdult: preferences.includeAdult) } }
     private var title: String {
-        query.genres.first?.label ?? query.tags.first?.label ?? (query.contentRatings.count == 1 ? query.contentRatings.first?.label : nil) ?? query.format?.label ?? query.shelf.label
+        query.publisher?.name ?? query.genres.first?.label ?? query.tags.first?.label ?? (query.contentRatings.count == 1 ? query.contentRatings.first?.label : nil) ?? query.format?.label ?? query.shelf.label
     }
     var body: some View {
         GeometryReader { geometry in
@@ -120,7 +120,7 @@ struct MangaBakaBrowseView: View {
         }.font(.subheadline)
     }
     private var filterSummary: String {
-        (query.genres.map(\.label) + query.tags.map(\.label) + query.excludedTags.map { "Exclude " + $0.label } +
+        ((query.publisher.map { [$0.name] } ?? []) + query.genres.map(\.label) + query.tags.map(\.label) + query.excludedTags.map { "Exclude " + $0.label } +
          MangaBakaContentRating.allCases.filter { query.contentRatings.contains($0) }.map(\.label)).joined(separator: " · ")
     }
     private var formatPicker: some View {

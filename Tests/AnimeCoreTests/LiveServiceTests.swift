@@ -3,6 +3,25 @@ import XCTest
 
 /// Opt-in checks against the same public clients used by the app. Ordinary unit tests stay offline.
 final class LiveServiceTests: XCTestCase {
+    func testMangaBakaPublisherBrowsing() async throws {
+        try requireLiveServices()
+        let api = MangaBakaClient(directory: nil)
+        let original = try await api.details(id: 1)
+        let publisher = try XCTUnwrap(original.publishers.first { !$0.name.isEmpty })
+        // Legacy detail responses can have a name without an ID. Test both
+        // contracts through the app client, including paging and safe ratings.
+        for value in [MangaBakaPublisher(name: publisher.name), MangaBakaPublisher(id: 4874, name: "LINE Webtoon")] {
+            let page = try await api.browse(.init(contentRatings: [.safe], publisher: value), page: 2, limit: 2, includeAdult: false)
+            XCTAssertFalse(page.items.isEmpty)
+            XCTAssertTrue(page.items.allSatisfy { $0.contentRating == "safe" })
+            for item in page.items {
+                let details = try await api.details(id: item.id)
+                XCTAssertTrue(details.publishers.contains {
+                    $0.name.caseInsensitiveCompare(value.name) == .orderedSame || (value.id != nil && $0.id == value.id)
+                }, "Publisher filter must not silently become an unfiltered catalog")
+            }
+        }
+    }
     func testMangaBakaDiscoveryDetails() async throws {
         try requireLiveServices()
         let api = MangaBakaClient(directory: nil)

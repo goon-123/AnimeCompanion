@@ -14,6 +14,10 @@ struct MangaBakaDetailView: View {
     @State private var refreshToken = 0
     @State private var preview: AnimeImagePreview?
     private var entry: MangaBakaLibraryEntry? { account.entries[series.id] }
+    private var publishers: [MangaBakaPublisher] {
+        Array(Set(series.publishers.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -113,7 +117,19 @@ struct MangaBakaDetailView: View {
             if !series.artists.isEmpty { LabeledContent("Art", value: series.artists.joined(separator: ", ")) }
             if let start = series.publishedStart { LabeledContent("Publication began", value: start) }
             if let end = series.publishedEnd { LabeledContent("Publication ended", value: end) }
-            if !series.publishers.isEmpty { LabeledContent("Publishers", value: series.publishers.map(\.name).joined(separator: ", ")) }
+            if !publishers.isEmpty {
+                Text("Publishers").foregroundStyle(.secondary)
+                MangaBakaFlowLayout {
+                    ForEach(publishers, id: \.self) { publisher in
+                        NavigationLink(value: MangaBakaBrowseRoute(query: .init(publisher: publisher))) {
+                            HStack(spacing: 6) { Text(publisher.name); Image(systemName: "chevron.right").font(.caption2) }
+                                .font(.subheadline.weight(.medium)).foregroundStyle(.mint)
+                                .padding(.horizontal, 12).padding(.vertical, 10)
+                                .background(Color.mint.opacity(0.1), in: Capsule())
+                        }.buttonStyle(.plain).accessibilityLabel("Browse series from " + publisher.name)
+                    }
+                }
+            }
             if !series.titles.isEmpty { alternativeTitles }
         }.font(.subheadline)
     }

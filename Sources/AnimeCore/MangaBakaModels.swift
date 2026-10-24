@@ -59,14 +59,16 @@ public struct MangaBakaQuery: Hashable, Sendable {
     public var tags: [MangaBakaTag]
     public var excludedTags: [MangaBakaTag]
     public var contentRatings: Set<MangaBakaContentRating>
+    public var publisher: MangaBakaPublisher?
     public init(shelf: MangaBakaShelf = .popular, format: MangaBakaFormat? = nil, text: String = "", status: String? = nil,
                 genres: [MangaBakaGenre] = [], tags: [MangaBakaTag] = [], excludedTags: [MangaBakaTag] = [],
-                contentRatings: Set<MangaBakaContentRating> = []) {
+                contentRatings: Set<MangaBakaContentRating> = [], publisher: MangaBakaPublisher? = nil) {
         self.shelf = shelf; self.format = format; self.text = text; self.status = status
         self.genres = genres; self.tags = tags; self.excludedTags = excludedTags; self.contentRatings = contentRatings
+        self.publisher = publisher
     }
-    public var hasFacets: Bool { !genres.isEmpty || !tags.isEmpty || !excludedTags.isEmpty || !contentRatings.isEmpty }
-    public var filterCount: Int { genres.count + tags.count + excludedTags.count + contentRatings.count + (format == nil ? 0 : 1) + (status == nil ? 0 : 1) }
+    public var hasFacets: Bool { !genres.isEmpty || !tags.isEmpty || !excludedTags.isEmpty || !contentRatings.isEmpty || publisher != nil }
+    public var filterCount: Int { genres.count + tags.count + excludedTags.count + contentRatings.count + (format == nil ? 0 : 1) + (status == nil ? 0 : 1) + (publisher == nil ? 0 : 1) }
     public func allowedRatings(includeAdult: Bool) -> [MangaBakaContentRating] {
         MangaBakaContentRating.allCases.filter { (includeAdult || !$0.isMature) && (contentRatings.isEmpty || contentRatings.contains($0)) }
     }

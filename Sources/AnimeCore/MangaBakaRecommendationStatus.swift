@@ -1,8 +1,8 @@
 import Foundation
 
 /// The service's own readiness response, rather than an assumption based on an
-/// empty list. Kept in memory with the rest of the account's private data.
-public struct MangaBakaRecommendationStatus: Decodable, Sendable, Equatable {
+/// empty list. Saved only with the encrypted account recommendation snapshot.
+public struct MangaBakaRecommendationStatus: Codable, Sendable, Equatable {
     public let coldStart: Bool?
     public let profileStale: Bool?
     public let libraryCount: Int?
@@ -17,5 +17,11 @@ public struct MangaBakaRecommendationStatus: Decodable, Sendable, Equatable {
         profileStale = try c.decodeIfPresent(Bool.self, forKey: .profileStale)
         libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount).flatMap { $0 >= 0 ? $0 : nil }
         guard coldStart != nil || profileStale != nil || libraryCount != nil else { throw MangaBakaError.invalidResponse }
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(coldStart, forKey: .coldStart)
+        try c.encodeIfPresent(profileStale, forKey: .profileStale)
+        try c.encodeIfPresent(libraryCount, forKey: .libraryCount)
     }
 }

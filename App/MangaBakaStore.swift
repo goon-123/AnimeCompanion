@@ -82,6 +82,7 @@ final class MangaBakaStore: ObservableObject {
     @Published private(set) var profile: MangaBakaProfile?
     @Published private(set) var revision = UUID()
     @Published private(set) var recommendationState = MangaBakaRecommendationsState()
+    @Published private(set) var recommendationCacheNotice: String?
     @Published private(set) var library: [MangaBakaLibraryEntry] = []
     @Published private(set) var entries: [Int: MangaBakaLibraryEntry] = [:]
     @Published private(set) var loadingLibrary = false
@@ -99,6 +100,8 @@ final class MangaBakaStore: ObservableObject {
     private var credential: MangaBakaCredential?
     private var refreshTask: Task<MangaBakaCredential, Error>?
     private var recommendationTask: Task<Void, Never>?
+    private let recommendationCache = MangaBakaRecommendationCache()
+    private var recommendationSnapshot: MangaBakaRecommendationSnapshot?
     private var generation = UUID()
     private var libraryGeneration = UUID()
     private var restored = false
@@ -135,7 +138,15 @@ final class MangaBakaStore: ObservableObject {
         guard !restored else { return }; restored = true
         do {
             guard let saved = try MangaBakaKeychain.load() else { return }
-            credential = saved; connected = true
+            credential = saved
+            // Restore before publishing the connection so a view cannot start a
+            // replacement request before discovering the saved weekly result.
+            if let snapshot = try? recommendationCache.load(credential: saved),
+               (try? recommendationState.restore(snapshot, account: generation,
+                    includeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult"))) == true {
+                recommendationSnapshot = snapshot
+            }
+            connected = true
             let attempt = generation
             let value = try await api.profile(validCredential())
             guard attempt == generation else { return }
@@ -170,6 +181,8 @@ final class MangaBakaStore: ObservableObject {
     private func clearLibrary() {
         recommendationTask?.cancel(); recommendationTask = nil
         recommendationState.reset()
+        recommendationSnapshot = nil; recommendationCacheNotice = nil
+        try? recommendationCache.clear()
         libraryGeneration = UUID(); library = []; entries = [:]; libraryState = nil; libraryPage = 0
         loadingLibrary = false; hasMoreLibrary = false; libraryTotal = nil; libraryError = nil
     }
@@ -184,11 +197,14 @@ final class MangaBakaStore: ObservableObject {
         let renewed = try await work.value
         guard generation == attempt else { throw CancellationError() }
         try MangaBakaKeychain.save(renewed); credential = renewed
+        // OAuth rotates its secret. Move the already-loaded snapshot to the new
+        // encryption key without changing its original seven-day timestamp.
+        if let snapshot = recommendationSnapshot { saveRecommendationCache(snapshot, credential: renewed) }
         return renewed
     }
     func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
         guard connected, !Task.isCancelled else { return }
-        guard let attempt = recommendationState.begin(account: generation, revision: revision,
+        guard let attempt = recommendationState.begin(account: generation,
             includeAdult: includeAdult, refresh: refresh) else {
             await recommendationTask?.value
             return
@@ -203,7 +219,8 @@ final class MangaBakaStore: ObservableObject {
                 }
             }
             do {
-                let result = try await api.recommendations(validCredential(), includeAdult: includeAdult)
+                let payload = try await api.recommendationPayload(validCredential(), includeAdult: includeAdult)
+                let result = try payload.records()
                 var status: MangaBakaRecommendationStatus?
                 if result.isEmpty {
                     // Readiness is supplementary: an unavailable status endpoint
@@ -211,13 +228,21 @@ final class MangaBakaStore: ObservableObject {
                     status = try? await api.recommendationStatus(validCredential())
                 }
                 try Task.checkCancellation()
-                recommendationState.complete(result, for: attempt, status: status)
+                let snapshot = MangaBakaRecommendationSnapshot(payload: payload, status: status)
+                if recommendationState.complete(result, for: attempt, status: status, now: snapshot.fetchedAt) {
+                    recommendationSnapshot = snapshot
+                    if let credential { saveRecommendationCache(snapshot, credential: credential) }
+                }
             } catch is CancellationError {} catch {
                 if !Task.isCancelled { recommendationState.fail(error.localizedDescription, for: attempt) }
             }
         }
         recommendationTask = work
         await work.value
+    }
+    private func saveRecommendationCache(_ snapshot: MangaBakaRecommendationSnapshot, credential: MangaBakaCredential) {
+        do { try recommendationCache.save(snapshot, credential: credential); recommendationCacheNotice = nil }
+        catch { recommendationCacheNotice = "For you could not be saved on this device. These recommendations are available until the app closes." }
     }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }

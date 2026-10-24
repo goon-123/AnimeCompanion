@@ -9,7 +9,10 @@ private struct MangaBakaNavigation: ViewModifier {
         content.navigationDestination(for: MangaBakaSeriesRoute.self) { route in
             MangaBakaDetailView(series: route.series).id(route.series.id).toolbar(.visible, for: .navigationBar)
         }.navigationDestination(for: MangaBakaBrowseRoute.self) { route in
-            MangaBakaBrowseView(initial: route.query).id(route.query).toolbar(.visible, for: .navigationBar)
+            Group {
+                if route.query.shelf == .recommended { MangaBakaRecommendationsView() }
+                else { MangaBakaBrowseView(initial: route.query).id(route.query) }
+            }.toolbar(.visible, for: .navigationBar)
         }
     }
 }
@@ -120,18 +123,20 @@ struct MangaBakaShelfView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(shelf.label).font(.title2.bold())
+                NavigationLink(value: MangaBakaBrowseRoute(query: .init(shelf: shelf))) {
+                    Text(shelf.label).font(.title2.bold())
+                }.buttonStyle(.plain).accessibilityLabel("Open " + shelf.label + " list")
                 Spacer()
-                if shelf != .recommended {
-                    NavigationLink(value: MangaBakaBrowseRoute(query: .init(shelf: shelf))) {
-                        Label("See all", systemImage: "chevron.right").font(.subheadline).labelStyle(.titleAndIcon)
-                    }.buttonStyle(.plain).foregroundStyle(.secondary)
-                } else if loading {
-                    ProgressView().controlSize(.small)
-                } else if let retry {
-                    Button(action: retry) { Label("Refresh", systemImage: "arrow.clockwise") }
-                        .font(.subheadline).accessibilityLabel("Refresh manga recommendations")
+                if shelf == .recommended {
+                    if loading { ProgressView().controlSize(.small) }
+                    else if let retry {
+                        Button(action: retry) { Image(systemName: "arrow.clockwise").frame(width: 36, height: 36) }
+                            .accessibilityLabel("Refresh manga recommendations")
+                    }
                 }
+                NavigationLink(value: MangaBakaBrowseRoute(query: .init(shelf: shelf))) {
+                    Label("See all", systemImage: "chevron.right").font(.subheadline).labelStyle(.titleAndIcon)
+                }.buttonStyle(.plain).foregroundStyle(.secondary)
             }.padding(.horizontal, 20)
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -195,6 +200,7 @@ struct MangaBakaExploreView: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @StateObject private var model = MangaBakaHomeModel()
+    @Environment(\.scenePhase) private var scenePhase
     private var allSeries: [MangaBakaSeries] {
         MangaBakaHomeModel.shelves.flatMap { model.items[$0] ?? [] }.filter { $0.isVisible(includeAdult: preferences.includeAdult) }
     }
@@ -221,14 +227,11 @@ struct MangaBakaExploreView: View {
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
-            .task(id: "\(account.connected)-\(account.revision)-\(preferences.includeAdult)") {
+            .task(id: "\(account.connected)-\(preferences.includeAdult)") {
                 await account.loadRecommendations(includeAdult: preferences.includeAdult)
-                // Retry a temporarily empty warm profile once while this page
-                // stays open. Navigation cancels the delay, not the shared fetch.
-                if account.recommendationState.canRetryEmptyResult {
-                    do { try await Task.sleep(for: .seconds(31)) } catch { return }
-                    await account.loadRecommendations(includeAdult: preferences.includeAdult)
-                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await account.loadRecommendations(includeAdult: preferences.includeAdult) } }
             }
             .task { await account.loadTaxonomy() }
             .refreshable {
@@ -316,12 +319,19 @@ private struct MangaBakaPersonalShelf: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     var body: some View {
-        MangaBakaShelfView(shelf: .recommended,
-            items: account.recommendationState.items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
-            loading: account.recommendationState.loading, error: account.recommendationState.error, retry: {
-                Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
-            }, emptyMessage: account.recommendationState.emptyMessage
-        )
+        VStack(alignment: .leading, spacing: 10) {
+            MangaBakaShelfView(shelf: .recommended,
+                items: account.recommendationState.items.filter { $0.isVisible(includeAdult: preferences.includeAdult) },
+                loading: account.recommendationState.loading, error: account.recommendationState.error, retry: {
+                    Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
+                }, emptyMessage: account.recommendationState.emptyMessage
+            )
+            Text("Refreshes weekly · Tap the refresh arrow for a new selection")
+                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20)
+            if let notice = account.recommendationCacheNotice {
+                Text(notice).font(.caption).foregroundStyle(.orange).padding(.horizontal, 20)
+            }
+        }
     }
 }
 

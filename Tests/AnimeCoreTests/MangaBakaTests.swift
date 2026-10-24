@@ -47,6 +47,31 @@ final class MangaBakaTests: XCTestCase {
         let requests = await transport.recorded(); XCTAssertTrue(requests.isEmpty)
         XCTAssertFalse(query.includes(try series(record), includeAdult: true))
     }
+    func testPublisherIdentityAndLegacyNameFiltersComposeWithoutBecomingTitleSearch() throws {
+        let publisher = try JSONDecoder().decode(MangaBakaPublisher.self, from: Data(#"{"id":"19","name":"Owned & Other Press"}"#.utf8))
+        XCTAssertEqual(publisher.id, 19)
+        let byID = MangaBakaQuery(shelf: .hiddenGems, format: .manga, text: "Moon", status: "completed",
+            genres: [.init(value: "fantasy", label: "Fantasy")], contentRatings: [.safe], publisher: publisher)
+        XCTAssertTrue(byID.hasFacets); XCTAssertEqual(byID.filterCount, 5)
+        let url = MangaBakaClient.browseURL(byID, page: 2, limit: 30, includeAdult: false)
+        XCTAssertEqual(url.path, "/v1/series/search")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        for item in [URLQueryItem(name: "publisher_id", value: "19"), .init(name: "genre", value: "fantasy"),
+            .init(name: "q", value: "Moon"), .init(name: "type", value: "manga"), .init(name: "status", value: "completed"),
+            .init(name: "page", value: "2"), .init(name: "content_rating", value: "safe")] {
+            XCTAssertTrue(items.contains(item))
+        }
+        XCTAssertFalse(items.contains { $0.name == "publisher" })
+        let legacy = MangaBakaQuery(publisher: .init(name: "Owned & Other Press"))
+        let named = MangaBakaClient.browseURL(legacy, page: 3, limit: 24, includeAdult: false)
+        XCTAssertEqual(named.path, "/v1/series/search")
+        let namedItems = try XCTUnwrap(URLComponents(url: named, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertTrue(namedItems.contains(.init(name: "publisher", value: "Owned & Other Press")))
+        XCTAssertFalse(namedItems.contains { $0.name == "q" || $0.name == "publisher_id" })
+        let modern = MangaBakaClient.browseURL(.init(publisher: publisher), page: 1, limit: 24, includeAdult: false)
+        XCTAssertEqual(modern.path, "/v2/series/search")
+        XCTAssertNotEqual(legacy, MangaBakaQuery(publisher: publisher))
+    }
     func testTaxonomyAndDetailedTagsRetainHierarchyAndLabels() async throws {
         let transport = MBTestTransport([.json(#"{"data":[{"value":"science_fiction","label":"Sci-Fi"}]}"#),
             .json(#"{"data":[{"id":42,"name":"space_travel","name_path":"Themes > Science > Space Travel","description":"A <b>journey</b>.","is_spoiler":true,"is_implied":true,"weight":3}]}"#)])
