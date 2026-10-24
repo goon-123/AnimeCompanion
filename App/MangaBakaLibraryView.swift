@@ -147,7 +147,12 @@ struct MangaBakaTrackingView: View {
                     Section { Button("Remove from My Library", role: .destructive) { removing = true } }
                 }
             } else if error == nil { ProgressView("Checking your MangaBaka entry…") }
-            if let error { Section { Text(error).foregroundStyle(.orange); if !ready { Button("Try again") { Task { await load() } } } }
+            if let error {
+                Section {
+                    Text(error).foregroundStyle(.orange)
+                    if !ready { Button("Try again") { Task { await load() } } }
+                }
+            }
         }.disabled(busy).navigationTitle(existing ? "Edit reading entry" : "Add to My Library").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) }
@@ -197,6 +202,10 @@ struct MangaBakaAccountView: View {
     @State private var clientID = UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? ""
     @State private var apiKey = ""
     @State private var confirmation = false
+    private var effectiveClientID: String {
+        let value = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? account.bundledClientID : value
+    }
     var body: some View {
         Form {
             Section {
@@ -211,18 +220,30 @@ struct MangaBakaAccountView: View {
                 if account.connecting { ProgressView("Connecting securely…") }
             }
             Section("Sign in with MangaBaka") {
-                TextField("OAuth app ID", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Sign in with MangaBaka") {
-                    UserDefaults.standard.set(clientID.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "mangabaka.clientID")
+                    let customClientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if customClientID.isEmpty { UserDefaults.standard.removeObject(forKey: "mangabaka.clientID") }
+                    else { UserDefaults.standard.set(customClientID, forKey: "mangabaka.clientID") }
                     Task { await account.connect() }
-                }.disabled(clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || account.connecting || !account.saving.isEmpty)
-                Text("Browser sign-in needs a MangaBaka-registered public OAuth app ID. Use the redirect below and enable PKCE (S256), library.read, library.write and offline_access. Your password is entered only on MangaBaka.")
+                }.disabled(effectiveClientID.isEmpty || account.connecting || !account.saving.isEmpty)
+                Text("Sign in on MangaBaka to connect your reading library. Your password is entered only on MangaBaka.")
                     .font(.caption).foregroundStyle(.secondary)
-                LabeledContent("Redirect") { Text(MangaBakaOAuth.callback.absoluteString).font(.caption.monospaced()).textSelection(.enabled) }
-                Link("MangaBaka API & developer information", destination: URL(string: "https://mangabaka.org/data/api")!)
             }
             Section {
-                DisclosureGroup("Use your own API key") {
+                DisclosureGroup("Advanced connection settings") {
+                    TextField("Custom OAuth client ID (optional)", text: $clientID)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Text("Leave blank to use Anime Companion's registered MangaBaka application.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if !clientID.isEmpty {
+                        Button("Use Anime Companion's application") {
+                            clientID = ""
+                            UserDefaults.standard.removeObject(forKey: "mangabaka.clientID")
+                        }
+                    }
+                    LabeledContent("Redirect") { Text(MangaBakaOAuth.callback.absoluteString).font(.caption.monospaced()).textSelection(.enabled) }
+                    Link("MangaBaka API & developer information", destination: URL(string: "https://mangabaka.org/data/api")!)
+                    Divider()
                     SecureField("MangaBaka API key", text: $apiKey).textInputAutocapitalization(.never).autocorrectionDisabled().privacySensitive()
                     Button("Connect with key") {
                         let key = apiKey; apiKey = ""
@@ -230,10 +251,9 @@ struct MangaBakaAccountView: View {
                     }.disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || account.connecting || !account.saving.isEmpty)
                     Text("If MangaBaka has issued you a personal key, you can connect with it instead. It needs access to your profile and library. Never enter another person's key or an OAuth app secret.")
                         .font(.caption).foregroundStyle(.secondary)
-                }
+                }.disabled(account.connecting || !account.saving.isEmpty)
             } footer: { Text("Connection credentials are saved in this device's Keychain. Private library data and personal recommendations are not written to the public catalog cache. Disconnect removes local account data; your MangaBaka library stays online.") }
         }.navigationTitle("MangaBaka account").navigationBarTitleDisplayMode(.inline)
-            .onAppear { if clientID.isEmpty { clientID = account.clientID } }
             .onDisappear { apiKey = "" }
             .confirmationDialog("Disconnect MangaBaka?", isPresented: $confirmation) {
                 Button("Disconnect", role: .destructive) { account.disconnect() }

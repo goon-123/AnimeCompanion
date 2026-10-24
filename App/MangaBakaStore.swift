@@ -98,9 +98,14 @@ final class MangaBakaStore: ObservableObject {
     private var libraryState: String?
     private var libraryPage = 0
     private let authentication = MangaBakaSignIn()
+    var bundledClientID: String {
+        (Bundle.main.object(forInfoDictionaryKey: "MangaBakaClientID") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     var clientID: String {
-        let stored = UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? ""
-        return stored.isEmpty ? Bundle.main.object(forInfoDictionaryKey: "MangaBakaClientID") as? String ?? "" : stored
+        let stored = (UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stored.isEmpty ? bundledClientID : stored
     }
     func restore() async {
         guard !restored else { return }; restored = true
