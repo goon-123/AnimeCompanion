@@ -20,12 +20,13 @@ jobs:
   mangabaka-contracts:
     name: MangaBaka public discovery contracts
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    continue-on-error: true
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - name: Verify public taxonomy, covers and recommendation contracts
         run: python3 scripts/check-mangabaka-contracts.py
+      - name: Exercise the app's live MangaBaka discovery clients
+        run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter 'LiveServiceTests.testMangaBaka'
   manga-runtime:
     name: Build on-device manga runtime
     runs-on: macos-15
