@@ -68,7 +68,9 @@ struct MangaBakaLibraryView: View {
                 }
                 ForEach(entries) { entry in
                     if let series = entry.series {
-                        NavigationLink(value: MangaBakaSeriesRoute(series: series)) { row(entry, series: series) }.buttonStyle(.plain)
+                        NavigationLink(value: MangaBakaSeriesRoute(series: series)) {
+                            MangaBakaLibraryRow(entry: entry, series: series)
+                        }.buttonStyle(.plain)
                     }
                 }
                 if account.loadingLibrary { ProgressView("Loading your library…").frame(maxWidth: .infinity).padding() }
@@ -87,21 +89,37 @@ struct MangaBakaLibraryView: View {
                 .foregroundStyle(state == value ? Color.black : Color.white)
         }.buttonStyle(.plain).accessibilityAddTraits(state == value ? .isSelected : [])
     }
-    private func row(_ entry: MangaBakaLibraryEntry, series: MangaBakaSeries) -> some View {
+}
+
+private struct MangaBakaLibraryRow: View {
+    let entry: MangaBakaLibraryEntry
+    let series: MangaBakaSeries
+    private var statusText: String {
+        let status = MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized
+        return series.formatLabel + " · " + status
+    }
+    private var progressText: String {
+        let chapter = "Ch. " + (entry.chapter ?? 0).formatted()
+        guard let volume = entry.volume else { return chapter }
+        return chapter + " · Vol. " + volume.formatted()
+    }
+    var body: some View {
         HStack(spacing: 16) {
             MangaBakaCover(series: series, width: 80)
-            VStack(alignment: .leading, spacing: 9) {
-                Text(series.displayTitle).font(.headline).lineLimit(3)
-                Text(series.formatLabel + " · " + (MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized))
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("Ch. \(entry.chapter ?? 0, specifier: "%g")" + (entry.volume.map { " · Vol. " + $0.formatted() } ?? "")).font(.subheadline.monospacedDigit())
-                if let total = series.totalChapters, total > 0 {
-                    ProgressView(value: min(max(0, entry.chapter ?? 0), total), total: total).tint(.mint)
-                }
-                if let rating = entry.rating { Label("\(rating)/100", systemImage: "star.fill").font(.caption).foregroundStyle(.yellow) }
-            }.frame(maxWidth: .infinity, alignment: .leading)
+            details.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
         }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
+    }
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(series.displayTitle).font(.headline).lineLimit(3)
+            Text(statusText).font(.caption).foregroundStyle(.secondary)
+            Text(progressText).font(.subheadline.monospacedDigit())
+            if let total = series.totalChapters, total > 0 {
+                ProgressView(value: min(max(0, entry.chapter ?? 0), total), total: total).tint(.mint)
+            }
+            if let rating = entry.rating { Label("\(rating)/100", systemImage: "star.fill").font(.caption).foregroundStyle(.yellow) }
+        }
     }
 }
 
