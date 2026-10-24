@@ -11,14 +11,20 @@ final class LiveServiceTests: XCTestCase {
         XCTAssertTrue(tags.contains { $0.path.contains(" > ") })
         let details = try await api.details(id: 1)
         XCTAssertFalse(details.tags.isEmpty)
+        print("Checking MangaBaka cover pagination")
         let covers = try await api.covers(id: 1)
         XCTAssertFalse(covers.items.isEmpty)
         XCTAssertTrue(covers.items.contains { $0.fullURL != nil })
-        for kind in MangaBakaRelatedKind.allCases { _ = try await api.related(id: 1, kind: kind, includeAdult: false) }
+        for kind in MangaBakaRelatedKind.allCases {
+            print("Checking MangaBaka " + kind.rawValue)
+            _ = try await api.related(id: 1, kind: kind, includeAdult: false)
+        }
         if let genre = genres.first {
+            print("Checking MangaBaka genre query")
             _ = try await api.browse(.init(genres: [genre], contentRatings: [.safe]), limit: 2, includeAdult: false)
         }
         if let tag = tags.first {
+            print("Checking MangaBaka tag query")
             _ = try await api.browse(.init(tags: [tag]), limit: 2, includeAdult: false)
         }
     }

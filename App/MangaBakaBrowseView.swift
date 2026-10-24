@@ -51,7 +51,7 @@ struct MangaBakaBrowseView: View {
     private var key: MBBrowseKey { .init(query: query, adult: preferences.includeAdult) }
     private var visible: [MangaBakaSeries] { model.items.filter { query.includes($0, includeAdult: preferences.includeAdult) } }
     private var title: String {
-        initial.genres.first?.label ?? initial.tags.first?.label ?? (initial.contentRatings.count == 1 ? initial.contentRatings.first?.label : nil) ?? initial.format?.label ?? initial.shelf.label
+        query.genres.first?.label ?? query.tags.first?.label ?? (query.contentRatings.count == 1 ? query.contentRatings.first?.label : nil) ?? query.format?.label ?? query.shelf.label
     }
     var body: some View {
         GeometryReader { geometry in

@@ -8,6 +8,7 @@ import json
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 
 
 def shape(value, depth=0):
@@ -28,8 +29,12 @@ def request(path, params=()):
         "Accept": "application/json",
         "User-Agent": "AnimeCompanion/0.25 (https://github.com/goon-123/AnimeCompanion)",
     })
-    with urllib.request.urlopen(req, timeout=25) as response:
-        data = json.loads(response.read(16_000_001))
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            data = json.loads(response.read(16_000_001))
+    except urllib.error.HTTPError as error:
+        print("Rejected public request " + url + " " + error.read(10_000).decode(errors="replace"), flush=True)
+        raise
     print(path + " " + json.dumps(shape(data), separators=(",", ":")), flush=True)
     assert isinstance(data.get("data"), (dict, list)), "Missing data envelope: " + path
     time.sleep(0.4)
@@ -41,8 +46,11 @@ if __name__ == "__main__":
     tags = request("/v1/tags")
     assert genres and tags, "Taxonomy must be available"
     request("/v1/series/1")
-    request("/v1/series/1/images", [("limit", "2")])
-    ratings = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "2")]
+    request("/v1/series/1/images", [("limit", "40"), ("page", "1")])
+    ratings = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "24")]
     for path in ["/v1/series/1/relationships", "/v2/series/1/similar", "/v2/series/1/readers-also-like"]:
         request(path, ratings)
+    base = [("content_rating", "safe"), ("content_rating", "suggestive"), ("limit", "2"), ("page", "1"), ("sort_by", "popularity_asc")]
+    request("/v2/series/search", base + [("genre", genres[0]["value"])])
+    request("/v2/series/search", base + [("tag", str(tags[0]["id"]))])
     print("MangaBaka discovery contracts reachable", flush=True)
