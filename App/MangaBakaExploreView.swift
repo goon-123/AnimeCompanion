@@ -227,7 +227,7 @@ struct MangaBakaExploreView: View {
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
-            .task(id: "\(account.connected)-\(preferences.includeAdult)") {
+            .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.includeAdult)") {
                 await account.loadRecommendations(includeAdult: preferences.includeAdult)
             }
             .onChange(of: scenePhase) { _, phase in

@@ -50,7 +50,7 @@ struct MangaBakaRecommendationsView: View {
                         .accessibilityLabel("Refresh manga recommendations")
                 }
             }
-            .task(id: "\(account.connected)-\(preferences.includeAdult)") {
+            .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.includeAdult)") {
                 await account.loadRecommendations(includeAdult: preferences.includeAdult)
             }
             .onChange(of: scenePhase) { _, phase in

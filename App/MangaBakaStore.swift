@@ -102,7 +102,7 @@ final class MangaBakaStore: ObservableObject {
     private var recommendationTask: Task<Void, Never>?
     private let recommendationCache = MangaBakaRecommendationCache()
     private var recommendationSnapshot: MangaBakaRecommendationSnapshot?
-    private var generation = UUID()
+    @Published private(set) var connectionID = UUID()
     private var libraryGeneration = UUID()
     private var restored = false
     private var libraryState: String?
@@ -142,29 +142,29 @@ final class MangaBakaStore: ObservableObject {
             // Restore before publishing the connection so a view cannot start a
             // replacement request before discovering the saved weekly result.
             if let snapshot = try? recommendationCache.load(credential: saved),
-               (try? recommendationState.restore(snapshot, account: generation,
+               (try? recommendationState.restore(snapshot, account: connectionID,
                     includeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult"))) == true {
                 recommendationSnapshot = snapshot
             }
             connected = true
-            let attempt = generation
+            let attempt = connectionID
             let value = try await api.profile(validCredential())
-            guard attempt == generation else { return }
+            guard attempt == connectionID else { return }
             profile = value; revision = UUID()
         } catch { accountError = error.localizedDescription }
     }
     func connect(apiKey: String? = nil) async {
         guard !connecting, saving.isEmpty else { return }; connecting = true; accountError = nil; notice = nil
-        let attempt = generation
+        let attempt = connectionID
         defer { connecting = false }
         do {
             let candidate: MangaBakaCredential
             if let apiKey { candidate = try MangaBakaCredential(kind: .apiKey, secret: apiKey) }
             else { candidate = try await authentication.signIn(clientID: clientID, api: api) }
             let value = try await api.profile(candidate)
-            guard generation == attempt else { return }
+            guard connectionID == attempt else { return }
             try MangaBakaKeychain.save(candidate)
-            generation = UUID(); refreshTask?.cancel(); refreshTask = nil
+            connectionID = UUID(); refreshTask?.cancel(); refreshTask = nil
             clearLibrary(); credential = candidate; connected = true; profile = value; revision = UUID()
         } catch is CancellationError {} catch {
             if (error as NSError).domain != ASWebAuthenticationSessionError.errorDomain || (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
@@ -174,7 +174,7 @@ final class MangaBakaStore: ObservableObject {
     }
     func disconnect() {
         do {
-            try MangaBakaKeychain.delete(); generation = UUID(); authentication.cancel(); refreshTask?.cancel(); refreshTask = nil
+            try MangaBakaKeychain.delete(); connectionID = UUID(); authentication.cancel(); refreshTask?.cancel(); refreshTask = nil
             credential = nil; connected = false; profile = nil; accountError = nil; notice = nil; clearLibrary(); revision = UUID()
         } catch { accountError = error.localizedDescription }
     }
@@ -189,13 +189,13 @@ final class MangaBakaStore: ObservableObject {
     private func validCredential() async throws -> MangaBakaCredential {
         guard let current = credential else { throw MangaBakaError.unauthorized }
         guard current.needsRefresh() else { return current }
-        let attempt = generation
+        let attempt = connectionID
         let work: Task<MangaBakaCredential, Error>
         if let existing = refreshTask { work = existing }
         else { work = Task { try await api.refresh(current) }; refreshTask = work }
-        defer { if generation == attempt { refreshTask = nil } }
+        defer { if connectionID == attempt { refreshTask = nil } }
         let renewed = try await work.value
-        guard generation == attempt else { throw CancellationError() }
+        guard connectionID == attempt else { throw CancellationError() }
         try MangaBakaKeychain.save(renewed); credential = renewed
         // OAuth rotates its secret. Move the already-loaded snapshot to the new
         // encryption key without changing its original seven-day timestamp.
@@ -204,7 +204,7 @@ final class MangaBakaStore: ObservableObject {
     }
     func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
         guard connected, !Task.isCancelled else { return }
-        guard let attempt = recommendationState.begin(account: generation,
+        guard let attempt = recommendationState.begin(account: connectionID,
             includeAdult: includeAdult, refresh: refresh) else {
             await recommendationTask?.value
             return
@@ -253,52 +253,52 @@ final class MangaBakaStore: ObservableObject {
         if !next && !refresh && state == libraryState && libraryPage > 0 { return }
         guard !loadingLibrary, !next || hasMoreLibrary else { return }
         libraryState = state; loadingLibrary = true; libraryError = nil
-        let attempt = generation, request = libraryGeneration, page = next ? libraryPage + 1 : 1
+        let attempt = connectionID, request = libraryGeneration, page = next ? libraryPage + 1 : 1
         defer { if libraryGeneration == request { loadingLibrary = false } }
         do {
             let response = try await api.library(validCredential(), page: page, state: state)
             try Task.checkCancellation()
-            guard generation == attempt, libraryGeneration == request else { return }
+            guard connectionID == attempt, libraryGeneration == request else { return }
             var known = Set(next ? library.map(\.id) : [])
             let additions = response.items.filter { known.insert($0.id).inserted }
             if next && additions.isEmpty && response.hasNext { throw MangaBakaError.message("This page returned no new entries. Pull to refresh your library.") }
             library = next ? library + additions : additions
             for entry in response.items { entries[entry.id] = entry }
             libraryPage = page; hasMoreLibrary = response.hasNext; libraryTotal = response.total
-        } catch is CancellationError {} catch { if generation == attempt, libraryGeneration == request { libraryError = error.localizedDescription } }
+        } catch is CancellationError {} catch { if connectionID == attempt, libraryGeneration == request { libraryError = error.localizedDescription } }
     }
     func loadEntry(_ series: MangaBakaSeries) async throws -> MangaBakaLibraryEntry? {
-        let attempt = generation
+        let attempt = connectionID
         let value = try await api.entry(id: series.id, credential: validCredential())?.attaching(series)
-        guard attempt == generation else { throw CancellationError() }
+        guard attempt == connectionID else { throw CancellationError() }
         entries[series.id] = value
         return value
     }
     func save(_ series: MangaBakaSeries, update: MangaBakaLibraryUpdate, existing: Bool) async throws {
         guard saving.insert(series.id).inserted else { throw MangaBakaError.message("This entry is already being saved.") }
-        let attempt = generation
+        let attempt = connectionID
         defer { saving.remove(series.id) }
         let key = try await validCredential()
         try await api.save(id: series.id, update: update, existing: existing, credential: key)
-        guard attempt == generation else { throw CancellationError() }
+        guard attempt == connectionID else { throw CancellationError() }
         do {
             guard let confirmed = try await api.entry(id: series.id, credential: key)?.attaching(series) else { throw MangaBakaError.invalidResponse }
-            guard attempt == generation else { throw CancellationError() }
+            guard attempt == connectionID else { throw CancellationError() }
             entries[series.id] = confirmed
             notice = "Saved to MangaBaka."
         } catch is CancellationError { throw CancellationError() }
         catch {
-            guard attempt == generation else { throw CancellationError() }
+            guard attempt == connectionID else { throw CancellationError() }
             notice = "Saved on MangaBaka. Refresh to load the latest progress."
         }
         libraryPage = 0; revision = UUID()
     }
     func remove(_ series: MangaBakaSeries) async throws {
         guard saving.insert(series.id).inserted else { return }
-        let attempt = generation
+        let attempt = connectionID
         defer { saving.remove(series.id) }
         try await api.remove(id: series.id, credential: validCredential())
-        guard attempt == generation else { throw CancellationError() }
+        guard attempt == connectionID else { throw CancellationError() }
         entries[series.id] = nil; library.removeAll { $0.id == series.id }; libraryPage = 0
         notice = "Removed from your MangaBaka library."; revision = UUID()
     }
