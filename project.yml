@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.25.19'
-    CURRENT_PROJECT_VERSION: '66'
+    MARKETING_VERSION: '0.25.21'
+    CURRENT_PROJECT_VERSION: '68'
 packages:
   AnimeCore:
     path: .
@@ -37,6 +37,7 @@ targets:
             CFBundleURLSchemes:
               - animecompanion
         AniListClientID: ''
+        MangaBakaClientID: 'CNeUHLqjnLGiBGIJBbpzuoIiQYUhhuVK'
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

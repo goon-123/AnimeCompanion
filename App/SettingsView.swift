@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var seanime: SeanimeStore
+    @EnvironmentObject private var mangaBaka: MangaBakaStore
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -15,6 +16,9 @@ struct SettingsView: View {
                     NavigationLink { AniListSettingsView() } label: {
                         SettingsCategoryLabel(title: "AniList account", detail: store.isSignedIn ? store.viewer.map { "Signed in as \($0.name)" } ?? "Connected" : "Connect to sync your library", symbol: "person.crop.circle.fill", tint: .blue)
                     }.accessibilityIdentifier("settings-account")
+                    NavigationLink { MangaBakaAccountView() } label: {
+                        SettingsCategoryLabel(title: "MangaBaka account", detail: mangaBaka.connected ? mangaBaka.profile?.name ?? "Connected" : "Manga & novels · Library sync", symbol: "books.vertical.fill", tint: .teal)
+                    }.accessibilityIdentifier("settings-mangabaka-account")
                 }
                 Section("Playback & sources") {
                     NavigationLink { TorBoxSettingsView() } label: {
@@ -153,9 +157,9 @@ private struct BrowsingSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Show adult anime (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
+                Toggle("Show adult content (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
             } header: { Text("Content") } footer: {
-                Text("Applies to native browsing, search, library, schedules and known adult providers. Hidden entries stay in AniList. External websites use their own filters.")
+                Text("Applies to anime and MangaBaka browsing, search, libraries, schedules and known adult providers. Hidden entries stay in your online lists. External websites use their own filters.")
             }
         }.navigationTitle("Browsing & content").navigationBarTitleDisplayMode(.inline)
     }
@@ -201,11 +205,13 @@ private struct AboutSettingsView: View {
     var body: some View {
         Form {
             Section("Anime Companion") {
-                Text("Anime discovery & AniList tracking")
+                Text("Anime discovery, manga & novels · AniList & MangaBaka tracking")
                 Text("Broadcast times and dub dates may change. Times use your device timezone. Japanese broadcasts do not guarantee local subtitle availability.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Metadata & lists") {
                 Link("AniList", destination: URL(string: "https://anilist.co")!)
+                MangaBakaAttribution()
+                Link("MangaBaka data license · CC BY-NC-SA 4.0", destination: URL(string: "https://creativecommons.org/licenses/by-nc-sa/4.0/")!)
             }
             Section("English dub data") {
                 Link("AniSchedule by RockinChaos", destination: DubProvider.current.repositoryURL)

@@ -11,6 +11,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var navigation = AppNavigationStore()
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
+    @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
@@ -19,11 +20,13 @@ struct AnimeCompanionApp: App {
                 .environmentObject(seanime)
                 .environmentObject(navigation)
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
+                .environmentObject(mangaBaka)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
                     Task { await MangaImagePipeline.shared.clearMemory() }
                 }
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
+                .task { if !artworkPreview { await mangaBaka.restore() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
                     await store.exploreDubs.keepUpdated(using: store.dubs)
@@ -115,6 +118,7 @@ final class AppNavigationStore: ObservableObject {
     }
 
     func openGenre(_ genre: String) {
+        UserDefaults.standard.set("anime", forKey: "app.mediaSection")
         var path = NavigationPath()
         path.append(DiscoveryRoute(category: .trending, titleOverride: genre, genre: genre, shortcutID: UUID()))
         explore.path = path
@@ -126,8 +130,12 @@ final class AppNavigationStore: ObservableObject {
     }
 
     func openMangaSearch(for anime: Anime) {
+        openMangaSearch(titles: MangaSearchTitles.suggestions(for: anime))
+    }
+
+    func openMangaSearch(titles: [String]) {
         var path = NavigationPath()
-        path.append(MangaSearchRoute(titles: MangaSearchTitles.suggestions(for: anime)))
+        path.append(MangaSearchRoute(titles: titles))
         manga.path = path
         selectedTab = .manga
     }
@@ -136,6 +144,7 @@ final class AppNavigationStore: ObservableObject {
 struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
+    @AppStorage("app.mediaSection") private var mediaSection = "anime"
     var body: some View {
         tabs.task {
             guard !loadedLayout else { return }
@@ -144,9 +153,9 @@ struct AppTabs: View {
     }
     private var tabs: some View {
         TabView(selection: $navigation.selectedTab) {
-            AnimeTabPane(state: navigation.explore, layout: navigation.tabletLayout) { ExploreView() }
+            AnimeTabPane(state: navigation.explore, layout: mediaSection == "written" ? .fullWidth : navigation.tabletLayout) { MediaExploreView() }
                 .tabItem { Label("Explore", systemImage: "safari") }.tag(AppTab.explore)
-            AnimeTabPane(state: navigation.library, layout: navigation.tabletLayout) { LibraryView() }
+            AnimeTabPane(state: navigation.library, layout: mediaSection == "written" ? .fullWidth : navigation.tabletLayout) { MediaLibraryView() }
                 .tabItem { Label("My Library", systemImage: "books.vertical") }.tag(AppTab.library)
             MangaTabPane(state: navigation.manga)
                 .tabItem { Label("Manga", systemImage: "book.closed") }.tag(AppTab.manga)
