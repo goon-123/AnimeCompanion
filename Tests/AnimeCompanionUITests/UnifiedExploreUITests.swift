@@ -2,10 +2,44 @@ import XCTest
 import UIKit
 
 final class UnifiedExploreUITests: XCTestCase {
-    @MainActor private func launch(failedReading: Bool = false) -> XCUIApplication {
+    @MainActor func testRelatedMangaAndNovelOpenMangaBakaAndBackReturnsToAnime() {
+        let app = launch()
+        app.buttons["unified-explore-search"].tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("harbor\n")
+        tap(app.buttons["explore-story-anilist:1"], app)
+        XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 15))
+        for id in [30073, 30074] {
+            tap(app.buttons["related-mangabaka-\(id)"], app)
+            XCTAssertTrue(app.buttons["mangabaka-series-cover"].waitForExistence(timeout: 15))
+            if id == 30074 { XCTAssertTrue(app.staticTexts["A Lantern Across the Sea"].firstMatch.exists) }
+            capture(id == 30073 ? "Related-MangaBaka-Manga" : "Related-MangaBaka-Novel", app)
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 15))
+        }
+        tap(app.buttons["related-anime-5"], app)
+        XCTAssertTrue(app.buttons["watch-in-vidhub"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
+    }
+    @MainActor func testUnlinkedAdaptationOffersMangaBakaSearch() {
+        let app = launch(extra: ["--ui-related-mangabaka-missing"])
+        app.buttons["unified-explore-search"].tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("harbor\n")
+        tap(app.buttons["explore-story-anilist:1"], app)
+        tap(app.buttons["related-mangabaka-30073"], app)
+        XCTAssertTrue(app.staticTexts["No linked MangaBaka listing"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
+        app.buttons["related-mangabaka-search"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "Glass Harbor Manga")
+        capture("Related-MangaBaka-Search-Fallback", app)
+    }
+    @MainActor private func launch(failedReading: Bool = false, extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-content-preferences", "--ui-phase2-preview", "--ui-customization-preview", "--ui-unified-preview"]
+        app.launchArguments += extra
         if failedReading { app.launchArguments.append("--ui-unified-reading-failure") }
         app.launch()
         XCTAssertTrue(app.buttons["unified-explore-search"].waitForExistence(timeout: 20))
@@ -135,3 +169,4 @@ final class UnifiedExploreUITests: XCTestCase {
         capture("Unified-Replaced-Search", app)
     }
 }
+

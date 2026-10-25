@@ -166,8 +166,12 @@ struct RelatedAnimeCard: View {
     var body: some View {
       VStack(alignment: .leading, spacing: 3) {
         Group {
-            if anime.type == "MANGA" { Link(destination: URL(string: "https://anilist.co/manga/\(anime.id)")!) { card } }
-            else { AnimeLink(id: anime.id) { card } }
+            if anime.type == "MANGA" {
+                NavigationLink { RelatedMangaBakaView(media: anime) } label: { card }
+                    .accessibilityIdentifier("related-mangabaka-\(anime.id)")
+            } else {
+                AnimeLink(id: anime.id) { card }.accessibilityIdentifier("related-anime-\(anime.id)")
+            }
         }.buttonStyle(.plain)
         GenreTags(genres: anime.genres ?? [], animeID: anime.id)
       }.frame(width: sizeClass == .regular ? 145 : 100, alignment: .leading)
@@ -270,4 +274,5 @@ struct AnimeDubSchedule: View {
         }.padding(.vertical, 3)
     }
 }
+
 
