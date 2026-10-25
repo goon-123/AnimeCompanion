@@ -69,6 +69,7 @@ struct DiscoveryRoute: Hashable {
     var titleOverride: String? = nil
     var genre: String? = nil
     var shortcutID: UUID? = nil
+    var initialQuery = ""
 }
 
 struct SupplementaryDestination: Identifiable {
@@ -166,6 +167,7 @@ struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
+    @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.discover.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
     var body: some View {
         tabs.task {
@@ -212,7 +214,7 @@ struct AppTabs: View {
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {
         switch tab {
         case .explore:
-            AnimeTabPane(state: navigation.explore, layout: mediaSection == "written" ? .fullWidth : navigation.tabletLayout) { MediaExploreView() }
+            AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
         case .library:
             AnimeTabPane(state: navigation.library, layout: librarySection == "anime" ? navigation.tabletLayout : .fullWidth) { MediaLibraryView() }
         case .manga: MangaTabPane(state: navigation.manga)
@@ -333,7 +335,7 @@ struct AnimeNavigation: ViewModifier {
                 AnimeVisualsView(anime: route.anime).id(route.anime?.id ?? 0)
             }
             .navigationDestination(for: DiscoveryRoute.self) { route in
-                DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre)
+                DiscoveryBrowseView(category: route.category, selection: route.selection, titleOverride: route.titleOverride, initialGenre: route.genre, initialQuery: route.initialQuery)
                     // Replacing a path with the same destination type otherwise reuses its
                     // @State filters. Each genre tap must initialize a fresh result page;
                     // normal detail/back navigation keeps the same route and loaded pages.

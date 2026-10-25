@@ -43,6 +43,9 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-manga-extensions")
                 }
                 Section("Preferences") {
+                    NavigationLink { ExploreDesignSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Explore design", detail: "Combined shelves, mixed grid or Classic", symbol: "rectangle.stack.fill", tint: .mint)
+                    }.accessibilityIdentifier("settings-explore-design")
                     NavigationLink { TabCustomizationView() } label: {
                         SettingsCategoryLabel(title: "Bottom tabs", detail: "Reorder or hide sections", symbol: "rectangle.bottomthird.inset.filled", tint: .cyan)
                     }.accessibilityIdentifier("settings-bottom-tabs")

@@ -34,9 +34,11 @@ struct DiscoveryBrowseView: View {
     @State private var paginationScheduled = false
     @FocusState private var searching: Bool
 
-    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil, initialGenre: String? = nil) {
+    init(category: DiscoveryCategory, selection: SeasonSelection = .current(), titleOverride: String? = nil, initialGenre: String? = nil, initialQuery: String = "") {
         self.category = category; self.selection = selection; self.titleOverride = titleOverride
-        _filters = State(initialValue: initialGenre.map { DiscoveryFilters(genre: $0) } ?? DiscoveryFilters(category: category, selection: selection))
+        var initial = initialGenre.map { DiscoveryFilters(genre: $0) } ?? DiscoveryFilters(category: category, selection: selection)
+        initial.search = initialQuery
+        _filters = State(initialValue: initial)
     }
     private var genres: [String] { DiscoveryGenres.all }
     private var formats: [(String, String)] {

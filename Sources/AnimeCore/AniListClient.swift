@@ -253,10 +253,10 @@ public actor AniListClient {
         let result: PageResponse = try await request(AniListQueries.seasonal, variables: vars)
         return result.Page
     }
-    public func search(_ text: String, page: Int = 1, includeAdult: Bool = false) async throws -> MediaPage {
+    public func search(_ text: String, page: Int = 1, includeAdult: Bool = false, refresh: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["search": .string(text), "page": .int(page)]
         if !includeAdult { vars["isAdult"] = .bool(false) }
-        let result: PageResponse = try await request(AniListQueries.search, variables: vars)
+        let result: PageResponse = try await request(AniListQueries.search, variables: vars, bypassCache: refresh)
         return result.Page
     }
     public func browse(_ filters: DiscoveryFilters, page: Int = 1, refresh: Bool = false, includeAdult: Bool = false) async throws -> MediaPage {

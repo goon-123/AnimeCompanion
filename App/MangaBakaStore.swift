@@ -79,7 +79,9 @@ final class MangaBakaStore: ObservableObject {
     let api: MangaBakaClient
     init() {
         #if DEBUG
-        api = LibraryCustomizationPreview.active
+        api = UnifiedExplorePreview.active
+            ? MangaBakaClient(transport: UnifiedReadingPreviewTransport(), directory: nil, minimumRequestInterval: 0)
+            : LibraryCustomizationPreview.active
             ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
             : MangaBakaClient()
         #else
