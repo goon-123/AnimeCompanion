@@ -56,7 +56,7 @@ final class LibraryCustomizationTests: XCTestCase {
         XCTAssertFalse(restored.autoLoadNextChapter); XCTAssertEqual(restored.autoScrollSpeed, 120)
     }
     private func anime(_ id: Int = 73, adult: Bool = false, status: String = "CURRENT") throws -> LibraryEntry {
-        try JSONDecoder().decode(LibraryEntry.self, from: Data("{\"id\":\(id),\"mediaId\":\(id),\"status\":\"\(status)\",\"progress\":3,\"media\":{\"id\":\(id),\"title\":{\"english\":\"Harbor Anime\",\"native\":\"Owned native alias\"},\"isAdult\":\(adult)}}".utf8))
+        try JSONDecoder().decode(LibraryEntry.self, from: Data("{\"id\":\(id),\"mediaId\":\(id),\"status\":\"\(status)\",\"progress\":3,\"media\":{\"id\":\(id),\"title\":{\"english\":\"Harbor Anime\",\"romaji\":\"Owned alternate alias\"},\"isAdult\":\(adult)}}".utf8))
     }
     private func book(_ id: Int = 73, rating: String = "safe", state: String = "reading") throws -> MangaBakaLibraryEntry {
         try JSONDecoder().decode(MangaBakaLibraryEntry.self, from: Data("{\"series_id\":\(id),\"state\":\"\(state)\",\"progress_chapter\":4.5,\"series\":{\"id\":\(id),\"title\":\"Harbor Book\",\"content_rating\":\"\(rating)\",\"type\":\"novel\"}}".utf8))
@@ -78,7 +78,7 @@ final class LibraryCustomizationTests: XCTestCase {
         XCTAssertEqual(Set(safe.map(\.id)), ["anilist:73", "mangabaka:73"])
         let mature = CombinedLibraryItem.merge(anime: watched, reading: books, includeAdult: true, status: .active)
         XCTAssertEqual(Set(mature.map(\.id)), ["anilist:73", "anilist:75", "mangabaka:73", "mangabaka:74", "mangabaka:76"])
-        let alias = CombinedLibraryItem.merge(anime: watched, reading: books, includeAdult: false, query: "native alias", status: .planned)
+        let alias = CombinedLibraryItem.merge(anime: watched, reading: books, includeAdult: false, query: "alternate alias", status: .planned)
         XCTAssertEqual(alias.map(\.id), ["anilist:74"])
         let paused = CombinedLibraryItem.merge(anime: watched, reading: books, includeAdult: false, status: .paused)
         XCTAssertEqual(paused.map(\.id), ["mangabaka:75"])

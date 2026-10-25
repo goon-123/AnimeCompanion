@@ -71,7 +71,7 @@ final class WebtoonReaderModel: ObservableObject {
         saveTask?.cancel(); saveTask = nil
         if let reading, let confirmed { await reading.progress(title, position: confirmed) }
     }
-    func select(_ value: SourceMangaChapter, automatically: Bool = false, keepScrolling: Bool = false) async {
+    func select(_ value: SourceMangaChapter, automatically: Bool = false, keepScrolling: Bool = false, canAdvance: () -> Bool = { true }) async {
         guard value != chapter else { return }
         let token = generation
         await flush()
@@ -80,6 +80,7 @@ final class WebtoonReaderModel: ObservableObject {
             await pending.value
             guard generation == token, value != chapter else { return }
         }
+        guard !automatically || canAdvance() else { return }
         prefetchTask?.cancel(); prefetchTask = nil
         if prefetched?.url != value.url { prefetched = nil }
         prefetchAttemptedURL = nil
@@ -105,11 +106,11 @@ final class WebtoonReaderModel: ObservableObject {
         }
     }
     func cancelPrefetch() { prefetchTask?.cancel(); prefetchTask = nil; prefetched = nil; prefetchAttemptedURL = nil }
-    func advanceAutomatically(from chapterURL: String, keepScrolling: Bool) async {
+    func advanceAutomatically(from chapterURL: String, keepScrolling: Bool, isAllowed: () -> Bool) async {
         guard chapter.url == chapterURL, hasNext, !loading, !advancing else { return }
         advancing = true
         defer { advancing = false }
-        await select(chapters[chapterIndex + 1], automatically: true, keepScrolling: keepScrolling)
+        await select(chapters[chapterIndex + 1], automatically: true, keepScrolling: keepScrolling, canAdvance: isAllowed)
     }
     func move(_ offset: Int) async {
         let index = chapterIndex + offset
@@ -226,7 +227,9 @@ struct WebtoonReaderView: View {
             onChapterEnd: { chapter, scrolling in
                 guard preferences.autoLoadNextChapter, !settings, !chapters, !website, !closing, scene == .active else { return }
                 Task {
-                    await model.advanceAutomatically(from: chapter, keepScrolling: scrolling)
+                    await model.advanceAutomatically(from: chapter, keepScrolling: scrolling) {
+                        preferences.autoLoadNextChapter && scene == .active && !settings && !chapters && !website && !closing
+                    }
                     if scene != .active || closing { model.autoScroll = false }
                 }
             },

@@ -64,7 +64,10 @@ struct CombinedLibraryView: View {
             .task(id: "\(reading.connected)-\(reading.connectionID)-\(reading.revision)") { await loadReading(refresh: true) }
             .task(id: "\(anime.isSignedIn)-\(scene)") {
                 guard scene == .active else { return }
-                await anime.refreshLibraryIfNeeded()
+                while !Task.isCancelled {
+                    await anime.refreshLibraryIfNeeded()
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                }
             }
             .refreshable {
                 async let watched: Void = anime.reloadLibrary()

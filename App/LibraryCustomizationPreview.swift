@@ -30,7 +30,7 @@ struct LibraryCustomizationTransport: HTTPTransport {
         if url.path == "/v1/my/library" {
             let state = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "state" }?.value
             let entries = try LibraryCustomizationPreview.library(state: state)
-            payload = ["data": entries.map { entry in ["series_id": entry.id, "series": LibraryCustomizationPreview.series(entry.id),
+            payload = ["data": entries.map { entry -> [String: Any] in ["series_id": entry.id, "series": LibraryCustomizationPreview.series(entry.id),
                 "state": entry.state, "progress_chapter": entry.chapter ?? 0] },
                 "pagination": ["page": 1, "count": entries.count, "next": NSNull()]]
         } else if url.path.hasPrefix("/v1/my/library/") { payload = ["data": NSNull()] }

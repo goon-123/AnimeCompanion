@@ -88,7 +88,9 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         func update(_ value: WebtoonCanvas) {
             let preferencesChanged = parent.preferences != value.preferences
+            let interrupted = parent.scrollingAllowed && !value.scrollingAllowed
             parent = value
+            if interrupted { continuation.reset(chapter: chapter) }
             scroll?.accessibilityValue = value.chapterKey
             if chapter != value.chapterKey || pages != value.pages {
                 endHold()

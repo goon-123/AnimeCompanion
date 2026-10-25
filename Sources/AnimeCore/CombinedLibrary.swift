@@ -42,7 +42,7 @@ public enum CombinedLibraryItem: Identifiable, Sendable {
             switch item {
             case .anime(let entry):
                 guard let media = entry.media, includeAdult || media.isAdult != true else { return false }
-                titles = [media.displayTitle, media.title?.english ?? "", media.title?.romaji ?? "", media.title?.native ?? ""]
+                titles = [media.displayTitle, media.title?.english ?? "", media.title?.romaji ?? "", media.title?.userPreferred ?? ""]
             case .reading(let entry):
                 guard let series = entry.series, series.isVisible(includeAdult: includeAdult) else { return false }
                 titles = [series.displayTitle, series.title, series.nativeTitle ?? ""] + series.titles.map(\.title)
