@@ -12,11 +12,11 @@ final class NewsExperienceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["news-story-harbor-dub"].exists)
         capture("Saved", app)
 
-        app.buttons["news-customize"].tap()
+        openPreferences(app)
         let publisher = app.switches["news-enable-animeNewsNetwork"]
-        app.revealInContent(publisher); publisher.tap()
+        toggle(publisher, to: "0", app)
         let compact = app.switches["news-compact-layout"]
-        app.revealInContent(compact); compact.tap()
+        toggle(compact, to: "1", app)
         app.buttons["news-preferences-done"].tap()
         waitForCount(1, app)
         XCTAssertTrue(app.buttons["news-story-harbor-dub"].exists)
@@ -26,7 +26,7 @@ final class NewsExperienceUITests: XCTestCase {
         let remove = app.buttons["news-save-harbor-dub"]
         app.revealInContent(remove)
         XCTAssertEqual(remove.label, "Remove saved story")
-        app.buttons["news-customize"].tap()
+        openPreferences(app)
         let persisted = app.switches["news-compact-layout"]
         app.revealInContent(persisted)
         XCTAssertEqual(persisted.value as? String, "1")
@@ -44,7 +44,7 @@ final class NewsExperienceUITests: XCTestCase {
         capture("Latest", app)
         select("For You", app)
         waitForCount(2, app)
-        let followed = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "In your library")).firstMatch
+        let followed = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "In your library")).firstMatch
         app.revealInContent(followed)
         XCTAssertTrue(followed.exists)
         capture("For-You", app)
@@ -55,7 +55,11 @@ final class NewsExperienceUITests: XCTestCase {
         app.buttons["news-reset-filters"].tap()
         waitForCount(7, app)
         let search = app.searchFields.firstMatch
-        app.revealInContent(search, upward: false)
+        if !search.isHittable {
+            let searchButton = app.navigationBars.buttons["Search"]
+            if searchButton.exists { searchButton.tap() }
+            else { app.scrollViews["news-list"].swipeDown() }
+        }
         XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("Paper")
         waitForCount(1, app)
         let result = app.buttons["news-story-lantern-manga"]
@@ -78,7 +82,7 @@ final class NewsExperienceUITests: XCTestCase {
         app.buttons["Mark as read"].tap()
         let filter = app.buttons["news-sources"]
         app.revealInContent(filter, upward: false); filter.tap()
-        app.switches["news-unread-only"].tap()
+        app.buttons["news-unread-only"].tap()
         waitForCount(3, app) // The owned history fixture is also migrated as read.
         select("History", app)
         waitForCount(1, app)
@@ -89,7 +93,7 @@ final class NewsExperienceUITests: XCTestCase {
         waitForCount(5, app)
         let status = app.descendants(matching: .any).matching(identifier: "news-feed-status").firstMatch
         app.revealInContent(status, upward: false)
-        XCTAssertTrue(status.label.contains("Anime Corner") || app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Anime Corner")).count > 0)
+        XCTAssertTrue(status.label.contains("Anime Corner") || app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Anime Corner")).count > 0)
         capture("Partial-Feed", app)
     }
     @MainActor private func launch(keep: Bool = false, partial: Bool = false) -> XCUIApplication {
@@ -108,6 +112,19 @@ final class NewsExperienceUITests: XCTestCase {
         let control = app.segmentedControls["news-collections"]
         app.revealInContent(control, upward: false)
         control.buttons[title].tap()
+    }
+    @MainActor private func openPreferences(_ app: XCUIApplication) {
+        let button = app.buttons["news-customize"]
+        app.revealInContent(button, upward: false)
+        button.tap()
+        XCTAssertTrue(app.navigationBars["Customize News"].waitForExistence(timeout: 10))
+    }
+    @MainActor private func toggle(_ row: XCUIElement, to value: String, _ app: XCUIApplication) {
+        app.revealInContent(row)
+        let control = row.descendants(matching: .switch).allElementsBoundByIndex.last ?? row
+        control.tap()
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: row)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
     }
     @MainActor private func waitForCount(_ count: Int, _ app: XCUIApplication) {
         let result = app.staticTexts["news-results-count"]

@@ -6,7 +6,7 @@ public enum NewsTopic: String, CaseIterable, Codable, Sendable {
         switch self {
         case .all: return "All stories"
         case .announcements: return "Announcements"
-        case .dubs: return "English dubs"
+        case .dubs: return "Dubs"
         case .trailers: return "Trailers & visuals"
         case .manga: return "Manga & novels"
         case .industry: return "Industry"
@@ -104,14 +104,18 @@ public struct NewsReaderState: Codable, Sendable {
 public struct NewsLibraryTitle: Sendable {
     public let title: String
     public let aliases: [String]
-    public init(title: String, aliases: [String] = []) { self.title = title; self.aliases = aliases }
-    public init(anime: Anime) {
-        title = anime.displayTitle
-        aliases = [anime.title?.english, anime.title?.romaji, anime.title?.userPreferred].compactMap { $0 }
+    private let phrases: Set<String>
+    public init(title: String, aliases: [String] = []) {
+        self.title = title; self.aliases = aliases
+        phrases = Set(([title] + aliases).map(NewsFeed.normalized).filter { !$0.isEmpty })
     }
-    public func matches(_ article: NewsArticle) -> Bool {
-        let text = NewsFeed.normalized(article.title)
-        return ([title] + aliases).contains { NewsFeed.containsPhrase($0, in: text) }
+    public init(anime: Anime) {
+        self.init(title: anime.displayTitle, aliases: [anime.title?.english, anime.title?.romaji, anime.title?.userPreferred].compactMap { $0 })
+    }
+    public func matches(_ article: NewsArticle) -> Bool { matches(headline: NewsFeed.normalized(article.title)) }
+    fileprivate func matches(headline: String) -> Bool {
+        let text = " " + headline + " "
+        return phrases.contains { text.contains(" " + $0 + " ") }
     }
 }
 
@@ -147,7 +151,8 @@ public enum NewsFeed {
     }
     public static func matchingTitles(_ article: NewsArticle, library: [NewsLibraryTitle]) -> [String] {
         var seen = Set<String>()
-        return library.filter { $0.matches(article) && seen.insert($0.title).inserted }.map(\.title)
+        let headline = normalized(article.title)
+        return library.filter { $0.matches(headline: headline) && seen.insert($0.title).inserted }.map(\.title)
     }
     public static func articles(_ articles: [NewsArticle], query: NewsFeedQuery, preferences: NewsPreferences,
                                 reader: NewsReaderState, history: NewsReadingHistory, library: [NewsLibraryTitle],
@@ -160,6 +165,7 @@ public enum NewsFeed {
         default: input = articles
         }
         let search = normalized(query.text).split(separator: " ").map(String.init)
+        let muted = personal ? [] : preferences.mutedKeywords.map(normalized).filter { !$0.isEmpty }
         let sorted = input.sorted {
             if query.sort == .unreadFirst, reader.isRead($0) != reader.isRead($1) { return !reader.isRead($0) }
             let a = $0.publishedAt ?? .distantPast, b = $1.publishedAt ?? .distantPast
@@ -173,11 +179,15 @@ public enum NewsFeed {
                   query.source == nil || query.source == article.source,
                   query.topic.matches(article), query.timeRange.includes(article.publishedAt, now: now),
                   !query.unreadOnly || query.collection == .history || !reader.isRead(article) else { return false }
-            let text = normalized(([article.title, article.summary ?? "", article.source.label] + (article.categories ?? [])).joined(separator: " "))
-            guard search.allSatisfy({ text.contains($0) }) else { return false }
-            if !personal && preferences.mutedKeywords.contains(where: { containsPhrase($0, in: text) }) { return false }
-            if query.collection == .forYou && !library.contains(where: { $0.matches(article) })
-                && !preferences.followedTopics.contains(where: { $0 != .all && $0.matches(article) }) { return false }
+            if !search.isEmpty || !muted.isEmpty {
+                let text = normalized(([article.title, article.summary ?? "", article.source.label] + (article.categories ?? [])).joined(separator: " "))
+                guard search.allSatisfy({ text.contains($0) }), !muted.contains(where: { (" " + text + " ").contains(" " + $0 + " ") }) else { return false }
+            }
+            if query.collection == .forYou {
+                let headline = normalized(article.title)
+                guard library.contains(where: { $0.matches(headline: headline) })
+                    || preferences.followedTopics.contains(where: { $0 != .all && $0.matches(article) }) else { return false }
+            }
             return seen.insert(storyKey(article)).inserted
         }
     }

@@ -16,7 +16,7 @@ struct NewsStoryCard: View {
     let source: (NewsSource) -> Void
     @State private var imageURL: URL?
     private var enriched: NewsArticle { article.withImage(imageURL) }
-    private var topic: NewsTopic? { NewsTopic.allCases.first { $0 != .all && $0.matches(article) } }
+    private var topic: NewsTopic? { [NewsTopic.dubs, .trailers, .manga, .reviews, .events, .industry, .announcements].first { $0.matches(article) } }
     private var identifier: String { article.url.lastPathComponent }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

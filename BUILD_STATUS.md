@@ -1,3 +1,9 @@
+## News upgrade — build 75 (verification in progress)
+
+Version 0.26.0 adds a responsive News feed, Latest / For You / Saved / History, topic/publisher/date/search/read filters, local bookmarks and preferences, and bounded per-publisher disk caching with explicit outage fallback. Includes build 74's reader, library and tab customization changes.
+
+The first run passed Linux/macOS Core tests, Release IPA packaging, Safari/WebKit, JavaScript extensions, public-provider checks and the iPhone/iPad reader/library journeys. News UI checks exposed adaptive toolbar/menu representations and native-switch targeting; the follow-up retains every behavior assertion and also improves direct access to customization. Final source validation and screenshot review are pending.
+
 ## Automatic chapter continuation & library/navigation customization — build 74
 
 Version 0.25.27. Enable automatic next-chapter loading by default, with an opt-out in reader settings. Gate automatic advance on actual reading motion, the chapter end, every image succeeding, an active unobstructed reader, an unzoomed canvas and a next chapter. A per-chapter claim rejects duplicates/old events. Flush completed progress before changing chapters, prefetch at most one next page list, consume an in-flight prefetch rather than duplicate it, and retain explicit auto-scroll across automatic transitions. Manual chapter changes and app switches still pause scrolling. Failure leaves the existing source/Retry flow; final chapters never loop or auto-close. Invalidate queued canvas callbacks on teardown and check their original chapter before applying progress.

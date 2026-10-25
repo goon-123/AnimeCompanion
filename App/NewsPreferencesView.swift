@@ -16,7 +16,7 @@ struct NewsPreferencesView: View {
                         })) { Label(topic.label, systemImage: topic.symbol) }.accessibilityIdentifier("news-follow-\(topic.rawValue)")
                     }
                 } header: { Text("Your interests") } footer: {
-                    Text("For You combines these topics with title matches from your loaded libraries. English dubs start followed. Topics are inferred from headlines and publisher categories.")
+                    Text("For You combines these topics with title matches from your libraries. Dubs start followed. Topics are inferred from headlines and publisher categories.")
                 }
                 Section {
                     ForEach(NewsSource.allCases, id: \.self) { source in

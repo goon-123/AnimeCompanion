@@ -7,6 +7,8 @@ struct NewsView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
     var anime: Anime? = nil
     @AppStorage("news.readingHistory") private var historyJSON = ""
     @AppStorage("news.reader.v1") private var readerJSON = ""
@@ -48,6 +50,7 @@ struct NewsView: View {
             else { headlines }
         }
         .navigationTitle(anime == nil ? "Anime News" : "Headlines")
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query.text, prompt: "Search stories and publishers")
         .toolbar { toolbar }
         .appSettingsSheet(isPresented: $appSettings)
@@ -66,14 +69,14 @@ struct NewsView: View {
         .refreshable { await load(refresh: true) }
         .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
         .sheet(isPresented: $feedSettings) {
-            NewsPreferencesView(preferences: Binding(get: { preferences }, set: { preferencesJSON = encode($0) }), compact: $compact)
+            NewsPreferencesView(preferences: Binding(get: { preferences }, set: { preferences = $0; preferencesJSON = encode($0) }), compact: $compact)
         }
     }
 
     private var headlines: some View {
         let values = filtered
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 masthead
                 if anime == nil {
                     Picker("News collection", selection: $query.collection) {
@@ -87,7 +90,7 @@ struct NewsView: View {
                         Image(systemName: "sparkles").foregroundStyle(.cyan)
                         VStack(alignment: .leading, spacing: 5) {
                             Text("A little more you").font(.headline)
-                            Text("Headlines matching your loaded anime, manga and novel libraries, plus topics you follow.")
+                            Text("Stories about series in your anime, manga and novel libraries, plus the topics you follow.")
                                 .font(.caption).foregroundStyle(.secondary)
                             if mangaBaka.hasMoreLibrary { Text("Load more of your written library for more title matches.").font(.caption).foregroundStyle(.secondary) }
                             Button("Choose your interests") { feedSettings = true }.font(.subheadline.weight(.semibold))
@@ -124,7 +127,10 @@ struct NewsView: View {
                         Text("Your anime briefing").font(.title2.bold())
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "newspaper.fill").font(.title).foregroundStyle(.cyan).accessibilityHidden(true)
+                    Button { feedSettings = true } label: {
+                        Image(systemName: "slider.horizontal.3").font(.title3).foregroundStyle(.cyan)
+                            .frame(width: 44, height: 44).background(Theme.surface, in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel("Customize news").accessibilityIdentifier("news-customize")
                 }
                 HStack(spacing: 10) {
                     NavigationLink(value: AnimeVisualsRoute(anime: nil)) { Label("Visuals", systemImage: "photo.on.rectangle").frame(maxWidth: .infinity, minHeight: 44) }
@@ -177,7 +183,7 @@ struct NewsView: View {
             Toggle("Compact layout", isOn: $compact)
             Divider()
             Button("Mark this selection as read", systemImage: "checkmark.circle") {
-                var value = reader; for article in filtered { value.markRead(article) }; readerJSON = encode(value)
+                var value = reader; for article in filtered { value.markRead(article) }; saveReader(value)
             }.disabled(count == 0)
             Button("Customize news", systemImage: "slider.horizontal.3") { feedSettings = true }
         } label: { Image(systemName: "line.3.horizontal.decrease").frame(width: 44, height: 44).background(Theme.surface, in: Circle()) }
@@ -204,7 +210,7 @@ struct NewsView: View {
             if compact {
                 LazyVStack(spacing: 12) { ForEach(remaining) { card($0) } }
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 18)], alignment: .leading, spacing: 18) {
+                LazyVGrid(columns: sizeClass == .compact || typeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 290), spacing: 18)], alignment: .leading, spacing: 18) {
                     ForEach(remaining) { card($0) }
                 }
             }
@@ -243,8 +249,10 @@ struct NewsView: View {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button { Task { await load(refresh: true) } } label: { Image(systemName: "arrow.clockwise") }
                 .disabled(loading).accessibilityLabel("Refresh news").accessibilityIdentifier("news-refresh")
-            Button { feedSettings = true } label: { Image(systemName: "slider.horizontal.3") }
-                .accessibilityLabel("Customize news").accessibilityIdentifier("news-customize")
+            if anime != nil {
+                Button { feedSettings = true } label: { Image(systemName: "slider.horizontal.3") }
+                    .accessibilityLabel("Customize news").accessibilityIdentifier("news-customize")
+            }
             if anime == nil {
                 Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             }
@@ -269,16 +277,16 @@ struct NewsView: View {
         return nil
     }
     private func resetFilters() { let collection = query.collection; query = NewsFeedQuery(); query.collection = collection; unreadOnly = false }
-    private func toggleSaved(_ article: NewsArticle) { var value = reader; value.toggleSaved(article); readerJSON = encode(value) }
+    private func toggleSaved(_ article: NewsArticle) { var value = reader; value.toggleSaved(article); saveReader(value) }
     private func toggleRead(_ article: NewsArticle) {
         var value = reader
         if value.isRead(article) { value.markUnread(article) } else { value.markRead(article) }
-        readerJSON = encode(value)
+        saveReader(value)
     }
     private func open(_ article: NewsArticle) {
         guard article.source.accepts(article.url) else { return }
-        var updated = history; updated.record(article); historyJSON = encode(updated)
-        var state = reader; state.markRead(article); readerJSON = encode(state)
+        var updated = history; updated.record(article); history = updated; historyJSON = encode(updated)
+        var state = reader; state.markRead(article); saveReader(state)
         selected = article
     }
     @MainActor private func load(refresh: Bool = false) async {
@@ -292,6 +300,7 @@ struct NewsView: View {
             articles = value.articles; snapshot = value
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
+    private func saveReader(_ value: NewsReaderState) { reader = value; readerJSON = encode(value) }
     private func decode<T: Decodable>(_ value: String) -> T? { try? JSONDecoder().decode(T.self, from: Data(value.utf8)) }
     private func encode<T: Encodable>(_ value: T) -> String { (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? "" }
 }
