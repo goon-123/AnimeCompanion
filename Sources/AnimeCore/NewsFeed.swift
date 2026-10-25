@@ -110,7 +110,7 @@ public struct NewsLibraryTitle: Sendable {
         phrases = Set(([title] + aliases).map(NewsFeed.normalized).filter { !$0.isEmpty })
     }
     public init(anime: Anime) {
-        self.init(title: anime.displayTitle, aliases: [anime.title?.english, anime.title?.romaji, anime.title?.userPreferred].compactMap { $0 })
+        self.init(title: anime.displayTitle, aliases: AnimeUpdates.headlineAliases(for: anime))
     }
     public func matches(_ article: NewsArticle) -> Bool { matches(headline: NewsFeed.normalized(article.title)) }
     fileprivate func matches(headline: String) -> Bool {

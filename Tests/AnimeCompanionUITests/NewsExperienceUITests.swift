@@ -2,6 +2,30 @@ import XCTest
 import UIKit
 
 final class NewsExperienceUITests: XCTestCase {
+    @MainActor func testSeriesHeadlinesFindBaseTitleAndArchiveAndPreserveBookmarks() {
+        let app = launch(series: true)
+        waitForCount(7, app)
+        let markRead = app.buttons["news-options-moonlit-season"]
+        reveal(markRead, in: app); markRead.tap(); app.buttons["Mark as read"].tap()
+        let filters = app.buttons["news-sources"]
+        reveal(filters, in: app, upward: false); filters.tap(); app.buttons["news-unread-only"].tap()
+        waitForCount(5, app)
+        app.appTab("My Library").tap()
+        let entry = app.buttons["library-entry-1"]
+        app.revealInContent(entry); entry.tap()
+        let headlines = app.buttons["detail-open-headlines"]
+        app.revealInContent(headlines); headlines.tap()
+        XCTAssertTrue(app.navigationBars["Headlines"].waitForExistence(timeout: 10))
+        waitForCount(3, app)
+        let archive = app.buttons["news-save-relay-archive-0"]
+        reveal(archive, in: app); archive.tap()
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Remove saved story"), object: archive)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed)
+        capture("Series-Season-And-Archive", app)
+        app.appTab("News").tap()
+        select("Saved", app); waitForCount(1, app)
+        XCTAssertTrue(app.buttons["news-story-relay-archive-0"].exists)
+    }
     @MainActor func testBookmarksAndPreferencesSurviveRelaunchAndPublisherChanges() {
         var app = launch()
         waitForCount(7, app)
@@ -127,12 +151,13 @@ final class NewsExperienceUITests: XCTestCase {
         }
         XCTAssertTrue(item.isHittable, "Could not reveal \(item.identifier)")
     }
-    @MainActor private func launch(keep: Bool = false, partial: Bool = false) -> XCUIApplication {
+    @MainActor private func launch(keep: Bool = false, partial: Bool = false, series: Bool = false) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--ui-phase2-preview", "--ui-reset-content-preferences", "--ui-catalog-loading-preview", "--ui-news-preview"]
         if keep { app.launchArguments.append("--ui-news-keep-state") }
         if partial { app.launchArguments.append("--ui-news-partial") }
+        if series { app.launchArguments.append("--ui-news-series-preview") }
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 20))
         app.appTab("News").tap()

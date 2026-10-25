@@ -38,7 +38,7 @@ final class CatalogUpdatesUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["detail-open-headlines"].tap()
         XCTAssertTrue(app.navigationBars["Headlines"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Title matches in recent publisher headlines, not a complete news archive."].exists)
+        XCTAssertTrue(app.staticTexts["Series news from recent feeds and Anime Corner’s title search, including other seasons."].exists)
         capture("Native-Headlines", app)
     }
     @MainActor

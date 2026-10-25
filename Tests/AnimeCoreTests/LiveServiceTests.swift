@@ -134,6 +134,15 @@ final class LiveServiceTests: XCTestCase {
         XCTAssertTrue(snapshot.events(knownMedia: [title.id: title]).contains { $0.anime.id == title.id })
     }
 
+    func testSeriesNewsPublisherSearch() async throws {
+        try requireLiveServices()
+        let anime = Anime(id: 990001, title: "The Apothecary Diaries Season 3")
+        let client = SeriesNewsClient(directory: nil)
+        let snapshot = try await client.snapshot(for: anime, refresh: true)
+        XCTAssertFalse(snapshot.unavailable, "The live publisher search contract must be checked independently from general RSS")
+        XCTAssertFalse(snapshot.articles.isEmpty)
+        XCTAssertTrue(snapshot.articles.allSatisfy { AnimeUpdates.headline($0, matches: anime) && $0.source == .animeCorner })
+    }
     func testAnimeNewsNetworkFeed() async throws {
         try requireLiveServices()
         let client = NewsClient()
