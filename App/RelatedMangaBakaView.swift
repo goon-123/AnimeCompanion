@@ -1,6 +1,8 @@
 import SwiftUI
 import AnimeCore
 
+struct RelatedMangaBakaRoute: Hashable { let media: RelatedAnime }
+
 /// Stays on the anime's navigation stack, including an iPad detail column.
 /// Opening a written adaptation does not depend on the Manga tab being visible.
 struct RelatedMangaBakaView: View {

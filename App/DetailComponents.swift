@@ -167,7 +167,7 @@ struct RelatedAnimeCard: View {
       VStack(alignment: .leading, spacing: 3) {
         Group {
             if anime.type == "MANGA" {
-                NavigationLink { RelatedMangaBakaView(media: anime) } label: { card }
+                NavigationLink(value: RelatedMangaBakaRoute(media: anime)) { card }
                     .accessibilityIdentifier("related-mangabaka-\(anime.id)")
             } else {
                 AnimeLink(id: anime.id) { card }.accessibilityIdentifier("related-anime-\(anime.id)")
