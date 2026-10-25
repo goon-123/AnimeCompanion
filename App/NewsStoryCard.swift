@@ -29,6 +29,7 @@ struct NewsStoryCard: View {
                     }.padding([.horizontal, .top], 16)
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
+                        if featured { storyText.padding(16) }
                         ZStack(alignment: .topLeading) {
                             artwork.frame(height: featured ? 235 : 170).clipped()
                             if featured {
@@ -36,7 +37,7 @@ struct NewsStoryCard: View {
                                     .padding(9).background(.black.opacity(0.7), in: Capsule()).padding(14)
                             }
                         }
-                        storyText.padding(16)
+                        if !featured { storyText.padding(16) }
                     }
                 }
             }.buttonStyle(.plain).accessibilityIdentifier("news-story-\(identifier)")

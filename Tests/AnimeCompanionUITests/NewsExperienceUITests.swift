@@ -62,6 +62,8 @@ final class NewsExperienceUITests: XCTestCase {
         }
         XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("Paper")
         waitForCount(1, app)
+        let submit = app.keyboards.buttons.matching(NSPredicate(format: "label ==[c] %@", "search")).firstMatch
+        if submit.exists { submit.tap() }
         let result = app.buttons["news-story-lantern-manga"]
         app.revealInContent(result)
         XCTAssertTrue(result.exists)
@@ -128,11 +130,22 @@ final class NewsExperienceUITests: XCTestCase {
     }
     @MainActor private func waitForCount(_ count: Int, _ app: XCUIApplication) {
         let result = app.staticTexts["news-results-count"]
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND label BEGINSWITH %@", "\(count) stories"), object: result)
+        let expected = "\(count) \(count == 1 ? "story" : "stories")"
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND label BEGINSWITH %@", expected), object: result)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
     }
     @MainActor private func capture(_ title: String, _ app: XCUIApplication) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        // A frame-width assertion can finish while UIKit is still rotating its
+        // screenshot surface. Require the captured pixels to match the window.
+        let landscape = app.frame.width > app.frame.height
+        let deadline = Date().addingTimeInterval(5)
+        var screenshot = app.screenshot()
+        while (screenshot.image.size.width > screenshot.image.size.height) != landscape && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            screenshot = app.screenshot()
+        }
+        XCTAssertEqual(screenshot.image.size.width > screenshot.image.size.height, landscape)
+        let shot = XCTAttachment(screenshot: screenshot)
         shot.name = "News-\(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")-\(title)"
         shot.lifetime = .keepAlways; add(shot)
     }

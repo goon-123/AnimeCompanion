@@ -43,7 +43,8 @@ struct NewsView: View {
             .filter { article in anime.map { AnimeUpdates.headline(article, matches: $0) } ?? true }
     }
     private var hasFilters: Bool { query.topic != .all || query.source != nil || query.timeRange != .all || !query.text.isEmpty || unreadOnly }
-    private var showsFeatured: Bool { !compact && query.sort == .newest && query.text.isEmpty && (query.collection == .latest || query.collection == .forYou) }
+    private var usesRows: Bool { compact || !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var showsFeatured: Bool { !usesRows && query.sort == .newest && (query.collection == .latest || query.collection == .forYou) }
 
     var body: some View {
         Group {
@@ -78,7 +79,7 @@ struct NewsView: View {
         let values = filtered
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                masthead
+                if anime != nil || query.text.isEmpty { masthead }
                 if anime == nil {
                     Picker("News collection", selection: $query.collection) {
                         ForEach(NewsCollection.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -111,7 +112,7 @@ struct NewsView: View {
                         .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 12)
                 }
             }.padding(18).readableContent(width: 1140)
-        }.accessibilityIdentifier("news-list").background(Theme.background)
+        }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("news-list").background(Theme.background)
     }
 
     @ViewBuilder private var masthead: some View {
@@ -122,7 +123,7 @@ struct NewsView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(Date(), format: .dateTime.weekday(.wide).month(.wide).day()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         Text("Your anime briefing").font(.title2.bold())
@@ -161,7 +162,7 @@ struct NewsView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(anime != nil || query.collection == .latest ? "Latest headlines" : query.collection.label).font(.title3.bold())
-                Text("\(count) stories" + (query.source.map { " · " + $0.label } ?? "") + (unreadOnly && query.collection != .history ? " · Unread" : ""))
+                Text("\(count) \(count == 1 ? "story" : "stories")" + (query.source.map { " · " + $0.label } ?? "") + (unreadOnly && query.collection != .history ? " · Unread" : ""))
                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("news-results-count")
             }
             Spacer(minLength: 6)
@@ -212,7 +213,7 @@ struct NewsView: View {
         if !values.isEmpty {
             if showsFeatured, let first = values.first { card(first, featured: true) }
             let remaining = showsFeatured ? Array(values.dropFirst()) : values
-            if compact {
+            if usesRows {
                 LazyVStack(spacing: 12) { ForEach(remaining) { card($0) } }
             } else {
                 LazyVGrid(columns: sizeClass == .compact || typeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 290), spacing: 18)], alignment: .leading, spacing: 18) {
@@ -230,7 +231,7 @@ struct NewsView: View {
         }
     }
     private func card(_ article: NewsArticle, featured: Bool = false) -> some View {
-        NewsStoryCard(article: article, featured: featured, compact: compact, isRead: reader.isRead(article), isSaved: reader.isSaved(article),
+        NewsStoryCard(article: article, featured: featured, compact: usesRows, isRead: reader.isRead(article), isSaved: reader.isSaved(article),
             reason: query.collection == .forYou ? reason(for: article) : nil,
             open: open, openExternally: openExternal, save: { toggleSaved($0) }, markRead: { toggleRead($0) }, source: { query.source = $0 })
     }
