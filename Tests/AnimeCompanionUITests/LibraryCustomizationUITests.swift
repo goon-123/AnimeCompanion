@@ -26,7 +26,15 @@ final class LibraryCustomizationUITests: XCTestCase {
             else { app.swipeUp() }
         }
         XCTAssertTrue(item.waitForExistence(timeout: 5)); XCTAssertTrue(item.isHittable)
-        if item.elementType == .switch { item.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        if item.elementType == .switch {
+            let oldValue = item.value as? String
+            item.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+            if item.value as? String == oldValue {
+                capture("Unchanged-Switch-" + item.identifier, app)
+                let hierarchy = XCTAttachment(string: app.debugDescription)
+                hierarchy.name = "Unchanged switch hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+            }
+        }
         else { item.tap() }
     }
     @MainActor func testCombinedGridCoverLayoutAndSourceSearchWithMangaTabHidden() {
