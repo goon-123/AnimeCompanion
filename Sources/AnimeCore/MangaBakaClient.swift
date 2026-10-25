@@ -151,21 +151,13 @@ public actor MangaBakaClient {
         let data: Data
         do { data = try await publicData(url, refresh: refresh) }
         catch MangaBakaError.http(404) { return [] }
-        let lookup: MBAniListSourceLookup
         do {
-            lookup = try decode(MBEnvelope<MBAniListSourceLookup>.self, data).data
-            guard lookup.id == anilistID else { throw MangaBakaError.invalidResponse }
+            let lookup = try decode(MBEnvelope<MBAniListSourceLookup>.self, data).data
+            let records = lookup.series.filter { $0.state == nil || $0.state == "active" }.map(\.record)
+            guard records.allSatisfy({ $0.anilistID == anilistID }) else { throw MangaBakaError.invalidResponse }
+            var seen = Set<Int>()
+            return records.filter { seen.insert($0.id).inserted }
         } catch { cache[url] = nil; trimCache(); throw error }
-        var seen = Set<Int>()
-        let ids = lookup.series.filter { $0.state == nil || $0.state == "active" }
-            .map(\.id).filter { seen.insert($0).inserted }
-        guard ids.count <= 24 else { throw MangaBakaError.invalidResponse }
-        var records: [MangaBakaSeries] = []
-        for id in ids {
-            try Task.checkCancellation()
-            records.append(try await details(id: id, refresh: refresh))
-        }
-        return records
     }
     public func details(id: Int, refresh: Bool = false) async throws -> MangaBakaSeries {
         guard id > 0 else { throw MangaBakaError.invalidResponse }

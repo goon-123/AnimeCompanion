@@ -43,10 +43,10 @@ def request(path, params=()):
 
 if __name__ == "__main__":
     source = request("/v1/source/anilist/30002")
-    assert str(source.get("id")) == "30002", "Source identity must match the written work's AniList ID"
     assert isinstance(source.get("series"), list) and source["series"], "AniList lookup must supply linked MangaBaka series"
     linked = [item for item in source["series"] if item.get("state") in (None, "active")]
     assert linked, "AniList lookup must contain an active listing"
+    assert all(str(item.get("source", {}).get("anilist", {}).get("id")) == "30002" for item in linked), "Linked AniList identities must match the written work"
     matched = request("/v1/series/" + str(linked[0]["id"]))
     assert str(matched["id"]) == str(linked[0]["id"]), "Linked detail must preserve MangaBaka identity"
     genres = request("/v1/genres")

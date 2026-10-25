@@ -13,7 +13,9 @@ struct UnifiedReadingPreviewTransport: HTTPTransport {
             let missing = ProcessInfo.processInfo.arguments.contains("--ui-related-mangabaka-missing")
             let failed = ProcessInfo.processInfo.arguments.contains("--ui-related-mangabaka-failure")
             let id = Int(url.lastPathComponent) ?? 0
-            let payload: [String: Any] = ["data": ["id": id, "series": missing ? [] : [["id": id == 30074 ? 74 : 73, "state": "active"]]]]
+            var series = LibraryCustomizationPreview.series(id == 30074 ? 74 : 73)
+            series["source"] = ["anilist": ["id": id]]; series["state"] = "active"
+            let payload: [String: Any] = ["data": ["series": missing ? [] : [series]]]
             return (try JSONSerialization.data(withJSONObject: payload),
                 HTTPURLResponse(url: url, statusCode: failed ? 503 : 200, httpVersion: nil, headerFields: nil)!)
         }

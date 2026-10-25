@@ -1,26 +1,22 @@
 import Foundation
 
-/// The source endpoint returns MangaBaka identities; hydrate them through the
-/// normal detail client so content settings and the complete metadata apply.
+/// The source endpoint wraps complete catalog records without a top-level
+/// source ID. Each record's AniList source identity must be checked instead.
 struct MBAniListSourceLookup: Decodable {
-    let id: Int
     let series: [Series]
 
     struct Series: Decodable {
-        let id: Int
+        let record: MangaBakaSeries
         let state: String?
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: MBKey.self)
-            guard let id = c.mbInt(.id), id > 0 else { throw MangaBakaError.invalidResponse }
-            self.id = id
+            record = try MangaBakaSeries(from: decoder)
             state = c.mbString(.state)
         }
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
-        guard let id = c.mbInt(.id), id > 0 else { throw MangaBakaError.invalidResponse }
-        self.id = id
         series = try c.decode([Series].self, forKey: .series)
     }
 }

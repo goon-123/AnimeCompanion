@@ -23,29 +23,35 @@ final class MangaBakaTests: XCTestCase {
         XCTAssertEqual(MangaBakaShelf.popular.sort, "popularity_asc")
         XCTAssertEqual(MangaBakaShelf.topRated.sort, "score_desc")
     }
-    func testAniListAdaptationLookupHydratesTheMangaBakaIdentityAndCachesPublicRequests() async throws {
-        let transport = MBTestTransport([.json(#"{"data":{"id":"30002","series":[{"id":81,"state":"active"},{"id":81,"state":"active"},{"id":82,"state":"merged"},{"id":83,"state":"deleted"}]}}"#),
-            .json("{\"data\":\(record)}")])
+    private func sourceLookup(_ records: [String]) -> String {
+        "{\"data\":{\"source_response\":null,\"series\":[\(records.joined(separator: ","))]}}"
+    }
+    private var mappedRecord: String {
+        String(record.dropLast()) + #", "state":"active","source":{"anilist":{"id":"30002"}}}"#
+    }
+    func testAniListAdaptationLookupUsesTheMangaBakaIdentityAndCachesPublicRequests() async throws {
+        let transport = MBTestTransport([.json(sourceLookup([mappedRecord, mappedRecord,
+            #"{"id":82,"state":"merged"}"#, #"{"id":83,"state":"deleted"}"#]))])
         let api = client(transport)
         for _ in 0..<2 {
             let matches = try await api.series(anilistID: 30002)
             XCTAssertEqual(matches.map(\.id), [81]); XCTAssertEqual(matches.first?.displayTitle, "Paper Moon")
         }
         let requests = await transport.recorded()
-        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/source/anilist/30002", "/v1/series/81"])
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/source/anilist/30002"])
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil && $0.value(forHTTPHeaderField: "X-API-Key") == nil })
     }
     func testAniListLookupPreservesMultipleMatchesAndTheirContentRatings() async throws {
-        let transport = MBTestTransport([.json(#"{"data":{"id":30002,"series":[{"id":"81"},{"id":82,"state":"active"}]}}"#),
-            .json("{\"data\":\(record)}"), .json(#"{"data":{"id":82,"type":"novel","content_rating":"erotica"}}"#)])
+        let transport = MBTestTransport([.json(sourceLookup([mappedRecord,
+            #"{"id":"82","type":"novel","content_rating":"erotica","source":{"anilist":{"id":30002}}}"#]))])
         let matches = try await client(transport).series(anilistID: 30002)
         XCTAssertEqual(matches.map(\.id), [81, 82])
         XCTAssertEqual(matches.filter { $0.isVisible(includeAdult: false) }.map(\.id), [81])
         XCTAssertEqual(matches.last?.type, "novel")
     }
     func testMissingAniListMappingReturnsNoMatchWithoutSearchingForAnotherTitle() async throws {
-        for reply in [MBTestTransport.Response.json(#"{"data":{"id":30002,"series":[]}}"#),
-            .json(#"{"data":{"id":30002,"series":[{"id":81,"state":"merged"}]}}"#), .json("{}", status: 404)] {
+        for reply in [MBTestTransport.Response.json(sourceLookup([])),
+            .json(sourceLookup([#"{"id":81,"state":"merged"}"#])), .json("{}", status: 404)] {
             let transport = MBTestTransport([reply])
             let matches = try await client(transport).series(anilistID: 30002)
             XCTAssertTrue(matches.isEmpty)
@@ -53,20 +59,16 @@ final class MangaBakaTests: XCTestCase {
         }
     }
     func testAniListMappingRejectsWrongIdentitiesAndMalformedSourcePayloads() async throws {
-        for body in [#"{"data":{"id":999,"series":[{"id":81}]}}"#,
-            #"{"data":{"id":30002}}"#, #"{"data":{"id":30002,"series":[{"id":0}]}}"#] {
+        for body in [sourceLookup([#"{"id":81,"source":{"anilist":{"id":999}}}"#]),
+            sourceLookup([#"{"id":81}"#]), #"{"data":{}}"#, sourceLookup([#"{"id":0}"#])] {
             let transport = MBTestTransport([.json(body)])
             do { _ = try await client(transport).series(anilistID: 30002); XCTFail("An invalid mapping must not open another series") }
             catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
             let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
         }
-        let wrongDetails = MBTestTransport([.json(#"{"data":{"id":30002,"series":[{"id":82}]}}"#), .json("{\"data\":\(record)}")])
-        do { _ = try await client(wrongDetails).series(anilistID: 30002); XCTFail("Detail identity must match the mapping") }
-        catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
     }
     func testAniListMappingFailureCanBeRetriedWithoutBecomingAMissingListing() async throws {
-        let transport = MBTestTransport([.json("{}", status: 503), .json(#"{"data":{"id":30002,"series":[{"id":81}]}}"#),
-            .json("{\"data\":\(record)}")]), api = client(transport)
+        let transport = MBTestTransport([.json("{}", status: 503), .json(sourceLookup([mappedRecord]))]), api = client(transport)
         do { _ = try await api.series(anilistID: 30002); XCTFail("Service failure must offer retry") }
         catch { XCTAssertEqual(error as? MangaBakaError, .http(503)) }
         let matches = try await api.series(anilistID: 30002, refresh: true)
