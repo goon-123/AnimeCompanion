@@ -65,6 +65,7 @@ struct MediaExploreView: View {
                 MediaSectionPicker()
                 Button { designs = true } label: {
                     Image(systemName: "rectangle.stack").frame(width: 44, height: 44)
+                        .silverGlass(in: Circle()).contentShape(Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
                 Button { settings = true } label: {
                     Image(systemName: "person.crop.circle").font(.title2).frame(width: 44, height: 44)
