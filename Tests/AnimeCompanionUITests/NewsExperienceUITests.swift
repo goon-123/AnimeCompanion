@@ -6,7 +6,7 @@ final class NewsExperienceUITests: XCTestCase {
         var app = launch()
         waitForCount(7, app)
         let save = app.buttons["news-save-harbor-dub"]
-        app.revealInContent(save); save.tap()
+        reveal(save, in: app); save.tap()
         select("Saved", app)
         waitForCount(1, app)
         XCTAssertTrue(app.buttons["news-story-harbor-dub"].exists)
@@ -24,17 +24,17 @@ final class NewsExperienceUITests: XCTestCase {
         app = launch(keep: true)
         select("Saved", app); waitForCount(1, app)
         let remove = app.buttons["news-save-harbor-dub"]
-        app.revealInContent(remove)
+        reveal(remove, in: app)
         XCTAssertEqual(remove.label, "Remove saved story")
         openPreferences(app)
         let persisted = app.switches["news-compact-layout"]
-        app.revealInContent(persisted)
+        reveal(persisted, in: app)
         XCTAssertEqual(persisted.value as? String, "1")
         let disabled = app.switches["news-enable-animeNewsNetwork"]
-        app.revealInContent(disabled, upward: false)
+        reveal(disabled, in: app, upward: false)
         XCTAssertEqual(disabled.value as? String, "0")
         app.buttons["news-preferences-done"].tap()
-        app.revealInContent(remove); remove.tap()
+        reveal(remove, in: app); remove.tap()
         waitForCount(0, app)
         XCTAssertTrue(app.staticTexts["Keep a story for later"].exists)
     }
@@ -45,12 +45,12 @@ final class NewsExperienceUITests: XCTestCase {
         select("For You", app)
         waitForCount(2, app)
         let followed = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "In your library")).firstMatch
-        app.revealInContent(followed)
+        reveal(followed, in: app)
         XCTAssertTrue(followed.exists)
         capture("For-You", app)
         select("Latest", app)
         let dubs = app.buttons["news-topic-dubs"]
-        app.revealInContent(dubs, upward: false); dubs.tap()
+        reveal(dubs, in: app, upward: false); dubs.tap()
         waitForCount(2, app)
         app.buttons["news-reset-filters"].tap()
         waitForCount(7, app)
@@ -65,13 +65,22 @@ final class NewsExperienceUITests: XCTestCase {
         let submit = app.keyboards.buttons.matching(NSPredicate(format: "label ==[c] %@", "search")).firstMatch
         if submit.exists { submit.tap() }
         let result = app.buttons["news-story-lantern-manga"]
-        app.revealInContent(result)
+        reveal(result, in: app)
         XCTAssertTrue(result.exists)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             waitForCount(1, app)
             let content = app.scrollViews["news-list"]
             XCTAssertGreaterThan(content.frame.width, 900)
+            let settleAfter = Date().addingTimeInterval(0.8)
+            let fitted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard Date() >= settleAfter else { return false }
+                let window = app.frame, story = result.frame
+                return window.width > window.height && story.minX >= window.minX - 1 && story.maxX <= window.maxX + 1
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 10), .completed)
+            reveal(result, in: app)
+            XCTAssertTrue(result.isHittable)
         }
         capture("Search", app)
         XCUIDevice.shared.orientation = .portrait
@@ -80,10 +89,10 @@ final class NewsExperienceUITests: XCTestCase {
         let app = launch(partial: true)
         waitForCount(5, app)
         let options = app.buttons["news-options-harbor-dub"]
-        app.revealInContent(options); options.tap()
+        reveal(options, in: app); options.tap()
         app.buttons["Mark as read"].tap()
         let filter = app.buttons["news-sources"]
-        app.revealInContent(filter, upward: false); filter.tap()
+        reveal(filter, in: app, upward: false); filter.tap()
         app.buttons["news-unread-only"].tap()
         waitForCount(3, app) // The owned history fixture is also migrated as read.
         select("History", app)
@@ -94,9 +103,26 @@ final class NewsExperienceUITests: XCTestCase {
         app.buttons["news-reset-filters"].tap()
         waitForCount(5, app)
         let status = app.descendants(matching: .any).matching(identifier: "news-feed-status").firstMatch
-        app.revealInContent(status, upward: false)
+        reveal(status, in: app, upward: false)
         XCTAssertTrue(status.label.contains("Anime Corner") || app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Anime Corner")).count > 0)
         capture("Partial-Feed", app)
+    }
+    @MainActor private func reveal(_ item: XCUIElement, in app: XCUIApplication, upward: Bool = true) {
+        // These journeys only use the News feed and its own preferences form.
+        // Target that surface directly instead of scanning unrelated app sheets
+        // or requiring a container (rather than its button) to be tappable.
+        for _ in 0..<8 {
+            if item.exists && item.isHittable { return }
+            let preferences = app.navigationBars["Customize News"].exists
+            let scroll = preferences ? app.collectionViews.firstMatch : app.scrollViews["news-list"]
+            let surface: XCUIElement = scroll.exists ? scroll : app
+            let bounds = surface.frame
+            let backwards = item.exists && item.frame.height > 0 ? item.frame.midY < bounds.midY : !upward
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.35 : 0.75))
+            let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: backwards ? 0.70 : 0.40))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.05)
+        }
+        XCTAssertTrue(item.isHittable, "Could not reveal \(item.identifier)")
     }
     @MainActor private func launch(keep: Bool = false, partial: Bool = false) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
@@ -111,18 +137,18 @@ final class NewsExperienceUITests: XCTestCase {
         return app
     }
     @MainActor private func select(_ title: String, _ app: XCUIApplication) {
-        let control = app.segmentedControls["news-collections"]
-        app.revealInContent(control, upward: false)
-        control.buttons[title].tap()
+        let button = app.segmentedControls["news-collections"].buttons[title]
+        reveal(button, in: app, upward: false)
+        button.tap()
     }
     @MainActor private func openPreferences(_ app: XCUIApplication) {
         let button = app.buttons["news-customize"]
-        app.revealInContent(button, upward: false)
+        reveal(button, in: app, upward: false)
         button.tap()
         XCTAssertTrue(app.navigationBars["Customize News"].waitForExistence(timeout: 10))
     }
     @MainActor private func toggle(_ row: XCUIElement, to value: String, _ app: XCUIApplication) {
-        app.revealInContent(row)
+        reveal(row, in: app)
         let control = row.descendants(matching: .switch).allElementsBoundByIndex.last ?? row
         control.tap()
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: row)
@@ -135,17 +161,9 @@ final class NewsExperienceUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
     }
     @MainActor private func capture(_ title: String, _ app: XCUIApplication) {
-        // A frame-width assertion can finish while UIKit is still rotating its
-        // screenshot surface. Require the captured pixels to match the window.
-        let landscape = app.frame.width > app.frame.height
-        let deadline = Date().addingTimeInterval(5)
-        var screenshot = app.screenshot()
-        while (screenshot.image.size.width > screenshot.image.size.height) != landscape && Date() < deadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-            screenshot = app.screenshot()
-        }
-        XCTAssertEqual(screenshot.image.size.width > screenshot.image.size.height, landscape)
-        let shot = XCTAttachment(screenshot: screenshot)
+        // Capture the actual display after the window-fit check. Cropped app
+        // screenshots can retain portrait coordinates after iPad rotation.
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = "News-\(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")-\(title)"
         shot.lifetime = .keepAlways; add(shot)
     }
