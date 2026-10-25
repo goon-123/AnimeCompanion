@@ -1,5 +1,11 @@
 # Anime Companion
 
+## Series headlines fix — version 0.27.1 / build 77
+
+Opening **Headlines** from a series now matches its English/romaji base title across season, part and cour suffixes. It combines recent publisher feeds with Anime Corner's public title-search listings, so stories can appear after leaving the latest RSS feeds. Whole-title boundaries keep unrelated results out. The main News feed's saved unread-only preference no longer hides stories on a newly opened series page.
+
+Title searches have a separate bounded cache, restore across launches, coalesce concurrent loads and keep successful results during publisher failures. Refresh retries immediately. Search, topics, source/date filters, bookmarks and reading history still work on series stories; unavailable searches and empty results have distinct messages. This is a list of matching stories, not a complete historical news archive.
+
 ## News upgrade — version 0.26.0 / build 75
 
 News now offers Latest, For You, Saved and History, with a featured headline, publisher excerpts, responsive cards and a persistent compact layout. Search stories and publishers; combine topic, publisher, date, read-status and sort controls. Customize publishers, followed topics and muted phrases. Dubs start followed. For You uses headline title matches from loaded AniList and MangaBaka library entries and explains each match; it does not invent recommendations or claim publisher-wide popularity.

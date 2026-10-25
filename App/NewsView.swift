@@ -16,6 +16,7 @@ struct NewsView: View {
     @AppStorage("news.preferences.v1") private var preferencesJSON = ""
     @AppStorage("news.compact") private var compact = false
     @AppStorage("news.unreadOnly") private var unreadOnly = false
+    @State private var seriesUnreadOnly = false
     @AppStorage("news.popularPeriod") private var periodValue = NewsPeriod.week.rawValue
     @State private var articles: [NewsArticle] = []
     @State private var query = NewsFeedQuery()
@@ -25,6 +26,7 @@ struct NewsView: View {
     @State private var error: String?
     @State private var selected: NewsArticle?
     @State private var snapshot: NewsSnapshot?
+    @State private var seriesSnapshot: SeriesNewsSnapshot?
     @State private var history = NewsReadingHistory()
     @State private var reader = NewsReaderState()
     @State private var preferences = NewsPreferences()
@@ -35,14 +37,19 @@ struct NewsView: View {
         return anime + written
     }
     private var effectiveQuery: NewsFeedQuery {
-        var value = query; value.unreadOnly = unreadOnly
+        var value = query; value.unreadOnly = unreadFilter.wrappedValue
         return value
     }
-    private var filtered: [NewsArticle] {
-        NewsFeed.articles(articles, query: effectiveQuery, preferences: preferences, reader: reader, history: history, library: library)
-            .filter { article in anime.map { AnimeUpdates.headline(article, matches: $0) } ?? true }
+    private var unreadFilter: Binding<Bool> {
+        anime == nil ? $unreadOnly : $seriesUnreadOnly
     }
-    private var hasFilters: Bool { query.topic != .all || query.source != nil || query.timeRange != .all || !query.text.isEmpty || unreadOnly }
+    private var filtered: [NewsArticle] {
+        let title = anime.map(NewsLibraryTitle.init(anime:))
+        let relevant = articles.filter { title?.matches($0) ?? true }
+        return NewsFeed.articles(relevant, query: effectiveQuery, preferences: preferences, reader: reader, history: history, library: library)
+            .filter { title?.matches($0) ?? true }
+    }
+    private var hasFilters: Bool { query.topic != .all || query.source != nil || query.timeRange != .all || !query.text.isEmpty || unreadFilter.wrappedValue }
     private var usesRows: Bool { compact || !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var showsFeatured: Bool { !usesRows && query.sort == .newest && (query.collection == .latest || query.collection == .forYou) }
 
@@ -101,7 +108,7 @@ struct NewsView: View {
                     }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.cyan.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                 }
                 feedStatus
-                if loading && articles.isEmpty && (query.collection == .latest || query.collection == .forYou) {
+                if loading && values.isEmpty && (query.collection == .latest || query.collection == .forYou) {
                     ProgressView("Loading headlines…").frame(maxWidth: .infinity).padding(30)
                 }
                 if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
@@ -119,7 +126,7 @@ struct NewsView: View {
         if let anime {
             VStack(alignment: .leading, spacing: 8) {
                 Text(anime.displayTitle).font(.title2.bold())
-                Text("Title matches in recent publisher headlines, not a complete news archive.").font(.caption).foregroundStyle(.secondary)
+                Text("Series news from recent feeds and Anime Corner’s title search, including other seasons.").font(.caption).foregroundStyle(.secondary)
             }
         } else {
             VStack(alignment: .leading, spacing: 14) {
@@ -162,7 +169,7 @@ struct NewsView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(anime != nil || query.collection == .latest ? "Latest headlines" : query.collection.label).font(.title3.bold())
-                Text("\(count) \(count == 1 ? "story" : "stories")" + (query.source.map { " · " + $0.label } ?? "") + (unreadOnly && query.collection != .history ? " · Unread" : ""))
+                Text("\(count) \(count == 1 ? "story" : "stories")" + (query.source.map { " · " + $0.label } ?? "") + (unreadFilter.wrappedValue && query.collection != .history ? " · Unread" : ""))
                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("news-results-count")
             }
             Spacer(minLength: 6)
@@ -180,7 +187,7 @@ struct NewsView: View {
             Picker("Published", selection: $query.timeRange) { ForEach(NewsTimeRange.allCases, id: \.self) { Text($0.label).tag($0) } }
             if query.collection != .history {
                 Picker("Sort", selection: $query.sort) { ForEach(NewsSort.allCases, id: \.self) { Text($0.label).tag($0) } }
-                Toggle("Unread only", isOn: $unreadOnly).accessibilityIdentifier("news-unread-only")
+                Toggle("Unread only", isOn: unreadFilter).accessibilityIdentifier("news-unread-only")
             }
             Toggle("Compact layout", isOn: $compact)
             Divider()
@@ -192,6 +199,19 @@ struct NewsView: View {
             .accessibilityLabel("Filter and sort news").accessibilityIdentifier("news-sources")
     }
     @ViewBuilder private var feedStatus: some View {
+        if anime != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if loading {
+                    Label("Checking recent feeds and searching the series archive…", systemImage: "arrow.clockwise")
+                } else if let seriesSnapshot {
+                    if seriesSnapshot.unavailable {
+                        Label(seriesSnapshot.isStale ? "Some publisher searches are unavailable. Showing available series headlines." : "Publisher title search is temporarily unavailable. Recent feed matches are still shown.", systemImage: "exclamationmark.circle")
+                    } else {
+                        Label("Includes Anime Corner title-search results beyond the latest feeds.", systemImage: "text.magnifyingglass")
+                    }
+                }
+            }.font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("news-series-status")
+        }
         if let snapshot, query.collection == .latest || query.collection == .forYou {
             VStack(alignment: .leading, spacing: 6) {
                 if loading {
@@ -226,6 +246,9 @@ struct NewsView: View {
                 Text(emptyTitle).font(.headline)
                 Text(emptyMessage).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if hasFilters { Button("Clear filters") { resetFilters() }.buttonStyle(.bordered) }
+                if let anime, let url = SeriesNewsClient.publisherSearchURL(for: anime) {
+                    Link("Search publisher archive", destination: url).buttonStyle(.bordered)
+                }
                 if query.collection == .forYou || preferences.enabledSources.isEmpty { Button("Customize news") { feedSettings = true }.buttonStyle(.bordered) }
             }.padding(30).frame(maxWidth: .infinity).accessibilityIdentifier("news-empty")
         }
@@ -266,10 +289,14 @@ struct NewsView: View {
     }
     private var emptyTitle: String {
         if hasFilters { return "No stories match these filters" }
+        if anime != nil { return "No matching series headlines" }
         switch query.collection { case .saved: return "Keep a story for later"; case .history: return "Your reading starts here"; case .forYou: return "Let’s tune your feed"; case .latest: return "No headlines yet" }
     }
     private var emptyMessage: String {
         if hasFilters { return "Try another topic, publisher or date range, or clear your filters." }
+        if anime != nil {
+            return "No matching stories are available from the recent feeds or publisher title search. Check your publisher preferences or open the publisher archive."
+        }
         switch query.collection {
         case .saved: return "Tap a bookmark on any story. Saved headlines and excerpts stay here even after leaving the feeds. Full articles open on the publisher’s website."
         case .history: return "Stories you open appear here, so you can find them again."
@@ -282,7 +309,7 @@ struct NewsView: View {
         if let topic = NewsTopic.allCases.first(where: { $0 != .all && preferences.followedTopics.contains($0) && $0.matches(article) }) { return "You follow · \(topic.label)" }
         return nil
     }
-    private func resetFilters() { let collection = query.collection; query = NewsFeedQuery(); query.collection = collection; unreadOnly = false }
+    private func resetFilters() { let collection = query.collection; query = NewsFeedQuery(); query.collection = collection; unreadFilter.wrappedValue = false }
     private func toggleSaved(_ article: NewsArticle) { var value = reader; value.toggleSaved(article); saveReader(value) }
     private func toggleRead(_ article: NewsArticle) {
         var value = reader
@@ -308,6 +335,23 @@ struct NewsView: View {
         loading = true; error = nil
         defer { loading = false }
         if articles.isEmpty, let cached = await store.news.cachedSnapshot() { snapshot = cached; articles = cached.articles }
+        if let anime {
+            if let saved = await store.news.cachedSeriesSnapshot(for: anime) {
+                seriesSnapshot = saved; articles = (snapshot?.articles ?? []) + saved.articles
+            }
+            // Fetch independently: a feed outage must not discard successful archive matches.
+            async let recent = try? store.news.snapshot(refresh: refresh)
+            async let related = try? store.news.seriesSnapshot(for: anime, refresh: refresh)
+            let (feed, series) = await (recent, related)
+            guard !Task.isCancelled else { return }
+            if let feed { snapshot = feed }
+            if let series { seriesSnapshot = series }
+            articles = (snapshot?.articles ?? []) + (seriesSnapshot?.articles ?? [])
+            if snapshot == nil && seriesSnapshot?.unavailable != false {
+                error = "Series headlines are temporarily unavailable. Pull to refresh."
+            }
+            return
+        }
         do {
             let value = try await store.news.snapshot(refresh: refresh)
             try Task.checkCancellation()

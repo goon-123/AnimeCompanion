@@ -38,6 +38,23 @@ enum NewsPreview {
 }
 struct NewsPreviewTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if let url = request.url, url.host == "animecorner.me", let term = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "s" })?.value {
+            let active = ProcessInfo.processInfo.arguments.contains("--ui-news-series-preview")
+            let titles = active ? ["Moonlit Relay Season 2 English dub announced", "Tsukikage Relay announces new cast"] : []
+            let items = titles.enumerated().map { index, title in
+                """
+                <article class="ac-archive-card"><div class="ac-archive-card__body">
+                <h2><a href="https://animecorner.me/relay-archive-\(index)">\(title)</a></h2>
+                <time>September 1, 2026</time><p>Owned listing excerpt from the series archive.</p>
+                </div></article>
+                """
+            }.joined()
+            let empty = titles.isEmpty ? "<div class='ac-search-empty'></div>" : ""
+            let body = "<section class='ac-search-shell'><form class='ac-search-form'><input name='s' value='\(term)'></form><div class='ac-archive-grid'>\(items)</div>\(empty)</section>"
+            let failed = ProcessInfo.processInfo.arguments.contains("--ui-news-series-failed")
+            try await Task.sleep(for: .milliseconds(150))
+            return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: failed ? 503 : 200, httpVersion: nil, headerFields: nil)!)
+        }
         guard let url = request.url, let source = NewsSource.allCases.first(where: { $0.feedURL == url }) else { throw ServiceError.invalidResponse }
         try await Task.sleep(for: .milliseconds(150))
         let items = NewsPreview.articles.filter { $0.source == source }.map { article in

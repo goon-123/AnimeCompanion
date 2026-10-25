@@ -10,6 +10,9 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
             "status": "FINISHED", "format": "TV", "episodes": id == 1 ? 26 : 12,
             "genres": ["Action", "Sci-Fi"], "averageScore": 84, "description": "Offline screen fixture synopsis.",
             "studios": ["nodes": [["id": 1, "name": "Fixture studio"]]]]
+        if id == 1, ProcessInfo.processInfo.arguments.contains("--ui-news-series-preview") {
+            result["title"] = ["english": "Moonlit Relay Season 3", "romaji": "Tsukikage Relay 3rd Season"]
+        }
         if (990101...990105).contains(id) {
             result["status"] = "RELEASING"
             if id != 990105 {

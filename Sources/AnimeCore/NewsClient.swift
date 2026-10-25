@@ -163,6 +163,7 @@ public actor NewsClient {
     }
     private let transport: any HTTPTransport
     private let directory: URL?
+    private let series: SeriesNewsClient
     private let requests = RequestCoalescer<String, NewsSnapshot>()
     private var feeds: [NewsSource: NewsCachedFeed] = [:]
     private var restored = false
@@ -171,6 +172,14 @@ public actor NewsClient {
     private var imageTasks: [String: Task<URL?, Never>] = [:]
     public init(transport: any HTTPTransport = URLSessionTransport(), directory: URL? = NewsClient.defaultDirectory) {
         self.transport = transport; self.directory = directory
+        self.series = SeriesNewsClient(transport: transport, directory: directory)
+    }
+
+    public func seriesSnapshot(for anime: Anime, refresh: Bool = false) async throws -> SeriesNewsSnapshot {
+        try await series.snapshot(for: anime, refresh: refresh)
+    }
+    public func cachedSeriesSnapshot(for anime: Anime) async -> SeriesNewsSnapshot? {
+        await series.cachedSnapshot(for: anime)
     }
 
     /// Restore headlines immediately; the view can display them while fresh feeds load.
