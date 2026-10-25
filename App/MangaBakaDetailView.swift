@@ -70,7 +70,7 @@ struct MangaBakaDetailView: View {
                     heading(centered: false)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-        }.accessibilityIdentifier("mangabaka-series-header")
+        }
     }
     private func cover(width: CGFloat) -> some View {
         Button {

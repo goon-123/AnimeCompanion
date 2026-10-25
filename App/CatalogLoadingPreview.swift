@@ -9,7 +9,7 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
     @MainActor private static var visualCards: [String: Data] = [:]
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url,
-              url.host == "catalog-preview.invalid" || (["u.livechart.me", "cdn.myanimelist.net"].contains(url.host ?? "") && url.path.hasPrefix("/owned-visuals/")) else { throw ArtworkError.invalidURL }
+              url.host == "catalog-preview.invalid" || (url.host == "cdn.mangabaka.dev" && url.path.hasPrefix("/owned-preview/")) || (["u.livechart.me", "cdn.myanimelist.net"].contains(url.host ?? "") && url.path.hasPrefix("/owned-visuals/")) else { throw ArtworkError.invalidURL }
         try await Task.sleep(for: .milliseconds(350))
         let data = await Self.artwork(url)
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,

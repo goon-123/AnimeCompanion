@@ -12,7 +12,7 @@ enum LibraryCustomizationPreview {
             : id == 74 ? "A Lantern Across the Sea" : "Echoes of the Glass Harbor",
          "native_title": "Owned original-language title", "type": id == 74 ? "novel" : "manga",
          "status": "releasing", "content_rating": "safe", "rating": 82.5, "total_chapters": 40,
-         "cover": ["x350": "https://catalog-preview.invalid/poster/\(id).png"],
+         "cover": ["x350": "https://cdn.mangabaka.dev/owned-preview/poster/\(id).png"],
          "description": "An independently written story fixture for layout tests.", "genres": [], "tags": [], "publishers": []]
     }
     static func library(state: String? = nil) throws -> [MangaBakaLibraryEntry] {

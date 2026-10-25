@@ -3,6 +3,7 @@ import UIKit
 
 final class LibraryCustomizationUITests: XCTestCase {
     @MainActor private func launch(failedPage: Bool = false) -> XCUIApplication {
+        continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-content-preferences", "--ui-phase2-preview", "--ui-customization-preview",
@@ -17,9 +18,16 @@ final class LibraryCustomizationUITests: XCTestCase {
         add(attachment)
     }
     @MainActor private func tapWhenVisible(_ item: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(item.waitForExistence(timeout: 15))
-        for _ in 0..<7 { if item.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(item.isHittable); item.tap()
+        for _ in 0..<10 {
+            if item.exists && item.isHittable { break }
+            // Settings is a centered sheet on iPad. Swiping the whole app can
+            // miss the sheet entirely, and offscreen Form rows are virtualized.
+            if app.collectionViews.count > 0 { app.collectionViews.element(boundBy: app.collectionViews.count - 1).swipeUp() }
+            else { app.swipeUp() }
+        }
+        XCTAssertTrue(item.waitForExistence(timeout: 5)); XCTAssertTrue(item.isHittable)
+        if item.elementType == .switch { item.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        else { item.tap() }
     }
     @MainActor func testCombinedGridCoverLayoutAndSourceSearchWithMangaTabHidden() {
         let app = launch()
@@ -65,7 +73,9 @@ final class LibraryCustomizationUITests: XCTestCase {
         app.buttons["Account and settings"].tap()
         tapWhenVisible(app.buttons["settings-bottom-tabs"], in: app)
         let manga = app.switches["tab-visible-manga"], library = app.switches["tab-visible-library"]
-        XCTAssertTrue(manga.waitForExistence(timeout: 10)); manga.tap(); library.tap()
+        XCTAssertTrue(manga.waitForExistence(timeout: 10))
+        tapWhenVisible(manga, in: app); XCTAssertEqual(manga.value as? String, "1")
+        tapWhenVisible(library, in: app); XCTAssertEqual(library.value as? String, "0")
         XCTAssertTrue(app.navigationBars["Bottom tabs"].exists, "Editing visibility must not tear down the Settings sheet")
         capture("Customize-Bottom-Tabs", app)
         app.navigationBars["Bottom tabs"].buttons["Settings"].tap()
@@ -82,7 +92,8 @@ final class LibraryCustomizationUITests: XCTestCase {
         // their saved data remain present even when their tab starts hidden.
         app.buttons["Accounts and settings"].tap()
         tapWhenVisible(app.buttons["settings-bottom-tabs"], in: app)
-        app.switches["tab-visible-manga"].tap()
+        tapWhenVisible(app.switches["tab-visible-manga"], in: app)
+        XCTAssertEqual(app.switches["tab-visible-manga"].value as? String, "1")
         app.navigationBars["Bottom tabs"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
         app.appTab("Manga").tap()
@@ -100,14 +111,15 @@ final class LibraryCustomizationUITests: XCTestCase {
             if chapter(canvas).hasSuffix("/chapter/2") { break }
             canvas.swipeUp(velocity: .slow)
         }
-        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.chapter(canvas).hasSuffix("/chapter/2") }, object: nil)
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (canvas.value as? String ?? "").hasSuffix("/chapter/2") }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 15), .completed)
         capture("Automatically-Loaded-Chapter-2", app)
-        canvas.tap()
-        if !app.buttons["webtoon-settings"].isHittable { canvas.tap() }
+        if !app.buttons["webtoon-settings"].exists { canvas.tap() }
+        XCTAssertTrue(app.buttons["webtoon-settings"].waitForExistence(timeout: 5))
         app.buttons["webtoon-settings"].tap()
         let automatic = app.switches["webtoon-auto-next"]
         tapWhenVisible(automatic, in: app)
+        XCTAssertEqual(automatic.value as? String, "0")
         app.navigationBars["Webtoon reader"].buttons["Done"].tap()
         for _ in 0..<10 { canvas.swipeUp(velocity: .slow) }
         XCTAssertTrue(chapter(canvas).hasSuffix("/chapter/2"), "Turning automatic loading off must leave the next chapter manual")
@@ -126,7 +138,7 @@ final class LibraryCustomizationUITests: XCTestCase {
             if chapter(canvas).hasSuffix("/chapter/2") { break }
             canvas.swipeUp(velocity: .slow)
         }
-        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.chapter(canvas).hasSuffix("/chapter/2") }, object: nil)
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (canvas.value as? String ?? "").hasSuffix("/chapter/2") }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 15), .completed)
         capture("Retry-Then-Automatic-Chapter", app)
     }

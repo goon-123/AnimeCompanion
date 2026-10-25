@@ -194,12 +194,16 @@ fi
 if [[ "$test_scope" == customization ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/LibraryCustomizationUITests)
 fi
+test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
+if [[ "$test_scope" == customization ]]; then
+  test_retry_arguments=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240)
+fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath build/Simulator -resultBundlePath "$result_path" \
   "${test_arguments[@]}" \
-  -retry-tests-on-failure -test-iterations 2 \
+  "${test_retry_arguments[@]}" \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
 if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization ]]; then
