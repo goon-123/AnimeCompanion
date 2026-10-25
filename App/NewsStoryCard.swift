@@ -22,24 +22,27 @@ struct NewsStoryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { open(enriched) } label: {
-                if compact && !typeSize.isAccessibilitySize {
-                    HStack(alignment: .top, spacing: 14) {
-                        artwork.frame(width: 100, height: 92).clipShape(RoundedRectangle(cornerRadius: 12))
-                        storyText
-                    }.padding([.horizontal, .top], 16)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if featured { storyText.padding(16) }
-                        ZStack(alignment: .topLeading) {
-                            artwork.frame(height: featured ? 235 : 170).clipped()
-                            if featured {
-                                Label("IN FOCUS", systemImage: "sparkles").font(.caption2.bold())
-                                    .padding(9).background(.black.opacity(0.7), in: Capsule()).padding(14)
+                Group {
+                    if compact && !typeSize.isAccessibilitySize {
+                        HStack(alignment: .top, spacing: 14) {
+                            artwork.frame(width: 100, height: 92).contentShape(Rectangle()).clipShape(RoundedRectangle(cornerRadius: 12))
+                            storyText
+                        }.padding([.horizontal, .top], 16)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if featured { storyText.padding(16) }
+                            ZStack(alignment: .topLeading) {
+                                // Clipping pixels alone does not constrain a scaled image's hit area.
+                                artwork.frame(height: featured ? 235 : 170).contentShape(Rectangle()).clipped()
+                                if featured {
+                                    Label("IN FOCUS", systemImage: "sparkles").font(.caption2.bold())
+                                        .padding(9).background(.black.opacity(0.7), in: Capsule()).padding(14)
+                                }
                             }
+                            if !featured { storyText.padding(16) }
                         }
-                        if !featured { storyText.padding(16) }
                     }
-                }
+                }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("news-story-\(identifier)")
             controls.padding(.horizontal, 12).padding(.bottom, 5)
         }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))

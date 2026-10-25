@@ -7,6 +7,9 @@ final class NewsExperienceUITests: XCTestCase {
         waitForCount(7, app)
         let save = app.buttons["news-save-harbor-dub"]
         reveal(save, in: app); save.tap()
+        // A scaled hero image must not intercept its sibling bookmark button.
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Remove saved story"), object: save)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed)
         select("Saved", app)
         waitForCount(1, app)
         XCTAssertTrue(app.buttons["news-story-harbor-dub"].exists)
