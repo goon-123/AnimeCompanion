@@ -28,7 +28,11 @@ final class LibraryCustomizationUITests: XCTestCase {
         XCTAssertTrue(item.waitForExistence(timeout: 5)); XCTAssertTrue(item.isHittable)
         if item.elementType == .switch {
             let oldValue = item.value as? String
-            item.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+            // SwiftUI exposes a row-sized accessibility Switch containing the
+            // actual UISwitch. A trailing row coordinate can hit the reorder
+            // handle instead, so use the innermost native control's bounds.
+            let control = item.descendants(matching: .switch).allElementsBoundByIndex.last ?? item
+            control.tap()
             if item.value as? String == oldValue {
                 capture("Unchanged-Switch-" + item.identifier, app)
                 let hierarchy = XCTAttachment(string: app.debugDescription)
