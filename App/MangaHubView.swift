@@ -9,6 +9,7 @@ struct MangaHubView: View {
     @State private var query = ""
     @State private var language = "en"
     @State private var manage = false
+    @State private var appSettings = false
     @State private var choseInitialSection = false
     @State private var confirmClearHistory = false
     @State private var clearingHistory = false
@@ -49,6 +50,10 @@ struct MangaHubView: View {
                         .accessibilityLabel("Manage manga extensions").accessibilityIdentifier("manga-manage-extensions")
                 }
             }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
+            } }
+            .appSettingsSheet(isPresented: $appSettings)
             .sheet(isPresented: $manage) { MangaExtensionSheet() }
             .confirmationDialog("Clear manga history?", isPresented: $confirmClearHistory, titleVisibility: .visible) {
                 Button("Clear history", role: .destructive) {

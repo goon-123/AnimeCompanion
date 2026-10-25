@@ -44,7 +44,7 @@ private struct AnimeReleaseInfoView: View {
                 AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                     events: dubs.snapshot?.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } ?? [],
                     loading: dubs.loading, error: dubs.notice)
-                Button { navigation.selectedTab = .schedule } label: { Label("Open the weekly schedule", systemImage: "calendar") }
+                Button { navigation.openSchedule() } label: { Label("Open the weekly schedule", systemImage: "calendar") }
                     .buttonStyle(.bordered).accessibilityIdentifier("detail-weekly-schedule")
                 } else { ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash") }
             }.padding(18).readableContent(width: 940)

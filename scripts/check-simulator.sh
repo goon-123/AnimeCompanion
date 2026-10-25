@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals ]]; then
-  echo "Expected full, focused, weekly, fixes, streams, layout, reader or visuals test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization ]]; then
+  echo "Expected full, focused, weekly, fixes, streams, layout, reader visuals or customization test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -41,6 +41,12 @@ if [[ "$test_scope" == reader ]]; then
   result_path="build/Reader-${device_family}.xcresult"
   screenshot_path="build/reader-${device_family}-screenshots"
   diagnostic_path="build/reader-${device_family}-diagnostics"
+fi
+
+if [[ "$test_scope" == customization ]]; then
+  result_path="build/Customization-${device_family}.xcresult"
+  screenshot_path="build/customization-${device_family}-screenshots"
+  diagnostic_path="build/customization-${device_family}-diagnostics"
 fi
 
 # Bound the workaround to this disposable test runner and resume paused services.
@@ -185,6 +191,9 @@ fi
 if [[ "$test_scope" == visuals ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/NativeVisualGalleryUITests)
 fi
+if [[ "$test_scope" == customization ]]; then
+  test_arguments=(-only-testing:AnimeCompanionUITests/LibraryCustomizationUITests)
+fi
 run_tests() {
 xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
@@ -193,7 +202,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   -retry-tests-on-failure -test-iterations 2 \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

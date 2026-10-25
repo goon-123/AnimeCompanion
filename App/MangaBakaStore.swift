@@ -76,7 +76,16 @@ private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationCo
 
 @MainActor
 final class MangaBakaStore: ObservableObject {
-    let api = MangaBakaClient()
+    let api: MangaBakaClient
+    init() {
+        #if DEBUG
+        api = LibraryCustomizationPreview.active
+            ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
+            : MangaBakaClient()
+        #else
+        api = MangaBakaClient()
+        #endif
+    }
     @Published private(set) var connected = false
     @Published private(set) var connecting = false
     @Published private(set) var profile: MangaBakaProfile?
@@ -136,6 +145,16 @@ final class MangaBakaStore: ObservableObject {
     }
     func restore() async {
         guard !restored else { return }; restored = true
+        #if DEBUG
+        if LibraryCustomizationPreview.active {
+            do {
+                credential = try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-not-a-real-credential")
+                library = try LibraryCustomizationPreview.library(); libraryTotal = library.count
+                connected = true; revision = UUID()
+            } catch { accountError = error.localizedDescription }
+            return
+        }
+        #endif
         do {
             guard let saved = try MangaBakaKeychain.load() else { return }
             credential = saved
@@ -241,6 +260,9 @@ final class MangaBakaStore: ObservableObject {
         await work.value
     }
     private func saveRecommendationCache(_ snapshot: MangaBakaRecommendationSnapshot, credential: MangaBakaCredential) {
+        #if DEBUG
+        if LibraryCustomizationPreview.active { return }
+        #endif
         do { try recommendationCache.save(snapshot, credential: credential); recommendationCacheNotice = nil }
         catch { recommendationCacheNotice = "For you could not be saved on this device. These recommendations are available until the app closes." }
     }

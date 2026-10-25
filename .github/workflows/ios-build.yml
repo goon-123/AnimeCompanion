@@ -114,6 +114,51 @@ jobs:
             build/Reader-${{ matrix.device }}.xcresult
           if-no-files-found: ignore
           retention-days: 30
+  library-customization:
+    needs: manga-runtime
+    name: Reader and library changes ${{ matrix.device }}
+    runs-on: macos-15
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Verify automatic chapters, covers, combined library and tab visibility
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} customization
+      - name: Upload feature screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-customization-${{ matrix.device }}
+          path: |
+            build/customization-${{ matrix.device }}-screenshots
+            build/customization-${{ matrix.device }}-diagnostics
+            build/Customization-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   visual-gallery:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: manga-runtime

@@ -32,7 +32,7 @@ struct MediaSectionPicker: View {
     private func option(_ title: String, symbol: String, value: String) -> some View {
         Button {
             guard mode != value else { return }
-            for state in [navigation.explore, navigation.library] {
+            for state in [navigation.explore] {
                 state.path = NavigationPath(); state.detailPath = NavigationPath()
                 state.animeID = nil; state.column = .sidebar; state.visibility = .all
             }
@@ -65,13 +65,25 @@ struct MediaExploreView: View {
 }
 
 struct MediaLibraryView: View {
-    @AppStorage("app.mediaSection") private var mode = "anime"
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @AppStorage("library.mediaSection") private var mode = "all"
     var body: some View {
         VStack(spacing: 0) {
-            MediaSectionPicker().padding(.horizontal, 16).padding(.vertical, 8)
+            Picker("Library media", selection: $mode) {
+                Text("All").tag("all")
+                Text("Anime").tag("anime")
+                Text("Manga & Novels").tag("written")
+            }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
+                .accessibilityIdentifier("library-media-picker")
             if mode == "written" { MangaBakaLibraryView() }
-            else { LibraryView() }
+            else if mode == "anime" { LibraryView() }
+            else { CombinedLibraryView() }
         }.background(Theme.background).mangaBakaNavigation()
+            .onChange(of: mode) { _, _ in
+                let state = navigation.library
+                state.path = NavigationPath(); state.detailPath = NavigationPath()
+                state.animeID = nil; state.column = .sidebar; state.visibility = .all
+            }
     }
 }
 
