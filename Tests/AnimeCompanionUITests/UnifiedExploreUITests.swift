@@ -12,7 +12,12 @@ final class UnifiedExploreUITests: XCTestCase {
         return app
     }
     @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
-        let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
+        let landscape = XCUIDevice.shared.orientation.isLandscape
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (app.frame.width > app.frame.height) == landscape
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed)
+        let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
     }
     @MainActor private func tap(_ item: XCUIElement, _ app: XCUIApplication) {
         app.revealInContent(item); XCTAssertTrue(item.isEnabled); item.tap()
