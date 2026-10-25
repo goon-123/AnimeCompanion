@@ -38,6 +38,7 @@ final class UnifiedExploreUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("harbor\n")
         XCTAssertTrue(app.buttons["explore-story-anilist:1"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["explore-story-mangabaka:73"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["explore-story-anilist:1"].frame.minY, app.buttons["explore-story-mangabaka:73"].frame.minY, accuracy: 3)
         tap(app.buttons["explore-story-mangabaka:74"], app)
         XCTAssertTrue(app.buttons["mangabaka-series-cover"].waitForExistence(timeout: 15))
         capture("Unified-Novel-Details", app)

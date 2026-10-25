@@ -342,7 +342,7 @@ struct ExploreStoryGrid: View {
     let items: [ExploreStory]
     @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 220 : 140), spacing: 14)], alignment: .leading, spacing: 24) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 220 : 140), spacing: 14, alignment: .topLeading)], alignment: .leading, spacing: 24) {
             ForEach(items) { item in ExploreStoryLink(item: item) { ExploreStoryCard(item: item) } }
         }.accessibilityIdentifier("explore-story-grid")
     }

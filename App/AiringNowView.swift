@@ -52,7 +52,7 @@ struct AiringNowView: View {
                                         Text("\(grouped.count)").font(.caption).foregroundStyle(.secondary)
                                     }.padding(.top, 6).accessibilityIdentifier("schedule-group-\(group.rawValue)")
                                     if layout == "grid" {
-                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 230 : 160), spacing: 14)], alignment: .leading, spacing: 18) {
+                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 230 : 160), spacing: 14, alignment: .topLeading)], alignment: .leading, spacing: 18) {
                                             ForEach(grouped) { item in
                                                 if let anime = item.entry.media {
                                                     AiringWatchlistGridCard(entry: item.entry, anime: anime, status: item.status)
