@@ -298,6 +298,9 @@ public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
     public let imageURL: URL?
     public let source: NewsSource
     public let headlineID: Int?
+    /// Short publisher-provided RSS excerpt; never a scraped article body.
+    public let summary: String?
+    public let categories: [String]?
     public var id: String {
         if source == .liveChart, let headlineID {
             return "https://www.livechart.me/headlines/\(headlineID)"
@@ -308,12 +311,16 @@ public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
         parts.queryItems = query?.isEmpty == false ? query : nil
         return parts.url?.absoluteString ?? url.absoluteString
     }
-    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork, headlineID: Int? = nil) {
+    public init(title: String, url: URL, publishedAt: Date?, imageURL: URL?, source: NewsSource = .animeNewsNetwork, headlineID: Int? = nil,
+                summary: String? = nil, categories: [String] = []) {
         self.title = title; self.url = url; self.publishedAt = publishedAt; self.imageURL = imageURL; self.source = source
         self.headlineID = headlineID
+        self.summary = summary
+        self.categories = categories.isEmpty ? nil : categories
     }
     public func withImage(_ image: URL?) -> Self {
-        Self(title: title, url: url, publishedAt: publishedAt, imageURL: image ?? imageURL, source: source, headlineID: headlineID)
+        Self(title: title, url: url, publishedAt: publishedAt, imageURL: image ?? imageURL, source: source, headlineID: headlineID,
+             summary: summary, categories: categories ?? [])
     }
 }
 

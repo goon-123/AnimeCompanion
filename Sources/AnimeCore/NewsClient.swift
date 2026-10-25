@@ -51,6 +51,9 @@ public final class RSSParser: NSObject, XMLParserDelegate {
     private var articles: [NewsArticle] = []
     private var item: [String: String] = [:]
     private var field = ""
+    private var elements: [String] = []
+    private var categories: [String] = []
+    private var category = ""
     private var insideItem = false
     private var imageURL: URL?
     private var openedRSS = false
@@ -72,21 +75,31 @@ public final class RSSParser: NSObject, XMLParserDelegate {
     }
     public func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String]) {
         if name == "rss" { openedRSS = true }
-        if name == "item" { insideItem = true; item = [:]; imageURL = nil }
+        if name == "item" { insideItem = true; item = [:]; imageURL = nil; elements = []; categories = []; category = "" }
         guard insideItem else { return }
-        field = name
+        elements.append(name)
+        field = elements.first(where: { ["title", "link", "guid", "pubDate", "description", "content:encoded", "category"].contains($0) }) ?? ""
+        if name == "category" { category = "" }
         if (name == "media:thumbnail" || name == "media:content" || name == "enclosure"),
-           let value = attributes["url"], let url = URL(string: value), url.scheme == "https",
+           let value = attributes["url"], let url = URL(string: value), url.scheme == "https", url.host != nil, url.user == nil, url.password == nil,
            (name != "enclosure" || attributes["type"]?.hasPrefix("image/") == true) { imageURL = url }
     }
     public func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if insideItem { item[field, default: ""] += string }
+        if insideItem { if field == "category" { category += string } else { item[field, default: ""] += string } }
     }
     public func parser(_ parser: XMLParser, foundCDATA data: Data) {
-        if insideItem, let text = String(data: data, encoding: .utf8) { item[field, default: ""] += text }
+        if insideItem, let text = String(data: data, encoding: .utf8) { self.parser(parser, foundCharacters: text) }
     }
     public func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
         if name == "rss" { closedRSS = true }
+        if insideItem {
+            if name == "category" {
+                let text = TextSanitizer.plain(category)
+                if !text.isEmpty && !categories.contains(text) { categories.append(String(text.prefix(100))) }
+            }
+            if !elements.isEmpty { elements.removeLast() }
+            field = elements.first(where: { ["title", "link", "guid", "pubDate", "description", "content:encoded", "category"].contains($0) }) ?? ""
+        }
         guard name == "item" else { return }
         insideItem = false
         guard let raw = item["link"]?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -106,7 +119,11 @@ public final class RSSParser: NSObject, XMLParserDelegate {
         let image = imageURL
             ?? NewsImageMetadata.image(in: item["description"] ?? "", relativeTo: url, allowInline: true)
             ?? NewsImageMetadata.image(in: item["content:encoded"] ?? "", relativeTo: url, allowInline: true)
-        articles.append(NewsArticle(title: TextSanitizer.plain(title), url: url, publishedAt: date, imageURL: image, source: source, headlineID: headlineID))
+        let excerpt = TextSanitizer.plain(item["description"] ?? "")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        let summary = excerpt.isEmpty ? nil : String(excerpt.prefix(500))
+        articles.append(NewsArticle(title: TextSanitizer.plain(title), url: url, publishedAt: date, imageURL: image, source: source, headlineID: headlineID,
+                                    summary: summary, categories: Array(categories.prefix(20))))
     }
     private static func parseDate(_ value: String) -> Date? {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0)
@@ -121,9 +138,17 @@ public final class RSSParser: NSObject, XMLParserDelegate {
 public struct NewsSnapshot: Sendable {
     public let articles: [NewsArticle]
     public let unavailableSources: [String]
-    public init(articles: [NewsArticle], unavailableSources: [String]) {
+    public let updatedAt: Date
+    public let isStale: Bool
+    public init(articles: [NewsArticle], unavailableSources: [String], updatedAt: Date = Date(), isStale: Bool = false) {
         self.articles = articles; self.unavailableSources = unavailableSources
+        self.updatedAt = updatedAt; self.isStale = isStale
     }
+}
+private struct NewsCachedFeed: Codable, Sendable {
+    let source: NewsSource
+    let updatedAt: Date
+    let articles: [NewsArticle]
 }
 private struct NewsFeedResult: Sendable {
     let source: NewsSource
@@ -132,14 +157,50 @@ private struct NewsFeedResult: Sendable {
 
 public actor NewsClient {
     public static let feedURL = NewsSource.animeNewsNetwork.feedURL
+    public static var defaultDirectory: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("AnimeCompanion-News", isDirectory: true)
+    }
     private let transport: any HTTPTransport
+    private let directory: URL?
+    private let requests = RequestCoalescer<String, NewsSnapshot>()
+    private var feeds: [NewsSource: NewsCachedFeed] = [:]
+    private var restored = false
     private var cached: (Date, NewsSnapshot)?
     private var images: [String: (Date, URL?)] = [:]
     private var imageTasks: [String: Task<URL?, Never>] = [:]
-    public init(transport: any HTTPTransport = URLSessionTransport()) { self.transport = transport }
+    public init(transport: any HTTPTransport = URLSessionTransport(), directory: URL? = NewsClient.defaultDirectory) {
+        self.transport = transport; self.directory = directory
+    }
+
+    /// Restore headlines immediately; the view can display them while fresh feeds load.
+    public func cachedSnapshot(now: Date = Date()) -> NewsSnapshot? {
+        if !restored {
+            restored = true
+            if let file = directory?.appendingPathComponent("feeds-v1.json"),
+               let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 3_000_000,
+               let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode([NewsCachedFeed].self, from: data) {
+                for feed in saved where feed.updatedAt <= now && now.timeIntervalSince(feed.updatedAt) < 7 * 86400 {
+                    feeds[feed.source] = NewsCachedFeed(source: feed.source, updatedAt: feed.updatedAt,
+                        articles: Array(feed.articles.filter { $0.source == feed.source && feed.source.accepts($0.url) }.prefix(120)))
+                }
+            }
+        }
+        feeds = feeds.filter { $0.value.updatedAt <= now && now.timeIntervalSince($0.value.updatedAt) < 7 * 86400 }
+        guard !feeds.isEmpty else { return nil }
+        let unavailable = NewsSource.allCases.filter { feeds[$0] == nil || now.timeIntervalSince(feeds[$0]!.updatedAt) >= 900 }.map(\.label)
+        return makeSnapshot(unavailable: unavailable, stale: !unavailable.isEmpty)
+    }
 
     public func snapshot(refresh: Bool = false) async throws -> NewsSnapshot {
         if !refresh, let (date, snapshot) = cached, Date().timeIntervalSince(date) < 900 { return snapshot }
+        if !refresh, let saved = cachedSnapshot(), saved.unavailableSources.isEmpty {
+            cached = (saved.updatedAt, saved); return saved
+        }
+        return try await requests.value(for: "feeds") { try await self.fetchSnapshot() }
+    }
+    private func fetchSnapshot() async throws -> NewsSnapshot {
+        _ = cachedSnapshot()
         let transport = self.transport
         var results: [NewsFeedResult] = []
         await withTaskGroup(of: NewsFeedResult.self) { group in
@@ -157,15 +218,29 @@ public actor NewsClient {
             for await result in group { results.append(result) }
         }
         try Task.checkCancellation()
-        guard results.contains(where: { $0.articles != nil }) else { throw ServiceError.message("The news sources are temporarily unavailable. Pull to refresh.") }
-        var seen = Set<String>()
-        let articles = results.flatMap { $0.articles ?? [] }.filter { seen.insert($0.id).inserted }.sorted {
+        let now = Date()
+        for result in results {
+            if let articles = result.articles {
+                feeds[result.source] = NewsCachedFeed(source: result.source, updatedAt: now, articles: Array(articles.prefix(120)))
+            }
+        }
+        guard !feeds.isEmpty else { throw ServiceError.message("The news sources are temporarily unavailable. Pull to refresh.") }
+        let failed = results.filter { $0.articles == nil }.map { $0.source.label }.sorted()
+        let result = makeSnapshot(unavailable: failed, stale: results.contains { $0.articles == nil && feeds[$0.source] != nil })
+        cached = (now, result)
+        if let directory, let data = try? JSONEncoder().encode(Array(feeds.values)), data.count <= 3_000_000 {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try? data.write(to: directory.appendingPathComponent("feeds-v1.json"), options: .atomic)
+        }
+        return result
+    }
+    private func makeSnapshot(unavailable: [String], stale: Bool) -> NewsSnapshot {
+        let articles = feeds.values.flatMap(\.articles).sorted {
             let a = $0.publishedAt ?? .distantPast, b = $1.publishedAt ?? .distantPast
             return a == b ? $0.id < $1.id : a > b
         }
-        let result = NewsSnapshot(articles: articles, unavailableSources: results.filter { $0.articles == nil }.map { $0.source.label }.sorted())
-        cached = (Date(), result)
-        return result
+        return NewsSnapshot(articles: articles, unavailableSources: unavailable.sorted(),
+                            updatedAt: feeds.values.map(\.updatedAt).max() ?? Date(), isStale: stale)
     }
     public func articles(refresh: Bool = false) async throws -> [NewsArticle] { try await snapshot(refresh: refresh).articles }
 

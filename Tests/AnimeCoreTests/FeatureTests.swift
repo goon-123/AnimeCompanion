@@ -114,7 +114,7 @@ final class FeatureTests: XCTestCase {
     func testNewsIncludesLiveChartAndDoesNotFetchSocialPagesForMissingThumbnails() async throws {
         let rss = "<rss><channel><item><guid>https://www.livechart.me/headlines/900002</guid><title>Owned headline</title><link>https://www.youtube.com/watch?v=owned</link></item></channel></rss>"
         let transport = FeedTransport([NewsSource.liveChart.feedURL: (200, rss)])
-        let client = NewsClient(transport: transport)
+        let client = NewsClient(transport: transport, directory: nil)
         let snapshot = try await client.snapshot()
         XCTAssertEqual(snapshot.articles.map(\.source), [.liveChart])
         XCTAssertEqual(snapshot.unavailableSources, ["Anime Corner", "Anime News Network", "Crunchyroll"])
@@ -132,7 +132,7 @@ final class FeatureTests: XCTestCase {
         let client = NewsClient(transport: FeedTransport([
             NewsSource.animeNewsNetwork.feedURL: (200, ann), NewsSource.crunchyroll.feedURL: (200, cr),
             NewsSource.animeCorner.feedURL: (503, "")
-        ]))
+        ]), directory: nil)
         let snapshot = try await client.snapshot()
         XCTAssertEqual(Set(snapshot.articles.map(\.source)), Set([.animeNewsNetwork, .crunchyroll]))
         XCTAssertEqual(snapshot.unavailableSources, ["Anime Corner", "LiveChart.me"])

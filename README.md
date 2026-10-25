@@ -1,5 +1,16 @@
 # Anime Companion
 
+## News upgrade — version 0.26.0 / build 75
+
+News now offers Latest, For You, Saved and History, with a featured headline, publisher excerpts, responsive cards and a persistent compact layout. Search stories and publishers; combine topic, publisher, date, read-status and sort controls. Customize publishers, followed topics and muted phrases. Dubs start followed. For You uses headline title matches from loaded AniList and MangaBaka library entries and explains each match; it does not invent recommendations or claim publisher-wide popularity.
+
+Bookmarks keep article metadata when stories leave the live feeds; original articles open on the publisher's site. Reading status, bookmarks, interests and the existing reading history stay local. Saved stories and history remain accessible when a publisher or keyword is muted. Device-local weekly/monthly reading highlights live under History.
+
+A bounded feed cache restores immediately and refreshes at most every 15 minutes automatically; pull-to-refresh or the refresh button bypasses that interval. Failed sources retain their last successful headlines for up to seven days, with cache and publisher-availability notices. Matching publisher/LiveChart URLs collapse into one story after source selection. Full articles are not stored offline.
+
+Includes the automatic chapter, library layout and bottom-tab changes from build 74. Focused checks: `swift test --filter NewsFeedTests` and `bash scripts/check-simulator.sh iphone news` / `ipad news`. These native journeys use Release-excluded, owned RSS/artwork fixtures. See BUILD_STATUS.md for current validation.
+
+
 ### Automatic chapters, combined library and customizable tabs (0.25.27 / build 74)
 
 The webtoon reader **automatically loads the next chapter** after you scroll through the chapter end. This is enabled by default, including for existing reader settings, and can be disabled in reader settings. Prefetch the next chapter's page list near the end, retain the old chapter's completed progress before moving on, and continue explicit auto-scroll across automatic transitions. Failed/missing images, initial layout, restored offsets, zooming, inactive scenes and open sheets cannot trigger a transition. One end event advances one chapter; the final chapter keeps its normal end controls. A failed next load offers the existing source-aware Retry flow.

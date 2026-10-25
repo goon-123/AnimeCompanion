@@ -108,6 +108,7 @@ final class LibraryCustomizationUITests: XCTestCase {
         XCTAssertEqual(app.switches["tab-visible-manga"].value as? String, "1")
         app.navigationBars["Bottom tabs"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
+        XCTAssertTrue(app.appTab("Manga").waitForExistence(timeout: 15), "Apply the saved tabs after Settings finishes dismissing")
         app.appTab("Manga").tap()
         tapWhenVisible(app.buttons["manga-source-preview-en"], in: app)
         tapWhenVisible(app.buttons["manga-title-0"], in: app)

@@ -9,7 +9,7 @@ final class AppStore: ObservableObject {
     let visuals: AnimeVisualsClient
     let dubs = DubClient()
     let exploreDubs = ExploreDubStore()
-    let news = NewsClient()
+    let news: NewsClient
     private let authentication = AuthSession()
     private var token: OAuthToken?
     private var generation = UUID()
@@ -47,6 +47,8 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(true, forKey: "explore.poster.immersive-v2")
         }
         #if DEBUG
+        NewsPreview.resetIfNeeded()
+        news = NewsPreview.active ? NewsClient(transport: NewsPreviewTransport(), directory: nil) : NewsClient()
         let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
         let phaseTwoPreview = ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences"),
@@ -81,6 +83,7 @@ final class AppStore: ObservableObject {
             }
         }
         #else
+        news = NewsClient()
         aniList = AniListClient()
         exploreCache = ExploreCache()
         visuals = AnimeVisualsClient()
