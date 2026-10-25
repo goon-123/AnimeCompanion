@@ -11,6 +11,7 @@ struct NewsStoryCard: View {
     let isSaved: Bool
     var reason: String?
     let open: (NewsArticle) -> Void
+    let openExternally: (NewsArticle) -> Void
     let save: (NewsArticle) -> Void
     let markRead: (NewsArticle) -> Void
     let source: (NewsSource) -> Void
@@ -94,7 +95,7 @@ struct NewsStoryCard: View {
             Menu {
                 Button(isRead ? "Mark as unread" : "Mark as read", systemImage: isRead ? "circle" : "checkmark.circle") { markRead(article) }
                 ShareLink(item: article.url) { Label("Share story", systemImage: "square.and.arrow.up") }
-                Link(destination: article.url) { Label("Open in Safari", systemImage: "safari") }
+                Button("Open in Safari", systemImage: "safari") { openExternally(enriched) }
                 Button("More from \(article.source.label)", systemImage: "newspaper") { source(article.source) }
             } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
                 .accessibilityLabel("Story options").accessibilityIdentifier("news-options-\(identifier)")

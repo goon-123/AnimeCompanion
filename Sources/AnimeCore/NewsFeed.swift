@@ -92,7 +92,7 @@ public struct NewsReaderState: Codable, Sendable {
     public mutating func markUnread(_ article: NewsArticle) { readDates[NewsFeed.storyKey(article)] = nil }
     public mutating func toggleSaved(_ article: NewsArticle) {
         if isSaved(article) { saved.removeAll { NewsFeed.storyKey($0) == NewsFeed.storyKey(article) } }
-        else { saved.insert(article, at: 0); saved = Array(saved.prefix(250)) }
+        else { saved.insert(article, at: 0) }
     }
     public mutating func migrate(_ history: NewsReadingHistory) {
         guard !migratedHistory else { return }

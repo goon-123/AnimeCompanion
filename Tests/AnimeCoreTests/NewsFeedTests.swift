@@ -94,6 +94,16 @@ final class NewsFeedTests: XCTestCase {
         query.text = "excerpt"
         XCTAssertEqual(feed([], query: query, preferences: preferences, reader: reader), [a])
     }
+    func testSavingBeyondAFeedWindowNeverEvictsEarlierBookmarks() throws {
+        var reader = NewsReaderState()
+        let first = story("first", "The first saved story")
+        reader.toggleSaved(first)
+        for index in 0..<250 { reader.toggleSaved(story("saved-\(index)", "Saved story \(index)")) }
+        let restored = try JSONDecoder().decode(NewsReaderState.self, from: JSONEncoder().encode(reader))
+        XCTAssertEqual(restored.saved.count, 251)
+        XCTAssertTrue(restored.isSaved(first))
+        XCTAssertEqual(restored.saved.last?.title, first.title)
+    }
     func testHistoryMigrationIsIdempotentAndMarkUnreadDoesNotEraseHistory() throws {
         let a = story("a", "A")
         var history = NewsReadingHistory(); history.record(a, at: now)

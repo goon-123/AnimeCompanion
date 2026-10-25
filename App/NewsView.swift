@@ -7,6 +7,7 @@ struct NewsView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     var anime: Anime? = nil
@@ -192,13 +193,17 @@ struct NewsView: View {
     @ViewBuilder private var feedStatus: some View {
         if let snapshot, query.collection == .latest || query.collection == .forYou {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
-                    Image(systemName: snapshot.isStale ? "clock.arrow.circlepath" : "checkmark.circle")
-                    Text("Updated \(snapshot.updatedAt.formatted(.relative(presentation: .named)))")
-                    Text("· \(NewsSource.allCases.count - snapshot.unavailableSources.count) publishers available")
-                }
-                if !snapshot.unavailableSources.isEmpty {
-                    Text((snapshot.isStale ? "Keeping cached headlines. Unavailable: " : "Temporarily unavailable: ") + snapshot.unavailableSources.joined(separator: ", "))
+                if loading {
+                    Label("Showing cached headlines while checking publishers…", systemImage: "arrow.clockwise")
+                } else {
+                    HStack(spacing: 5) {
+                        Image(systemName: snapshot.isStale ? "clock.arrow.circlepath" : "checkmark.circle")
+                        Text("Updated \(snapshot.updatedAt.formatted(.relative(presentation: .named)))")
+                        Text("· \(NewsSource.allCases.count - snapshot.unavailableSources.count) publishers available")
+                    }
+                    if !snapshot.unavailableSources.isEmpty {
+                        Text((snapshot.isStale ? "Keeping cached headlines. Unavailable: " : "Temporarily unavailable: ") + snapshot.unavailableSources.joined(separator: ", "))
+                    }
                 }
             }.font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("news-feed-status")
         }
@@ -227,7 +232,7 @@ struct NewsView: View {
     private func card(_ article: NewsArticle, featured: Bool = false) -> some View {
         NewsStoryCard(article: article, featured: featured, compact: compact, isRead: reader.isRead(article), isSaved: reader.isSaved(article),
             reason: query.collection == .forYou ? reason(for: article) : nil,
-            open: open, save: { toggleSaved($0) }, markRead: { toggleRead($0) }, source: { query.source = $0 })
+            open: open, openExternally: openExternal, save: { toggleSaved($0) }, markRead: { toggleRead($0) }, source: { query.source = $0 })
     }
     private var readingHighlights: some View {
         DisclosureGroup("Your reading highlights") {
@@ -285,9 +290,17 @@ struct NewsView: View {
     }
     private func open(_ article: NewsArticle) {
         guard article.source.accepts(article.url) else { return }
+        recordRead(article)
+        selected = article
+    }
+    private func openExternal(_ article: NewsArticle) {
+        guard article.source.accepts(article.url) else { return }
+        recordRead(article)
+        openURL(article.url)
+    }
+    private func recordRead(_ article: NewsArticle) {
         var updated = history; updated.record(article); history = updated; historyJSON = encode(updated)
         var state = reader; state.markRead(article); saveReader(state)
-        selected = article
     }
     @MainActor private func load(refresh: Bool = false) async {
         guard anime.map({ store.isVisible($0) }) ?? true, !loading else { return }
