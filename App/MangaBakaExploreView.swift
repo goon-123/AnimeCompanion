@@ -3,6 +3,7 @@ import AnimeCore
 
 struct MangaBakaSeriesRoute: Hashable { let series: MangaBakaSeries }
 struct MangaBakaBrowseRoute: Hashable { let query: MangaBakaQuery }
+struct ExploreSearchRoute: Hashable {}
 
 private struct MangaBakaNavigation: ViewModifier {
     func body(content: Content) -> some View {
@@ -71,6 +72,9 @@ struct MediaExploreView: View {
             }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
             }
         }.mangaBakaNavigation().appSettingsSheet(isPresented: $settings)
+            .navigationDestination(for: ExploreSearchRoute.self) { _ in
+                UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
+            }
             .sheet(isPresented: $designs) {
                 NavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
             }

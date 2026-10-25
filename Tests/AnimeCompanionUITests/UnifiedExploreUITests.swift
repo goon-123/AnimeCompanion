@@ -15,7 +15,7 @@ final class UnifiedExploreUITests: XCTestCase {
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
     }
     @MainActor private func tap(_ item: XCUIElement, _ app: XCUIApplication) {
-        app.revealInContent(item); item.tap()
+        app.revealInContent(item); XCTAssertTrue(item.isEnabled); item.tap()
     }
     @MainActor private func chooseDesign(_ value: String, _ app: XCUIApplication) {
         tap(app.buttons["explore-designs"], app)

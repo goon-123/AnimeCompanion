@@ -143,7 +143,7 @@ struct UnifiedExploreView: View {
                 Text("Your next story.").font(.largeTitle.bold())
                 Text("Anime, manga & novels. One place to discover.").font(.subheadline).foregroundStyle(.secondary)
             }
-            NavigationLink { UnifiedExploreSearchView() } label: {
+            NavigationLink(value: ExploreSearchRoute()) {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.mint)
                     Text("Search anime, manga & novels").foregroundStyle(.secondary)
