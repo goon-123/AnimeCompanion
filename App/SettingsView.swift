@@ -43,6 +43,9 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-manga-extensions")
                 }
                 Section("Preferences") {
+                    NavigationLink { TabCustomizationView() } label: {
+                        SettingsCategoryLabel(title: "Bottom tabs", detail: "Reorder or hide sections", symbol: "rectangle.bottomthird.inset.filled", tint: .cyan)
+                    }.accessibilityIdentifier("settings-bottom-tabs")
                     if UIDevice.current.userInterfaceIdiom == .pad {
                         NavigationLink { TabletLayoutSettingsView() } label: {
                             SettingsCategoryLabel(title: "iPad layout", detail: "Full-width pages or side-by-side browsing", symbol: "rectangle.split.2x1", tint: .cyan)
@@ -72,7 +75,7 @@ private struct AppSettingsSheet: ViewModifier {
     @EnvironmentObject private var navigation: AppNavigationStore
     @Binding var isPresented: Bool
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented, onDismiss: { navigation.applyLayoutPreference() }) { SettingsView() }
+        content.sheet(isPresented: $isPresented, onDismiss: { navigation.applyLayoutPreference(); navigation.applyTabPreferences() }) { SettingsView() }
     }
 }
 

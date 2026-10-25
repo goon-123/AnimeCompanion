@@ -85,6 +85,7 @@ public struct WebtoonPreferences: Codable, Equatable, Sendable {
     public var background = Background.black
     public var sidePadding = 0.0
     public var autoScrollSpeed = 45.0
+    public var autoLoadNextChapter = true
     public var holdToScroll = true
     public var keepAwake = true
     public init() {}
@@ -92,12 +93,13 @@ public struct WebtoonPreferences: Codable, Equatable, Sendable {
         sidePadding = sidePadding.isFinite ? min(0.12, max(0, sidePadding)) : 0
         autoScrollSpeed = autoScrollSpeed.isFinite ? min(Self.scrollSpeedRange.upperBound, max(Self.scrollSpeedRange.lowerBound, autoScrollSpeed)) : 45
     }
-    private enum CodingKeys: String, CodingKey { case background, sidePadding, autoScrollSpeed, holdToScroll, keepAwake }
+    private enum CodingKeys: String, CodingKey { case background, sidePadding, autoScrollSpeed, holdToScroll, keepAwake, autoLoadNextChapter }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         background = try c.decodeIfPresent(Background.self, forKey: .background) ?? .black
         sidePadding = try c.decodeIfPresent(Double.self, forKey: .sidePadding) ?? 0
         autoScrollSpeed = try c.decodeIfPresent(Double.self, forKey: .autoScrollSpeed) ?? 45
+        autoLoadNextChapter = try c.decodeIfPresent(Bool.self, forKey: .autoLoadNextChapter) ?? true
         holdToScroll = try c.decodeIfPresent(Bool.self, forKey: .holdToScroll) ?? true
         keepAwake = try c.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? true
         normalize()

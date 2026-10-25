@@ -99,18 +99,18 @@ enum MangaReaderPreview {
             failedChapter = true
             throw MangaRuntimeIssue(kind: "unsupportedAPI", api: "kotlin.text.MatchGroupCollection")
         }
-        return (0..<8).map { SourceMangaImage(index: 30 - $0, url: chapter.url,
+        return (0..<(LibraryCustomizationPreview.active ? 3 : 8)).map { SourceMangaImage(index: 30 - $0, url: chapter.url,
             imageURL: "https://webtoon-preview.invalid\(chapter.url)/page/\($0)") }
     }
     private static var failed = Set<String>()
     static func image(_ image: SourceMangaImage) throws -> Data {
         // Keep the failure beyond the initial preload window, so a canceled
         // preload cannot consume the one-shot failure before the retry test.
-        if ProcessInfo.processInfo.arguments.contains("--ui-webtoon-failed-page"), image.imageURL.hasSuffix("/page/5"),
+        if ProcessInfo.processInfo.arguments.contains("--ui-webtoon-failed-page"), image.imageURL.hasSuffix(LibraryCustomizationPreview.active ? "/page/1" : "/page/5"),
            failed.insert(image.imageURL).inserted { throw ArtworkError.invalidData }
         let cover = image.imageURL.contains("/cover/")
         let index = Int(image.imageURL.split(separator: "/").last ?? "0") ?? 0
-        let size = CGSize(width: 600, height: cover ? 900 : (index == 0 ? 2400 : 1300))
+        let size = CGSize(width: 600, height: cover ? 900 : (LibraryCustomizationPreview.active ? 1200 : (index == 0 ? 2400 : 1300)))
         let renderer = UIGraphicsImageRenderer(size: size, format: {
             let f = UIGraphicsImageRendererFormat(); f.scale = 1; f.opaque = true; return f
         }())

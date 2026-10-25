@@ -6,7 +6,10 @@ struct MangaBakaLibraryView: View {
     @EnvironmentObject private var preferences: AppStore
     @State private var state = "all"
     @State private var search = ""
+    @AppStorage("mangabaka.library.layout") private var layout = "grid"
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var connection = false
+    @State private var appSettings = false
     private var entries: [MangaBakaLibraryEntry] {
         account.library.filter { entry in
             guard let series = entry.series, series.isVisible(includeAdult: preferences.includeAdult) else { return false }
@@ -29,6 +32,10 @@ struct MangaBakaLibraryView: View {
                     Button { connection = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("MangaBaka account")
                 }
             }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
+            } }
+            .appSettingsSheet(isPresented: $appSettings)
             .sheet(isPresented: $connection) {
                 NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
             }
@@ -46,6 +53,7 @@ struct MangaBakaLibraryView: View {
                     Spacer()
                     if let total = account.libraryTotal { Text("\(total.formatted()) titles").font(.caption).foregroundStyle(.secondary) }
                 }
+                LibraryLayoutPicker(layout: $layout)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         status("All", value: "all")
@@ -66,11 +74,21 @@ struct MangaBakaLibraryView: View {
                     ContentUnavailableView("No visible titles", systemImage: "book.closed",
                         description: Text(account.hasMoreLibrary ? "Load more entries, or adjust your filters." : "Add a series from Explore, or choose another reading status."))
                 }
-                ForEach(entries) { entry in
-                    if let series = entry.series {
-                        NavigationLink(value: MangaBakaSeriesRoute(series: series)) {
-                            MangaBakaLibraryRow(entry: entry, series: series)
-                        }.buttonStyle(.plain)
+                if layout == "grid" {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 190 : 140), spacing: 14)], alignment: .leading, spacing: 22) {
+                        ForEach(entries) { entry in
+                            if let series = entry.series {
+                                NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryTile(entry: entry, series: series) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                    }.accessibilityIdentifier("mangabaka-library-grid")
+                } else {
+                    ForEach(entries) { entry in
+                        if let series = entry.series {
+                            NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryRow(entry: entry, series: series) }
+                                .buttonStyle(.plain)
+                        }
                     }
                 }
                 if account.loadingLibrary { ProgressView("Loading your library…").frame(maxWidth: .infinity).padding() }
@@ -91,7 +109,7 @@ struct MangaBakaLibraryView: View {
     }
 }
 
-private struct MangaBakaLibraryRow: View {
+struct MangaBakaLibraryRow: View {
     let entry: MangaBakaLibraryEntry
     let series: MangaBakaSeries
     private var statusText: String {

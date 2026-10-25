@@ -9,6 +9,7 @@ final class WebtoonReaderModel: ObservableObject {
     @Published var chapter: SourceMangaChapter
     @Published var pages: [SourceMangaImage] = []
     @Published var loading = false
+    @Published private(set) var advancing = false
     @Published var error: String?
     @Published var controls = true
     @Published var autoScroll = false
@@ -19,6 +20,10 @@ final class WebtoonReaderModel: ObservableObject {
     private var reading: MangaReadingStore?
     private var generation = UUID()
     private var saveTask: Task<Void, Never>?
+    private var prefetchTask: Task<Void, Never>?
+    private var prefetched: (url: String, pages: [SourceMangaImage])?
+    private var startAtBeginning = false
+    private var prefetchAttemptedURL: String?
     var chapterIndex: Int { chapters.firstIndex(of: chapter) ?? 0 }
     var hasNext: Bool { chapterIndex + 1 < chapters.count }
     var hasPrevious: Bool { chapterIndex > 0 }
@@ -30,13 +35,15 @@ final class WebtoonReaderModel: ObservableObject {
         loading = true; error = nil
         defer { if generation == token { loading = false } }
         do {
-            let list = try await extensions.pages(title.source, chapter: chapter)
+            let list: [SourceMangaImage]
+            if let saved = prefetched, saved.url == chapter.url { list = saved.pages; prefetched = nil }
+            else { list = try await extensions.pages(title.source, chapter: chapter) }
             try Task.checkCancellation()
             guard generation == token else { return }
             guard !list.isEmpty else { throw WebtoonReaderError.empty }
             guard list.count <= 5000 else { throw MangaExtensionError.oversized }
             let saved = reading.record(title.id)?.position(for: chapter.url)
-            initial = saved?.completed == false ? saved?.clamped(to: list.count) : nil
+            initial = !startAtBeginning && saved?.completed == false ? saved?.clamped(to: list.count) : nil
             currentPage = initial?.pageIndex ?? 0; pages = list
         } catch is CancellationError {} catch { if generation == token { self.error = error.localizedDescription } }
     }
@@ -64,14 +71,46 @@ final class WebtoonReaderModel: ObservableObject {
         saveTask?.cancel(); saveTask = nil
         if let reading, let confirmed { await reading.progress(title, position: confirmed) }
     }
-    func select(_ value: SourceMangaChapter) async {
+    func select(_ value: SourceMangaChapter, automatically: Bool = false, keepScrolling: Bool = false, canAdvance: () -> Bool = { true }) async {
         guard value != chapter else { return }
         let token = generation
         await flush()
         guard generation == token, value != chapter else { return }
-        autoScroll = false; controls = true
+        if automatically, prefetchAttemptedURL == value.url, let pending = prefetchTask {
+            await pending.value
+            guard generation == token, value != chapter else { return }
+        }
+        guard !automatically || canAdvance() else { return }
+        prefetchTask?.cancel(); prefetchTask = nil
+        if prefetched?.url != value.url { prefetched = nil }
+        prefetchAttemptedURL = nil
+        startAtBeginning = automatically
+        autoScroll = automatically && keepScrolling; controls = !automatically
         pages = []; initial = nil; confirmed = nil; currentPage = 0; jump = nil; error = nil
         generation = UUID(); loading = false; chapter = value
+    }
+    func prefetchNext(extensions: MangaExtensionStore) {
+        guard hasNext, !loading, !pages.isEmpty, currentPage >= max(0, pages.count - 3), prefetchTask == nil else { return }
+        let next = chapters[chapterIndex + 1]
+        guard prefetched?.url != next.url, prefetchAttemptedURL != next.url else { return }
+        prefetchAttemptedURL = next.url
+        let token = generation
+        prefetchTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if generation == token { prefetchTask = nil } }
+            do {
+                let values = try await extensions.pages(title.source, chapter: next)
+                guard !Task.isCancelled, generation == token, !values.isEmpty, values.count <= 5000 else { return }
+                prefetched = (next.url, values)
+            } catch { /* The current chapter remains readable; a failed next load offers Retry. */ }
+        }
+    }
+    func cancelPrefetch() { prefetchTask?.cancel(); prefetchTask = nil; prefetched = nil; prefetchAttemptedURL = nil }
+    func advanceAutomatically(from chapterURL: String, keepScrolling: Bool, isAllowed: () -> Bool) async {
+        guard chapter.url == chapterURL, hasNext, !loading, !advancing else { return }
+        advancing = true
+        defer { advancing = false }
+        await select(chapters[chapterIndex + 1], automatically: true, keepScrolling: keepScrolling, canAdvance: isAllowed)
     }
     func move(_ offset: Int) async {
         let index = chapterIndex + offset
@@ -124,6 +163,10 @@ struct WebtoonReaderView: View {
                 }.foregroundStyle(.white)
             }
             if model.controls || model.pages.isEmpty { chrome }
+            if model.advancing {
+                VStack { Spacer(); ProgressView("Loading next chapter…").padding(16).background(.ultraThinMaterial, in: Capsule()).padding(.bottom, 28) }
+                    .allowsHitTesting(false)
+            }
             if holdScrolling {
                 VStack { Spacer(); Label("\(Int(preferences.autoScrollSpeed)) pt/s · Lift to stop", systemImage: "hand.point.up.left.fill")
                     .font(.caption.monospacedDigit().bold()).padding(.horizontal, 16).padding(.vertical, 10)
@@ -142,16 +185,19 @@ struct WebtoonReaderView: View {
                 updateAwake()
                 Task { await ArtworkPipeline.shared.clearMemory() }
             }
+            .onChange(of: preferences.autoLoadNextChapter) { _, enabled in
+                if !enabled { model.cancelPrefetch() }
+            }
             .onChange(of: preferences.keepAwake) { _, _ in updateAwake() }
             .onChange(of: scene) { _, value in
                 if value != .active {
-                    model.autoScroll = false; scrubbing = false; UIApplication.shared.isIdleTimerDisabled = originalIdleTimer
+                    model.autoScroll = false; model.cancelPrefetch(); scrubbing = false; UIApplication.shared.isIdleTimerDisabled = originalIdleTimer
                     Task { await model.flush(); await reading.preferences(preferences) }
                 } else { updateAwake() }
             }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = originalIdleTimer
-                model.autoScroll = false
+                model.autoScroll = false; model.cancelPrefetch()
                 Task { await model.flush(); await reading.preferences(preferences) }
             }
             .sheet(isPresented: $settings, onDismiss: { Task { await reading.preferences(preferences) } }) {
@@ -166,14 +212,27 @@ struct WebtoonReaderView: View {
             }
     }
     private var canvas: some View {
-        let store = extensions, source = model.title.source
+        let store = extensions, source = model.title.source, chapterURL = model.chapter.url
         return WebtoonCanvas(source: source, version: extensions.imageVersion(source),
             chapterKey: model.chapter.url, pages: model.pages, initial: model.initial, jump: model.jump,
             preferences: preferences, autoScroll: model.autoScroll,
             scrollingAllowed: !settings && !chapters && !website && !scrubbing && !closing && scene == .active,
             hasNext: model.hasNext,
             loader: { try await store.imageData(source, image: $0) },
-            onPosition: { model.position(page: $0, fraction: $1, complete: $2) },
+            onPosition: {
+                guard model.chapter.url == chapterURL else { return }
+                model.position(page: $0, fraction: $1, complete: $2)
+                if preferences.autoLoadNextChapter && scene == .active && !settings && !chapters && !website && !closing { model.prefetchNext(extensions: extensions) }
+            },
+            onChapterEnd: { chapter, scrolling in
+                guard preferences.autoLoadNextChapter, !settings, !chapters, !website, !closing, scene == .active else { return }
+                Task {
+                    await model.advanceAutomatically(from: chapter, keepScrolling: scrolling) {
+                        preferences.autoLoadNextChapter && scene == .active && !settings && !chapters && !website && !closing
+                    }
+                    if scene != .active || closing { model.autoScroll = false }
+                }
+            },
             onTap: { model.controls.toggle() },
             onDrag: { model.controls = false; model.autoScroll = false },
             onHoldChanged: { active in
@@ -309,6 +368,8 @@ private struct WebtoonSettingsView: View {
                     }
                 }
                 Section {
+                    Toggle("Automatically load next chapter", isOn: $preferences.autoLoadNextChapter)
+                        .accessibilityIdentifier("webtoon-auto-next")
                     Toggle("Hold to scroll", isOn: $preferences.holdToScroll).accessibilityIdentifier("webtoon-hold-to-scroll")
                     Toggle("Auto-scroll", isOn: $autoScroll).accessibilityIdentifier("webtoon-auto-scroll")
                     VStack(alignment: .leading) {
@@ -318,7 +379,7 @@ private struct WebtoonSettingsView: View {
                     }
                     Toggle("Keep screen awake", isOn: $preferences.keepAwake)
                 } header: { Text("Reading") }
-                footer: { Text("Tap the speed for presets, or use the slider for 15–1,200 pt/s. Hold to scroll stops when you lift your finger. Auto-scroll keeps moving until paused. Both stop for a drag, chapter change, app switch or chapter end.") }
+                footer: { Text("Tap the speed for presets, or use the slider for 15–1,200 pt/s. Hold to scroll stops when you lift your finger. Auto-scroll keeps moving until paused. Auto-scroll continues into the next chapter when automatic chapter loading is on. Dragging, changing chapters manually or leaving the app pauses scrolling.") }
             }.navigationTitle("Webtoon reader").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent)

@@ -19,7 +19,7 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         }
         if id == 5 { result["format"] = "MOVIE"; result["episodes"] = 1 }
         if id == 990106 { result["status"] = "NOT_YET_RELEASED" }
-        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
+        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") || LibraryCustomizationPreview.active {
             result["coverImage"] = ["extraLarge": "https://catalog-preview.invalid/poster/\(id).png", "color": "#243B59"]
             result["bannerImage"] = "https://catalog-preview.invalid/banner/\(id).png"
         }

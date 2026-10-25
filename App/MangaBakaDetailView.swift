@@ -5,6 +5,7 @@ struct MangaBakaDetailView: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.dynamicTypeSize) private var textSize
     @State var series: MangaBakaSeries
     @State private var error: String?
     @State private var editing = false
@@ -19,11 +20,12 @@ struct MangaBakaDetailView: View {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
     var body: some View {
+        GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
                 if series.isVisible(includeAdult: preferences.includeAdult) {
                     VStack(alignment: .leading, spacing: 26) {
-                        header.id("overview")
+                        header(width: geometry.size.width).id("overview")
                         MangaBakaBadges(series: series)
                         jumpLinks(proxy)
                         actions
@@ -52,26 +54,53 @@ struct MangaBakaDetailView: View {
             }
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .onChange(of: preferences.includeAdult) { _, _ in preview = nil }
-    }
-    private var header: some View {
-        HStack(alignment: .top, spacing: 20) {
-            Button {
-                if let url = series.fullCoverURL { preview = AnimeImagePreview(url: url, title: series.displayTitle, source: "MangaBaka") }
-            } label: { MangaBakaCover(series: series, width: 118) }
-                .buttonStyle(.plain).accessibilityLabel("Enlarge series cover")
-            VStack(alignment: .leading, spacing: 10) {
-                Text(series.formatLabel.uppercased()).font(.caption.bold()).tracking(1.2).foregroundStyle(.mint)
-                Text(series.displayTitle).font(.title2.bold()).textSelection(.enabled)
-                if let native = series.nativeTitle, !native.isEmpty, native != series.displayTitle {
-                    Text(native).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                if let rating = series.rating, rating > 0 {
-                    Label(rating.formatted(.number.precision(.fractionLength(0...1))) + "% · Community score", systemImage: "star.fill")
-                        .font(.caption).foregroundStyle(.yellow)
-                }
-                if let rank = series.popularityRank, rank > 0 { Text("Popularity #" + rank.formatted()).font(.caption).foregroundStyle(.secondary) }
-            }.frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+    private func header(width: CGFloat) -> some View {
+        let compact = width < 650 || textSize.isAccessibilitySize
+        return Group {
+            if compact {
+                VStack(spacing: 22) {
+                    cover(width: min(240, max(180, (width - 40) * 0.6)))
+                    heading(centered: true)
+                }.frame(maxWidth: .infinity)
+            } else {
+                HStack(alignment: .center, spacing: 30) {
+                    cover(width: 210)
+                    heading(centered: false)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+    private func cover(width: CGFloat) -> some View {
+        Button {
+            if let url = series.fullCoverURL { preview = AnimeImagePreview(url: url, title: series.displayTitle, source: "MangaBaka") }
+        } label: {
+            ArtworkImage(url: series.fullCoverURL ?? series.coverURL, pointSize: width) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                ZStack { Theme.surface; Image(systemName: "book.closed").font(.largeTitle).foregroundStyle(.secondary) }
+            }.frame(width: width, height: width * 1.45)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
+        }.buttonStyle(.plain).accessibilityLabel("Enlarge series cover")
+            .accessibilityIdentifier("mangabaka-series-cover")
+    }
+    private func heading(centered: Bool) -> some View {
+        VStack(alignment: centered ? .center : .leading, spacing: 12) {
+            Text(series.formatLabel.uppercased()).font(.caption.bold()).tracking(1.2).foregroundStyle(.mint)
+            Text(series.displayTitle).font(.title2.bold()).textSelection(.enabled).accessibilityIdentifier("mangabaka-series-title")
+            if let native = series.nativeTitle, !native.isEmpty, native != series.displayTitle {
+                Text(native).font(.subheadline).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
+            }
+            if let rating = series.rating, rating > 0 {
+                Label(rating.formatted(.number.precision(.fractionLength(0...1))) + "% · Community score", systemImage: "star.fill")
+                    .font(.caption).foregroundStyle(.yellow)
+            }
+            if let rank = series.popularityRank, rank > 0 { Text("Popularity #" + rank.formatted()).font(.caption).foregroundStyle(.secondary) }
+        }.frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            .multilineTextAlignment(centered ? .center : .leading)
     }
     private func jumpLinks(_ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {

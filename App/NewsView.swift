@@ -12,6 +12,7 @@ struct NewsView: View {
     @State private var unavailable: [String] = []
     @State private var sourceFilter = "all"
     @State private var loading = false
+    @State private var appSettings = false
     @State private var error: String?
     @State private var selected: NewsArticle?
     private var history: NewsReadingHistory { (try? JSONDecoder().decode(NewsReadingHistory.self, from: Data(historyJSON.utf8))) ?? NewsReadingHistory() }
@@ -29,6 +30,10 @@ struct NewsView: View {
                 ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash")
             } else { headlines }
         }.navigationTitle(anime == nil ? "Anime News" : "Headlines")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                if anime == nil { Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") }
+            } }
+            .appSettingsSheet(isPresented: $appSettings)
             .task { if articles.isEmpty { await load() } }.refreshable { await load(refresh: true) }
             .sheet(item: $selected) { ArticleBrowser(url: $0.url).ignoresSafeArea() }
     }
@@ -38,7 +43,7 @@ struct NewsView: View {
                 Section("Discover") {
                     NavigationLink(value: AnimeVisualsRoute(anime: nil)) { Label("Visuals", systemImage: "photo.on.rectangle") }
                         .accessibilityIdentifier("news-open-visuals")
-                    Button { navigation.selectedTab = .schedule } label: { Label("Release schedules", systemImage: "calendar") }
+                    Button { navigation.openSchedule() } label: { Label("Release schedules", systemImage: "calendar") }
                         .accessibilityIdentifier("news-open-schedule")
                 }
             } else if let anime {

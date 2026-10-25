@@ -24,6 +24,7 @@ struct WebtoonCanvas: UIViewRepresentable {
     let hasNext: Bool
     let loader: @Sendable (SourceMangaImage) async throws -> Data
     let onPosition: (Int, Double, Bool) -> Void
+    let onChapterEnd: (String, Bool) -> Void
     let onTap: () -> Void
     let onDrag: () -> Void
     let onHoldChanged: (Bool) -> Void
@@ -37,6 +38,7 @@ struct WebtoonCanvas: UIViewRepresentable {
         scroll.minimumZoomScale = 1; scroll.maximumZoomScale = 3
         scroll.showsVerticalScrollIndicator = false; scroll.showsHorizontalScrollIndicator = false
         scroll.contentInsetAdjustmentBehavior = .never
+        scroll.alwaysBounceVertical = true
         scroll.accessibilityIdentifier = "webtoon-canvas"
         context.coordinator.attach(scroll)
         return scroll
@@ -66,6 +68,7 @@ struct WebtoonCanvas: UIViewRepresentable {
         private var lastReport = 0.0
         private var displayLink: CADisplayLink?
         private var motion = WebtoonScrollMotion()
+        private var continuation = WebtoonChapterContinuation()
         private weak var holdGesture: UILongPressGestureRecognizer?
         private var holding = false
         init(_ parent: WebtoonCanvas) { self.parent = parent }
@@ -85,12 +88,15 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         func update(_ value: WebtoonCanvas) {
             let preferencesChanged = parent.preferences != value.preferences
+            let interrupted = parent.scrollingAllowed && !value.scrollingAllowed
             parent = value
+            if interrupted { continuation.reset(chapter: chapter) }
+            scroll?.accessibilityValue = value.chapterKey
             if chapter != value.chapterKey || pages != value.pages {
                 endHold()
                 stopLoads(); generation = UUID()
                 cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
-                chapter = value.chapterKey; pages = value.pages; ratios = Array(repeating: 1.7, count: pages.count)
+                chapter = value.chapterKey; continuation.reset(chapter: chapter); pages = value.pages; ratios = Array(repeating: 1.7, count: pages.count)
                 offsets = []; failures.removeAll(); succeeded.removeAll(); lastJump = nil
                 pending = (min(max(0, value.initial?.pageIndex ?? 0), max(0, pages.count - 1)), value.initial?.fraction ?? 0)
                 scroll?.setZoomScale(1, animated: false); lastWidth = 0
@@ -259,14 +265,28 @@ struct WebtoonCanvas: UIViewRepresentable {
             let fraction = min(1, max(0, (y - offsets[page]) / max(1, offsets[page + 1] - offsets[page])))
             let complete = y + viewport >= offsets.last! - 2 && succeeded.count == pages.count
             let token = generation
+            let scrolling = parent.autoScroll
             DispatchQueue.main.async { [weak self] in
                 guard let self, let scroll = self.scroll, self.generation == token, self.pending == nil,
                       self.index(at: max(0, scroll.contentOffset.y / scroll.zoomScale)) == page else { return }
                 self.parent.onPosition(page, Double(fraction), complete)
+                let bottom = max(0, scroll.contentOffset.y / scroll.zoomScale) + scroll.bounds.height / scroll.zoomScale
+                let atEnd = bottom >= (self.offsets.last ?? .greatestFiniteMagnitude) + 60
+                if self.continuation.claim(chapter: self.chapter, enabled: self.parent.preferences.autoLoadNextChapter,
+                    hasNext: self.parent.hasNext, atEnd: atEnd, imagesComplete: self.succeeded.count == self.pages.count,
+                    allowed: self.parent.scrollingAllowed, zoomed: scroll.zoomScale > 1.01) {
+                    self.parent.onChapterEnd(self.chapter, scrolling)
+                }
             }
         }
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { content }
-        func scrollViewDidScroll(_ scrollView: UIScrollView) { guard !layingOut else { return }; window(); report() }
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard !layingOut else { return }
+            if pending == nil && (scrollView.isDragging || scrollView.isDecelerating || parent.autoScroll || holding) {
+                continuation.didScroll()
+            }
+            window(); report()
+        }
         func scrollViewDidZoom(_ scrollView: UIScrollView) { guard !layingOut else { return }; window(); report(force: true) }
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { pending = nil; endHold(); stopMotion(); parent.onDrag() }
         func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { endHold(); stopMotion(); parent.onDrag() }
@@ -324,6 +344,7 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         private func stopLoads() { tasks.values.forEach { $0.1.cancel() }; tasks.removeAll() }
         func stop() {
+            generation = UUID()
             endHold(); stopMotion(); stopLoads()
             cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
             scroll?.delegate = nil; scroll?.onSizeChange = nil
