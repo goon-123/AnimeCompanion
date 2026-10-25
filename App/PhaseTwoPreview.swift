@@ -26,8 +26,9 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         return result
     }
     static func library() throws -> [LibraryEntry] {
-        let items = [(1, 8, "CURRENT"), (5, 1, "COMPLETED"), (990101, 4, "CURRENT"),
+        var items = [(1, 8, "CURRENT"), (5, 1, "COMPLETED"), (990101, 4, "CURRENT"),
                      (990102, 6, "CURRENT"), (990104, 0, "CURRENT"), (990105, 2, "CURRENT"), (990106, 0, "PLANNING")]
+        if UnifiedExplorePreview.active { items.append((990103, 3, "CURRENT")) }
         let records: [[String: Any]] = items.map { id, progress, status in
             ["id": id, "mediaId": id, "status": status, "progress": progress,
              "updatedAt": id == 1 ? 2_000 : 1_000, "media": media(id)]

@@ -21,7 +21,7 @@ extension XCUIApplication {
     }
 
     @MainActor var browseSurface: XCUIElement {
-        for id in ["discovery-scroll", "library-scroll", "explore-scroll", "schedule-airing-scroll", "news-list"] {
+        for id in ["unified-search", "unified-explore-discover", "unified-explore-posterGrid", "discovery-scroll", "library-scroll", "explore-scroll", "schedule-airing-scroll", "news-list"] {
             let scroll = scrollViews[id]
             if scroll.exists { return scroll }
         }

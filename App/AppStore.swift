@@ -51,6 +51,10 @@ final class AppStore: ObservableObject {
         news = NewsPreview.active ? NewsClient(transport: NewsPreviewTransport(), directory: nil) : NewsClient()
         let discoveryPreview = ProcessInfo.processInfo.arguments.contains("--ui-discovery-preview")
         let phaseTwoPreview = ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")
+        // Older native journeys intentionally exercise the retained Classic UI.
+        if !UnifiedExplorePreview.active && (discoveryPreview || phaseTwoPreview || ProcessInfo.processInfo.arguments.contains("--ui-library-preview")) {
+            UserDefaults.standard.set(ExploreDesign.classic.rawValue, forKey: ExploreDesign.storageKey)
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences"),
            !ProcessInfo.processInfo.arguments.contains("--ui-keep-ipad-layout") {
             UserDefaults.standard.set(TabletLayout.fullWidth.rawValue, forKey: TabletLayout.preferenceKey)
@@ -58,13 +62,16 @@ final class AppStore: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--ui-ipad-split-preview") {
             UserDefaults.standard.set(TabletLayout.sideBySide.rawValue, forKey: TabletLayout.preferenceKey)
         }
-        if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
+        if UnifiedExplorePreview.active { aniList = AniListClient(transport: UnifiedAnimePreviewTransport(), minimumRequestInterval: 0) }
+        else if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
         else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }
         exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()
         visuals = phaseTwoPreview
             ? AnimeVisualsClient(transport: VisualGalleryPreviewTransport(), directory: nil, minimumRequestInterval: 0)
             : AnimeVisualsClient()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+            UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
+            UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
             includeAdult = false; automaticallyComplete = true
             airingProgressSource = .broadcast
             // Property observers do not run for assignments during initialization.

@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news ]]; then
-  echo "Expected full, focused, weekly, fixes, streams, layout, reader, visuals, customization or news test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore ]]; then
+  echo "Expected full, focused, weekly, fixes, streams, layout, reader, visuals, customization, news or explore test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -53,6 +53,12 @@ if [[ "$test_scope" == news ]]; then
   result_path="build/News-${device_family}.xcresult"
   screenshot_path="build/news-${device_family}-screenshots"
   diagnostic_path="build/news-${device_family}-diagnostics"
+fi
+
+if [[ "$test_scope" == explore ]]; then
+  result_path="build/Explore-${device_family}.xcresult"
+  screenshot_path="build/explore-${device_family}-screenshots"
+  diagnostic_path="build/explore-${device_family}-diagnostics"
 fi
 
 # Bound the workaround to this disposable test runner and resume paused services.
@@ -203,8 +209,11 @@ fi
 if [[ "$test_scope" == news ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/NewsExperienceUITests)
 fi
+if [[ "$test_scope" == explore ]]; then
+  test_arguments=(-only-testing:AnimeCompanionUITests/UnifiedExploreUITests)
+fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
-if [[ "$test_scope" == customization || "$test_scope" == news ]]; then
+if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore ]]; then
   test_retry_arguments=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240)
 fi
 run_tests() {
@@ -215,7 +224,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   "${test_retry_arguments[@]}" \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

@@ -300,6 +300,52 @@ jobs:
             build/News-${{ matrix.device }}.xcresult
           if-no-files-found: ignore
           retention-days: 30
+  explore-ui:
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    needs: manga-runtime
+    name: Explore and Airing Now layouts ${{ matrix.device }}
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Verify combined discovery, catalog search, Classic and Airing Now grids
+        run: bash scripts/check-simulator.sh ${{ matrix.device }} explore
+      - name: Upload Explore screenshots and native results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-explore-${{ matrix.device }}
+          path: |
+            build/explore-${{ matrix.device }}-screenshots
+            build/explore-${{ matrix.device }}-diagnostics
+            build/Explore-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   weekly-ui:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: playback-fixes

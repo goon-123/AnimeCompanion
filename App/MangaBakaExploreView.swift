@@ -3,6 +3,7 @@ import AnimeCore
 
 struct MangaBakaSeriesRoute: Hashable { let series: MangaBakaSeries }
 struct MangaBakaBrowseRoute: Hashable { let query: MangaBakaQuery }
+struct ExploreSearchRoute: Hashable {}
 
 private struct MangaBakaNavigation: ViewModifier {
     func body(content: Content) -> some View {
@@ -27,6 +28,7 @@ struct MediaSectionPicker: View {
             option("Anime", symbol: "play.rectangle", value: "anime")
             option("Manga & Novels", symbol: "book.closed", value: "written")
         }.padding(4).silverGlass(in: Capsule()).frame(maxWidth: 440)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("media-section-picker")
     }
     private func option(_ title: String, symbol: String, value: String) -> some View {
@@ -48,19 +50,35 @@ struct MediaSectionPicker: View {
 
 struct MediaExploreView: View {
     @AppStorage("app.mediaSection") private var mode = "anime"
+    @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
     @State private var settings = false
+    @State private var designs = false
+    private var design: ExploreDesign { ExploreDesign(preference: designValue) }
     var body: some View {
         Group {
-            if mode == "written" { MangaBakaExploreView() }
+            if design != .classic { UnifiedExploreView(design: design, settings: $settings, designs: $designs) }
+            else if mode == "written" { MangaBakaExploreView() }
             else { ExploreView() }
         }.safeAreaInset(edge: .top, spacing: 0) {
+            if design == .classic {
             HStack(spacing: 10) {
                 MediaSectionPicker()
+                Button { designs = true } label: {
+                    Image(systemName: "rectangle.stack").frame(width: 44, height: 44)
+                        .silverGlass(in: Circle()).contentShape(Circle())
+                }.buttonStyle(.plain).accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
                 Button { settings = true } label: {
                     Image(systemName: "person.crop.circle").font(.title2).frame(width: 44, height: 44)
                 }.buttonStyle(.plain).silverGlass(in: Circle()).accessibilityLabel("Accounts and settings")
             }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
+            }
         }.mangaBakaNavigation().appSettingsSheet(isPresented: $settings)
+            .navigationDestination(for: ExploreSearchRoute.self) { _ in
+                UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
+            }
+            .sheet(isPresented: $designs) {
+                NavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
+            }
     }
 }
 
@@ -209,6 +227,7 @@ private final class MangaBakaHomeModel: ObservableObject {
 }
 
 struct MangaBakaExploreView: View {
+    var showsNavigationBar = false
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @StateObject private var model = MangaBakaHomeModel()
@@ -237,7 +256,7 @@ struct MangaBakaExploreView: View {
                 }
                 MangaBakaAttribution().padding(.horizontal, 20)
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
-        }.background(Theme.background).toolbar(.hidden, for: .navigationBar)
+        }.background(Theme.background).toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
             .task(id: preferences.includeAdult) { await model.load(api: account.api, adult: preferences.includeAdult) }
             .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.includeAdult)") {
                 await account.loadRecommendations(includeAdult: preferences.includeAdult)
@@ -327,7 +346,7 @@ struct MangaBakaExploreView: View {
     }
 }
 
-private struct MangaBakaPersonalShelf: View {
+struct MangaBakaPersonalShelf: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     var body: some View {

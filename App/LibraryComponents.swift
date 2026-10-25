@@ -91,11 +91,13 @@ struct LibraryEntryActions: View {
     @EnvironmentObject private var store: AppStore
     let entry: LibraryEntry
     let anime: Anime
+    var horizontal = false
     @State private var editing = false
     @State private var watching = false
     @State private var error: String?
     var body: some View {
-        VStack(spacing: 4) {
+        let layout = horizontal ? AnyLayout(HStackLayout(spacing: 4)) : AnyLayout(VStackLayout(spacing: 4))
+        layout {
             Button { watching = true } label: {
                 Image(systemName: "play.fill").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9))
             }.disabled(anime.status == "NOT_YET_RELEASED")

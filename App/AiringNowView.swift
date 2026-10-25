@@ -12,9 +12,11 @@ struct AiringNowView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var textSize
     @Binding var showSettings: Bool
     @State private var behindOnly = false
     @State private var now = Date()
+    @AppStorage("schedule.airing.layout") private var layout = "list"
 
     private var items: [AiringWatchlistItem] {
         store.watching.compactMap { entry -> AiringWatchlistItem? in
@@ -43,22 +45,31 @@ struct AiringNowView: View {
                         ForEach(AiringWatchlistGroup.allCases) { group in
                             let grouped = visible.filter { AiringWatchlistGroup(state: $0.status.state) == group }
                             if !grouped.isEmpty {
-                                Section {
-                                    ForEach(grouped) { item in
-                                        if let anime = item.entry.media {
-                                            AiringWatchlistCard(entry: item.entry, anime: anime, status: item.status)
-                                        }
-                                    }
-                                } header: {
+                                VStack(alignment: .leading, spacing: 14) {
                                     HStack {
                                         Text(group.title).font(.headline)
                                         Spacer()
                                         Text("\(grouped.count)").font(.caption).foregroundStyle(.secondary)
                                     }.padding(.top, 6).accessibilityIdentifier("schedule-group-\(group.rawValue)")
+                                    if layout == "grid" {
+                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 230 : 160), spacing: 14, alignment: .topLeading)], alignment: .leading, spacing: 18) {
+                                            ForEach(grouped) { item in
+                                                if let anime = item.entry.media {
+                                                    AiringWatchlistGridCard(entry: item.entry, anime: anime, status: item.status)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        ForEach(grouped) { item in
+                                            if let anime = item.entry.media {
+                                                AiringWatchlistCard(entry: item.entry, anime: anime, status: item.status)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }.accessibilityIdentifier("schedule-airing-list")
+                    }.accessibilityIdentifier(layout == "grid" ? "schedule-airing-grid" : "schedule-airing-list")
                     if visible.isEmpty && !store.loadingLibrary && !(store.airingProgressSource == .dub && dubs.loading) {
                         ContentUnavailableView(behindOnly ? "No confirmed episodes behind" : "No airing titles yet",
                             systemImage: behindOnly ? "checkmark.circle" : "antenna.radiowaves.left.and.right",
@@ -118,6 +129,14 @@ struct AiringNowView: View {
                 } label: { Label(store.airingProgressSource.label, systemImage: "antenna.radiowaves.left.and.right").font(.caption) }
                     .accessibilityIdentifier("schedule-airing-source")
             }
+            HStack {
+                Text("View").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Picker("Airing Now layout", selection: $layout) {
+                    Label("List", systemImage: "list.bullet").tag("list")
+                    Label("Grid", systemImage: "square.grid.2x2").tag("grid")
+                }.pickerStyle(.segmented).frame(maxWidth: 220).accessibilityIdentifier("schedule-airing-layout")
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { behindFilter(behind); caughtUpLabel(caught) }
                 VStack(alignment: .leading, spacing: 8) { behindFilter(behind); caughtUpLabel(caught) }
@@ -135,6 +154,29 @@ struct AiringNowView: View {
     }
     private func caughtUpLabel(_ count: Int) -> some View {
         Label("\(count) caught up", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(.green)
+    }
+}
+
+private struct AiringWatchlistGridCard: View {
+    let entry: LibraryEntry
+    let anime: Anime
+    let status: LibraryAiringProgress
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AnimeLink(id: anime.id) {
+                VStack(alignment: .leading, spacing: 9) {
+                    GeometryReader { geometry in AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 12) }
+                        .aspectRatio(1 / 1.45, contentMode: .fit)
+                        .overlay(alignment: .topTrailing) { DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(8) }
+                    Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3, reservesSpace: true)
+                    Text(status.source.label).font(.caption2).foregroundStyle(.secondary)
+                }.foregroundStyle(.primary).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+            LibraryAiringStatus(status: status, animeID: anime.id, compact: true)
+            LibraryEntryActions(entry: entry, anime: anime, horizontal: true).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(10).frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+            .overlay { RoundedRectangle(cornerRadius: 16).stroke(status.state.color.opacity(0.25), lineWidth: 1) }
     }
 }
 
