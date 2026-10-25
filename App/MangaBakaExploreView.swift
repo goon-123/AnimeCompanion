@@ -27,6 +27,7 @@ struct MediaSectionPicker: View {
             option("Anime", symbol: "play.rectangle", value: "anime")
             option("Manga & Novels", symbol: "book.closed", value: "written")
         }.padding(4).silverGlass(in: Capsule()).frame(maxWidth: 440)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("media-section-picker")
     }
     private func option(_ title: String, symbol: String, value: String) -> some View {

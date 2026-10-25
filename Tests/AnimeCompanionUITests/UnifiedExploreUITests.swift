@@ -29,7 +29,7 @@ final class UnifiedExploreUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "unified-spotlight").firstMatch.waitForExistence(timeout: 15))
         capture("Unified-Discovery-Home", app)
         app.buttons["unified-explore-search"].tap()
-        let field = app.textFields["unified-search-field"]
+        let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("harbor\n")
         XCTAssertTrue(app.buttons["explore-story-anilist:1"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["explore-story-mangabaka:73"].waitForExistence(timeout: 15))
@@ -53,7 +53,7 @@ final class UnifiedExploreUITests: XCTestCase {
         capture("Unified-Search-Paginated", app)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
-            XCTAssertTrue(app.textFields["unified-search-field"].exists)
+            XCTAssertTrue(app.searchFields.firstMatch.exists)
             capture("Unified-Search-Landscape", app)
             XCUIDevice.shared.orientation = .portrait
         }
@@ -103,7 +103,7 @@ final class UnifiedExploreUITests: XCTestCase {
     @MainActor func testReadingOutageKeepsAnimeHomeAndSearchUsable() {
         let app = launch(failedReading: true)
         app.buttons["unified-explore-search"].tap()
-        let field = app.textFields["unified-search-field"]
+        let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("harbor\n")
         XCTAssertTrue(app.buttons["explore-story-anilist:1"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "unified-search-error-reading").firstMatch.waitForExistence(timeout: 25))
@@ -115,7 +115,7 @@ final class UnifiedExploreUITests: XCTestCase {
     @MainActor func testReplacingASearchRejectsLateResultsFromTheOldQuery() {
         let app = launch()
         app.buttons["unified-explore-search"].tap()
-        let field = app.textFields["unified-search-field"]
+        let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("slow\n")
         XCTAssertTrue(app.staticTexts["Searching catalogs…"].waitForExistence(timeout: 10))
         app.buttons["Clear all-catalog search"].tap()

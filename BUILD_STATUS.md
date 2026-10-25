@@ -8,6 +8,8 @@ Five focused Core cases cover mixed identities, overlaps, format balance, adult 
 
 The user approved publishing this feature branch and opening a PR. Hosted Core, native iPhone/iPad, screenshot review and universal Release packaging are pending; record actual results and the build-76 artifact after CI completes.
 
+The first hosted run passed Core (428 Linux / 431 macOS cases, zero failures), public-provider contracts, native runtime/Safari checks and universal Release packaging. Its iPad journeys confirmed saved grid choices and Airing Now progress/rotation. Search exposed an input beneath the adaptive navigation bar's hit area; use the native navigation-bar search field so UIKit owns its placement/focus. The Classic UI did restore, but its parent accessibility identifier masked the two option identifiers; explicitly contain its accessible children. Retain and rerun all behavior assertions with the native search field and corrected option identities.
+
 Includes the News, reader, library and bottom-tab work from builds 74–75. Shared extension-runtime compatibility is unchanged by these presentation changes.
 
 ## News discovery, saved stories and reading history — build 75

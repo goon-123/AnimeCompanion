@@ -61,21 +61,15 @@ struct UnifiedExploreSearchView: View {
     @EnvironmentObject private var reading: MangaBakaStore
     @StateObject private var model = UnifiedExploreSearchModel()
     @State private var text = ""
-    @FocusState private var searching: Bool
     private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult) }
     private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.mint)
-                    TextField("Search anime, manga & novels", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .submitLabel(.search).focused($searching).onSubmit { searching = false }.accessibilityIdentifier("unified-search-field")
-                    if !text.isEmpty {
-                        Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                            .accessibilityLabel("Clear all-catalog search")
-                    }
-                }.padding(15).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                if !text.isEmpty {
+                    Button { text = "" } label: { Label("Clear search", systemImage: "xmark.circle") }
+                        .font(.caption).accessibilityLabel("Clear all-catalog search")
+                }
                 if key.text.isEmpty {
                     ContentUnavailableView("Find your next story", systemImage: "magnifyingglass",
                         description: Text("One search for anime, manga, manhwa, light novels and more. No account needed."))
@@ -110,7 +104,9 @@ struct UnifiedExploreSearchView: View {
                 MangaBakaAttribution()
             }.padding(20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Search stories").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.visible, for: .navigationBar).scrollDismissesKeyboard(.interactively)
+            .toolbar(.visible, for: .navigationBar).scrollDismissesKeyboard(.immediately)
+            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "Anime, manga & novels")
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
             .accessibilityIdentifier("unified-search")
             .task(id: key) {
                 let requested = key
