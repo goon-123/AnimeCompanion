@@ -58,8 +58,9 @@ final class MangaBakaStore: ObservableObject {
     init(api: MangaBakaClient? = nil, keychain: MangaBakaAccountKeychain? = nil, cacheDirectory: URL? = nil) {
         self.cacheDirectory = cacheDirectory
         #if DEBUG
-        previewAccounts = api == nil && LibraryCustomizationPreview.active
-        self.keychain = keychain ?? MangaBakaAccountKeychain(service: previewAccounts
+        let usePreviewAccounts = api == nil && LibraryCustomizationPreview.active
+        previewAccounts = usePreviewAccounts
+        self.keychain = keychain ?? MangaBakaAccountKeychain(service: usePreviewAccounts
             ? "com.animecompanion.mangabaka.owned-preview" : "com.animecompanion.mangabaka")
         self.api = api ?? (MangaBakaAccountsPreview.active
             ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
@@ -68,7 +69,7 @@ final class MangaBakaStore: ObservableObject {
             : LibraryCustomizationPreview.active
             ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
             : MangaBakaClient())
-        if previewAccounts && ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+        if usePreviewAccounts && ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             try? self.keychain.save(.init())
         }
         #else

@@ -29,7 +29,7 @@ jobs:
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter 'LiveServiceTests.testMangaBaka'
   manga-runtime:
     name: Build on-device manga runtime
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: manga-runtime
     name: Webtoon reader ${{ matrix.device }} regression
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -117,7 +117,7 @@ jobs:
   library-customization:
     needs: manga-runtime
     name: Reader and library changes ${{ matrix.device }}
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 22
     strategy:
       fail-fast: false
@@ -163,7 +163,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: manga-runtime
     name: Native artwork gallery ${{ matrix.device }} regression
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -258,7 +258,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
     needs: manga-runtime
     name: News experience ${{ matrix.device }}
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -304,7 +304,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
     needs: manga-runtime
     name: Explore, accounts and Airing Now ${{ matrix.device }}
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -350,7 +350,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: playback-fixes
     name: Weekly schedule ${{ matrix.device }} regression
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -400,7 +400,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: playback-fixes
     name: Focused ${{ matrix.device }} layout and playback
-    runs-on: macos-15
+    runs-on: macos-15-intel
     # The expanded Phase 1/2 suites include native navigation and a cold boot.
     # Build 20's iPad runs exhausted the former 30/35-minute job limits.
     timeout-minutes: 45
@@ -450,7 +450,7 @@ jobs:
           retention-days: 30
   build:
     needs: [safari-extension, manga-runtime]
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -510,7 +510,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: manga-runtime
     name: Full-width and split layout ${{ matrix.device }} regression
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -559,7 +559,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: playback-fixes
     name: ${{ matrix.label }}
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 60
     strategy:
       fail-fast: false
