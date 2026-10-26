@@ -52,11 +52,15 @@ struct LibraryView: View {
                 if let first, let second, first != second { return reversed ? first < second : first > second }
             case .title: break
             case .updated:
-                if a.updatedAt != b.updatedAt { return reversed ? (a.updatedAt ?? 0) < (b.updatedAt ?? 0) : (a.updatedAt ?? 0) > (b.updatedAt ?? 0) }
+                let first = a.updatedAt, second = b.updatedAt
+                if (first == nil) != (second == nil) { return first != nil }
+                if let first, let second, first != second { return reversed ? first < second : first > second }
             case .progress:
                 if a.progressValue != b.progressValue { return reversed ? a.progressValue < b.progressValue : a.progressValue > b.progressValue }
             case .score:
-                if a.score != b.score { return reversed ? (a.score ?? 0) < (b.score ?? 0) : (a.score ?? 0) > (b.score ?? 0) }
+                let first = a.score.flatMap { $0 > 0 ? $0 : nil }, second = b.score.flatMap { $0 > 0 ? $0 : nil }
+                if (first == nil) != (second == nil) { return first != nil }
+                if let first, let second, first != second { return reversed ? first < second : first > second }
             case .year:
                 let first = a.media?.seasonYear, second = b.media?.seasonYear
                 if (first == nil) != (second == nil) { return first != nil }

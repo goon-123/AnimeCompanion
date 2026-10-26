@@ -14,8 +14,11 @@ public struct MangaBakaContentFilter: Hashable, Sendable {
     }
     private struct Saved: Codable { let ratings: [String]; let includeUnrated: Bool }
     public init(saved: String?, legacyIncludeAdult: Bool = false) {
-        guard let saved, let data = saved.data(using: .utf8), let value = try? JSONDecoder().decode(Saved.self, from: data) else {
+        guard let saved else {
             self = .legacy(includeAdult: legacyIncludeAdult); return
+        }
+        guard let data = saved.data(using: .utf8), let value = try? JSONDecoder().decode(Saved.self, from: data) else {
+            self.init(); return
         }
         self.init(ratings: Set(value.ratings.compactMap(MangaBakaContentRating.init(rawValue:))), includeUnrated: value.includeUnrated)
     }

@@ -30,6 +30,7 @@ final class ContentAndLibraryPreferencesTests: XCTestCase {
         XCTAssertEqual(saved, selected); XCTAssertTrue(saved.includes(nil)); XCTAssertTrue(saved.includes(" Erotica "))
         XCTAssertFalse(saved.includes("safe")); XCTAssertFalse(saved.includes("pornographic"))
         XCTAssertEqual(MangaBakaContentFilter(saved: "damaged"), .init())
+        XCTAssertEqual(MangaBakaContentFilter(saved: "damaged", legacyIncludeAdult: true), .init())
     }
     func testSearchCuratedAndFacetRequestsKeepExactEnabledRatings() throws {
         let filter = MangaBakaContentFilter(ratings: [.suggestive, .erotica])
