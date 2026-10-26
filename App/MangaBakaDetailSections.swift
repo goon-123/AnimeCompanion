@@ -98,7 +98,7 @@ struct MangaBakaCoverGallery: View {
     @State private var retry = 0
     @State private var generation = UUID()
     @State private var preview: AnimeImagePreview?
-    private var visible: [MangaBakaCoverImage] { covers.filter { $0.isVisible(includeAdult: preferences.includeAdult) && $0.thumbnailURL != nil } }
+    private var visible: [MangaBakaCoverImage] { covers.filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) && $0.thumbnailURL != nil } }
     private var gallery: [AnimeImagePreview] {
         visible.compactMap { cover in
             cover.fullURL.map { AnimeImagePreview(url: $0, title: series.displayTitle + " · " + cover.caption, credit: cover.note, source: "MangaBaka") }
@@ -116,9 +116,9 @@ struct MangaBakaCoverGallery: View {
             if let error { NoticeView(message: error) { retry += 1 } }
             if !loading && visible.isEmpty && error == nil { Text("No additional covers are available for this title and content setting.").font(.subheadline).foregroundStyle(.secondary) }
             if hasMore && !loading { Button("Load more covers") { Task { await load(next: true) } }.buttonStyle(.bordered) }
-        }.task(id: "\(series.id)-\(preferences.includeAdult)-\(retry)-\(refreshToken)") { await load() }
+        }.task(id: "\(series.id)-\(preferences.mangaBakaContent)-\(retry)-\(refreshToken)") { await load() }
             .fullScreenCover(item: $preview) { item in AnimeImageViewer(preview: item, gallery: gallery) }
-            .onChange(of: preferences.includeAdult) { _, _ in preview = nil }
+            .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
     }
     private func coverButton(_ cover: MangaBakaCoverImage) -> some View {
         Button {
@@ -160,7 +160,7 @@ struct MangaBakaRelatedSection: View {
     @State private var error: String?
     @State private var retry = 0
     @State private var generation = UUID()
-    private var visible: [MangaBakaRelatedSeries] { items.filter { $0.series.isVisible(includeAdult: preferences.includeAdult) } }
+    private var visible: [MangaBakaRelatedSeries] { items.filter { $0.series.isVisible(contentFilter: preferences.mangaBakaContent) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(kind.label).font(.title2.bold())
@@ -182,7 +182,7 @@ struct MangaBakaRelatedSection: View {
             if loading { ProgressView("Loading " + kind.label.lowercased() + "…") }
             if let error { NoticeView(message: error) { retry += 1 } }
             if !loading && visible.isEmpty && error == nil { Text("MangaBaka has no matching titles for this section yet.").font(.subheadline).foregroundStyle(.secondary) }
-        }.task(id: "\(series.id)-\(preferences.includeAdult)-\(retry)-\(refreshToken)") { await load() }
+        }.task(id: "\(series.id)-\(preferences.mangaBakaContent)-\(retry)-\(refreshToken)") { await load() }
     }
     private func context(_ item: MangaBakaRelatedSeries) -> String? {
         if kind == .readers, let count = item.sharedReaders { return count.formatted() + " readers" }
@@ -194,7 +194,7 @@ struct MangaBakaRelatedSection: View {
         let request = UUID(); generation = request; loading = true; error = nil
         defer { if generation == request { loading = false } }
         do {
-            let result = try await account.api.related(id: series.id, kind: kind, includeAdult: preferences.includeAdult, refresh: retry > 0 || refreshToken > 0)
+            let result = try await account.api.related(id: series.id, kind: kind, contentFilter: preferences.mangaBakaContent, refresh: retry > 0 || refreshToken > 0)
             try Task.checkCancellation(); guard request == generation else { return }; items = result
         } catch is CancellationError {} catch { if generation == request { self.error = error.localizedDescription } }
     }

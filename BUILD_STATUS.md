@@ -1,3 +1,11 @@
+## Content ratings and library defaults — build 80
+
+Version 0.29.0. Stacked on account-switcher build 79. Independent persisted MangaBaka ratings and an unrated option are shared by Explore/search requests and immediate local filtering across shelves, recommendations, libraries, related titles and galleries. Retain the seven-day account-owned recommendation cache. One-time migration copies the old adult preference; AniList and video-source filtering remain separate afterward.
+
+Initial library statuses are Watching / Reading / In progress, each independently configurable in Settings and library sort menus. Reading/combined sorts and directions persist separately; Anime adds All, release year and completion and saves reverse direction. Automatically load remaining selected-library pages so final search/sort covers all entries; retain cancellation/generation checks, partial results and retry.
+
+Local checks: diff whitespace, simulator shell syntax and Safari bundle/version consistency passed. No local Swift/Xcode toolchain is available. Core type checking/execution, hosted iPhone/iPad journeys, visual review and unsigned Release packaging are pending. Native tests use neutral owned metadata and a two-page reading library; no real account mutations are part of these checks.
+
 ## Series headline matching and publisher search — build 77
 
 Version 0.27.1 fixes the series-detail Headlines route, which previously required an exact season title inside the current small RSS batch. Match full English/romaji/preferred aliases and conservative base titles by removing explicit terminal season/part/cour markers. Preserve intrinsic numbers and short ambiguous names. The same anime aliases improve News For You matches.

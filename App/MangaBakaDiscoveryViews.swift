@@ -54,14 +54,16 @@ struct MangaBakaTaxonomyView: View {
     }
     private var ratings: some View {
         Section {
-            Toggle("Include mature titles", isOn: $preferences.includeAdult)
+            NavigationLink { MangaBakaContentSettingsView() } label: {
+                LabeledContent("Content settings", value: preferences.mangaBakaContent.summary)
+            }
             ForEach(MangaBakaContentRating.allCases, id: \.self) { rating in
                 NavigationLink(value: MangaBakaBrowseRoute(query: .init(contentRatings: [rating]))) {
                     Label(rating.label, systemImage: rating.isMature ? "eye" : "books.vertical")
-                }.disabled(rating.isMature && !preferences.includeAdult)
+                }.disabled(!preferences.mangaBakaContent.ratings.contains(rating))
             }
         } header: { Text("Content ratings") }
-        footer: { Text("Content ratings and genres are separate filters. Enable mature titles to browse every rating.") }
+        footer: { Text("Content ratings and genres are separate filters. Choose which ratings to enable in Content settings.") }
     }
     @ViewBuilder private func genreRow(_ genre: MangaBakaGenre) -> some View {
         if selecting {
@@ -118,22 +120,22 @@ struct MangaBakaFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding private var query: MangaBakaQuery
     @State private var draft: MangaBakaQuery
-    @State private var allowMature = false
-    @State private var initialized = false
     init(query: Binding<MangaBakaQuery>) { _query = query; _draft = State(initialValue: query.wrappedValue) }
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Include mature titles", isOn: $allowMature)
+                    NavigationLink { MangaBakaContentSettingsView() } label: {
+                        LabeledContent("Enabled in the app", value: preferences.mangaBakaContent.summary)
+                    }
                     ForEach(MangaBakaContentRating.allCases, id: \.self) { rating in
                         Toggle(rating.label, isOn: Binding(get: { draft.contentRatings.contains(rating) }, set: { selected in
                             if selected { draft.contentRatings.insert(rating) } else { draft.contentRatings.remove(rating) }
                             regularQuery()
-                        })).disabled(rating.isMature && !allowMature)
+                        })).disabled(!preferences.mangaBakaContent.ratings.contains(rating))
                     }
                 } header: { Text("Content ratings") }
-                footer: { Text("With no ratings selected, results use all ratings allowed by your content setting.") }
+                footer: { Text("These filters narrow this search. With none selected, results use your enabled app ratings. Change Enabled in the app to make another rating available.") }
                 Section("Genres & tags") {
                     NavigationLink { MangaBakaTaxonomyView(selection: $draft) } label: {
                         Label("Browse all genres & tags", systemImage: "tag")
@@ -165,12 +167,11 @@ struct MangaBakaFilterSheet: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Show results") {
-                            regularQuery(); preferences.includeAdult = allowMature; query = draft; dismiss()
+                            regularQuery(); query = draft; dismiss()
                         }.fontWeight(.semibold)
                     }
                 }
-        }.onAppear { if !initialized { initialized = true; allowMature = preferences.includeAdult } }
-            .onChange(of: allowMature) { _, value in if !value { draft.contentRatings = Set(draft.contentRatings.filter { !$0.isMature }) } }
+        }
     }
     private func regularQuery() {
         if draft.shelf.isCurated && (draft.format != nil || draft.status != nil || draft.hasFacets) { draft.shelf = .popular }

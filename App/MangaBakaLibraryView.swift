@@ -4,17 +4,21 @@ import AnimeCore
 struct MangaBakaLibraryView: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
-    @State private var state = "all"
+    @AppStorage("library.reading.defaultStatus") private var defaultStatus = LibraryScope.reading.initialStatus
+    @State private var state = LibraryScope.reading.openingStatus()
     @State private var search = ""
     @AppStorage("mangabaka.library.layout") private var layout = "grid"
+    @AppStorage("mangabaka.library.sort") private var sortValue = ReadingLibrarySort.updated.rawValue
+    @AppStorage("mangabaka.library.ascending") private var ascending = false
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var connection = false
     @State private var appSettings = false
     private var entries: [MangaBakaLibraryEntry] {
-        account.library.filter { entry in
-            guard let series = entry.series, series.isVisible(includeAdult: preferences.includeAdult) else { return false }
+        let values = account.library.filter { entry in
+            guard let series = entry.series, series.isVisible(contentFilter: preferences.mangaBakaContent) else { return false }
             return search.isEmpty || series.searchTitles.contains { $0.localizedCaseInsensitiveContains(search) }
         }
+        return (ReadingLibrarySort(rawValue: sortValue) ?? .updated).sorted(values, ascending: ascending)
     }
     var body: some View {
         Group {
@@ -34,7 +38,8 @@ struct MangaBakaLibraryView: View {
             .sheet(isPresented: $connection) {
                 NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
             }
-            .task(id: "\(state)-\(account.revision)") { await account.loadLibrary(state: selectedState, refresh: true) }
+            .onChange(of: defaultStatus) { _, _ in state = LibraryScope.reading.openingStatus() }
+            .task(id: "\(state)-\(account.revision)") { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private var selectedState: String? { state == "all" ? nil : state }
     private var connectedLibrary: some View {
@@ -49,6 +54,8 @@ struct MangaBakaLibraryView: View {
                     if let total = account.libraryTotal { Text("\(total.formatted()) titles").font(.caption).foregroundStyle(.secondary) }
                 }
                 LibraryLayoutPicker(layout: $layout)
+                ReadingLibrarySortControls(scope: .reading, sortValue: $sortValue, ascending: $ascending)
+                MangaBakaContentButton().font(.subheadline)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         status("All", value: "all")
@@ -60,10 +67,10 @@ struct MangaBakaLibraryView: View {
                     TextField("Filter loaded titles", text: $search).textInputAutocapitalization(.never)
                     if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear filter") }
                 }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
-                if !search.isEmpty && account.hasMoreLibrary {
-                    Text("Filtering \(account.library.count) loaded titles. Load more to search the rest of this list.").font(.caption).foregroundStyle(.secondary)
+                if account.hasMoreLibrary {
+                    Text("\(account.library.count.formatted()) titles loaded. Syncing the rest of this list for complete search and sorting…").font(.caption).foregroundStyle(.secondary)
                 }
-                if let error = account.libraryError { NoticeView(message: error) { Task { await account.loadLibrary(state: selectedState, refresh: true) } } }
+                if let error = account.libraryError { NoticeView(message: error) { Task { await account.loadCompleteLibrary(state: selectedState, refresh: true) } } }
                 if let notice = account.notice { Text(notice).font(.caption).foregroundStyle(.mint) }
                 if entries.isEmpty && !account.loadingLibrary && account.libraryError == nil {
                     ContentUnavailableView("No visible titles", systemImage: "book.closed",
@@ -88,19 +95,20 @@ struct MangaBakaLibraryView: View {
                 }
                 if account.loadingLibrary { ProgressView("Loading your library…").frame(maxWidth: .infinity).padding() }
                 else if account.hasMoreLibrary {
-                    Button("Load more from My Library") { Task { await account.loadLibrary(state: selectedState, next: true) } }
+                    Button("Continue syncing My Library") { Task { await account.loadCompleteLibrary(state: selectedState) } }
                         .buttonStyle(.bordered).frame(maxWidth: .infinity)
                 }
                 MangaBakaAttribution().padding(.top, 12)
             }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
-        }.refreshable { await account.loadLibrary(state: selectedState, refresh: true) }
+        }.refreshable { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private func status(_ title: String, value: String) -> some View {
         Button { state = value } label: {
             Text(title).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
                 .background(state == value ? Color.white : Theme.surface, in: Capsule())
                 .foregroundStyle(state == value ? Color.black : Color.white)
-        }.buttonStyle(.plain).accessibilityAddTraits(state == value ? .isSelected : [])
+        }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-library-status-" + value)
+            .accessibilityAddTraits(state == value ? .isSelected : [])
     }
 }
 

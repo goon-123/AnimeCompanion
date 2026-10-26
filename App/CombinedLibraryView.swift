@@ -7,12 +7,16 @@ struct CombinedLibraryView: View {
     @Environment(\.scenePhase) private var scene
     @Environment(\.dynamicTypeSize) private var textSize
     @AppStorage("mangabaka.library.layout") private var layout = "grid"
-    @State private var status = CombinedLibraryStatus.all
+    @AppStorage("library.combined.defaultStatus") private var defaultStatus = LibraryScope.combined.initialStatus
+    @State private var status = CombinedLibraryStatus(rawValue: LibraryScope.combined.openingStatus()) ?? .active
+    @AppStorage("combined.library.sort") private var sortValue = ReadingLibrarySort.title.rawValue
+    @AppStorage("combined.library.ascending") private var ascending = true
     @State private var search = ""
     @State private var settings = false
     private var items: [CombinedLibraryItem] {
-        CombinedLibraryItem.merge(anime: anime.isSignedIn ? anime.entries : [], reading: reading.connected ? reading.library : [],
-            includeAdult: anime.includeAdult, query: search, status: status)
+        let values = CombinedLibraryItem.merge(anime: anime.isSignedIn ? anime.entries : [], reading: reading.connected ? reading.library : [],
+            includeAdult: anime.includeAdult, query: search, status: status, contentFilter: anime.mangaBakaContent)
+        return (ReadingLibrarySort(rawValue: sortValue) ?? .title).sorted(values, ascending: ascending)
     }
     var body: some View {
         ScrollView {
@@ -23,6 +27,8 @@ struct CombinedLibraryView: View {
                     Text("\(items.count) loaded").font(.caption).foregroundStyle(.secondary)
                 }
                 LibraryLayoutPicker(layout: $layout)
+                ReadingLibrarySortControls(scope: .combined, sortValue: $sortValue, ascending: $ascending)
+                MangaBakaContentButton().font(.subheadline)
                 filters
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -46,9 +52,9 @@ struct CombinedLibraryView: View {
                 }
                 if reading.hasMoreLibrary {
                     VStack(spacing: 8) {
-                        Text("Search and filters include loaded titles. Load more books to include the rest of your MangaBaka library.")
+                        Text("Syncing remaining books for complete search and sorting…")
                             .font(.caption).foregroundStyle(.secondary)
-                        Button("Load more books") { Task { await loadReading(next: true) } }.buttonStyle(.bordered)
+                        Button("Continue syncing books") { Task { await loadReading() } }.buttonStyle(.bordered)
                             .disabled(reading.loadingLibrary)
                     }.frame(maxWidth: .infinity)
                 }
@@ -61,6 +67,7 @@ struct CombinedLibraryView: View {
                 Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             } }
             .appSettingsSheet(isPresented: $settings)
+            .onChange(of: defaultStatus) { _, _ in status = CombinedLibraryStatus(rawValue: LibraryScope.combined.openingStatus()) ?? .active }
             .task(id: "\(reading.connected)-\(reading.connectionID)-\(reading.revision)") { await loadReading(refresh: true) }
             .task(id: "\(anime.isSignedIn)-\(scene)") {
                 guard scene == .active else { return }
@@ -83,7 +90,8 @@ struct CombinedLibraryView: View {
                         Text(value.label).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
                             .background(status == value ? Color.white : Theme.surface, in: Capsule())
                             .foregroundStyle(status == value ? Color.black : Color.white)
-                    }.buttonStyle(.plain).accessibilityAddTraits(status == value ? .isSelected : [])
+                    }.buttonStyle(.plain).accessibilityIdentifier("combined-library-status-" + value.rawValue)
+                        .accessibilityAddTraits(status == value ? .isSelected : [])
                 }
             }
         }
@@ -106,9 +114,9 @@ struct CombinedLibraryView: View {
             if let series = entry.series { NavigationLink(value: MangaBakaSeriesRoute(series: series), label: content).buttonStyle(.plain).accessibilityIdentifier("combined-entry-" + item.id) }
         }
     }
-    private func loadReading(refresh: Bool = false, next: Bool = false) async {
+    private func loadReading(refresh: Bool = false) async {
         guard reading.connected else { return }
-        await reading.loadLibrary(state: nil, refresh: refresh, next: next)
+        await reading.loadCompleteLibrary(state: nil, refresh: refresh)
     }
 }
 

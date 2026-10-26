@@ -19,14 +19,17 @@ public struct MangaBakaRecommendationsState: Sendable {
     private var records: [MangaBakaSeries] = []
     private var retryAfter = Date.distantPast
     private var account: UUID?
-    private var includeAdult = false
+    private var contentFilter = MangaBakaContentFilter()
     private var attempt: Attempt?
 
     public init() {}
 
     public mutating func begin(account: UUID, includeAdult: Bool, refresh: Bool = false, now: Date = Date()) -> Attempt? {
+        begin(account: account, contentFilter: .legacy(includeAdult: includeAdult), refresh: refresh, now: now)
+    }
+    public mutating func begin(account: UUID, contentFilter: MangaBakaContentFilter, refresh: Bool = false, now: Date = Date()) -> Attempt? {
         if self.account != account { reset(); self.account = account }
-        self.includeAdult = includeAdult
+        self.contentFilter = contentFilter
         applyFilter()
         guard attempt == nil else { return nil }
         guard refresh || (now >= (refreshAt ?? .distantPast) && now >= retryAfter) else { return nil }
@@ -40,9 +43,14 @@ public struct MangaBakaRecommendationsState: Sendable {
     @discardableResult
     public mutating func restore(_ snapshot: MangaBakaRecommendationSnapshot, account: UUID,
         includeAdult: Bool, now: Date = Date()) throws -> Bool {
+        try restore(snapshot, account: account, contentFilter: .legacy(includeAdult: includeAdult), now: now)
+    }
+    @discardableResult
+    public mutating func restore(_ snapshot: MangaBakaRecommendationSnapshot, account: UUID,
+        contentFilter: MangaBakaContentFilter, now: Date = Date()) throws -> Bool {
         guard attempt == nil, !hasResult, snapshot.fetchedAt <= now.addingTimeInterval(60) else { return false }
         let values = try snapshot.payload.records()
-        self.account = account; self.includeAdult = includeAdult
+        self.account = account; self.contentFilter = contentFilter
         receive(values, status: snapshot.status, at: snapshot.fetchedAt)
         return true
     }
@@ -64,7 +72,7 @@ public struct MangaBakaRecommendationsState: Sendable {
         applyFilter()
     }
 
-    private mutating func applyFilter() { items = records.filter { $0.isVisible(includeAdult: includeAdult) } }
+    private mutating func applyFilter() { items = records.filter { $0.isVisible(contentFilter: contentFilter) } }
 
     public mutating func fail(_ message: String, for requested: Attempt, now: Date = Date()) {
         if isCurrent(requested) {

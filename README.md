@@ -1,5 +1,13 @@
 # Anime Companion
 
+## Content ratings and library preferences — version 0.29.0 / build 80
+
+**Content rating** on Explore or the reading/combined libraries opens four independent MangaBaka switches: Safe, Suggestive, Erotica and Pornographic. Unrated titles have their own switch. Settings → Browsing & content exposes the same controls beside the separate AniList adult setting. Existing adult preferences migrate once; later changes stay provider-specific. Ratings apply to public requests and local results, including unified search/Explore, library entries, related adaptations and cover galleries. For you refilters its weekly saved selection immediately without resetting its refresh date.
+
+Libraries default to **Watching** (Anime), **Reading** (MangaBaka) and **In progress** (All stories). Change each opening status under Settings → Library defaults or the library sort menu. MangaBaka and All stories now save sort order and direction independently: title, last updated, your score, community rating, progress, completion and publication year; reading also offers volumes. Anime keeps its existing sorts and adds release year, completion and an All status; its reverse direction now persists. Unknown sort values remain last. Combined completion compares percentages rather than chapter and episode counts.
+
+MangaBaka library pages load automatically for complete search/sorting; the page count and retry state remain visible while syncing. Nine Core regressions and four native journeys per device cover rating combinations, migration, request encoding, cached recommendations, independent defaults/sorts, restart persistence and automatic pagination. See BUILD_STATUS.md and the PR for actual hosted validation results.
+
 ## Account switcher — version 0.28.0 / build 79
 
 Tap the profile button on Explore or My Library to see both AniList and MangaBaka accounts, sign into either service, manage each connection, or open App settings. Both logins remain saved independently. Choosing an account opens its library and remembers the selection across launches; the All library option remains available. A hidden My Library tab opens in a sheet without changing bottom-tab preferences.

@@ -166,7 +166,8 @@ final class MangaBakaStore: ObservableObject {
             // replacement request before discovering the saved weekly result.
             if let snapshot = try? recommendationCache.load(credential: saved),
                (try? recommendationState.restore(snapshot, account: connectionID,
-                    includeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult"))) == true {
+                    contentFilter: MangaBakaContentFilter(saved: UserDefaults.standard.string(forKey: MangaBakaContentFilter.storageKey),
+                        legacyIncludeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult")))) == true {
                 recommendationSnapshot = snapshot
             }
             connected = true
@@ -225,10 +226,10 @@ final class MangaBakaStore: ObservableObject {
         if let snapshot = recommendationSnapshot { saveRecommendationCache(snapshot, credential: renewed) }
         return renewed
     }
-    func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
+    func loadRecommendations(contentFilter: MangaBakaContentFilter, refresh: Bool = false) async {
         guard connected, !Task.isCancelled else { return }
         guard let attempt = recommendationState.begin(account: connectionID,
-            includeAdult: includeAdult, refresh: refresh) else {
+            contentFilter: contentFilter, refresh: refresh) else {
             await recommendationTask?.value
             return
         }
@@ -242,7 +243,7 @@ final class MangaBakaStore: ObservableObject {
                 }
             }
             do {
-                let payload = try await api.recommendationPayload(validCredential(), includeAdult: includeAdult)
+                let payload = try await api.recommendationPayload(validCredential(), contentFilter: contentFilter)
                 let result = try payload.records()
                 var status: MangaBakaRecommendationStatus?
                 if result.isEmpty {
@@ -269,6 +270,21 @@ final class MangaBakaStore: ObservableObject {
         #endif
         do { try recommendationCache.save(snapshot, credential: credential); recommendationCacheNotice = nil }
         catch { recommendationCacheNotice = "For you could not be saved on this device. These recommendations are available until the app closes." }
+    }
+    /// Complete the selected list before presenting its final sort order.
+    /// Existing pages appear progressively and a failed page remains retryable.
+    func loadCompleteLibrary(state: String?, refresh: Bool = false) async {
+        let account = connectionID
+        if !refresh, libraryState == state, libraryPage > 0, hasMoreLibrary {
+            await loadLibrary(state: state, next: true)
+        } else {
+            await loadLibrary(state: state, refresh: refresh)
+        }
+        let request = libraryGeneration
+        while !Task.isCancelled, account == connectionID, request == libraryGeneration,
+              libraryState == state, hasMoreLibrary, libraryError == nil, !loadingLibrary {
+            await loadLibrary(state: state, next: true)
+        }
     }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }

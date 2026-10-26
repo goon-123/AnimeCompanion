@@ -68,8 +68,11 @@ struct SettingsDirectoryView: View {
                         }.accessibilityIdentifier("settings-ipad-layout")
                     }
                     NavigationLink { BrowsingSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Browsing & content", detail: "Metadata source & adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
+                        SettingsCategoryLabel(title: "Browsing & content", detail: "MangaBaka ratings & AniList adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
                     }.accessibilityIdentifier("settings-browsing")
+                    NavigationLink { LibraryPreferencesView() } label: {
+                        SettingsCategoryLabel(title: "Library defaults", detail: "Open on Watching, Reading or In progress", symbol: "books.vertical.fill", tint: .teal)
+                    }.accessibilityIdentifier("settings-library-defaults")
                     NavigationLink { TrackingSettingsView() } label: {
                         SettingsCategoryLabel(title: "Watch tracking", detail: "Catch-up status & completion", symbol: "checkmark.circle.fill", tint: .green)
                     }.accessibilityIdentifier("settings-tracking")
@@ -182,8 +185,12 @@ private struct BrowsingSettingsView: View {
         Form {
             Section {
                 Toggle("Show adult content (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
-            } header: { Text("Content") } footer: {
-                Text("Applies to anime and MangaBaka browsing, search, libraries, schedules and known adult providers. Hidden entries stay in your online lists. External websites use their own filters.")
+            } header: { Text("AniList & video sources") } footer: {
+                Text("Applies to anime browsing, libraries, schedules and known adult video providers. Hidden entries stay in your online lists.")
+            }
+            MangaBakaRatingSection(filter: $store.mangaBakaContent)
+            Section {
+                NavigationLink("More MangaBaka content options") { MangaBakaContentSettingsView() }
             }
         }.navigationTitle("Browsing & content").navigationBarTitleDisplayMode(.inline)
     }
