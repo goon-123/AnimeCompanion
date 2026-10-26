@@ -31,9 +31,14 @@ final class UnifiedExploreUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No linked MangaBaka listing"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
         app.buttons["related-mangabaka-search"].tap()
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "Glass Harbor Manga")
+        // Native search bars can collapse; the returned title proves that the
+        // destination opened and used the adaptation's prefilled query.
+        XCTAssertTrue(app.staticTexts["Glass Harbor Manga · manga 73"].waitForExistence(timeout: 15))
         capture("Related-MangaBaka-Search-Fallback", app)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["No linked MangaBaka listing"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 10))
     }
     @MainActor private func launch(failedReading: Bool = false, extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
