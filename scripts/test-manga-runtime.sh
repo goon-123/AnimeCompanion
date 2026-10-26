@@ -5,12 +5,10 @@ python3 scripts/prepare-manga-interpreter.py
 fixture_dir="$PWD/Tools/MangaRuntime/target/fixtures"
 mkdir -p "$fixture_dir"
 for file in tachiyomi-en.mangapill-v1.4.9.apk tachiyomi-vi.cuutruyenmoe-v1.6.3.apk tachiyomi-all.akuma-v1.4.10.apk; do
-  if [[ ! -f "$fixture_dir/$file" ]]; then
-    # prepare-manga-interpreter verifies this exact checkout and its patches.
-    # Use its tracked fixtures instead of a second raw-CDN download; the SHA-256
-    # checks below still validate every APK before it is executed.
-    cp "Tools/MangaRuntime/target/patched-dexvm/fixtures/$file" "$fixture_dir/$file"
-  fi
+  # prepare-manga-interpreter verifies this exact checkout and its patches.
+  # Use its tracked fixtures instead of a second raw-CDN download; the SHA-256
+  # checks below still validate every APK before it is executed.
+  cp "Tools/MangaRuntime/target/patched-dexvm/fixtures/$file" "$fixture_dir/$file"
 done
 if [[ ! -f "$fixture_dir/tachiyomi-all.commitstrip-v1.6.0.apk" ]]; then
   echo "Fetching pinned fixture: tachiyomi-all.commitstrip-v1.6.0.apk"
@@ -24,12 +22,7 @@ if [[ ! -f "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk" ]]; then
     https://github.com/keiyoushi/extensions/releases/download/8ef06cd-1/tachiyomi-en.weebcentral-v1.6.25.apk \
     -o "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk"
 fi
-if [[ ! -f "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk" ]]; then
-  echo "Fetching pinned fixture: tachiyomi-all.mangaplus-v1.6.67.apk"
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-    https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk \
-    -o "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk"
-fi
+cp Tools/MangaRuntime/test-support/pinned-apks/tachiyomi-all.mangaplus-v1.6.67.apk "$fixture_dir/"
 while read -r release file; do
   if [[ ! -f "$fixture_dir/$file" ]]; then
     echo "Fetching pinned fixture: $file"
