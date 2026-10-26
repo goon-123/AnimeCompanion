@@ -223,7 +223,7 @@ struct LibraryView: View {
                 ForEach(LibrarySort.allCases, id: \.self) { order in
                     MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue }
                 }
-                Section("Default view") { LibraryDefaultPicker(scope: .anime) }
+                Section("Default view") { LibraryDefaultMenu(scope: .anime) }
             } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                 .accessibilityIdentifier("library-sort")
             Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }

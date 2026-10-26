@@ -28,6 +28,22 @@ struct LibraryDefaultPicker: View {
     }
 }
 
+struct LibraryDefaultMenu: View {
+    let scope: LibraryScope
+    @AppStorage private var saved: String
+    init(scope: LibraryScope) {
+        self.scope = scope
+        _saved = AppStorage(wrappedValue: scope.initialStatus, scope.defaultStatusKey)
+    }
+    var body: some View {
+        Menu("Open library on") {
+            ForEach(scope.statuses) { status in
+                MenuChoice(title: status.label, selected: saved == status.id) { saved = status.id }
+            }
+        }.accessibilityIdentifier("library-default-" + scope.rawValue)
+    }
+}
+
 struct ReadingLibrarySortControls: View {
     let scope: LibraryScope
     @Binding var sortValue: String
@@ -47,7 +63,7 @@ struct ReadingLibrarySortControls: View {
                     sortValue = order.rawValue; ascending = order.defaultAscending
                 }
             }
-            Section("Default view") { LibraryDefaultPicker(scope: scope) }
+            Section("Default view") { LibraryDefaultMenu(scope: scope) }
         } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down") }
             .accessibilityIdentifier(scope.rawValue + "-library-sort")
     }
