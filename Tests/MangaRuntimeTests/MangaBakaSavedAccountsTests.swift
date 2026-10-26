@@ -169,6 +169,16 @@ final class MangaBakaSavedAccountsTests: XCTestCase {
         var result: CFTypeRef?
         XCTAssertEqual(SecItemCopyMatching(probe as CFDictionary, &result), errSecSuccess)
         XCTAssertEqual(result as? Data, bytes)
+        // If storage becomes readable again, retain its accounts while adding
+        // another login instead of using the failed restore's empty memory.
+        let keychain = MangaBakaAccountKeychain(service: service)
+        var recovered = MangaBakaAccounts()
+        let first = try recovered.add(profile: profile("reader-a"), credential: .init(kind: .apiKey, secret: "owned-a"))
+        try keychain.save(recovered)
+        await store.connect(apiKey: "owned-b")
+        XCTAssertEqual(store.savedAccounts.count, 2)
+        XCTAssertTrue(store.savedAccounts.contains { $0.id == first })
+        XCTAssertEqual(store.profile?.id, "reader-b")
     }
     @MainActor func testRotationFinishesForItsOwningAccountAfterSwitchWithoutLosingEitherLogin() async throws {
         let service = "com.animecompanion.saved-accounts-test." + UUID().uuidString

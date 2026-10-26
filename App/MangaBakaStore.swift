@@ -232,10 +232,12 @@ final class MangaBakaStore: ObservableObject {
             else { candidate = try await authentication.signIn(clientID: clientID, api: api, addingAccount: !accounts.sessions.isEmpty) }
             let profile = try await api.profile(candidate)
             guard connectionID == attempt else { return }
+            // Reload immediately before the transaction. Keychain may have
+            // recovered since launch, or another session may have renewed.
+            var next = try keychain.load()?.accounts ?? .init()
             // Reconnecting the same person rotates their credentials, not their cache age.
-            let old = accounts.sessions.first { $0.profile?.id == profile.id }
+            let old = next.sessions.first { $0.profile?.id == profile.id }
             let retained = old.flatMap { try? cache(for: $0.id).load(credential: $0.credential) }
-            var next = accounts
             next.add(profile: profile, credential: candidate)
             try keychain.save(next)
             activate(next, snapshot: retained)

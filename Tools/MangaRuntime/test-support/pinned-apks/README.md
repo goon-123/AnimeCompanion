@@ -1,10 +1,9 @@
-# Pinned extension regression input
+# Pinned extension regression inputs
 
-`tachiyomi-all.mangaplus-v1.6.67.apk` is the unmodified MangaPlus extension published by the Tachiyomi/Keiyoushi extension contributors. This copy is retained solely as an offline regression fixture after its upstream release download stopped resolving. It is not included in the Release application.
+These 59 unmodified APKs were published by the Tachiyomi/Keiyoushi extension contributors and are retained solely for offline regression tests after historical release URLs stopped resolving. They are not included in the Release application.
 
-- Original distribution: https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk
-- Upstream source and notices: https://github.com/keiyoushi/extensions-source
+- Original filenames, distribution URLs, SHA-256 digests and test coverage are recorded in `../../support/compatibility-fixtures.json`.
+- Upstream source and contributor notices: https://github.com/keiyoushi/extensions-source
 - Upstream license: Apache License 2.0, included in `LICENSE`.
-- SHA-256: `1be92d6255eae1954c4deb525c96cd4933b37be85a927b1d5a3793b818ab8f98`.
 
-The bytes were recovered from the hash-verified fixtures of the repository's successful runtime build (Actions run 40337296297, artifact 12657586488). `scripts/test-manga-runtime.sh` checks the original pinned digest before running any fixture, including this one.
+The bytes were recovered from the hash-verified fixtures of this repository's successful runtime build (Actions run 40337296297, artifact 12657586488). Every file matches its original manifest digest. `scripts/test-manga-runtime.sh` checks all pinned APK digests before running any test. The three classic interpreter fixtures continue to come from its independently verified Git checkout.

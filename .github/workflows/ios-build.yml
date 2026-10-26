@@ -45,7 +45,33 @@ jobs:
             manga-ios-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-
             manga-ios-${{ runner.arch }}-
       - name: Build device and universal simulator libraries
-        run: bash scripts/build-manga-runtime.sh
+        run: |
+          libraries=(
+            Tools/MangaRuntime/target/aarch64-apple-ios/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/aarch64-apple-ios-sim/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/x86_64-apple-ios/release/libanime_manga_runtime.a
+          )
+          complete=true
+          for library in "${libraries[@]}"; do
+            if [[ ! -s "$library" ]]; then complete=false; fi
+          done
+          # Exact cache hits cover the lockfile, runtime sources, patch and build
+          # scripts. Keep the same pinned Xcode and regenerate both slice groups.
+          if [[ '${{ steps.manga-runtime-cache.outputs.cache-hit }}' == true && "$complete" == true ]] && command -v rustup >/dev/null; then
+            source "$HOME/.cargo/env"
+            rustup toolchain install 1.99.1 --profile minimal
+            python3 scripts/prepare-manga-interpreter.py
+            python3 scripts/manga-licenses.py
+            mkdir -p build
+            xcrun lipo -create "${libraries[1]}" "${libraries[2]}" -output build/libMangaRuntime-simulator.a
+            rm -rf build/MangaRuntime.xcframework
+            xcodebuild -create-xcframework \
+              -library "${libraries[0]}" -headers Tools/MangaRuntime/include \
+              -library build/libMangaRuntime-simulator.a -headers Tools/MangaRuntime/include \
+              -output build/MangaRuntime.xcframework
+          else
+            bash scripts/build-manga-runtime.sh
+          fi
       - name: Test real classic and modern APKs through the C bridge
         run: bash scripts/test-manga-runtime.sh
       - name: Preserve compiled runtime for retries
