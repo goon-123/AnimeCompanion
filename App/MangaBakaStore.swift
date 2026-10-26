@@ -224,6 +224,9 @@ final class MangaBakaStore: ObservableObject {
         let attempt = connectionID
         defer { connecting = false }
         do {
+            // Do not replace an unreadable or newer registry with an empty list
+            // merely because restoring it failed earlier in this launch.
+            _ = try keychain.load()
             let candidate: MangaBakaCredential
             if let apiKey { candidate = try MangaBakaCredential(kind: .apiKey, secret: apiKey) }
             else { candidate = try await authentication.signIn(clientID: clientID, api: api, addingAccount: !accounts.sessions.isEmpty) }

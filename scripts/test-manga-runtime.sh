@@ -4,30 +4,35 @@ cd "$(dirname "$0")/.."
 python3 scripts/prepare-manga-interpreter.py
 fixture_dir="$PWD/Tools/MangaRuntime/target/fixtures"
 mkdir -p "$fixture_dir"
-revision=38d3438d7e36b5c2c17414029fd36b2d717eefcb
 for file in tachiyomi-en.mangapill-v1.4.9.apk tachiyomi-vi.cuutruyenmoe-v1.6.3.apk tachiyomi-all.akuma-v1.4.10.apk; do
   if [[ ! -f "$fixture_dir/$file" ]]; then
-    curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-      "https://raw.githubusercontent.com/tachibana-shin/dexvm/$revision/fixtures/$file" -o "$fixture_dir/$file"
+    # prepare-manga-interpreter verifies this exact checkout and its patches.
+    # Use its tracked fixtures instead of a second raw-CDN download; the SHA-256
+    # checks below still validate every APK before it is executed.
+    cp "Tools/MangaRuntime/target/patched-dexvm/fixtures/$file" "$fixture_dir/$file"
   fi
 done
 if [[ ! -f "$fixture_dir/tachiyomi-all.commitstrip-v1.6.0.apk" ]]; then
+  echo "Fetching pinned fixture: tachiyomi-all.commitstrip-v1.6.0.apk"
   curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
     https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.commitstrip-v1.6.0.apk \
     -o "$fixture_dir/tachiyomi-all.commitstrip-v1.6.0.apk"
 fi
 if [[ ! -f "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk" ]]; then
+  echo "Fetching pinned fixture: tachiyomi-en.weebcentral-v1.6.25.apk"
   curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
     https://github.com/keiyoushi/extensions/releases/download/8ef06cd-1/tachiyomi-en.weebcentral-v1.6.25.apk \
     -o "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk"
 fi
 if [[ ! -f "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk" ]]; then
+  echo "Fetching pinned fixture: tachiyomi-all.mangaplus-v1.6.67.apk"
   curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
     https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk \
     -o "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk"
 fi
 while read -r release file; do
   if [[ ! -f "$fixture_dir/$file" ]]; then
+    echo "Fetching pinned fixture: $file"
     curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
       "https://github.com/keiyoushi/extensions/releases/download/$release/$file" -o "$fixture_dir/$file"
   fi

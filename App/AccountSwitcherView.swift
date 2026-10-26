@@ -67,7 +67,7 @@ struct AccountSwitcherView: View {
     var body: some View {
         Form {
             Section {
-                ForEach(TrackingAccount.allCases) { account in
+                ForEach(TrackingAccount.allCases.filter { $0 != .mangaBaka || reading.savedAccounts.count <= 1 }) { account in
                     if connected(account) {
                         Button { select(account) } label: { accountLabel(account) }
                             .buttonStyle(.plain).accessibilityLabel("Switch to " + account.title)
@@ -80,7 +80,7 @@ struct AccountSwitcherView: View {
                     }
                 }
             } header: { Text("Your accounts") } footer: {
-                Text("Both accounts stay signed in. Tap an account to open its library. Each service keeps its own progress.")
+                Text("Saved accounts stay signed in. Tap an account to open its library. Each service keeps its own progress.")
             }
             if reading.savedAccounts.count > 1 {
                 Section("MangaBaka accounts") {

@@ -152,6 +152,24 @@ final class MangaBakaSavedAccountsTests: XCTestCase {
         var empty = reopened.accounts; empty.remove(try XCTUnwrap(empty.selectedID)); try keychain.save(empty)
         XCTAssertTrue(try XCTUnwrap(keychain.load()).accounts.sessions.isEmpty)
     }
+    @MainActor func testUnreadableRegistryIsPreservedWhenAnotherSignInIsAttempted() async throws {
+        let service = "com.animecompanion.saved-accounts-test." + UUID().uuidString
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { clean(service, directory) }
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "accounts.v1"]
+        let bytes = Data(#"{"schema":99,"sessions":[]}"#.utf8)
+        var item = query; item[kSecValueData as String] = bytes
+        XCTAssertEqual(SecItemAdd(item as CFDictionary, nil), errSecSuccess)
+        let transport = SavedAccountsTransport()
+        let store = MangaBakaStore(api: MangaBakaClient(transport: transport, directory: nil, minimumRequestInterval: 0),
+            keychain: MangaBakaAccountKeychain(service: service), cacheDirectory: directory)
+        await store.restore(); await store.connect(apiKey: "owned-a")
+        XCTAssertFalse(store.connected); XCTAssertNotNil(store.accountError)
+        var probe = query; probe[kSecReturnData as String] = true
+        var result: CFTypeRef?
+        XCTAssertEqual(SecItemCopyMatching(probe as CFDictionary, &result), errSecSuccess)
+        XCTAssertEqual(result as? Data, bytes)
+    }
     @MainActor func testRotationFinishesForItsOwningAccountAfterSwitchWithoutLosingEitherLogin() async throws {
         let service = "com.animecompanion.saved-accounts-test." + UUID().uuidString
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

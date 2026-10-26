@@ -33,7 +33,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: manga-runtime-cache
         with:
           path: |
             ~/.cargo/registry
@@ -47,6 +48,16 @@ jobs:
         run: bash scripts/build-manga-runtime.sh
       - name: Test real classic and modern APKs through the C bridge
         run: bash scripts/test-manga-runtime.sh
+      - name: Preserve compiled runtime for retries
+        if: ${{ always() && steps.manga-runtime-cache.outputs.cache-primary-key != '' && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Tools/MangaRuntime/target
+          key: ${{ steps.manga-runtime-cache.outputs.cache-primary-key }}
       - name: Upload bundled manga runtime
         uses: actions/upload-artifact@v4
         with:
