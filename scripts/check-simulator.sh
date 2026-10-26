@@ -211,7 +211,9 @@ if [[ "$test_scope" == news ]]; then
 fi
 if [[ "$test_scope" == explore ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/UnifiedExploreUITests
-    -only-testing:AnimeCompanionUITests/AccountSwitcherUITests)
+    -only-testing:AnimeCompanionUITests/AccountSwitcherUITests
+    -only-testing:AnimeCompanionUITests/MangaBakaSavedAccountsUITests
+    -only-testing:MangaRuntimeTests/MangaBakaSavedAccountsTests)
 fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
 if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore ]]; then

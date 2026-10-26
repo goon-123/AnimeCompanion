@@ -4,91 +4,15 @@ cd "$(dirname "$0")/.."
 python3 scripts/prepare-manga-interpreter.py
 fixture_dir="$PWD/Tools/MangaRuntime/target/fixtures"
 mkdir -p "$fixture_dir"
-revision=38d3438d7e36b5c2c17414029fd36b2d717eefcb
 for file in tachiyomi-en.mangapill-v1.4.9.apk tachiyomi-vi.cuutruyenmoe-v1.6.3.apk tachiyomi-all.akuma-v1.4.10.apk; do
-  if [[ ! -f "$fixture_dir/$file" ]]; then
-    curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-      "https://raw.githubusercontent.com/tachibana-shin/dexvm/$revision/fixtures/$file" -o "$fixture_dir/$file"
-  fi
+  # prepare-manga-interpreter verifies this exact checkout and its patches.
+  # Use its tracked fixtures instead of a second raw-CDN download; the SHA-256
+  # checks below still validate every APK before it is executed.
+  cp "Tools/MangaRuntime/target/patched-dexvm/fixtures/$file" "$fixture_dir/$file"
 done
-if [[ ! -f "$fixture_dir/tachiyomi-all.commitstrip-v1.6.0.apk" ]]; then
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-    https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-all.commitstrip-v1.6.0.apk \
-    -o "$fixture_dir/tachiyomi-all.commitstrip-v1.6.0.apk"
-fi
-if [[ ! -f "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk" ]]; then
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-    https://github.com/keiyoushi/extensions/releases/download/8ef06cd-1/tachiyomi-en.weebcentral-v1.6.25.apk \
-    -o "$fixture_dir/tachiyomi-en.weebcentral-v1.6.25.apk"
-fi
-if [[ ! -f "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk" ]]; then
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-    https://github.com/keiyoushi/extensions/releases/download/58fd63f/tachiyomi-all.mangaplus-v1.6.67.apk \
-    -o "$fixture_dir/tachiyomi-all.mangaplus-v1.6.67.apk"
-fi
-while read -r release file; do
-  if [[ ! -f "$fixture_dir/$file" ]]; then
-    curl --proto '=https' --tlsv1.2 -fsSL --retry 2 \
-      "https://github.com/keiyoushi/extensions/releases/download/$release/$file" -o "$fixture_dir/$file"
-  fi
-done <<'PINS'
-23345ef tachiyomi-en.omegascans-v1.6.52.apk
-e97033f tachiyomi-en.toonily-v1.6.72.apk
-e97033f tachiyomi-all.mangaball-v1.6.5.apk
-8ef06cd-0 tachiyomi-all.mangadex-v1.6.0.apk
-7363e42 tachiyomi-all.mangafire-v1.6.34.apk
-4217666-0 tachiyomi-en.asurascans-v1.6.69.apk
-24bd7e6 tachiyomi-en.comix-v1.6.54.apk
-e97033f tachiyomi-en.manhuaus-v1.6.60.apk
-7363e42 tachiyomi-all.cubari-v1.6.0.apk
-7363e42 tachiyomi-all.mangaup-v1.6.3.apk
-7363e42 tachiyomi-en.hiperdex-v1.6.89.apk
-7363e42 tachiyomi-all.namicomi-v1.6.0.apk
-24bc6c2 tachiyomi-all.comicfury-v1.6.0.apk
-24bc6c2 tachiyomi-all.comicskingdom-v1.6.0.apk
-bdcf84f tachiyomi-all.projectsuki-v1.6.0.apk
-4217666-0 tachiyomi-en.mangabuddy-v1.6.34.apk
-4217666-0 tachiyomi-en.hentainexus-v1.6.20.apk
-cfc0199 tachiyomi-en.flamecomics-v1.6.1.apk
-7363e42 tachiyomi-en.allanime-v1.6.29.apk
-4217666-0 tachiyomi-en.deathtollscans-v1.6.6.apk
-bdcf84f tachiyomi-en.dynasty-v1.6.1.apk
-cfc0199 tachiyomi-en.hiveworks-v1.6.2.apk
-24bc6c2 tachiyomi-fr.furyosquad-v1.6.0.apk
-b5d2cd5 tachiyomi-en.mangafoxfun-v1.6.38.apk
-bdcf84f tachiyomi-en.assortedscans-v1.6.0.apk
-bdcf84f tachiyomi-en.digitalcomicmuseum-v1.6.0.apk
-4217666-2 tachiyomi-ja.rawkuma-v1.6.41.apk
-bdcf84f tachiyomi-zh.manhuawu-v1.6.0.apk
-d0c0864 tachiyomi-all.lanraragi-v1.6.1.apk
-bdcf84f tachiyomi-all.mango-v1.6.0.apk
-bdcf84f tachiyomi-all.stashapp-v1.6.0.apk
-1319949 tachiyomi-en.mangadotnet-v1.6.25.apk
-58fd63f tachiyomi-zh.favcomic-v1.6.4.apk
-4217666-2 tachiyomi-zh.noyacg-v1.6.7.apk
-ff521c1 tachiyomi-all.komga-v1.6.74.apk
-2ba5b61 tachiyomi-zh.jinmantiantang-v1.6.59.apk
-bdcf84f tachiyomi-all.tappytoon-v1.6.0.apk
-cfc0199 tachiyomi-ar.arabmanhwa-v1.6.57.apk
-7363e42 tachiyomi-ar.procomic-v1.6.0.apk
-7363e42 tachiyomi-es.codearc-v1.6.2.apk
-39e8efc tachiyomi-es.inmanga-v1.6.1.apk
-4217666-1 tachiyomi-es.lectorjpg-v1.6.50.apk
-4217666-1 tachiyomi-ja.linemanga-v1.6.1.apk
-cfc0199 tachiyomi-ru.nudemoon-v1.6.32.apk
-24bc6c2 tachiyomi-all.danbooru-v1.6.0.apk
-4217666-0 tachiyomi-all.hentaifox-v1.6.18.apk
-bdcf84f tachiyomi-all.pixiv-v1.6.0.apk
-4217666-0 tachiyomi-all.webcomics-v1.6.11.apk
-ac40914 tachiyomi-en.hentaihere-v1.6.1.apk
-7363e42 tachiyomi-ko.sbxh-v1.6.1.apk
-ac40914 tachiyomi-pt.nexusmangas-v1.6.1.apk
-a0e93c0 tachiyomi-ru.wamanga-v1.6.2.apk
-24bc6c2 tachiyomi-zh.comicabc-v1.6.0.apk
-a2d7e26 tachiyomi-es.lectormonline-v1.6.4.apk
-06f6d69 tachiyomi-ru.senkuro-v1.6.0.apk
-06f6d69 tachiyomi-ru.senkognito-v1.6.0.apk
-PINS
+# Exact historical APK versions are offline test inputs, not app resources.
+# The original per-file SHA-256 assertions below remain authoritative.
+cp Tools/MangaRuntime/test-support/pinned-apks/*.apk "$fixture_dir/"
 python3 - "$fixture_dir" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])

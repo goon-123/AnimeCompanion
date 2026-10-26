@@ -45,11 +45,16 @@ struct LibraryCustomizationTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url, url.host == "api.mangabaka.org", request.httpMethod == nil || request.httpMethod == "GET" else { throw ServiceError.invalidResponse }
         let payload: [String: Any]
-        if url.path == "/v1/my/library" {
+        if MangaBakaAccountsPreview.active && url.path == "/v1/my/profile" {
+            let second = request.value(forHTTPHeaderField: "X-API-Key") == "owned-preview-second-account"
+            payload = ["data": ["id": second ? "owned-reader-two" : "owned-reader", "nickname": second ? "HarborReader" : "LanternReader", "rating_steps": 1]]
+        } else if url.path == "/v1/my/library" {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
             let state = query?.first { $0.name == "state" }?.value
             let page = Int(query?.first { $0.name == "page" }?.value ?? "1") ?? 1
-            let all = try LibraryCustomizationPreview.library(state: state)
+            let all = try LibraryCustomizationPreview.library(state: state).filter {
+                !MangaBakaAccountsPreview.active || $0.id == (request.value(forHTTPHeaderField: "X-API-Key") == "owned-preview-second-account" ? 74 : 73)
+            }
             let paginated = LibraryCustomizationPreview.controlsActive && all.contains { $0.id == 807 }
             let entries = paginated ? all.filter { page == 1 ? $0.id != 807 : $0.id == 807 } : all
             payload = ["data": entries.map { entry -> [String: Any] in ["series_id": entry.id, "series": LibraryCustomizationPreview.series(entry.id),

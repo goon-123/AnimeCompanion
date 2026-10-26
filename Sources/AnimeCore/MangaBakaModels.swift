@@ -335,7 +335,7 @@ public struct MangaBakaLibraryEntry: Decodable, Identifiable, Sendable {
     }
 }
 
-public struct MangaBakaProfile: Decodable, Sendable {
+public struct MangaBakaProfile: Codable, Equatable, Sendable {
     public let id: String
     public let name: String
     public let ratingSteps: Int
@@ -344,6 +344,11 @@ public struct MangaBakaProfile: Decodable, Sendable {
         guard let value = c.mbString(.id), !value.isEmpty else { throw MangaBakaError.invalidResponse }
         id = value; name = c.mbString(.nickname) ?? c.mbString(.preferredUsername) ?? "MangaBaka reader"
         ratingSteps = max(1, c.mbInt(.ratingSteps) ?? 1)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: MBKey.self)
+        try c.encode(id, forKey: .id); try c.encode(name, forKey: .nickname)
+        try c.encode(ratingSteps, forKey: .ratingSteps)
     }
 }
 
