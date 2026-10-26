@@ -16,20 +16,20 @@ final class UnifiedReadingCatalog: ObservableObject {
     @Published var items: [Shelf: [MangaBakaSeries]] = [:]
     @Published var errors: [Shelf: String] = [:]
     @Published var loading = Set<Shelf>()
-    private var adult: Bool?
+    private var contentFilter: MangaBakaContentFilter?
     private var generation = UUID()
-    func load(api: MangaBakaClient, adult: Bool, refresh: Bool = false) async {
+    func load(api: MangaBakaClient, contentFilter: MangaBakaContentFilter, refresh: Bool = false) async {
         guard !Task.isCancelled else { return }
-        if self.adult != adult { items = [:]; errors = [:] }
-        self.adult = adult
+        if self.contentFilter != contentFilter { items = [:]; errors = [:] }
+        self.contentFilter = contentFilter
         let attempt = UUID(); generation = attempt; loading = Set(Shelf.allCases)
         defer { if generation == attempt { loading = [] } }
         await withTaskGroup(of: (Shelf, [MangaBakaSeries]?, String?).self) { group in
             for shelf in Shelf.allCases {
                 group.addTask {
                     do {
-                        let page = try await api.browse(shelf.query, limit: 16, includeAdult: adult, refresh: refresh)
-                        return (shelf, page.items.filter { $0.isVisible(includeAdult: adult) }, nil)
+                        let page = try await api.browse(shelf.query, limit: 16, contentFilter: contentFilter, refresh: refresh)
+                        return (shelf, page.items.filter { $0.isVisible(contentFilter: contentFilter) }, nil)
                     } catch { return (shelf, nil, error is CancellationError ? nil : error.localizedDescription) }
                 }
             }
@@ -62,11 +62,11 @@ struct UnifiedExploreView: View {
     }
     private var trending: [ExploreStory] {
         ExploreStory.mix(anime: visible(response?.trending.media ?? []), reading: books.items[.trending] ?? [],
-                         novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult)
+                         novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     private var wall: [ExploreStory] {
         ExploreStory.mix(anime: visible((response?.trending.media ?? []) + (response?.seasonal.media ?? []) + (response?.upcoming.media ?? [])),
-            reading: (books.items[.trending] ?? []) + (books.items[.gems] ?? []), novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult)
+            reading: (books.items[.trending] ?? []) + (books.items[.gems] ?? []), novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     var body: some View {
         ScrollView {
@@ -114,15 +114,15 @@ struct UnifiedExploreView: View {
             .sheet(isPresented: $seasons) { seasonPicker }
             .sheet(isPresented: $dubFilters) { DubFiltersView() }
             .task(id: "\(selection.label)-\(anime.includeAdult)") { await loadAnime() }
-            .task(id: anime.includeAdult) { await books.load(api: reading.api, adult: anime.includeAdult) }
+            .task(id: anime.mangaBakaContent) { await books.load(api: reading.api, contentFilter: anime.mangaBakaContent) }
             .task { await dubs.load(using: anime.dubs) }
-            .task(id: "\(reading.connected)-\(reading.connectionID)-\(anime.includeAdult)-\(scene)") {
-                if scene == .active { await reading.loadRecommendations(includeAdult: anime.includeAdult) }
+            .task(id: "\(reading.connected)-\(reading.connectionID)-\(anime.mangaBakaContent)-\(scene)") {
+                if scene == .active { await reading.loadRecommendations(contentFilter: anime.mangaBakaContent) }
             }
             .refreshable {
                 async let shows: Void = loadAnime(refresh: true)
-                async let written: Void = books.load(api: reading.api, adult: anime.includeAdult, refresh: true)
-                async let personal: Void = reading.loadRecommendations(includeAdult: anime.includeAdult, refresh: true)
+                async let written: Void = books.load(api: reading.api, contentFilter: anime.mangaBakaContent, refresh: true)
+                async let personal: Void = reading.loadRecommendations(contentFilter: anime.mangaBakaContent, refresh: true)
                 async let dub: Void = dubs.load(using: anime.dubs, refresh: true)
                 _ = await (shows, written, personal, dub)
             }
@@ -140,6 +140,7 @@ struct UnifiedExploreView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text("Your next story.").font(.largeTitle.bold())
                 Text("Anime, manga & novels. One place to discover.").font(.subheadline).foregroundStyle(.secondary)
+                MangaBakaContentButton().font(.subheadline)
             }
             NavigationLink(value: ExploreSearchRoute()) {
                 HStack(spacing: 12) {
@@ -158,7 +159,7 @@ struct UnifiedExploreView: View {
             ForEach(UnifiedReadingCatalog.Shelf.allCases, id: \.self) { shelf in
                 if let error = books.errors[shelf] {
                     NoticeView(message: (shelf == .novels ? "Novels: " : "Manga: ") + error) {
-                        Task { await books.load(api: reading.api, adult: anime.includeAdult, refresh: true) }
+                        Task { await books.load(api: reading.api, contentFilter: anime.mangaBakaContent, refresh: true) }
                     }
                 }
             }
@@ -266,7 +267,7 @@ struct UnifiedExploreView: View {
                     Label("See all", systemImage: "chevron.right").font(.caption).foregroundStyle(.mint)
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(.plain)
-            storyShelf(title, subtitle: subtitle, items: (books.items[shelf] ?? []).filter { $0.isVisible(includeAdult: anime.includeAdult) }.map(ExploreStory.reading), showHeading: false)
+            storyShelf(title, subtitle: subtitle, items: (books.items[shelf] ?? []).filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.map(ExploreStory.reading), showHeading: false)
         }
     }
     private var loadingPosters: some View {

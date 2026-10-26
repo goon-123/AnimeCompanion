@@ -60,6 +60,9 @@ public actor MangaBakaClient {
         }
     }
     public static func browseURL(_ query: MangaBakaQuery, page: Int, limit: Int, includeAdult: Bool, now: Date = Date()) -> URL {
+        browseURL(query, page: page, limit: limit, contentFilter: .legacy(includeAdult: includeAdult), now: now)
+    }
+    public static func browseURL(_ query: MangaBakaQuery, page: Int, limit: Int, contentFilter: MangaBakaContentFilter, now: Date = Date()) -> URL {
         let searching = !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // /v1/genres and /v1/tags supply the legacy facet vocabulary. The v2
         // search schema rejects `genre`; use its supported v1 search contract
@@ -72,10 +75,10 @@ public actor MangaBakaClient {
         if curated && query.shelf == .hiddenGems { path = "/v2/series/discover/hidden-gems" }
         var c = URLComponents(string: "https://api.mangabaka.org" + path)!
         var items = [URLQueryItem(name: "limit", value: String(min(100, max(1, limit))))]
-        let ratings = query.allowedRatings(includeAdult: includeAdult).map(\.rawValue)
+        let ratings = query.allowedRatings(contentFilter: contentFilter).map(\.rawValue)
         if path.hasSuffix("/hidden-gems") {
-            if !includeAdult {
-                for rating in ["erotica", "pornographic"] { items.append(.init(name: "not_content_rating", value: rating)) }
+            for rating in MangaBakaContentRating.allCases where !ratings.contains(rating.rawValue) {
+                items.append(.init(name: "not_content_rating", value: rating.rawValue))
             }
         } else {
             for rating in ratings { items.append(.init(name: "content_rating", value: rating)) }
@@ -103,12 +106,15 @@ public actor MangaBakaClient {
         return c.url!
     }
     public func browse(_ query: MangaBakaQuery, page: Int = 1, limit: Int = 24, includeAdult: Bool, refresh: Bool = false) async throws -> MangaBakaPage<MangaBakaSeries> {
+        try await browse(query, page: page, limit: limit, contentFilter: .legacy(includeAdult: includeAdult), refresh: refresh)
+    }
+    public func browse(_ query: MangaBakaQuery, page: Int = 1, limit: Int = 24, contentFilter: MangaBakaContentFilter, refresh: Bool = false) async throws -> MangaBakaPage<MangaBakaSeries> {
         guard query.shelf != .recommended else { throw MangaBakaError.message("Connect MangaBaka to load personal recommendations.") }
         if let publisher = query.publisher, publisher.id == nil, publisher.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw MangaBakaError.message("This publisher is missing its identity.")
         }
-        guard !query.allowedRatings(includeAdult: includeAdult).isEmpty else { throw MangaBakaError.message("Enable mature titles or choose another content rating.") }
-        let url = Self.browseURL(query, page: page, limit: limit, includeAdult: includeAdult)
+        guard !query.allowedRatings(contentFilter: contentFilter).isEmpty else { throw MangaBakaError.message("Enable a matching MangaBaka content rating in Browsing & content.") }
+        let url = Self.browseURL(query, page: page, limit: limit, contentFilter: contentFilter)
         let data = try await publicData(url, refresh: refresh)
         do { return try decode(MangaBakaPage<MangaBakaSeries>.self, data) }
         catch { cache[url] = nil; trimCache(); throw error }
@@ -131,17 +137,21 @@ public actor MangaBakaClient {
         return result
     }
     public func related(id: Int, kind: MangaBakaRelatedKind, includeAdult: Bool, refresh: Bool = false) async throws -> [MangaBakaRelatedSeries] {
+        try await related(id: id, kind: kind, contentFilter: .legacy(includeAdult: includeAdult), refresh: refresh)
+    }
+    public func related(id: Int, kind: MangaBakaRelatedKind, contentFilter: MangaBakaContentFilter, refresh: Bool = false) async throws -> [MangaBakaRelatedSeries] {
+        guard !contentFilter.ratings.isEmpty else { return [] }
         guard id > 0 else { throw MangaBakaError.invalidResponse }
         let version = kind == .relationships ? "v1" : "v2"
         var c = URLComponents(url: api("/\(version)/series/\(id)/\(kind.rawValue)"), resolvingAgainstBaseURL: false)!
         c.queryItems = [.init(name: "limit", value: "24")]
-        for rating in MangaBakaQuery().allowedRatings(includeAdult: includeAdult) {
+        for rating in MangaBakaQuery().allowedRatings(contentFilter: contentFilter) {
             c.queryItems?.append(.init(name: "content_rating", value: rating.rawValue))
         }
         let bytes = try await publicData(c.url!, refresh: refresh)
         let list = try decode(MBEnvelope<[MangaBakaRelatedSeries]>.self, bytes).data
         var seen = Set<Int>()
-        return list.filter { $0.id != id && $0.series.isVisible(includeAdult: includeAdult) && seen.insert($0.id).inserted }
+        return list.filter { $0.id != id && $0.series.isVisible(contentFilter: contentFilter) && seen.insert($0.id).inserted }
     }
     /// Resolve the written work's AniList ID, which is distinct from both the
     /// parent anime ID and MangaBaka's series ID. Titles are never guessed.
@@ -193,9 +203,13 @@ public actor MangaBakaClient {
         try await recommendationPayload(credential, includeAdult: includeAdult).records()
     }
     public func recommendationPayload(_ credential: MangaBakaCredential, includeAdult: Bool) async throws -> MangaBakaRecommendationPayload {
+        try await recommendationPayload(credential, contentFilter: .legacy(includeAdult: includeAdult))
+    }
+    public func recommendationPayload(_ credential: MangaBakaCredential, contentFilter: MangaBakaContentFilter) async throws -> MangaBakaRecommendationPayload {
+        guard !contentFilter.ratings.isEmpty else { throw MangaBakaError.message("Enable a MangaBaka content rating before refreshing recommendations.") }
         var c = URLComponents(url: api("/v1/my/series/recommendations"), resolvingAgainstBaseURL: false)!
         c.queryItems = [.init(name: "limit", value: "24")]
-        for rating in includeAdult ? ["safe", "suggestive", "erotica", "pornographic"] : ["safe", "suggestive"] { c.queryItems?.append(.init(name: "content_rating", value: rating)) }
+        for rating in MangaBakaContentRating.allCases where contentFilter.ratings.contains(rating) { c.queryItems?.append(.init(name: "content_rating", value: rating.rawValue)) }
         let response = try await request(c.url!, credential: credential)
         let payload = MangaBakaRecommendationPayload(response: response)
         let unique = try payload.records()
@@ -203,7 +217,7 @@ public actor MangaBakaClient {
         // Resolve it before applying the allow-list, rather than silently
         // dropping every otherwise valid recommendation.
         let unknown = unique.filter { MangaBakaContentRating(rawValue: $0.contentRating ?? "") == nil }
-        guard !includeAdult, !unknown.isEmpty else { return payload }
+        guard !contentFilter.includeUnrated, !unknown.isEmpty else { return payload }
         let details = try await recommendationDetails(ids: unknown.map(\.id))
         let hydrated = MangaBakaRecommendationPayload(response: response, details: details)
         _ = try hydrated.records()

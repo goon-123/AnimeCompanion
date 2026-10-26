@@ -1,7 +1,7 @@
 import SwiftUI
 import AnimeCore
 
-private struct MBBrowseKey: Hashable { let query: MangaBakaQuery; let adult: Bool }
+private struct MBBrowseKey: Hashable { let query: MangaBakaQuery; let contentFilter: MangaBakaContentFilter }
 
 @MainActor
 private final class MangaBakaBrowseModel: ObservableObject {
@@ -26,7 +26,7 @@ private final class MangaBakaBrowseModel: ObservableObject {
         defer { if attempt == generation { loading = false } }
         do {
             let response = try await api.browse(key.query, page: requested, limit: key.query.shelf.isCurated ? 100 : 30,
-                includeAdult: key.adult, refresh: refresh)
+                contentFilter: key.contentFilter, refresh: refresh)
             try Task.checkCancellation()
             guard attempt == generation else { return }
             var known = Set(next ? items.map(\.id) : [])
@@ -48,8 +48,8 @@ struct MangaBakaBrowseView: View {
     @AppStorage("mangabaka.browseLayout") private var layout = "grid"
     @Environment(\.dynamicTypeSize) private var textSize
     init(initial: MangaBakaQuery) { self.initial = initial; _query = State(initialValue: initial) }
-    private var key: MBBrowseKey { .init(query: query, adult: preferences.includeAdult) }
-    private var visible: [MangaBakaSeries] { model.items.filter { query.includes($0, includeAdult: preferences.includeAdult) } }
+    private var key: MBBrowseKey { .init(query: query, contentFilter: preferences.mangaBakaContent) }
+    private var visible: [MangaBakaSeries] { model.items.filter { query.includes($0, contentFilter: preferences.mangaBakaContent) } }
     private var title: String {
         query.publisher?.name ?? query.genres.first?.label ?? query.tags.first?.label ?? (query.contentRatings.count == 1 ? query.contentRatings.first?.label : nil) ?? query.format?.label ?? query.shelf.label
     }

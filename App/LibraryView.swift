@@ -4,6 +4,7 @@ import AnimeCore
 private enum LibrarySort: String, CaseIterable {
     case airing = "Airing schedule", title = "Title", rating = "AniList rating"
     case updated = "Last updated", progress = "Progress", score = "Your score", behind = "Behind first"
+    case year = "Release year", completion = "Completion"
 }
 
 struct LibraryView: View {
@@ -15,9 +16,10 @@ struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     private var posters = PosterPreferences(.library)
     @AppStorage("library.sort") private var sortValue = LibrarySort.airing.rawValue
-    @State private var selected: LibraryStatus = .watching
+    @AppStorage("library.anime.defaultStatus") private var defaultStatus = LibraryScope.anime.initialStatus
+    @State private var selected: LibraryStatus? = LibraryStatus(rawValue: LibraryScope.anime.openingStatus())
     @State private var query = ""
-    @State private var reversed = false
+    @AppStorage("library.reversed") private var reversed = false
     @State private var showSettings = false
     @State private var showDisplay = false
     @State private var showTorBoxFiles = false
@@ -32,7 +34,7 @@ struct LibraryView: View {
     private var filtered: [LibraryEntry] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let entries = selectedEntries.filter { entry in
-            guard entry.status == selected, let anime = entry.media else { return false }
+            guard (selected == nil || entry.status == selected), let anime = entry.media else { return false }
             return text.isEmpty || [anime.displayTitle, anime.title?.romaji ?? "", anime.title?.english ?? ""].contains { $0.localizedCaseInsensitiveContains(text) }
         }
         return entries.sorted { a, b in
@@ -55,6 +57,14 @@ struct LibraryView: View {
                 if a.progressValue != b.progressValue { return reversed ? a.progressValue < b.progressValue : a.progressValue > b.progressValue }
             case .score:
                 if a.score != b.score { return reversed ? (a.score ?? 0) < (b.score ?? 0) : (a.score ?? 0) > (b.score ?? 0) }
+            case .year:
+                let first = a.media?.seasonYear, second = b.media?.seasonYear
+                if (first == nil) != (second == nil) { return first != nil }
+                if let first, let second, first != second { return reversed ? first < second : first > second }
+            case .completion:
+                let first = completion(a), second = completion(b)
+                if (first == nil) != (second == nil) { return first != nil }
+                if let first, let second, first != second { return reversed ? first < second : first > second }
             }
             let order = (a.media?.displayTitle ?? "").localizedStandardCompare(b.media?.displayTitle ?? "")
             if order == .orderedSame { return a.mediaId < b.mediaId }
@@ -108,7 +118,7 @@ struct LibraryView: View {
                             }.accessibilityIdentifier("library-list")
                         }
                         if filtered.isEmpty && !store.loadingLibrary && store.libraryError == nil {
-                            ContentUnavailableView(query.isEmpty ? "Your \(selected.label.lowercased()) list is empty" : "No matching anime",
+                            ContentUnavailableView(query.isEmpty ? "Your \(selected?.label.lowercased() ?? "all anime") list is empty" : "No matching anime",
                                                    systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
                         if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
@@ -133,6 +143,7 @@ struct LibraryView: View {
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }
             .sheet(isPresented: $showTorBoxFiles) { TorBoxFilesView() }
+            .onChange(of: defaultStatus) { _, _ in selected = LibraryStatus(rawValue: LibraryScope.anime.openingStatus()) }
             .task(id: syncKey) { await loadDubs() }
             .task(id: dubs.revision) { applyDubs() }
             .task(id: "\(store.isSignedIn)-\(scenePhase)") {
@@ -144,7 +155,11 @@ struct LibraryView: View {
                 }
             }
     }
-    private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { $0.status == selected } }
+    private var selectedEntries: [LibraryEntry] { store.visibleEntries.filter { selected == nil || $0.status == selected } }
+    private func completion(_ entry: LibraryEntry) -> Double? {
+        guard let total = entry.media?.episodes, total > 0 else { return nil }
+        return min(1, Double(entry.progressValue) / Double(total))
+    }
     private func airing(for entry: LibraryEntry) -> LibraryAiringProgress? {
         guard let anime = entry.media else { return nil }
         return LibraryAiringProgress(anime: anime, watched: entry.progressValue, source: store.airingProgressSource,
@@ -161,6 +176,12 @@ struct LibraryView: View {
     private var statusTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
+                Button { selected = nil } label: {
+                    Text("All").font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
+                        .foregroundStyle(selected == nil ? Color.black : Color.white)
+                        .background(selected == nil ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                }.buttonStyle(.plain).accessibilityIdentifier("library-status-all")
+                    .accessibilityAddTraits(selected == nil ? .isSelected : [])
                 ForEach(statuses) { status in
                     Button { selected = status } label: {
                         Text(status.label).font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
@@ -198,10 +219,12 @@ struct LibraryView: View {
                 ForEach(LibrarySort.allCases, id: \.self) { order in
                     MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue }
                 }
+                Section("Default view") { LibraryDefaultPicker(scope: .anime) }
             } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                 .accessibilityIdentifier("library-sort")
             Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }
                 .accessibilityLabel("Reverse library sort")
+                .accessibilityValue(reversed ? "Reversed" : "Default direction")
         }
     }
     private func nextDub(for id: Int) -> ReleaseEvent? {

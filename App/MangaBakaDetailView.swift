@@ -23,7 +23,7 @@ struct MangaBakaDetailView: View {
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if series.isVisible(includeAdult: preferences.includeAdult) {
+                if series.isVisible(contentFilter: preferences.mangaBakaContent) {
                     VStack(alignment: .leading, spacing: 26) {
                         header(width: geometry.size.width).id("overview")
                         MangaBakaBadges(series: series)
@@ -53,7 +53,7 @@ struct MangaBakaDetailView: View {
                 NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
             }
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
-            .onChange(of: preferences.includeAdult) { _, _ in preview = nil }
+            .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
         }
     }
     private func header(width: CGFloat) -> some View {
