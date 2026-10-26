@@ -23,6 +23,65 @@ final class MangaBakaTests: XCTestCase {
         XCTAssertEqual(MangaBakaShelf.popular.sort, "popularity_asc")
         XCTAssertEqual(MangaBakaShelf.topRated.sort, "score_desc")
     }
+    private func sourceLookup(_ records: [String]) -> String {
+        "{\"data\":{\"source_response\":null,\"series\":[\(records.joined(separator: ","))]}}"
+    }
+    private var mappedRecord: String {
+        String(record.dropLast()) + #", "state":"active","source":{"anilist":{"id":"30002"}}}"#
+    }
+    func testAniListAdaptationLookupUsesTheMangaBakaIdentityAndCachesPublicRequests() async throws {
+        let transport = MBTestTransport([.json(sourceLookup([mappedRecord, mappedRecord,
+            #"{"id":82,"state":"merged"}"#, #"{"id":83,"state":"deleted"}"#]))])
+        let api = client(transport)
+        for _ in 0..<2 {
+            let matches = try await api.series(anilistID: 30002)
+            XCTAssertEqual(matches.map(\.id), [81]); XCTAssertEqual(matches.first?.displayTitle, "Paper Moon")
+        }
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/v1/source/anilist/30002"])
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil && $0.value(forHTTPHeaderField: "X-API-Key") == nil })
+    }
+    func testAniListLookupPreservesMultipleMatchesAndTheirContentRatings() async throws {
+        let transport = MBTestTransport([.json(sourceLookup([mappedRecord,
+            #"{"id":"82","type":"novel","content_rating":"erotica","source":{"anilist":{"id":30002}}}"#]))])
+        let matches = try await client(transport).series(anilistID: 30002)
+        XCTAssertEqual(matches.map(\.id), [81, 82])
+        XCTAssertEqual(matches.filter { $0.isVisible(includeAdult: false) }.map(\.id), [81])
+        XCTAssertEqual(matches.last?.type, "novel")
+    }
+    func testMissingAniListMappingReturnsNoMatchWithoutSearchingForAnotherTitle() async throws {
+        for reply in [MBTestTransport.Response.json(sourceLookup([])),
+            .json(sourceLookup([#"{"id":81,"state":"merged"}"#])), .json("{}", status: 404)] {
+            let transport = MBTestTransport([reply])
+            let matches = try await client(transport).series(anilistID: 30002)
+            XCTAssertTrue(matches.isEmpty)
+            let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+        }
+    }
+    func testAniListMappingRejectsWrongIdentitiesAndMalformedSourcePayloads() async throws {
+        for body in [sourceLookup([#"{"id":81,"source":{"anilist":{"id":999}}}"#]),
+            sourceLookup([#"{"id":81}"#]), #"{"data":{}}"#, sourceLookup([#"{"id":0}"#])] {
+            let transport = MBTestTransport([.json(body)])
+            do { _ = try await client(transport).series(anilistID: 30002); XCTFail("An invalid mapping must not open another series") }
+            catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+            let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+        }
+    }
+    func testAniListMappingFailureCanBeRetriedWithoutBecomingAMissingListing() async throws {
+        let transport = MBTestTransport([.json("{}", status: 503), .json(sourceLookup([mappedRecord]))]), api = client(transport)
+        do { _ = try await api.series(anilistID: 30002); XCTFail("Service failure must offer retry") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .http(503)) }
+        let matches = try await api.series(anilistID: 30002, refresh: true)
+        XCTAssertEqual(matches.map(\.id), [81])
+    }
+    func testInvalidAniListIdentityNeverRequestsTheCatalog() async throws {
+        let transport = MBTestTransport([]), api = client(transport)
+        for id in [0, -1] {
+            do { _ = try await api.series(anilistID: id); XCTFail("Invalid AniList identity") }
+            catch { XCTAssertEqual(error as? MangaBakaError, .invalidResponse) }
+        }
+        let requests = await transport.recorded(); XCTAssertTrue(requests.isEmpty)
+    }
     func testGenreTagAndContentRatingFiltersComposeWithSearchAndPaging() throws {
         let query = MangaBakaQuery(format: .manga, text: "Moon & stars", genres: [.init(value: "science_fiction", label: "Sci-Fi")],
             tags: [.init(id: 42, name: "space_travel")], excludedTags: [.init(id: 91, name: "time_loop")], contentRatings: [.suggestive])
@@ -400,3 +459,4 @@ private actor MBTestTransport: HTTPTransport {
     }
     func recorded() -> [URLRequest] { requests }
 }
+

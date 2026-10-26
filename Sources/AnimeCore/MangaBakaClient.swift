@@ -143,6 +143,22 @@ public actor MangaBakaClient {
         var seen = Set<Int>()
         return list.filter { $0.id != id && $0.series.isVisible(includeAdult: includeAdult) && seen.insert($0.id).inserted }
     }
+    /// Resolve the written work's AniList ID, which is distinct from both the
+    /// parent anime ID and MangaBaka's series ID. Titles are never guessed.
+    public func series(anilistID: Int, refresh: Bool = false) async throws -> [MangaBakaSeries] {
+        guard anilistID > 0 else { throw MangaBakaError.invalidResponse }
+        let url = api("/v1/source/anilist/\(anilistID)")
+        let data: Data
+        do { data = try await publicData(url, refresh: refresh) }
+        catch MangaBakaError.http(404) { return [] }
+        do {
+            let lookup = try decode(MBEnvelope<MBAniListSourceLookup>.self, data).data
+            let records = lookup.series.filter { $0.state == nil || $0.state == "active" }.map(\.record)
+            guard records.allSatisfy({ $0.anilistID == anilistID }) else { throw MangaBakaError.invalidResponse }
+            var seen = Set<Int>()
+            return records.filter { seen.insert($0.id).inserted }
+        } catch { cache[url] = nil; trimCache(); throw error }
+    }
     public func details(id: Int, refresh: Bool = false) async throws -> MangaBakaSeries {
         guard id > 0 else { throw MangaBakaError.invalidResponse }
         // v1 still supplies the richer genres, publisher links and full detail metadata.
@@ -302,3 +318,4 @@ public actor MangaBakaClient {
         }
     }
 }
+

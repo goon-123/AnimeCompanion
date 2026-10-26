@@ -331,6 +331,10 @@ struct AnimeNavigation: ViewModifier {
         content.navigationDestination(for: AnimeRoute.self) {
             AnimeDetailView(mediaID: $0.id).id($0.id).environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
         }
+            .navigationDestination(for: RelatedMangaBakaRoute.self) { route in
+                RelatedMangaBakaView(media: route.media).id(route.media.id)
+                    .environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
+            }
             .navigationDestination(for: AnimeVisualsRoute.self) { route in
                 AnimeVisualsView(anime: route.anime).id(route.anime?.id ?? 0)
             }
@@ -345,4 +349,5 @@ struct AnimeNavigation: ViewModifier {
     }
 }
 extension View { func animeNavigation() -> some View { modifier(AnimeNavigation()) } }
+
 

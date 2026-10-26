@@ -137,11 +137,12 @@ struct MBCover: Decodable, Hashable, Sendable {
     let x150: MBCoverValue?, x250: MBCoverValue?, x350: MBCoverValue?, raw: MBCoverValue?
 }
 private struct MBProvider: Decodable {
+    let id: String?
     let present: Bool
     let rating: Double?
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
-        present = c.mbString(.id) != nil; rating = c.mbNumber(.ratingNormalized)
+        id = c.mbString(.id); present = id != nil; rating = c.mbNumber(.ratingNormalized)
     }
 }
 public struct MangaBakaTag: Decodable, Hashable, Sendable {
@@ -205,6 +206,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public let isLicensed: Bool
     public let publishers: [MangaBakaPublisher]
     public let providers: [String]
+    public let anilistID: Int?
     public let sourceRatings: [MangaBakaSourceRating]
     public let popularityRank: Int?
     private let cover: MBCover?
@@ -237,6 +239,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         cover = (try? c.decode(MBCover.self, forKey: .cover)) ?? (try? c.decode(MBCover.self, forKey: .coverImage))
         coverImage = c.mbString(.coverImage)
         let sources = (try? c.decode([String: MBProvider].self, forKey: .source)) ?? [:]
+        anilistID = sources["anilist"]?.id.flatMap(Int.init)
         let labels = ["anilist": "AniList", "anime_planet": "Anime-Planet", "anime_news_network": "Anime News Network", "kitsu": "Kitsu", "manga_updates": "MangaUpdates", "my_anime_list": "MyAnimeList", "shikimori": "Shikimori"]
         providers = sources.filter { $0.value.present }.keys.map { labels[$0] ?? $0 }.sorted()
         sourceRatings = sources.keys.sorted().compactMap { key in
@@ -366,3 +369,4 @@ public struct MangaBakaLibraryUpdate: Encodable, Sendable {
         try c.encode(rating, forKey: .rating); try c.encode(note, forKey: .note)
     }
 }
+

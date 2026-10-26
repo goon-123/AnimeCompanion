@@ -9,6 +9,16 @@ enum UnifiedExplorePreview {
 struct UnifiedReadingPreviewTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url else { throw ServiceError.invalidResponse }
+        if url.path.hasPrefix("/v1/source/anilist/") {
+            let missing = ProcessInfo.processInfo.arguments.contains("--ui-related-mangabaka-missing")
+            let failed = ProcessInfo.processInfo.arguments.contains("--ui-related-mangabaka-failure")
+            let id = Int(url.lastPathComponent) ?? 0
+            var series = LibraryCustomizationPreview.series(id == 30074 ? 74 : 73)
+            series["source"] = ["anilist": ["id": id]]; series["state"] = "active"
+            let payload: [String: Any] = ["data": ["series": missing ? [] : [series]]]
+            return (try JSONSerialization.data(withJSONObject: payload),
+                HTTPURLResponse(url: url, statusCode: failed ? 503 : 200, httpVersion: nil, headerFields: nil)!)
+        }
         if url.path.contains("/series/search") || url.path.contains("/discover/") {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let text = query.first { $0.name == "q" }?.value
@@ -38,7 +48,18 @@ struct UnifiedAnimePreviewTransport: HTTPTransport {
         let query = body?["query"] as? String ?? ""
         let variables = body?["variables"] as? [String: Any] ?? [:]
         guard (query.contains("query Search") || query.contains("query Browse")), let text = variables["search"] as? String else {
-            return try await PhaseTwoPreviewTransport().data(for: request)
+            let (bytes, response) = try await PhaseTwoPreviewTransport().data(for: request)
+            if query.contains("query Details"), variables["id"] as? Int == 1,
+               var payload = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+               var data = payload["data"] as? [String: Any], var media = data["Media"] as? [String: Any] {
+                media["relations"] = ["edges": [
+                    ["relationType": "ADAPTATION", "node": ["id": 30073, "type": "MANGA", "title": ["english": "Glass Harbor Manga"]]],
+                    ["relationType": "SOURCE", "node": ["id": 30074, "type": "MANGA", "title": ["english": "Glass Harbor Novel"]]],
+                    ["relationType": "SEQUEL", "node": ["id": 5, "type": "ANIME", "title": ["english": "Glass Harbor Movie"]]]]]
+                data["Media"] = media; payload["data"] = data
+                return (try JSONSerialization.data(withJSONObject: payload), response)
+            }
+            return (bytes, response)
         }
         if text == "slow" { try? await Task.sleep(for: .seconds(2)) }
         let page = variables["page"] as? Int ?? 1
@@ -53,3 +74,4 @@ struct UnifiedAnimePreviewTransport: HTTPTransport {
     }
 }
 #endif
+
