@@ -82,6 +82,23 @@ struct AccountSwitcherView: View {
             } header: { Text("Your accounts") } footer: {
                 Text("Both accounts stay signed in. Tap an account to open its library. Each service keeps its own progress.")
             }
+            if reading.savedAccounts.count > 1 {
+                Section("MangaBaka accounts") {
+                    ForEach(reading.savedAccounts) { account in
+                        Button {
+                            reading.selectAccount(account.id)
+                            if reading.activeAccountID == account.id { select(.mangaBaka) }
+                        } label: {
+                            HStack {
+                                Label(account.name, systemImage: "person.crop.circle").foregroundStyle(.primary)
+                                Spacer()
+                                if reading.activeAccountID == account.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(.mint) }
+                            }
+                        }.buttonStyle(.plain).disabled(reading.connecting || !reading.saving.isEmpty)
+                            .accessibilityIdentifier("account-switch-mangabaka-" + (account.profile?.id ?? account.id.uuidString))
+                    }
+                }
+            }
             Section("Manage accounts") {
                 ForEach(TrackingAccount.allCases) { account in
                     NavigationLink { connection(account) } label: {
@@ -124,14 +141,8 @@ struct AccountSwitcherView: View {
     }
     @ViewBuilder private func connection(_ account: TrackingAccount) -> some View {
         Group {
-            if account == .aniList { AniListSettingsView() }
-            else { MangaBakaAccountView() }
-        }.safeAreaInset(edge: .bottom) {
-            if connected(account) {
-                Button("Use " + account.title + " account") { select(account) }
-                    .buttonStyle(.borderedProminent).padding().frame(maxWidth: .infinity)
-                    .background(.regularMaterial).accessibilityIdentifier("account-use-" + account.rawValue)
-            }
+            if account == .aniList { AniListSettingsView(useAccount: { select(.aniList) }) }
+            else { MangaBakaAccountView(useAccount: { select(.mangaBaka) }) }
         }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
     }
 }

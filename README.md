@@ -1,5 +1,13 @@
 # Anime Companion
 
+## Saved MangaBaka accounts — version 0.30.0 / build 81
+
+Add multiple MangaBaka logins in account settings, then tap a saved name to switch. Credentials and the selected account stay in Keychain across restarts; the current single-account connection migrates automatically. Adding another account uses a fresh web-auth session so the existing browser login does not silently replace the account you meant to add. Reconnecting an existing MangaBaka identity refreshes its saved credentials without creating another row. Remove individual saved accounts from this device while retaining the others and their online libraries.
+
+Each saved account has its own encrypted weekly recommendation cache. Switches clear visible private library/entry state and invalidate previous responses. OAuth refresh writes only to its owning saved session; editing and removal actions are bound to the connection that loaded the editor. Saved account rows are also available in the main account switcher. The old bottom action strip is removed from both account pages; a readable inline Open library action takes its place. Includes build 80 content ratings, default statuses and saved sorting.
+
+Core, Keychain/store, cache isolation and iPhone/iPad account journeys are included in CI. See the PR for actual build and native verification results.
+
 ## Content ratings and library preferences — version 0.29.0 / build 80
 
 **Content rating** on Explore or the reading/combined libraries opens four independent MangaBaka switches: Safe, Suggestive, Erotica and Pornographic. Unrated titles have their own switch. Settings → Browsing & content exposes the same controls beside the separate AniList adult setting. Existing adult preferences migrate once; later changes stay provider-specific. Ratings apply to public requests and local results, including unified search/Explore, library entries, related adaptations and cover galleries. For you refilters its weekly saved selection immediately without resetting its refresh date.

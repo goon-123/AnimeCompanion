@@ -147,11 +147,16 @@ struct AniListSettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var clientID = AppConfiguration.clientID ?? ""
     @State private var confirmation = false
+    var useAccount: (() -> Void)? = nil
     var body: some View {
         Form {
             Section("Connection") {
                 if store.isSignedIn {
                     Label(store.viewer.map { "Signed in as \($0.name)" } ?? "Connected to AniList", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
+                    if let useAccount {
+                        Button(action: useAccount) { Label("Open AniList library", systemImage: "play.rectangle") }
+                            .foregroundStyle(.mint).accessibilityIdentifier("account-use-anilist")
+                    }
                     Button("Refresh library") { Task { await store.reloadLibrary() } }.disabled(store.loadingLibrary || !store.savingMedia.isEmpty)
                     if store.loadingLibrary { ProgressView("Refreshing library…") }
                     Button("Disconnect", role: .destructive) { confirmation = true }.disabled(!store.savingMedia.isEmpty)

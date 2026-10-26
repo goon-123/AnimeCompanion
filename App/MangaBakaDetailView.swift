@@ -46,7 +46,7 @@ struct MangaBakaDetailView: View {
                 } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash") }
             }
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
-            .task(id: account.connected) { await reload() }
+            .task(id: account.connectionID) { await reload() }
             .refreshable { refreshToken += 1; await reload(refresh: true) }
             .sheet(isPresented: $editing) { NavigationStack { MangaBakaTrackingView(series: series) } }
             .sheet(isPresented: $signingIn) {

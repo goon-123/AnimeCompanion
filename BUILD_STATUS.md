@@ -1,3 +1,9 @@
+## Saved MangaBaka accounts and account-page bar — build 81
+
+Version 0.30.0, stacked on build 80. Add/select/remove saved MangaBaka identities without discarding other credentials. Atomic Keychain registry migration preserves the old single connection, persists selection and deduplicates verified server identities. Account switches isolate visible entries, late responses, token refresh and editor writes. Account-specific encrypted For you snapshots preserve the seven-day timestamp, survive switches and clear only on removing that saved identity. Fresh browser sessions support adding a different login. Replace the blank bottom strip with an inline library action.
+
+Local diff, shell syntax and Safari bundle/version checks passed. New Core cases, native Keychain/store cases and three iPhone/iPad UI journeys cover restoration, removal, cache ownership, late requests and the inline action. Hosted Core/native execution, visual review and universal unsigned IPA packaging remain pending at this checkpoint.
+
 ## Content ratings and library defaults — build 80
 
 Version 0.29.0. Stacked on account-switcher build 79. Independent persisted MangaBaka ratings and an unrated option are shared by Explore/search requests and immediate local filtering across shelves, recommendations, libraries, related titles and galleries. Retain the seven-day account-owned recommendation cache. One-time migration copies the old adult preference; AniList and video-source filtering remain separate afterward.

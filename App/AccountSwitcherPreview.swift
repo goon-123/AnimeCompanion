@@ -14,4 +14,11 @@ enum AccountSwitcherPreview {
         try JSONDecoder().decode(MangaBakaProfile.self, from: Data(#"{"id":"owned-reader","nickname":"LanternReader","rating_steps":1}"#.utf8))
     }
 }
+
+enum MangaBakaAccountsPreview {
+    static var active: Bool { ProcessInfo.processInfo.arguments.contains("--ui-mangabaka-accounts-preview") }
+    static func secondProfile() throws -> MangaBakaProfile {
+        try JSONDecoder().decode(MangaBakaProfile.self, from: Data(#"{"id":"owned-reader-two","nickname":"HarborReader","rating_steps":5}"#.utf8))
+    }
+}
 #endif
