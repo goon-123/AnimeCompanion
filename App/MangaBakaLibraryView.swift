@@ -27,11 +27,6 @@ struct MangaBakaLibraryView: View {
                 } actions: { Button("Connect MangaBaka") { connection = true }.buttonStyle(.borderedProminent) }
             }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { connection = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("MangaBaka account")
-                }
-            }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             } }

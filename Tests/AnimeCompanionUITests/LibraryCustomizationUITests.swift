@@ -102,7 +102,8 @@ final class LibraryCustomizationUITests: XCTestCase {
     @MainActor private func openReader(_ app: XCUIApplication) -> XCUIElement {
         // Reveal the source hub using the same user-facing setting. Sources and
         // their saved data remain present even when their tab starts hidden.
-        app.buttons["Accounts and settings"].tap()
+        app.buttons["account-switcher"].tap()
+        tapWhenVisible(app.buttons["account-app-settings"], in: app)
         tapWhenVisible(app.buttons["settings-bottom-tabs"], in: app)
         tapWhenVisible(app.switches["tab-visible-manga"], in: app)
         XCTAssertEqual(app.switches["tab-visible-manga"].value as? String, "1")

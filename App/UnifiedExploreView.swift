@@ -53,7 +53,6 @@ struct UnifiedExploreView: View {
     @StateObject private var catalog = ExploreCatalogModel()
     @StateObject private var books = UnifiedReadingCatalog()
     @State private var selection = SeasonSelection.current()
-    @Binding var settings: Bool
     @Binding var designs: Bool
     @State private var seasons = false
     @State private var dubFilters = false
@@ -136,8 +135,7 @@ struct UnifiedExploreView: View {
                 Spacer()
                 Button { designs = true } label: { Image(systemName: design.symbol).frame(width: 44, height: 44).silverGlass(in: Circle()) }
                     .accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
-                Button { settings = true } label: { Image(systemName: "person.crop.circle").font(.title2).frame(width: 44, height: 44).silverGlass(in: Circle()) }
-                    .accessibilityLabel("Accounts and settings")
+                AccountSwitcherButton()
             }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 7) {
                 Text("Your next story.").font(.largeTitle.bold())

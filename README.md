@@ -1,5 +1,13 @@
 # Anime Companion
 
+## Account switcher — version 0.28.0 / build 79
+
+Tap the profile button on Explore or My Library to see both AniList and MangaBaka accounts, sign into either service, manage each connection, or open App settings. Both logins remain saved independently. Choosing an account opens its library and remembers the selection across launches; the All library option remains available. A hidden My Library tab opens in a sheet without changing bottom-tab preferences.
+
+Switching never signs out the other service or transfers progress between services. AniList tracks anime and MangaBaka tracks manga and novels. The account menu shows the current provider and each signed-in username. Existing combined Explore designs and Related MangaBaka navigation are preserved.
+
+Validation targets: `TrackingAccountTests` and four offline `AccountSwitcherUITests` journeys on iPhone/iPad, covering switching, persistence, both sign-in screens, settings and hidden-library navigation. Native verification and IPA packaging run through the existing GitHub workflow; local checks alone do not establish successful OAuth with real accounts.
+
 ## Series headlines fix — version 0.27.1 / build 77
 
 Opening **Headlines** from a series now matches its English/romaji base title across season, part and cour suffixes. It combines recent publisher feeds with Anime Corner's public title-search listings, so stories can appear after leaving the latest RSS feeds. Whole-title boundaries keep unrelated results out. The main News feed's saved unread-only preference no longer hides stories on a newly opened series page.
