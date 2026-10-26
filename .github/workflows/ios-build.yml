@@ -303,7 +303,7 @@ jobs:
   explore-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
     needs: manga-runtime
-    name: Explore and Airing Now layouts ${{ matrix.device }}
+    name: Explore, accounts and Airing Now ${{ matrix.device }}
     runs-on: macos-15
     timeout-minutes: 25
     strategy:
@@ -333,7 +333,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Verify combined discovery, catalog search, Classic and Airing Now grids
+      - name: Verify discovery, account switching, saved libraries and Airing Now grids
         run: bash scripts/check-simulator.sh ${{ matrix.device }} explore
       - name: Upload Explore screenshots and native results
         if: always()

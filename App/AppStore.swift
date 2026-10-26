@@ -106,8 +106,12 @@ final class AppStore: ObservableObject {
         guard !restored else { return }; restored = true
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
+            if AccountSwitcherPreview.active && !AccountSwitcherPreview.aniListConnected { return }
             isSignedIn = true
-            do { entries = try PhaseTwoPreviewTransport.library(); savedAt = Date() }
+            do {
+                entries = try PhaseTwoPreviewTransport.library(); savedAt = Date()
+                if AccountSwitcherPreview.active { viewer = try AccountSwitcherPreview.viewer() }
+            }
             catch { libraryError = error.localizedDescription }
             return
         }

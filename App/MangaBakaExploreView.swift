@@ -51,12 +51,11 @@ struct MediaSectionPicker: View {
 struct MediaExploreView: View {
     @AppStorage("app.mediaSection") private var mode = "anime"
     @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
-    @State private var settings = false
     @State private var designs = false
     private var design: ExploreDesign { ExploreDesign(preference: designValue) }
     var body: some View {
         Group {
-            if design != .classic { UnifiedExploreView(design: design, settings: $settings, designs: $designs) }
+            if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
             else if mode == "written" { MangaBakaExploreView() }
             else { ExploreView() }
         }.safeAreaInset(edge: .top, spacing: 0) {
@@ -67,12 +66,10 @@ struct MediaExploreView: View {
                     Image(systemName: "rectangle.stack").frame(width: 44, height: 44)
                         .silverGlass(in: Circle()).contentShape(Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
-                Button { settings = true } label: {
-                    Image(systemName: "person.crop.circle").font(.title2).frame(width: 44, height: 44)
-                }.buttonStyle(.plain).silverGlass(in: Circle()).accessibilityLabel("Accounts and settings")
+                AccountSwitcherButton()
             }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
             }
-        }.mangaBakaNavigation().appSettingsSheet(isPresented: $settings)
+        }.mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in
                 UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
             }
@@ -97,7 +94,11 @@ struct MediaLibraryView: View {
             else if mode == "anime" { LibraryView() }
             else { CombinedLibraryView() }
         }.background(Theme.background).mangaBakaNavigation()
-            .onChange(of: mode) { _, _ in
+            .toolbar { ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() } }
+            .onChange(of: mode) { _, value in
+                if let account = TrackingAccount.allCases.first(where: { $0.librarySection == value }) {
+                    UserDefaults.standard.set(account.rawValue, forKey: TrackingAccount.storageKey)
+                }
                 let state = navigation.library
                 state.path = NavigationPath(); state.detailPath = NavigationPath()
                 state.animeID = nil; state.column = .sidebar; state.visibility = .all

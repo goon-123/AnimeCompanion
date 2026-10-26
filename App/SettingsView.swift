@@ -4,15 +4,28 @@ import AnimeCore
 /// A compact directory. Credentials, provider management and long explanations
 /// live on their own screens instead of competing with everyday preferences.
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    let selectAccount: (TrackingAccount) -> Void
+    var body: some View {
+        NavigationStack {
+            SettingsDirectoryView(close: { dismiss() }, selectAccount: selectAccount)
+        }
+    }
+}
+
+struct SettingsDirectoryView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
+    let selectAccount: (TrackingAccount) -> Void
     var body: some View {
-        NavigationStack {
             Form {
                 Section {
+                    NavigationLink { AccountSwitcherView(showsSettings: false, close: close, select: selectAccount) } label: {
+                        SettingsCategoryLabel(title: "Switch account", detail: "AniList & MangaBaka · Stay signed in", symbol: "person.2.crop.square.stack.fill", tint: .mint)
+                    }.accessibilityIdentifier("settings-account-switcher")
                     NavigationLink { AniListSettingsView() } label: {
                         SettingsCategoryLabel(title: "AniList account", detail: store.isSignedIn ? store.viewer.map { "Signed in as \($0.name)" } ?? "Connected" : "Connect to sync your library", symbol: "person.crop.circle.fill", tint: .blue)
                     }.accessibilityIdentifier("settings-account")
@@ -69,16 +82,21 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity).padding(.top, 8)
                 }
             }.navigationTitle("Settings")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
     }
 }
 
 private struct AppSettingsSheet: ViewModifier {
     @EnvironmentObject private var navigation: AppNavigationStore
     @Binding var isPresented: Bool
+    @State private var selectedAccount: TrackingAccount?
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented, onDismiss: { navigation.applyLayoutPreference(); navigation.applyTabPreferences() }) { SettingsView() }
+        content.sheet(isPresented: $isPresented, onDismiss: {
+            navigation.applyLayoutPreference(); navigation.applyTabPreferences()
+            if let selectedAccount { self.selectedAccount = nil; navigation.openAccountLibrary(selectedAccount) }
+        }) {
+            SettingsView { account in selectedAccount = account; isPresented = false }
+        }
     }
 }
 
@@ -122,7 +140,7 @@ struct SettingsCategoryLabel: View {
     }
 }
 
-private struct AniListSettingsView: View {
+struct AniListSettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var clientID = AppConfiguration.clientID ?? ""
     @State private var confirmation = false

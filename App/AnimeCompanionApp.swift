@@ -73,7 +73,7 @@ struct DiscoveryRoute: Hashable {
 }
 
 struct SupplementaryDestination: Identifiable {
-    enum Kind { case manga([String]), schedule, genre(String) }
+    enum Kind { case manga([String]), schedule, genre(String), library }
     let id = UUID()
     let kind: Kind
 }
@@ -110,6 +110,16 @@ final class AppNavigationStore: ObservableObject {
     let library = TabNavigationState()
     let news = TabNavigationState()
     let manga = TabNavigationState()
+
+    func openAccountLibrary(_ account: TrackingAccount) {
+        UserDefaults.standard.set(account.rawValue, forKey: TrackingAccount.storageKey)
+        UserDefaults.standard.set(account.librarySection, forKey: "library.mediaSection")
+        library.path = NavigationPath(); library.detailPath = NavigationPath()
+        library.animeID = nil; library.column = .sidebar; library.visibility = .all
+        if tabPreferences.visible.contains(.library) { selectedTab = .library }
+        else if case .library? = supplementary?.kind { return }
+        else { supplementary = .init(kind: .library) }
+    }
 
     /// Apply on settings dismissal so changing topology cannot tear down its
     /// presenting sheet while the user is still editing preferences.
@@ -175,7 +185,9 @@ struct AppTabs: View {
             loadedLayout = true
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
-                let hidden: Set<AppTab> = ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? [.manga] : []
+                var hidden: Set<AppTab> = ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? [.manga] : []
+                if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { hidden.insert(.library) }
+                UserDefaults.standard.removeObject(forKey: TrackingAccount.storageKey)
                 UserDefaults.standard.set(AppTabPreferences(hidden: hidden).saved, forKey: AppTabPreferences.storageKey)
                 UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? "all" : "anime", forKey: "library.mediaSection")
                 UserDefaults.standard.set("anime", forKey: "app.mediaSection")
@@ -226,6 +238,7 @@ struct AppTabs: View {
         switch kind {
         case .manga(let titles): MangaTitleSearchView(titles: titles)
         case .schedule: ScheduleView()
+        case .library: MediaLibraryView()
         case .genre(let genre): DiscoveryBrowseView(category: .trending, selection: .current(), titleOverride: genre, initialGenre: genre)
         }
     }

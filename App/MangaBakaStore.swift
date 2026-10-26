@@ -149,9 +149,11 @@ final class MangaBakaStore: ObservableObject {
         guard !restored else { return }; restored = true
         #if DEBUG
         if LibraryCustomizationPreview.active {
+            if AccountSwitcherPreview.active && !AccountSwitcherPreview.mangaBakaConnected { return }
             do {
                 credential = try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-not-a-real-credential")
                 library = try LibraryCustomizationPreview.library(); libraryTotal = library.count
+                if AccountSwitcherPreview.active { profile = try AccountSwitcherPreview.profile() }
                 connected = true; revision = UUID()
             } catch { accountError = error.localizedDescription }
             return

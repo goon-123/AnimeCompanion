@@ -37,7 +37,7 @@ extension XCUIApplication {
         if descendants(matching: .any).matching(identifier: "torbox-webdav-list").firstMatch.exists { return self }
         // A sheet sits over the browse/detail panes; drag its form, not the
         // retained view underneath. The screen center is inside these sheets.
-        if ["Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
+        if ["Accounts", "MangaBaka account", "Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
             return self
         }
         if navigationBars["iPad layout"].exists { return self }
