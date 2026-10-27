@@ -25,7 +25,7 @@ private final class MangaBakaBrowseModel: ObservableObject {
         loading = true; error = nil
         defer { if attempt == generation { loading = false } }
         do {
-            let response = try await api.browse(key.query, page: requested, limit: key.query.shelf.isCurated ? 100 : 30,
+            let response = try await api.browse(key.query, page: requested, limit: 30,
                 contentFilter: key.contentFilter, refresh: refresh)
             try Task.checkCancellation()
             guard attempt == generation else { return }
