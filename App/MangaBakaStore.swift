@@ -367,6 +367,13 @@ final class MangaBakaStore: ObservableObject {
             await loadLibrary(state: state, next: true)
         }
     }
+    func loadSourceLinkingLibrary(refresh: Bool = false) async {
+        guard connected else { return }
+        let connection = connectionID
+        if profile == nil { await refreshProfile() }
+        guard !Task.isCancelled, connection == connectionID else { return }
+        await loadCompleteLibrary(state: nil, refresh: refresh)
+    }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }
         if !next && (state != libraryState || refresh) {

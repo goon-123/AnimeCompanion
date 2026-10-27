@@ -153,22 +153,24 @@ private struct MangaLibrarySourcePicker: View {
                     }
                     if account.loadingLibrary { ProgressView("Loading your library…") }
                     else if series.isEmpty { Text("No matching manga in this library. Add the title to MangaBaka or change your search.").foregroundStyle(.secondary) }
+                    if account.hasMoreLibrary && !account.loadingLibrary {
+                        Button("Load more library titles") { Task { await loadLibrary() } }
+                    }
                 }
-                if let error = account.libraryError { Section { Text(error); Button("Retry library") { Task { await loadLibrary() } } } }
+                if let error = account.libraryError { Section { Text(error); Button("Retry library") { Task { await loadLibrary(refresh: true) } } } }
                 if let error = links.error { Section { Text(error).foregroundStyle(.orange) } }
             }
         }.navigationTitle("Link reading source").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Find a title in My Library")
+            .refreshable { await loadLibrary(refresh: true) }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
             .task(id: account.connectionID) { await links.load(); await loadLibrary() }
             .sheet(isPresented: $signingIn) {
                 NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
             }
     }
-    private func loadLibrary() async {
-        guard account.connected else { return }
-        if account.profile == nil { await account.refreshProfile() }
-        await account.loadCompleteLibrary(state: nil)
+    private func loadLibrary(refresh: Bool = false) async {
+        await account.loadSourceLinkingLibrary(refresh: refresh)
     }
     private func save(_ series: MangaBakaSeries) {
         guard let target = account.sourceLinkTarget(for: series) else { return }
