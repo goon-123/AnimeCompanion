@@ -4,7 +4,7 @@ import AnimeCore
 struct MangaBakaSeriesTags: View {
     @EnvironmentObject private var account: MangaBakaStore
     let series: MangaBakaSeries
-    @State private var expanded = true
+    @State private var expanded = false
     @State private var spoilers = true
     @State private var implied = true
     @State private var information: String?
@@ -19,7 +19,8 @@ struct MangaBakaSeriesTags: View {
             return left == right ? $0.path < $1.path : left < right
         }
     }
-    private var visibleTags: [MangaBakaTag] { expanded ? tags : Array(tags.prefix(36)) }
+    private let previewCount = 8
+    private var visibleTags: [MangaBakaTag] { expanded ? tags : Array(tags.prefix(previewCount)) }
     private var groups: [String: [MangaBakaTag]] { Dictionary(grouping: visibleTags, by: \.category) }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -42,17 +43,26 @@ struct MangaBakaSeriesTags: View {
                     Toggle("Include implied tags", isOn: $implied)
                 } label: { Label("Display", systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
             }
-            ForEach(groups.keys.sorted(), id: \.self) { category in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(category.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    MangaBakaFlowLayout(spacing: 7) {
-                        ForEach(groups[category] ?? [], id: \.self) { tag in tagLink(tag) }
+            if !expanded {
+                MangaBakaFlowLayout(spacing: 7) {
+                    ForEach(visibleTags, id: \.self) { tag in tagLink(tag) }
+                }
+            } else {
+                ForEach(groups.keys.sorted(), id: \.self) { category in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(category.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        MangaBakaFlowLayout(spacing: 7) {
+                            ForEach(groups[category] ?? [], id: \.self) { tag in tagLink(tag) }
+                        }
                     }
                 }
             }
             if tags.isEmpty { Text("No tags are available with these display options.").font(.subheadline).foregroundStyle(.secondary) }
-            if tags.count > 36 {
-                Button(expanded ? "Show fewer tags" : "Show all \(tags.count) tags") { expanded.toggle() }.font(.subheadline.bold())
+            if tags.count > previewCount {
+                Button(expanded ? "Show fewer tags" : "Show all \(tags.count) tags") { expanded.toggle() }
+                    .font(.subheadline.bold()).frame(minHeight: 44)
+                    .accessibilityIdentifier("mangabaka-tags-expand")
+                    .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             }
             NavigationLink { MangaBakaTaxonomyView() } label: { Label("Explore every genre & tag", systemImage: "tag") }
                 .font(.subheadline)

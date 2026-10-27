@@ -116,7 +116,7 @@ struct ScheduleView: View {
             .task(id: "\(window.start)-\(store.includeAdult)") { await load() }
             .task(id: dubPresentationKey) { await presentDubs() }
             .sheet(isPresented: $pickingDate) {
-                NavigationStack {
+                AppNavigationStack {
                     DatePicker("Schedule date", selection: $anchor, displayedComponents: .date).datePickerStyle(.graphical).padding()
                         .navigationTitle("Choose a date").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { pickingDate = false } } }

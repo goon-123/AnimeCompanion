@@ -108,7 +108,7 @@ struct MangaSourceLinkControl: View {
             .background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 16))
             .task { await links.load() }
             .sheet(isPresented: $choosing) {
-                NavigationStack { MangaLibrarySourcePicker(title: title) { chosen = $0 } }
+                AppNavigationStack { MangaLibrarySourcePicker(title: title) { chosen = $0 } }
             }
     }
 }
@@ -166,7 +166,7 @@ private struct MangaLibrarySourcePicker: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
             .task(id: account.connectionID) { await links.load(); await loadLibrary() }
             .sheet(isPresented: $signingIn) {
-                NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
+                AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
             }
     }
     private func loadLibrary(refresh: Bool = false) async {

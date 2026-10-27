@@ -15,7 +15,7 @@ struct MangaSourceSettingsView: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Group {
                 if loading {
                     ProgressView("Loading source settings…").frame(maxWidth: .infinity, maxHeight: .infinity)

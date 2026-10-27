@@ -53,7 +53,7 @@ struct DisplayOptionsView: View {
     init(scope: DisplayScope) { preferences = PosterPreferences(scope) }
 
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     Text("Customize \(preferences.scope.title). Changes are saved automatically on this device, separately from the other tab.")

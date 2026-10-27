@@ -224,7 +224,7 @@ struct AppTabs: View {
                 pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }.sheet(item: $navigation.supplementary) { destination in
-            NavigationStack {
+            AppNavigationStack {
                 supplementary(destination.kind).animeNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
@@ -268,7 +268,7 @@ struct AppTabs: View {
 private struct MangaTabPane: View {
     @ObservedObject var state: TabNavigationState
     var body: some View {
-        NavigationStack(path: $state.path) {
+        AppNavigationStack(path: $state.path) {
             MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
                 MangaTitleSearchView(titles: route.titles, linkingTo: route.linkingTo).id(route.id)
             }
@@ -297,16 +297,19 @@ private struct AnimeTabPane<Content: View>: View {
                 split(browseWidth: TabletLayout.browseWidth(windowWidth: geometry.size.width))
             }.environment(\.animeSplitPresentation, true)
         } else {
-            NavigationStack(path: $state.path) { content }
+            AppNavigationStack(path: $state.path) { content }
                 .environment(\.animeSplitPresentation, false)
         }
     }
+    private func backToBrowsing() {
+        state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar; state.visibility = .all
+    }
     private func split(browseWidth: Double) -> some View {
         NavigationSplitView(columnVisibility: $state.visibility, preferredCompactColumn: $state.column) {
-            NavigationStack(path: $state.path) { content }
+            AppNavigationStack(path: $state.path) { content }
                 .navigationSplitViewColumnWidth(min: 480, ideal: browseWidth, max: 820)
         } detail: {
-            NavigationStack(path: $state.detailPath) {
+            AppNavigationStack(path: $state.detailPath, rootBack: state.animeID == nil ? nil : backToBrowsing) {
                 Group {
                     if let id = state.animeID {
                         AnimeDetailView(mediaID: id).id(id)
@@ -315,8 +318,7 @@ private struct AnimeTabPane<Content: View>: View {
                                 if sizeClass == .regular {
                                     ToolbarItem(placement: .topBarLeading) {
                                         Button {
-                                            state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar
-                                            state.visibility = .all
+                                            backToBrowsing()
                                         } label: { Label("Browse", systemImage: "chevron.left") }
                                             .accessibilityLabel("Back to browsing").accessibilityIdentifier("back-to-browsing")
                                     }

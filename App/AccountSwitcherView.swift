@@ -46,7 +46,7 @@ private struct AccountSwitcherSheet: View {
     @Environment(\.dismiss) private var dismiss
     let select: (TrackingAccount) -> Void
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             AccountSwitcherView(close: { dismiss() }, select: select)
         }
     }

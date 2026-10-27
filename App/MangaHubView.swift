@@ -270,7 +270,7 @@ struct MangaHubView: View {
 struct MangaExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             MangaExtensionsView().toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

@@ -1,3 +1,11 @@
+## Swipe back and MangaBaka details — build 84
+
+Version 0.32.0, stacked on build 83. Shared navigation stacks retain native interactive Back and add a public left-edge fallback for hidden bars, modal roots and split-detail browsing. Full-screen reader back routes through its existing save/close action, stops automatic scrolling and flushes progress/preferences. Full-screen artwork also closes with the edge gesture. Embedded WebKit page history takes priority; modal saving locks remain enforced.
+
+Classic Explore expands the media buttons to a complete 44-point target and claims header whitespace so it cannot open the spotlight. MangaBaka tags start collapsed to eight, with one compact preview and full grouped expansion. Decode optional anime start/end notes without losing season text or breaking records with missing coverage. Add an Anime jump and the exact AniList manga/novel listing link from the existing source ID.
+
+Local diff and Safari resource/version checks passed. No local Xcode toolchain is available; hosted universal Release compilation and unsigned IPA packaging are pending. Automated suites and device journeys are left to the user. Reuse the unchanged, source-checked build-81 native runtime for packaging.
+
 ## Saved MangaBaka accounts and account-page bar — build 81
 
 Version 0.30.0, stacked on build 80. Add/select/remove saved MangaBaka identities without discarding other credentials. Atomic Keychain registry migration preserves the old single connection, persists selection and deduplicates verified server identities. Account switches isolate visible entries, late responses, token refresh and editor writes. Account-specific encrypted For you snapshots preserve the seven-day timestamp, survive switches and clear only on removing that saved identity. Fresh browser sessions support adding a different login. Replace the blank bottom strip with an inline library action.

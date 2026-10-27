@@ -1,0 +1,69 @@
+name: Navigation and MangaBaka details device build
+on:
+  push:
+    branches: [codex/swipe-back-and-mangabaka-details]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: navigation-details-device-build-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+jobs:
+  package:
+    name: Package build 84 for device testing
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The navigation and metadata changes do not modify the native extension runtime. Reuse
+      # the immutable build-81 artifact, checking its source inputs first.
+      # This packaging path deliberately runs no automated test suites.
+      - name: Confirm native runtime inputs match the reused build
+        run: |
+          git diff --exit-code 79d120328b6a4153b869abe0c16e5e3aeb18d2ca HEAD -- \
+            Tools/MangaRuntime scripts/build-manga-runtime.sh scripts/prepare-manga-interpreter.py
+      - name: Download build-81 native runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+          run-id: 40357124552
+          github-token: ${{ github.token }}
+      - name: Download bundled runtime notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+          run-id: 40357124552
+          github-token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Generate Xcode project
+        run: |
+          mkdir -p Tests/MangaRuntimeTests/Fixtures
+          brew install xcodegen
+          xcodegen generate
+      - name: Compile universal iPhone and iPad app
+        run: |
+          xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-0.32.0-build84-unsigned.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-build84-unsigned-IPA
+          path: AnimeCompanion-0.32.0-build84-unsigned.ipa
+          retention-days: 30

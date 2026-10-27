@@ -1,5 +1,15 @@
 # Anime Companion
 
+## Swipe back and MangaBaka details — version 0.32.0 / build 84
+
+Swipe right from the left edge to go back one screen throughout the app. Native interactive navigation stays available; a shared fallback supports hidden navigation bars, sheet roots and the iPad detail pane. The full-screen manga reader saves progress and reader preferences before returning to chapters, including when its controls are hidden. Enlarged artwork also supports the same back gesture. Embedded browsers retain their own web-page history and saving editors retain their dismissal lock.
+
+Classic Explore gives both media categories complete 44-point touch targets and shields the header from spotlight-poster taps. MangaBaka series details start with eight priority-sorted tags in a compact group; Show all / Show fewer retains full tag browsing and the existing spoiler/implied display controls.
+
+Series pages show MangaBaka’s anime start/end chapter and volume notes, preserving season labels and exceptions. An Anime shortcut jumps to that section. Coverage comes from MangaUpdates through MangaBaka; an existing adaptation with no coverage is shown explicitly. View on AniList opens the exact linked manga/novel entry whenever its source ID is available.
+
+Builds on the saved reading-source links and scrolling improvements from builds 83 and 82. Compilation/packaging status is recorded in BUILD_STATUS.md and the PR. Device testing is left to the user as requested.
+
 ## Saved MangaBaka accounts — version 0.30.0 / build 81
 
 Add multiple MangaBaka logins in account settings, then tap a saved name to switch. Credentials and the selected account stay in Keychain across restarts; the current single-account connection migrates automatically. Adding another account uses a fresh web-auth session so the existing browser login does not silently replace the account you meant to add. Reconnecting an existing MangaBaka identity refreshes its saved credentials without creating another row. Remove individual saved accounts from this device while retaining the others and their online libraries.

@@ -27,7 +27,7 @@ struct DubFiltersView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     ForEach(DiscoveryDubFilter.allCases, id: \.self) { option in

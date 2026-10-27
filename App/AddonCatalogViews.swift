@@ -292,7 +292,7 @@ struct AddonVideoSourcesView: View {
             }
             .sheet(item: $information) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
             .sheet(item: $subtitleSource) { source in
-                NavigationStack { AddonSubtitlePicker(request: request, source: source, title: title, providers: enabled) }
+                AppNavigationStack { AddonSubtitlePicker(request: request, source: source, title: title, providers: enabled) }
             }
     }
 }

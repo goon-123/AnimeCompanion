@@ -35,6 +35,8 @@ struct MangaBakaDetailView: View {
                         story
                         metadata
                         sourceRatings
+                        catalogLinks
+                        animeCoverage.id("anime")
                         MangaBakaSeriesTags(series: series).id("tags")
                         officialLinks
                         MangaBakaCoverGallery(series: series, refreshToken: refreshToken).id("covers")
@@ -106,6 +108,7 @@ struct MangaBakaDetailView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 jump("Info", id: "overview", proxy: proxy)
+                if let anime = series.animeAdaptation, anime.exists || anime.hasCoverage { jump("Anime", id: "anime", proxy: proxy) }
                 jump("Tags", id: "tags", proxy: proxy)
                 jump("Covers", id: "covers", proxy: proxy)
                 jump("Related", id: "relationships", proxy: proxy)
@@ -195,6 +198,33 @@ struct MangaBakaDetailView: View {
         } else {
             MangaBakaSourceLinkSection(series: series)
         }
+    }
+    @ViewBuilder private var catalogLinks: some View {
+        if let url = series.anilistURL {
+            Link(destination: url) { Label("View on AniList", systemImage: "arrow.up.right.square") }
+                .font(.subheadline.bold()).frame(minHeight: 44)
+                .accessibilityIdentifier("mangabaka-anilist-link")
+        }
+    }
+    @ViewBuilder private var animeCoverage: some View {
+        if let anime = series.animeAdaptation, anime.exists || anime.hasCoverage {
+            VStack(alignment: .leading, spacing: 14) {
+                Label("Anime chapter coverage", systemImage: "play.rectangle").font(.title2.bold())
+                if let start = anime.start { coverageNote("Anime starts at", note: start) }
+                if let end = anime.end { coverageNote("Anime ends at", note: end) }
+                if !anime.hasCoverage {
+                    Text("An anime adaptation exists, but chapter and volume coverage has not been listed yet.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Text("MangaBaka · MangaUpdates coverage notes").font(.caption).foregroundStyle(.secondary)
+            }.accessibilityIdentifier("mangabaka-anime-coverage")
+        }
+    }
+    private func coverageNote(_ title: String, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.subheadline.bold()).foregroundStyle(.mint)
+            Text(note).font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var officialLinks: some View {
         DisclosureGroup(isExpanded: $linksExpanded) {
