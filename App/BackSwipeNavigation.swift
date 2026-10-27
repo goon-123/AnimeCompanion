@@ -101,6 +101,14 @@ private final class BackSwipeController: UIViewController, UIGestureRecognizerDe
         return true
     }
 
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // A reader/collection pan waits for the edge gesture. Vertical movement
+        // promptly fails Back in shouldBegin, so normal scrolling is unaffected.
+        guard let scroll = otherGestureRecognizer.view as? UIScrollView else { return false }
+        return otherGestureRecognizer === scroll.panGestureRecognizer
+    }
+
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         pendingBack = nil
         guard enabled, let host, host.viewIfLoaded?.window != nil,
