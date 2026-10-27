@@ -4,7 +4,7 @@ Version 0.32.0, stacked on build 83. Shared navigation stacks retain native inte
 
 Classic Explore expands the media buttons to a complete 44-point target and claims header whitespace so it cannot open the spotlight. MangaBaka tags start collapsed to eight, with one compact preview and full grouped expansion. Decode optional anime start/end notes without losing season text or breaking records with missing coverage. Add an Anime jump and the exact AniList manga/novel listing link from the existing source ID.
 
-Local diff and Safari resource/version checks passed. No local Xcode toolchain is available; hosted universal Release compilation and unsigned IPA packaging are pending. Automated suites and device journeys are left to the user. Reuse the unchanged, source-checked build-81 native runtime for packaging.
+Local diff, shared-stack coverage and Safari resource/version checks passed. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917 . Download build 84: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917/artifacts/12762005044 . Automated suites and device journeys are left to the user. The immutable build-81 native runtime was reused after its source inputs matched. Application sources at the final PR head match packaging commit 4d30a53581883705fca80676260a30add2d697b3; the temporary packaging workflow is absent from the final diff.
 
 ## Saved MangaBaka accounts and account-page bar — build 81
 
