@@ -35,8 +35,8 @@ struct MangaBakaDetailView: View {
                         story
                         metadata
                         sourceRatings
-                        catalogLinks
-                        animeCoverage.id("anime")
+                        MangaBakaAnimeSection(series: series, refreshToken: refreshToken).id("anime")
+                        animeCoverage
                         MangaBakaSeriesTags(series: series).id("tags")
                         officialLinks
                         MangaBakaCoverGallery(series: series, refreshToken: refreshToken).id("covers")
@@ -48,6 +48,15 @@ struct MangaBakaDetailView: View {
                 } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash") }
             }
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: MangaBakaAnimeRoute.self) { route in
+                AnimeDetailView(mediaID: route.id).id(route.id)
+                    .environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
+                    .animeNavigation().mangaBakaNavigation()
+            }
+            .navigationDestination(for: MangaBakaAnimeSearchRoute.self) { route in
+                DiscoveryBrowseView(category: .trending, selection: .current(), initialQuery: route.title)
+                    .id(route).toolbar(.visible, for: .navigationBar).animeNavigation().mangaBakaNavigation()
+            }
             .task(id: account.connectionID) { await reload() }
             .refreshable { refreshToken += 1; await reload(refresh: true) }
             .sheet(isPresented: $editing) { AppNavigationStack { MangaBakaTrackingView(series: series) } }
@@ -108,7 +117,7 @@ struct MangaBakaDetailView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 jump("Info", id: "overview", proxy: proxy)
-                if let anime = series.animeAdaptation, anime.exists || anime.hasCoverage { jump("Anime", id: "anime", proxy: proxy) }
+                jump("Anime", id: "anime", proxy: proxy)
                 jump("Tags", id: "tags", proxy: proxy)
                 jump("Covers", id: "covers", proxy: proxy)
                 jump("Related", id: "relationships", proxy: proxy)
@@ -197,13 +206,6 @@ struct MangaBakaDetailView: View {
             }
         } else {
             MangaBakaSourceLinkSection(series: series)
-        }
-    }
-    @ViewBuilder private var catalogLinks: some View {
-        if let url = series.anilistURL {
-            Link(destination: url) { Label("View on AniList", systemImage: "arrow.up.right.square") }
-                .font(.subheadline.bold()).frame(minHeight: 44)
-                .accessibilityIdentifier("mangabaka-anilist-link")
         }
     }
     @ViewBuilder private var animeCoverage: some View {

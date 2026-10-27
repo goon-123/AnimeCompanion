@@ -1,3 +1,9 @@
+## In-app anime links — version 0.32.1 / build 85
+
+MangaBaka series now show Related anime from the exact linked AniList manga/novel identity. Tap a title to open its native anime detail page, including episodes and watch actions, on the current navigation stack. Multiple linked seasons remain separate choices. The lookup only accepts anime nodes with Source/Adaptation relations and respects AniList adult-content settings. No linked entry or a failed lookup retains an in-app anime search prefilled with the written title; errors offer Retry. The Anime jump reaches these links above the existing chapter/volume coverage notes. Remove the external AniList website action introduced in build 84.
+
+Includes all build-84 swipe-back, category hit-target, compact-tag and coverage changes. Universal Release compilation and unsigned IPA packaging are pending; device acceptance is left to the user.
+
 ## Swipe back and MangaBaka details — build 84
 
 Version 0.32.0, stacked on build 83. Shared navigation stacks retain native interactive Back and add a public left-edge fallback for hidden bars, modal roots and split-detail browsing. Full-screen reader back routes through its existing save/close action, stops automatic scrolling and flushes progress/preferences. Full-screen artwork also closes with the edge gesture. Embedded WebKit page history takes priority; modal saving locks remain enforced.

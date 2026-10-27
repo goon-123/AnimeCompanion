@@ -282,10 +282,6 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     }
     public var formatLabel: String { MangaBakaFormat(rawValue: type)?.label ?? type.capitalized }
     public var websiteURL: URL { URL(string: "https://mangabaka.org/\(id)")! }
-    public var anilistURL: URL? {
-        guard let anilistID, anilistID > 0 else { return nil }
-        return URL(string: "https://anilist.co/manga/\(anilistID)")
-    }
     public var coverURL: URL? { [cover?.x350?.value, cover?.x250?.value, cover?.x150?.value, cover?.raw?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
     public var fullCoverURL: URL? { [cover?.raw?.value, cover?.x350?.value, cover?.x250?.value, coverImage].compactMap { $0 }.compactMap(Self.publicURL).first }
     public var searchTitles: [String] {
