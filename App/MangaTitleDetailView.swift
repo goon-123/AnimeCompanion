@@ -37,6 +37,8 @@ struct MangaTitleDetailView: View {
     @AppStorage("manga.showMatureSources") private var showMature = false
     @AppStorage("manga.chaptersNewestFirst") private var newestFirst = false
     let title: MangaTitleReference
+    let linkingTo: MangaSourceLinkTarget?
+    let resumeOnOpen: Bool
     @StateObject private var model: MangaBookModel
     @State private var expanded = false
     @State private var searchChapters = false
@@ -44,8 +46,21 @@ struct MangaTitleDetailView: View {
     @State private var unreadOnly = false
     @State private var reader: MangaReaderRoute?
     @State private var showWebsite = false
-    init(title: MangaTitleReference) { self.title = title; _model = StateObject(wrappedValue: MangaBookModel(title)) }
-    private var current: MangaTitleReference { MangaTitleReference(source: title.source, manga: model.manga) }
+    @State private var manageExtensions = false
+    @State private var resumed = false
+    init(title: MangaTitleReference, linkingTo: MangaSourceLinkTarget? = nil, resumeOnOpen: Bool = false) {
+        self.title = title; self.linkingTo = linkingTo; self.resumeOnOpen = resumeOnOpen
+        _model = StateObject(wrappedValue: MangaBookModel(title))
+    }
+    private var installed: InstalledMangaExtension? { extensions.installed(title.source.extensionID) }
+    private var source: MangaSourceReference {
+        guard let installed, let live = installed.sources.first(where: { $0.id == title.source.sourceID }) else { return title.source }
+        return MangaSourceReference(installation: installed, source: live)
+    }
+    private var sourceReady: Bool { installed?.enabled == true && installed?.sources.contains(where: { $0.id == title.source.sourceID }) == true }
+    private var matureSource: Bool { title.source.adult || source.adult }
+    private var availabilityKey: String { "\(extensions.loading)-\(sourceReady)-\(installed?.descriptor.sha256 ?? "")-\(showMature)" }
+    private var current: MangaTitleReference { MangaTitleReference(source: source, manga: model.manga) }
     private var record: MangaReadingRecord? { reading.record(title.id) }
     private var shownChapters: [SourceMangaChapter] {
         let filtered = model.chapters.filter {
@@ -56,20 +71,23 @@ struct MangaTitleDetailView: View {
     }
     var body: some View {
         Group {
-            if title.source.adult && !showMature { ContentUnavailableView("Collection hidden", systemImage: "eye.slash") }
+            if matureSource && !showMature { ContentUnavailableView("Collection hidden", systemImage: "eye.slash") }
+            else if !sourceReady && !extensions.loading { unavailableSource }
             else { content }
         }.background(Color.black).navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
-            .task {
-                guard showMature || !title.source.adult else { return }
+            .task(id: availabilityKey) {
+                await extensions.load()
+                guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }
                 await reading.load()
-                await model.load(title, extensions: extensions, reading: reading)
+                await loadChapters()
             }
             .fullScreenCover(item: $reader) { WebtoonReaderView(route: $0) }
             .sheet(isPresented: $showWebsite) {
-                MangaSourceSessionView(source: title.source) {
-                    Task { await model.load(title, extensions: extensions, reading: reading, force: true) }
+                MangaSourceSessionView(source: source) {
+                    Task { await loadChapters(force: true) }
                 }
             }
+            .sheet(isPresented: $manageExtensions) { MangaExtensionSheet() }
     }
     private var content: some View {
         ScrollView {
@@ -92,10 +110,11 @@ struct MangaTitleDetailView: View {
                     }
                 }
                 readingAction.padding(.horizontal, 20)
+                MangaSourceLinkControl(title: current, requestedTarget: linkingTo).padding(.horizontal, 20)
                 chapterSection.padding(.horizontal, 20)
             }.padding(.bottom, 32)
         }.accessibilityIdentifier("manga-title-detail")
-            .refreshable { await model.load(title, extensions: extensions, reading: reading, force: true) }
+            .refreshable { await loadChapters(force: true) }
     }
     private var header: some View {
         HStack(alignment: .top, spacing: 18) {
@@ -104,7 +123,7 @@ struct MangaTitleDetailView: View {
                 Text(model.manga.title).font(.title2.bold()).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("manga-detail-title")
                 if !model.manga.author.isEmpty { Text(model.manga.author).font(.subheadline).foregroundStyle(.secondary) }
                 Text(status).font(.caption.weight(.medium)).foregroundStyle(MangaStyle.accent)
-                Text(title.source.name).font(.caption).foregroundStyle(.secondary)
+                Text(source.name).font(.caption).foregroundStyle(.secondary)
                 Button {
                     Task { await reading.save(current, saved: record?.saved != true) }
                 } label: { Label(record?.saved == true ? "In library" : "Add to library", systemImage: record?.saved == true ? "bookmark.fill" : "bookmark") }
@@ -133,7 +152,7 @@ struct MangaTitleDetailView: View {
             if let error = model.error {
                 Text(error).font(.subheadline).foregroundStyle(.secondary)
                 Button("Open source website / verify") { showWebsite = true }
-                Button("Try again") { Task { await model.load(title, extensions: extensions, reading: reading, force: true) } }
+                Button("Try again") { Task { await loadChapters(force: true) } }
             }
         }
     }
@@ -193,4 +212,23 @@ struct MangaTitleDetailView: View {
         }
     }
     private func open(_ chapter: SourceMangaChapter) { reader = MangaReaderRoute(title: current, chapters: model.chapters, chapter: chapter) }
+    private func loadChapters(force: Bool = false) async {
+        guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }
+        await model.load(current, extensions: extensions, reading: reading, force: force || model.error != nil)
+        guard !Task.isCancelled, resumeOnOpen, !resumed, model.error == nil,
+              let chapter = MangaChapterSequence.nextToRead(model.chapters, record: record) else { return }
+        resumed = true; open(chapter)
+    }
+    private var unavailableSource: some View {
+        ContentUnavailableView {
+            Label(installed?.enabled == false ? "Reading source disabled" : "Reading source unavailable", systemImage: "puzzlepiece.extension")
+        } description: {
+            Text("Saved source: " + title.source.name + ". Enable or install it to read again. You can change the source link from your library entry.")
+        } actions: {
+            if installed?.enabled == false {
+                Button("Enable source") { Task { await extensions.setEnabled(title.source.extensionID, true) } }.disabled(extensions.busy)
+            }
+            Button("Manage extensions") { manageExtensions = true }.buttonStyle(.borderedProminent)
+        }
+    }
 }

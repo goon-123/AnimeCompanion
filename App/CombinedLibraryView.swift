@@ -111,7 +111,11 @@ struct CombinedLibraryView: View {
         switch item {
         case .anime(let entry): AnimeLink(id: entry.mediaId, label: content).buttonStyle(.plain).accessibilityIdentifier("combined-entry-" + item.id)
         case .reading(let entry):
-            if let series = entry.series { NavigationLink(value: MangaBakaSeriesRoute(series: series), label: content).buttonStyle(.plain).accessibilityIdentifier("combined-entry-" + item.id) }
+            if let series = entry.series {
+                NavigationLink(value: MangaBakaSeriesRoute(series: series), label: content).buttonStyle(.plain)
+                    .accessibilityIdentifier("combined-entry-" + item.id)
+                    .contextMenu { MangaLibrarySourceMenu(series: series) }
+            }
         }
     }
     private func loadReading(refresh: Bool = false) async {
@@ -144,6 +148,7 @@ private struct CombinedLibraryCard: View {
                     Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
                     Text(status).font(.caption).foregroundStyle(.secondary)
                     Text(progress).font(.caption.monospacedDigit()).lineLimit(2)
+                    sourceBadge
                 }
             } else {
                 HStack(spacing: 14) {
@@ -152,12 +157,16 @@ private struct CombinedLibraryCard: View {
                         Text(item.title).font(.headline).lineLimit(3)
                         Text(format + " · " + status).font(.caption).foregroundStyle(.secondary)
                         Text(progress).font(.subheadline.monospacedDigit())
+                        sourceBadge
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
             }
         }.frame(maxWidth: .infinity, alignment: .topLeading).contentShape(Rectangle())
             .accessibilityIdentifier("combined-title-" + item.id)
+    }
+    @ViewBuilder private var sourceBadge: some View {
+        if case .reading(let entry) = item, let series = entry.series { MangaSourceLinkBadge(series: series) }
     }
     @ViewBuilder private func cover(width: CGFloat) -> some View {
         switch item {
