@@ -50,9 +50,9 @@ struct MangaBakaDetailView: View {
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
             .task(id: account.connectionID) { await reload() }
             .refreshable { refreshToken += 1; await reload(refresh: true) }
-            .sheet(isPresented: $editing) { NavigationStack { MangaBakaTrackingView(series: series) } }
+            .sheet(isPresented: $editing) { AppNavigationStack { MangaBakaTrackingView(series: series) } }
             .sheet(isPresented: $signingIn) {
-                NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
+                AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
             }
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
