@@ -1,0 +1,14 @@
+name: Leave device testing to the user
+on:
+  push:
+    branches: [codex/device-build/saved-manga-source-links]
+permissions:
+  contents: read
+concurrency:
+  group: 'iOS unsigned IPA-refs/pull/60/merge'
+  cancel-in-progress: true
+jobs:
+  device-testing:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo 'Device testing is performed by the user. Only IPA packaging is required.'
