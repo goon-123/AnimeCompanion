@@ -83,6 +83,12 @@ final class AppStore: ObservableObject {
             ? AnimeVisualsClient(transport: VisualGalleryPreviewTransport(), directory: nil, minimumRequestInterval: 0)
             : AnimeVisualsClient()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
+                UserDefaults.standard.set("list", forKey: "library.layout")
+                UserDefaults.standard.set(2, forKey: "library.columns")
+                UserDefaults.standard.set("Last updated", forKey: "library.sort")
+                UserDefaults.standard.set(76, forKey: "library.poster.list")
+            }
             UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
             UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
             includeAdult = false; automaticallyComplete = true

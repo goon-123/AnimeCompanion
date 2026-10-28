@@ -1,3 +1,11 @@
+## My Library presentation — version 0.35.1 / build 90
+
+Rebuild anime Library grid cards as unified rounded poster/metadata panels, with ratings on artwork, aligned two-line titles, watched totals, a slim bounded progress track, next-episode text, dub counts and independent scrollable genre buttons. Compact list rows align metadata and genres beside the saved-size cover. Preserve saved layout, density, poster sizing, all sorting/status filters, native detail links and long-press playback/tracking actions. Combine layout/count/sort controls and adapt their arrangement at accessibility text sizes.
+
+Remove the account button's custom circular surface beneath the native navigation-bar surface and inset its service badge inside a fixed 44-point hit target, addressing the overlapping rings and clipped badge beside My Library. Keep both accounts and account switching intact.
+
+Native presentation journeys cover long titles in both appearances/layouts, detail navigation, saved grid selection, header/account hit targets, iPad rotation, accessibility text and unknown episode totals. Owned artwork/metadata fixtures are Debug-only. Local checks and hosted Release/native verification are pending at this checkpoint.
+
 ## Library and calendar — version 0.35.0 / build 89
 
 Removed the visible play/+1/ellipsis stack from Library rows, posters and Airing Now. Native context menus retain playback, progress, tracking and list moves. Rebuilt Airing Now as compact neutral rows and Weekly Schedule as a seven-day date strip with selected-day highlighting, release dots and a time-led agenda. Today positioning, free full-week browsing, account-independent weekly access, saved filters and source certainty rules are retained.

@@ -83,7 +83,7 @@ struct LibraryView: View {
                 let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
                 ScrollView {
                     // Keep controls stable while the results below remain lazy.
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 14) {
                         searchBar
                         if let anime = store.lastTrackedAnime, store.isVisible(anime), store.canUndo(anime.id) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -92,8 +92,7 @@ struct LibraryView: View {
                             }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
                         statusTabs
-                        layoutControls.zIndex(1)
-                        sortingBar.zIndex(1)
+                        libraryControls.zIndex(1)
                         if layout == "list", posters.listPosterWidth(in: contentWidth) < posters.listWidth - 1 {
                             Text("Covers fit this pane at \(Int(posters.listPosterWidth(in: contentWidth))) pt. Your saved width is \(Int(posters.listWidth)) pt.")
                                 .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("library-list-size-constrained")
@@ -105,7 +104,7 @@ struct LibraryView: View {
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                         if layout == "grid" {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)), alignment: .leading, spacing: 20) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)), alignment: .leading, spacing: 14) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
                                         LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
@@ -175,61 +174,93 @@ struct LibraryView: View {
             TextField("Search your anime", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
                 .focused($searchFocused).submitLabel(.search).onSubmit { searchFocused = false }.accessibilityIdentifier("library-search")
             if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear library search") }
-        }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+        }.padding(.horizontal, 14).frame(minHeight: 46).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
     }
     private var statusTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 Button { selected = nil } label: {
-                    Text("All").font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
+                    Text("All").font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
                         .foregroundStyle(selected == nil ? Theme.accent : Color.secondary)
-                        .background(selected == nil ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                        .background(selected == nil ? Theme.accent.opacity(0.12) : Theme.surface, in: Capsule())
+                        .overlay { Capsule().stroke(selected == nil ? Theme.accent.opacity(0.25) : Theme.border).allowsHitTesting(false) }
                 }.buttonStyle(.plain).accessibilityIdentifier("library-status-all")
                     .accessibilityAddTraits(selected == nil ? .isSelected : [])
                 ForEach(statuses) { status in
                     Button { selected = status } label: {
-                        Text(status.label).font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
+                        Text(status.label).font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
                             .foregroundStyle(selected == status ? Theme.accent : Color.secondary)
-                            .background(selected == status ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                            .background(selected == status ? Theme.accent.opacity(0.12) : Theme.surface, in: Capsule())
+                            .overlay { Capsule().stroke(selected == status ? Theme.accent.opacity(0.25) : Theme.border).allowsHitTesting(false) }
                     }.buttonStyle(.plain).accessibilityIdentifier("library-status-\(status.rawValue)")
                         .accessibilityAddTraits(selected == status ? .isSelected : [])
                 }
             }
         }
     }
-    private var layoutControls: some View {
-        HStack {
-            Picker("Library layout", selection: $layout) {
-                Text("List").tag("list")
-                Text("Grid").tag("grid")
-            }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
+    private var libraryControls: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if textSize.isAccessibilitySize {
+                resultCount
+                HStack(spacing: 10) { layoutPicker; sortMenu }
+            } else {
+                HStack(spacing: 10) {
+                    resultCount
+                    Spacer(minLength: 0)
+                    layoutPicker.frame(width: 144)
+                    sortMenu
+                }
+            }
             if layout == "grid" {
                 Menu {
                     ForEach(1...8, id: \.self) { count in
                         MenuChoice(title: "\(count) per row", selected: posters.preferredColumns == count) { posters.columns = count }
                             .accessibilityIdentifier("library-column-option-\(count)")
                     }
-                } label: { Text("\(posters.preferredColumns) per row").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "square.grid.2x2")
+                        Text("\(posters.preferredColumns) per row")
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }.font(.caption.weight(.medium)).frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).foregroundStyle(.secondary)
                     .accessibilityIdentifier("library-columns")
             }
         }
     }
-    private var sortingBar: some View {
-        HStack {
-            Text("\(filtered.count)").font(.subheadline.bold()).padding(.horizontal, 11).padding(.vertical, 5).background(Theme.surface, in: Capsule())
+    private var resultCount: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(filtered.count) titles").font(.subheadline.weight(.semibold))
                 .accessibilityLabel("\(filtered.count) anime in this list")
-            Spacer()
-            Menu {
-                ForEach(LibrarySort.allCases, id: \.self) { order in
-                    MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue }
+            Text(sort.rawValue + (reversed ? " · Reversed" : "")).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private var layoutPicker: some View {
+        Picker("Library layout", selection: $layout) {
+            Text("List").tag("list")
+            Text("Grid").tag("grid")
+        }.pickerStyle(.segmented).accessibilityIdentifier("library-layout")
+    }
+    private var sortMenu: some View {
+        Menu {
+            ForEach(LibrarySort.allCases, id: \.self) { order in
+                MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue }
+            }
+            Section {
+                Button { reversed.toggle() } label: {
+                    Label(reversed ? "Use default direction" : "Reverse direction", systemImage: reversed ? "arrow.down" : "arrow.up")
                 }
-                Section("Default view") { LibraryDefaultMenu(scope: .anime) }
-            } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
-                .accessibilityIdentifier("library-sort")
-            Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 44, height: 44).background(Theme.surface, in: Circle()) }
                 .accessibilityLabel("Reverse library sort")
                 .accessibilityValue(reversed ? "Reversed" : "Default direction")
-        }
+            }
+            Section("Default view") { LibraryDefaultMenu(scope: .anime) }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down").font(.subheadline.weight(.semibold))
+                .frame(width: 44, height: 44).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .overlay { RoundedRectangle(cornerRadius: 12).stroke(Theme.border).allowsHitTesting(false) }
+        }.accessibilityLabel("Sort by \(sort.rawValue)").accessibilityIdentifier("library-sort")
     }
     private func nextDub(for id: Int) -> ReleaseEvent? {
         dubEvents.first { $0.anime.id == id && ($0.date ?? .distantPast) > now }

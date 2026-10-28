@@ -158,6 +158,7 @@ test_arguments+=(-only-testing:AnimeCompanionUITests/TabletPresentationUITests)
 fi
 if [[ "$test_scope" == schedule ]]; then
   test_arguments+=(
+    -only-testing:AnimeCompanionUITests/LibraryPresentationUITests
     -only-testing:AnimeCompanionUITests/LibraryScheduleRedesignUITests
     -only-testing:AnimeCompanionUITests/AiringProgressUITests
   )
