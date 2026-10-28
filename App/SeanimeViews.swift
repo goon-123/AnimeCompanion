@@ -53,10 +53,10 @@ struct SeanimeSettingsView: View {
             Section { NavigationLink("Compatibility & privacy") { SeanimeSafetyView() } }
         }.navigationTitle("Seanime extensions").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $candidate) { value in
-                NavigationStack { SeanimeInstallReview(installation: value) { if seanime.install($0) { candidate = nil; manifestURL = ""; notice = "Seanime extension installed." } } }
+                AppNavigationStack { SeanimeInstallReview(installation: value) { if seanime.install($0) { candidate = nil; manifestURL = ""; notice = "Seanime extension installed." } } }
             }
             .sheet(isPresented: $marketplace) {
-                NavigationStack { SeanimeMarketplaceView { value in manifestURL = value; marketplace = false } }
+                AppNavigationStack { SeanimeMarketplaceView { value in manifestURL = value; marketplace = false } }
             }
             .onDisappear { work?.cancel() }
     }
@@ -233,7 +233,7 @@ struct SeanimeSourcesSections: View {
                 }
             }
         }.sheet(item: $releaseInfo) { choice in
-            NavigationStack {
+            AppNavigationStack {
                 Form {
                     Section(choice.provider.manifest.name) {
                         PlaybackAudioBadge(audio: choice.audio)

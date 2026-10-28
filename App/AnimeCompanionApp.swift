@@ -4,6 +4,9 @@ import AnimeCore
 
 @main
 struct AnimeCompanionApp: App {
+    // Declare before all stores: classify fresh vs. upgraded installations before
+    // AppStore writes its initialization defaults.
+    @StateObject private var firstRun = FirstRunSetupState(showOnLaunch: FirstRunSetupState.prepare())
     @StateObject private var store = AppStore()
     @StateObject private var discoveryFilters = DiscoveryFilterStore()
     @StateObject private var playback = PlaybackStore()
@@ -11,6 +14,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var navigation = AppNavigationStore()
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
+    @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
@@ -20,6 +24,7 @@ struct AnimeCompanionApp: App {
                 .environmentObject(seanime)
                 .environmentObject(navigation)
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
+                .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
@@ -27,6 +32,7 @@ struct AnimeCompanionApp: App {
                 }
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
                 .task { if !artworkPreview { await mangaBaka.restore() } }
+                .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
                     await store.exploreDubs.keepUpdated(using: store.dubs)
@@ -43,9 +49,11 @@ struct AnimeCompanionApp: App {
     @ViewBuilder private var root: some View {
         #if DEBUG
         if artworkPreview { ArtworkPerformancePreview() }
+        else if firstRun.showOnLaunch { FirstRunSetupView { firstRun.finish() } }
         else { AppTabs() }
         #else
-        AppTabs()
+        if firstRun.showOnLaunch { FirstRunSetupView { firstRun.finish() } }
+        else { AppTabs() }
         #endif
     }
 }
@@ -62,6 +70,14 @@ struct AnimeVisualsRoute: Hashable { let anime: Anime? }
 struct MangaSearchRoute: Hashable {
     let id = UUID()
     let titles: [String]
+    let linkingTo: MangaSourceLinkTarget?
+    init(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) { self.titles = titles; self.linkingTo = linkingTo }
+}
+struct LinkedMangaRoute: Hashable {
+    let id = UUID()
+    let link: MangaSourceLink
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 struct DiscoveryRoute: Hashable {
     let category: DiscoveryCategory
@@ -73,7 +89,7 @@ struct DiscoveryRoute: Hashable {
 }
 
 struct SupplementaryDestination: Identifiable {
-    enum Kind { case manga([String]), schedule, genre(String) }
+    enum Kind { case manga([String], linkingTo: MangaSourceLinkTarget? = nil), linkedManga(MangaSourceLink), schedule, genre(String), library }
     let id = UUID()
     let kind: Kind
 }
@@ -110,6 +126,16 @@ final class AppNavigationStore: ObservableObject {
     let library = TabNavigationState()
     let news = TabNavigationState()
     let manga = TabNavigationState()
+
+    func openAccountLibrary(_ account: TrackingAccount) {
+        UserDefaults.standard.set(account.rawValue, forKey: TrackingAccount.storageKey)
+        UserDefaults.standard.set(account.librarySection, forKey: "library.mediaSection")
+        library.path = NavigationPath(); library.detailPath = NavigationPath()
+        library.animeID = nil; library.column = .sidebar; library.visibility = .all
+        if tabPreferences.visible.contains(.library) { selectedTab = .library }
+        else if case .library? = supplementary?.kind { return }
+        else { supplementary = .init(kind: .library) }
+    }
 
     /// Apply on settings dismissal so changing topology cannot tear down its
     /// presenting sheet while the user is still editing preferences.
@@ -152,14 +178,22 @@ final class AppNavigationStore: ObservableObject {
         openMangaSearch(titles: MangaSearchTitles.suggestions(for: anime))
     }
 
-    func openMangaSearch(titles: [String]) {
+    func openMangaSearch(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
         guard tabPreferences.visible.contains(.manga) else {
-            supplementary = .init(kind: .manga(titles)); return
+            supplementary = .init(kind: .manga(titles, linkingTo: linkingTo)); return
         }
         var path = NavigationPath()
-        path.append(MangaSearchRoute(titles: titles))
+        path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
         manga.path = path
         selectedTab = .manga
+    }
+    func openLinkedManga(_ link: MangaSourceLink) {
+        guard tabPreferences.visible.contains(.manga) else {
+            supplementary = .init(kind: .linkedManga(link)); return
+        }
+        var path = NavigationPath()
+        path.append(LinkedMangaRoute(link: link))
+        manga.path = path; selectedTab = .manga
     }
 }
 
@@ -175,7 +209,9 @@ struct AppTabs: View {
             loadedLayout = true
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
-                let hidden: Set<AppTab> = ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? [.manga] : []
+                var hidden: Set<AppTab> = ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? [.manga] : []
+                if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { hidden.insert(.library) }
+                UserDefaults.standard.removeObject(forKey: TrackingAccount.storageKey)
                 UserDefaults.standard.set(AppTabPreferences(hidden: hidden).saved, forKey: AppTabPreferences.storageKey)
                 UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? "all" : "anime", forKey: "library.mediaSection")
                 UserDefaults.standard.set("anime", forKey: "app.mediaSection")
@@ -193,7 +229,7 @@ struct AppTabs: View {
                 pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }.sheet(item: $navigation.supplementary) { destination in
-            NavigationStack {
+            AppNavigationStack {
                 supplementary(destination.kind).animeNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
@@ -224,8 +260,10 @@ struct AppTabs: View {
     }
     @ViewBuilder private func supplementary(_ kind: SupplementaryDestination.Kind) -> some View {
         switch kind {
-        case .manga(let titles): MangaTitleSearchView(titles: titles)
+        case .manga(let titles, let target): MangaTitleSearchView(titles: titles, linkingTo: target)
+        case .linkedManga(let link): MangaTitleDetailView(title: link.title, linkingTo: link.library, resumeOnOpen: true)
         case .schedule: ScheduleView()
+        case .library: MediaLibraryView()
         case .genre(let genre): DiscoveryBrowseView(category: .trending, selection: .current(), titleOverride: genre, initialGenre: genre)
         }
     }
@@ -235,9 +273,12 @@ struct AppTabs: View {
 private struct MangaTabPane: View {
     @ObservedObject var state: TabNavigationState
     var body: some View {
-        NavigationStack(path: $state.path) {
+        AppNavigationStack(path: $state.path) {
             MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
-                MangaTitleSearchView(titles: route.titles).id(route.id)
+                MangaTitleSearchView(titles: route.titles, linkingTo: route.linkingTo).id(route.id)
+            }
+            .navigationDestination(for: LinkedMangaRoute.self) { route in
+                MangaTitleDetailView(title: route.link.title, linkingTo: route.link.library, resumeOnOpen: true).id(route.id)
             }
         }
     }
@@ -261,16 +302,19 @@ private struct AnimeTabPane<Content: View>: View {
                 split(browseWidth: TabletLayout.browseWidth(windowWidth: geometry.size.width))
             }.environment(\.animeSplitPresentation, true)
         } else {
-            NavigationStack(path: $state.path) { content }
+            AppNavigationStack(path: $state.path) { content }
                 .environment(\.animeSplitPresentation, false)
         }
     }
+    private func backToBrowsing() {
+        state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar; state.visibility = .all
+    }
     private func split(browseWidth: Double) -> some View {
         NavigationSplitView(columnVisibility: $state.visibility, preferredCompactColumn: $state.column) {
-            NavigationStack(path: $state.path) { content }
+            AppNavigationStack(path: $state.path) { content }
                 .navigationSplitViewColumnWidth(min: 480, ideal: browseWidth, max: 820)
         } detail: {
-            NavigationStack(path: $state.detailPath) {
+            AppNavigationStack(path: $state.detailPath, rootBack: state.animeID == nil ? nil : backToBrowsing) {
                 Group {
                     if let id = state.animeID {
                         AnimeDetailView(mediaID: id).id(id)
@@ -279,8 +323,7 @@ private struct AnimeTabPane<Content: View>: View {
                                 if sizeClass == .regular {
                                     ToolbarItem(placement: .topBarLeading) {
                                         Button {
-                                            state.detailPath = NavigationPath(); state.animeID = nil; state.column = .sidebar
-                                            state.visibility = .all
+                                            backToBrowsing()
                                         } label: { Label("Browse", systemImage: "chevron.left") }
                                             .accessibilityLabel("Back to browsing").accessibilityIdentifier("back-to-browsing")
                                     }
@@ -349,5 +392,3 @@ struct AnimeNavigation: ViewModifier {
     }
 }
 extension View { func animeNavigation() -> some View { modifier(AnimeNavigation()) } }
-
-

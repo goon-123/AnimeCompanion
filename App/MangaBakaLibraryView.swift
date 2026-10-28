@@ -4,17 +4,22 @@ import AnimeCore
 struct MangaBakaLibraryView: View {
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
-    @State private var state = "all"
+    @AppStorage("library.reading.defaultStatus") private var defaultStatus = LibraryScope.reading.initialStatus
+    @State private var state = LibraryScope.reading.openingStatus()
     @State private var search = ""
     @AppStorage("mangabaka.library.layout") private var layout = "grid"
+    @AppStorage("mangabaka.library.sort") private var sortValue = ReadingLibrarySort.updated.rawValue
+    @AppStorage("mangabaka.library.ascending") private var ascending = false
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var connection = false
     @State private var appSettings = false
     private var entries: [MangaBakaLibraryEntry] {
-        account.library.filter { entry in
-            guard let series = entry.series, series.isVisible(includeAdult: preferences.includeAdult) else { return false }
+        let values = account.library.filter { entry in
+            guard selectedState == nil || entry.state == selectedState else { return false }
+            guard let series = entry.series, series.isVisible(contentFilter: preferences.mangaBakaContent) else { return false }
             return search.isEmpty || series.searchTitles.contains { $0.localizedCaseInsensitiveContains(search) }
         }
+        return (ReadingLibrarySort(rawValue: sortValue) ?? .updated).sorted(values, ascending: ascending)
     }
     var body: some View {
         Group {
@@ -27,19 +32,15 @@ struct MangaBakaLibraryView: View {
                 } actions: { Button("Connect MangaBaka") { connection = true }.buttonStyle(.borderedProminent) }
             }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { connection = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("MangaBaka account")
-                }
-            }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             } }
             .appSettingsSheet(isPresented: $appSettings)
             .sheet(isPresented: $connection) {
-                NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
+                AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
             }
-            .task(id: "\(state)-\(account.revision)") { await account.loadLibrary(state: selectedState, refresh: true) }
+            .onChange(of: defaultStatus) { _, _ in state = LibraryScope.reading.openingStatus() }
+            .task(id: "\(state)-\(account.revision)") { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private var selectedState: String? { state == "all" ? nil : state }
     private var connectedLibrary: some View {
@@ -54,6 +55,8 @@ struct MangaBakaLibraryView: View {
                     if let total = account.libraryTotal { Text("\(total.formatted()) titles").font(.caption).foregroundStyle(.secondary) }
                 }
                 LibraryLayoutPicker(layout: $layout)
+                ReadingLibrarySortControls(scope: .reading, sortValue: $sortValue, ascending: $ascending)
+                MangaBakaContentButton().font(.subheadline)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         status("All", value: "all")
@@ -65,10 +68,10 @@ struct MangaBakaLibraryView: View {
                     TextField("Filter loaded titles", text: $search).textInputAutocapitalization(.never)
                     if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear filter") }
                 }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
-                if !search.isEmpty && account.hasMoreLibrary {
-                    Text("Filtering \(account.library.count) loaded titles. Load more to search the rest of this list.").font(.caption).foregroundStyle(.secondary)
+                if account.hasMoreLibrary {
+                    Text("\(account.library.count.formatted()) titles loaded. Syncing the rest of this list for complete search and sorting…").font(.caption).foregroundStyle(.secondary)
                 }
-                if let error = account.libraryError { NoticeView(message: error) { Task { await account.loadLibrary(state: selectedState, refresh: true) } } }
+                if let error = account.libraryError { NoticeView(message: error) { Task { await account.loadCompleteLibrary(state: selectedState, refresh: true) } } }
                 if let notice = account.notice { Text(notice).font(.caption).foregroundStyle(.mint) }
                 if entries.isEmpty && !account.loadingLibrary && account.libraryError == nil {
                     ContentUnavailableView("No visible titles", systemImage: "book.closed",
@@ -80,6 +83,7 @@ struct MangaBakaLibraryView: View {
                             if let series = entry.series {
                                 NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryTile(entry: entry, series: series) }
                                     .buttonStyle(.plain)
+                                    .contextMenu { MangaLibrarySourceMenu(series: series) }
                             }
                         }
                     }.accessibilityIdentifier("mangabaka-library-grid")
@@ -88,24 +92,26 @@ struct MangaBakaLibraryView: View {
                         if let series = entry.series {
                             NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryRow(entry: entry, series: series) }
                                 .buttonStyle(.plain)
+                                .contextMenu { MangaLibrarySourceMenu(series: series) }
                         }
                     }
                 }
                 if account.loadingLibrary { ProgressView("Loading your library…").frame(maxWidth: .infinity).padding() }
                 else if account.hasMoreLibrary {
-                    Button("Load more from My Library") { Task { await account.loadLibrary(state: selectedState, next: true) } }
+                    Button("Continue syncing My Library") { Task { await account.loadCompleteLibrary(state: selectedState) } }
                         .buttonStyle(.bordered).frame(maxWidth: .infinity)
                 }
                 MangaBakaAttribution().padding(.top, 12)
             }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
-        }.refreshable { await account.loadLibrary(state: selectedState, refresh: true) }
+        }.refreshable { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private func status(_ title: String, value: String) -> some View {
         Button { state = value } label: {
             Text(title).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
                 .background(state == value ? Color.white : Theme.surface, in: Capsule())
                 .foregroundStyle(state == value ? Color.black : Color.white)
-        }.buttonStyle(.plain).accessibilityAddTraits(state == value ? .isSelected : [])
+        }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-library-status-" + value)
+            .accessibilityAddTraits(state == value ? .isSelected : [])
     }
 }
 
@@ -133,6 +139,7 @@ struct MangaBakaLibraryRow: View {
             Text(series.displayTitle).font(.headline).lineLimit(3)
             Text(statusText).font(.caption).foregroundStyle(.secondary)
             Text(progressText).font(.subheadline.monospacedDigit())
+            MangaSourceLinkBadge(series: series)
             if let total = series.totalChapters, total > 0 {
                 ProgressView(value: min(max(0, entry.chapter ?? 0), total), total: total).tint(.mint)
             }
@@ -153,6 +160,7 @@ struct MangaBakaTrackingView: View {
     @State private var isPrivate = true
     @State private var existing = false
     @State private var ready = false
+    @State private var loadedConnection: UUID?
     @State private var error: String?
     @State private var removing = false
     private var busy: Bool { account.saving.contains(series.id) }
@@ -162,7 +170,10 @@ struct MangaBakaTrackingView: View {
     }
     var body: some View {
         Form {
-            Section { Text(series.displayTitle).font(.headline) }
+            Section {
+                Text(series.displayTitle).font(.headline)
+                if let name = account.profile?.name { Text("MangaBaka · " + name).font(.caption).foregroundStyle(.secondary) }
+            }
             if ready {
                 Section("Reading progress") {
                     Picker("Status", selection: $status) {
@@ -192,18 +203,30 @@ struct MangaBakaTrackingView: View {
         }.disabled(busy).navigationTitle(existing ? "Edit reading entry" : "Add to My Library").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await save() } }.disabled(!ready || busy) }
-            }.task { await load() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { let connection = loadedConnection; Task { await save(connection: connection) } }
+                        .disabled(!ready || busy || loadedConnection != account.connectionID)
+                }
+            }.task(id: account.connectionID) { await load() }
             .confirmationDialog("Remove this title from MangaBaka?", isPresented: $removing) {
                 Button("Remove from My Library", role: .destructive) {
-                    Task { do { try await account.remove(series); dismiss() } catch { self.error = error.localizedDescription } }
+                    let connection = loadedConnection
+                    Task {
+                        guard let connection else { return }
+                        do { try await account.remove(series, expectedConnection: connection); dismiss() }
+                        catch is CancellationError {} catch { self.error = error.localizedDescription }
+                    }
                 }
             } message: { Text("Its saved progress, score and notes will be removed from your MangaBaka library, not just this device.") }
     }
     private func load() async {
-        ready = false; error = nil
+        let connection = account.connectionID
+        ready = false; loadedConnection = nil; error = nil; removing = false
+        status = MangaBakaReadingStatus.planToRead.rawValue; chapter = ""; volume = ""
+        rating = -1; note = ""; isPrivate = true; existing = false
         do {
             let entry = try await account.loadEntry(series); try Task.checkCancellation()
+            guard connection == account.connectionID else { return }
             existing = entry != nil
             if let entry {
                 guard MangaBakaReadingStatus(rawValue: entry.state) != nil else { throw MangaBakaError.message("This entry uses a reading status the app does not yet support. Edit it on MangaBaka.") }
@@ -211,8 +234,8 @@ struct MangaBakaTrackingView: View {
                 volume = entry.volume.map { $0.formatted(.number.grouping(.never)) } ?? ""
                 rating = entry.rating ?? -1; note = entry.note ?? ""; isPrivate = entry.isPrivate
             }
-            ready = true
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+            loadedConnection = connection; ready = true
+        } catch is CancellationError {} catch { if connection == account.connectionID { self.error = error.localizedDescription } }
     }
     private func number(_ text: String) throws -> Double? {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -223,12 +246,13 @@ struct MangaBakaTrackingView: View {
         }
         return value
     }
-    private func save() async {
+    private func save(connection: UUID?) async {
+        guard let connection, connection == account.connectionID else { return }
         error = nil
         do {
             let update = try MangaBakaLibraryUpdate(state: status, chapter: number(chapter), volume: number(volume),
                 rating: rating < 0 ? nil : rating, note: note.isEmpty ? nil : note, isPrivate: isPrivate)
-            try await account.save(series, update: update, existing: existing); dismiss()
+            try await account.save(series, update: update, existing: existing, expectedConnection: connection); dismiss()
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 }
@@ -237,7 +261,8 @@ struct MangaBakaAccountView: View {
     @EnvironmentObject private var account: MangaBakaStore
     @State private var clientID = UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? ""
     @State private var apiKey = ""
-    @State private var confirmation = false
+    var useAccount: (() -> Void)? = nil
+    @State private var removingAccount: MangaBakaAccountIdentity?
     private var effectiveClientID: String {
         let value = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? account.bundledClientID : value
@@ -247,23 +272,60 @@ struct MangaBakaAccountView: View {
             Section {
                 Label(account.connected ? "Connected to MangaBaka" : "Bring your reading library", systemImage: account.connected ? "checkmark.circle.fill" : "books.vertical")
                     .font(.headline).foregroundStyle(account.connected ? .mint : .primary)
-                if let profile = account.profile { Text(profile.name).foregroundStyle(.secondary) }
-                Text("Browse without an account. Connect to view your lists, save progress, rate titles and get personal recommendations.").font(.subheadline).foregroundStyle(.secondary)
+                if let profile = account.profile { Text(profile.name).foregroundStyle(.secondary).accessibilityIdentifier("mangabaka-active-name") }
                 if account.connected {
-                    Button("Disconnect", role: .destructive) { confirmation = true }.disabled(!account.saving.isEmpty)
+                    Text("Your reading library, progress and recommendations belong to the selected account.").font(.subheadline).foregroundStyle(.secondary)
+                    if let useAccount {
+                        Button(action: useAccount) { Label("Open MangaBaka library", systemImage: "books.vertical") }
+                            .foregroundStyle(.mint).accessibilityIdentifier("account-use-mangabaka")
+                    }
+                } else {
+                    Text("Explore without signing in, or add an account to track your reading library.").font(.subheadline).foregroundStyle(.secondary)
                 }
                 if let error = account.accountError { Text(error).foregroundStyle(.orange) }
                 if account.connecting { ProgressView("Connecting securely…") }
             }
-            Section("Sign in with MangaBaka") {
-                Button("Sign in with MangaBaka") {
+            if !account.savedAccounts.isEmpty {
+                Section {
+                    ForEach(account.savedAccounts) { saved in
+                        Button { account.selectAccount(saved.id) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle.fill").font(.title2).foregroundStyle(.mint)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(saved.name).foregroundStyle(.primary)
+                                    Text(saved.id == account.activeAccountID ? "Active" : "Tap to switch")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: saved.id == account.activeAccountID ? "checkmark.circle.fill" : "arrow.right.circle")
+                                    .foregroundStyle(saved.id == account.activeAccountID ? Color.mint : .secondary)
+                            }.padding(.vertical, 6).contentShape(Rectangle())
+                        }.buttonStyle(.plain).disabled(account.connecting || !account.saving.isEmpty)
+                            .accessibilityLabel("Switch to " + saved.name)
+                            .accessibilityValue(saved.id == account.activeAccountID ? "Active" : "Saved")
+                            .accessibilityIdentifier("mangabaka-saved-account-" + (saved.profile?.id ?? saved.id.uuidString))
+                            .swipeActions { Button("Remove", role: .destructive) { removingAccount = saved } }
+                    }
+                } header: { Text("Saved accounts") } footer: {
+                    Text("Tap a name to switch immediately. Your other MangaBaka accounts stay saved.")
+                }
+            }
+            Section(account.connected ? "Add another account" : "Sign in with MangaBaka") {
+                Button(account.connected ? "Add MangaBaka account" : "Sign in with MangaBaka") {
                     let customClientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
                     if customClientID.isEmpty { UserDefaults.standard.removeObject(forKey: "mangabaka.clientID") }
                     else { UserDefaults.standard.set(customClientID, forKey: "mangabaka.clientID") }
                     Task { await account.connect() }
                 }.disabled(effectiveClientID.isEmpty || account.connecting || !account.saving.isEmpty)
-                Text("Sign in on MangaBaka to connect your reading library. Your password is entered only on MangaBaka.")
+                    .accessibilityIdentifier("mangabaka-add-account")
+                Text("Sign in once for each account. When adding another account, a fresh sign-in session lets you choose a different MangaBaka login.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            if let selected = account.savedAccounts.first(where: { $0.id == account.activeAccountID }) {
+                Section {
+                    Button("Remove selected account", role: .destructive) { removingAccount = selected }
+                        .disabled(account.connecting || !account.saving.isEmpty).accessibilityIdentifier("mangabaka-remove-selected")
+                }
             }
             Section {
                 DisclosureGroup("Advanced connection settings") {
@@ -288,11 +350,17 @@ struct MangaBakaAccountView: View {
                     Text("If MangaBaka has issued you a personal key, you can connect with it instead. It needs access to your profile and library. Never enter another person's key or an OAuth app secret.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.disabled(account.connecting || !account.saving.isEmpty)
-            } footer: { Text("Connection credentials are saved in this device's Keychain. Private library data and personal recommendations are not written to the public catalog cache. Disconnect removes local account data; your MangaBaka library stays online.") }
+            } footer: { Text("Saved accounts are stored securely in this device's Keychain. Each account keeps separate private recommendations. Removing a saved account leaves its online MangaBaka library intact.") }
         }.navigationTitle("MangaBaka account").navigationBarTitleDisplayMode(.inline)
             .onDisappear { apiKey = "" }
-            .confirmationDialog("Disconnect MangaBaka?", isPresented: $confirmation) {
-                Button("Disconnect", role: .destructive) { account.disconnect() }
-            } message: { Text("Your MangaBaka library stays online. The connection and private lists are removed from this device.") }
+            .alert("Remove saved MangaBaka account?", isPresented: Binding(get: { removingAccount != nil }, set: { if !$0 { removingAccount = nil } })) {
+                Button("Remove", role: .destructive) {
+                    if let removingAccount { account.removeAccount(removingAccount.id) }
+                    removingAccount = nil
+                }
+                Button("Cancel", role: .cancel) { removingAccount = nil }
+            } message: {
+                Text("Remove " + (removingAccount?.name ?? "this account") + " from this device? Other saved accounts and online libraries stay available.")
+            }
     }
 }

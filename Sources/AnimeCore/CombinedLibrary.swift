@@ -32,7 +32,7 @@ public enum CombinedLibraryItem: Identifiable, Sendable {
         }
     }
     public static func merge(anime: [LibraryEntry], reading: [MangaBakaLibraryEntry], includeAdult: Bool,
-        query: String = "", status: CombinedLibraryStatus = .all) -> [Self] {
+        query: String = "", status: CombinedLibraryStatus = .all, contentFilter: MangaBakaContentFilter? = nil) -> [Self] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         var seen = Set<String>()
         let entries = anime.map(Self.anime) + reading.map(Self.reading)
@@ -44,7 +44,7 @@ public enum CombinedLibraryItem: Identifiable, Sendable {
                 guard let media = entry.media, includeAdult || media.isAdult != true else { return false }
                 titles = [media.displayTitle, media.title?.english ?? "", media.title?.romaji ?? "", media.title?.userPreferred ?? ""]
             case .reading(let entry):
-                guard let series = entry.series, series.isVisible(includeAdult: includeAdult) else { return false }
+                guard let series = entry.series, series.isVisible(contentFilter: contentFilter ?? .legacy(includeAdult: includeAdult)) else { return false }
                 titles = [series.displayTitle, series.title, series.nativeTitle ?? ""] + series.titles.map(\.title)
             }
             return text.isEmpty || titles.contains { $0.localizedStandardContains(text) }

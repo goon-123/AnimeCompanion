@@ -47,14 +47,15 @@ struct MangaSourceBrowseView: View {
     @EnvironmentObject private var reading: MangaReadingStore
     @AppStorage("manga.showMatureSources") private var showMature = false
     let source: MangaSourceReference
+    let linkingTo: MangaSourceLinkTarget?
     @StateObject private var model = MangaBrowseModel()
     @State private var mode = "popular"
     @State private var query = ""
     @State private var submitted = ""
     @State private var showSettings = false
     @State private var showWebsite = false
-    init(source: MangaSourceReference, initialQuery: String = "") {
-        self.source = source
+    init(source: MangaSourceReference, initialQuery: String = "", linkingTo: MangaSourceLinkTarget? = nil) {
+        self.source = source; self.linkingTo = linkingTo
         let text = initialQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         _query = State(initialValue: text); _submitted = State(initialValue: text)
         _mode = State(initialValue: text.isEmpty ? "popular" : "search")
@@ -114,7 +115,7 @@ struct MangaSourceBrowseView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 12)], spacing: 12) {
                     ForEach(Array(model.mangas.enumerated()), id: \.element.id) { index, manga in
                         let title = MangaTitleReference(source: source, manga: manga)
-                        NavigationLink { MangaTitleDetailView(title: title) } label: {
+                        NavigationLink { MangaTitleDetailView(title: title, linkingTo: linkingTo) } label: {
                             MangaTitleCard(title: title, saved: reading.record(title.id)?.saved == true)
                         }.buttonStyle(.plain).accessibilityIdentifier("manga-title-\(index)")
                     }

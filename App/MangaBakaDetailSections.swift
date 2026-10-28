@@ -4,7 +4,7 @@ import AnimeCore
 struct MangaBakaSeriesTags: View {
     @EnvironmentObject private var account: MangaBakaStore
     let series: MangaBakaSeries
-    @State private var expanded = true
+    @State private var expanded = false
     @State private var spoilers = true
     @State private var implied = true
     @State private var information: String?
@@ -19,7 +19,8 @@ struct MangaBakaSeriesTags: View {
             return left == right ? $0.path < $1.path : left < right
         }
     }
-    private var visibleTags: [MangaBakaTag] { expanded ? tags : Array(tags.prefix(36)) }
+    private let previewCount = 8
+    private var visibleTags: [MangaBakaTag] { expanded ? tags : Array(tags.prefix(previewCount)) }
     private var groups: [String: [MangaBakaTag]] { Dictionary(grouping: visibleTags, by: \.category) }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -42,17 +43,26 @@ struct MangaBakaSeriesTags: View {
                     Toggle("Include implied tags", isOn: $implied)
                 } label: { Label("Display", systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
             }
-            ForEach(groups.keys.sorted(), id: \.self) { category in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(category.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    MangaBakaFlowLayout(spacing: 7) {
-                        ForEach(groups[category] ?? [], id: \.self) { tag in tagLink(tag) }
+            if !expanded {
+                MangaBakaFlowLayout(spacing: 7) {
+                    ForEach(visibleTags, id: \.self) { tag in tagLink(tag) }
+                }
+            } else {
+                ForEach(groups.keys.sorted(), id: \.self) { category in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(category.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        MangaBakaFlowLayout(spacing: 7) {
+                            ForEach(groups[category] ?? [], id: \.self) { tag in tagLink(tag) }
+                        }
                     }
                 }
             }
             if tags.isEmpty { Text("No tags are available with these display options.").font(.subheadline).foregroundStyle(.secondary) }
-            if tags.count > 36 {
-                Button(expanded ? "Show fewer tags" : "Show all \(tags.count) tags") { expanded.toggle() }.font(.subheadline.bold())
+            if tags.count > previewCount {
+                Button(expanded ? "Show fewer tags" : "Show all \(tags.count) tags") { expanded.toggle() }
+                    .font(.subheadline.bold()).frame(minHeight: 44)
+                    .accessibilityIdentifier("mangabaka-tags-expand")
+                    .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             }
             NavigationLink { MangaBakaTaxonomyView() } label: { Label("Explore every genre & tag", systemImage: "tag") }
                 .font(.subheadline)
@@ -98,7 +108,7 @@ struct MangaBakaCoverGallery: View {
     @State private var retry = 0
     @State private var generation = UUID()
     @State private var preview: AnimeImagePreview?
-    private var visible: [MangaBakaCoverImage] { covers.filter { $0.isVisible(includeAdult: preferences.includeAdult) && $0.thumbnailURL != nil } }
+    private var visible: [MangaBakaCoverImage] { covers.filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) && $0.thumbnailURL != nil } }
     private var gallery: [AnimeImagePreview] {
         visible.compactMap { cover in
             cover.fullURL.map { AnimeImagePreview(url: $0, title: series.displayTitle + " · " + cover.caption, credit: cover.note, source: "MangaBaka") }
@@ -116,9 +126,9 @@ struct MangaBakaCoverGallery: View {
             if let error { NoticeView(message: error) { retry += 1 } }
             if !loading && visible.isEmpty && error == nil { Text("No additional covers are available for this title and content setting.").font(.subheadline).foregroundStyle(.secondary) }
             if hasMore && !loading { Button("Load more covers") { Task { await load(next: true) } }.buttonStyle(.bordered) }
-        }.task(id: "\(series.id)-\(preferences.includeAdult)-\(retry)-\(refreshToken)") { await load() }
+        }.task(id: "\(series.id)-\(preferences.mangaBakaContent)-\(retry)-\(refreshToken)") { await load() }
             .fullScreenCover(item: $preview) { item in AnimeImageViewer(preview: item, gallery: gallery) }
-            .onChange(of: preferences.includeAdult) { _, _ in preview = nil }
+            .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
     }
     private func coverButton(_ cover: MangaBakaCoverImage) -> some View {
         Button {
@@ -160,7 +170,7 @@ struct MangaBakaRelatedSection: View {
     @State private var error: String?
     @State private var retry = 0
     @State private var generation = UUID()
-    private var visible: [MangaBakaRelatedSeries] { items.filter { $0.series.isVisible(includeAdult: preferences.includeAdult) } }
+    private var visible: [MangaBakaRelatedSeries] { items.filter { $0.series.isVisible(contentFilter: preferences.mangaBakaContent) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(kind.label).font(.title2.bold())
@@ -182,7 +192,7 @@ struct MangaBakaRelatedSection: View {
             if loading { ProgressView("Loading " + kind.label.lowercased() + "…") }
             if let error { NoticeView(message: error) { retry += 1 } }
             if !loading && visible.isEmpty && error == nil { Text("MangaBaka has no matching titles for this section yet.").font(.subheadline).foregroundStyle(.secondary) }
-        }.task(id: "\(series.id)-\(preferences.includeAdult)-\(retry)-\(refreshToken)") { await load() }
+        }.task(id: "\(series.id)-\(preferences.mangaBakaContent)-\(retry)-\(refreshToken)") { await load() }
     }
     private func context(_ item: MangaBakaRelatedSeries) -> String? {
         if kind == .readers, let count = item.sharedReaders { return count.formatted() + " readers" }
@@ -194,7 +204,7 @@ struct MangaBakaRelatedSection: View {
         let request = UUID(); generation = request; loading = true; error = nil
         defer { if generation == request { loading = false } }
         do {
-            let result = try await account.api.related(id: series.id, kind: kind, includeAdult: preferences.includeAdult, refresh: retry > 0 || refreshToken > 0)
+            let result = try await account.api.related(id: series.id, kind: kind, contentFilter: preferences.mangaBakaContent, refresh: retry > 0 || refreshToken > 0)
             try Task.checkCancellation(); guard request == generation else { return }; items = result
         } catch is CancellationError {} catch { if generation == request { self.error = error.localizedDescription } }
     }

@@ -4,32 +4,6 @@ import CryptoKit
 import AuthenticationServices
 import AnimeCore
 
-private enum MangaBakaKeychain {
-    private static let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.animecompanion.mangabaka", kSecAttrAccount as String: "connection"]
-    static func load() throws -> MangaBakaCredential? {
-        var q = base; q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var value: CFTypeRef?
-        let status = SecItemCopyMatching(q as CFDictionary, &value)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = value as? Data else { throw MangaBakaError.message("The saved MangaBaka connection could not be read.") }
-        return try JSONDecoder().decode(MangaBakaCredential.self, from: data)
-    }
-    static func save(_ credential: MangaBakaCredential) throws {
-        let data = try JSONEncoder().encode(credential)
-        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if status == errSecItemNotFound {
-            var q = base; q[kSecValueData as String] = data
-            q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw MangaBakaError.message("The MangaBaka connection could not be saved securely.") }
-        } else if status != errSecSuccess { throw MangaBakaError.message("The MangaBaka connection could not be updated.") }
-    }
-    static func delete() throws {
-        let result = SecItemDelete(base as CFDictionary)
-        guard result == errSecSuccess || result == errSecItemNotFound else { throw MangaBakaError.message("The MangaBaka connection could not be removed.") }
-    }
-}
-
 @MainActor
 private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
@@ -43,7 +17,7 @@ private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationCo
     private func urlBase64(_ data: Data) -> String {
         data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
-    func signIn(clientID: String, api: MangaBakaClient) async throws -> MangaBakaCredential {
+    func signIn(clientID: String, api: MangaBakaClient, addingAccount: Bool) async throws -> MangaBakaCredential {
         guard session == nil else { throw MangaBakaError.message("MangaBaka sign-in is already open.") }
         let state = try random(), verifier = try random(), started = Date()
         let challenge = urlBase64(Data(SHA256.hash(data: Data(verifier.utf8))))
@@ -57,7 +31,7 @@ private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationCo
                     else { self?.finish(.failure(MangaBakaError.invalidResponse)) }
                 }
             }
-            web.presentationContextProvider = self; web.prefersEphemeralWebBrowserSession = false
+            web.presentationContextProvider = self; web.prefersEphemeralWebBrowserSession = addingAccount
             session = web
             if !web.start() { finish(.failure(MangaBakaError.message("MangaBaka sign-in could not be opened."))) }
         }
@@ -77,17 +51,35 @@ private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationCo
 @MainActor
 final class MangaBakaStore: ObservableObject {
     let api: MangaBakaClient
-    init() {
+    private let keychain: MangaBakaAccountKeychain
+    private let cacheDirectory: URL?
+    private var accounts = MangaBakaAccounts()
+    private let previewAccounts: Bool
+    init(api: MangaBakaClient? = nil, keychain: MangaBakaAccountKeychain? = nil, cacheDirectory: URL? = nil) {
+        self.cacheDirectory = cacheDirectory
         #if DEBUG
-        api = UnifiedExplorePreview.active
+        let usePreviewAccounts = api == nil && LibraryCustomizationPreview.active
+        previewAccounts = usePreviewAccounts
+        self.keychain = keychain ?? MangaBakaAccountKeychain(service: usePreviewAccounts
+            ? "com.animecompanion.mangabaka.owned-preview" : "com.animecompanion.mangabaka")
+        self.api = api ?? (MangaBakaAccountsPreview.active
+            ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
+            : UnifiedExplorePreview.active
             ? MangaBakaClient(transport: UnifiedReadingPreviewTransport(), directory: nil, minimumRequestInterval: 0)
             : LibraryCustomizationPreview.active
             ? MangaBakaClient(transport: LibraryCustomizationTransport(), directory: nil, minimumRequestInterval: 0)
-            : MangaBakaClient()
+            : MangaBakaClient())
+        if usePreviewAccounts && ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+            try? self.keychain.save(.init())
+        }
         #else
-        api = MangaBakaClient()
+        previewAccounts = false
+        self.keychain = keychain ?? MangaBakaAccountKeychain()
+        self.api = api ?? MangaBakaClient()
         #endif
     }
+    @Published private(set) var savedAccounts: [MangaBakaAccountIdentity] = []
+    @Published private(set) var activeAccountID: UUID?
     @Published private(set) var connected = false
     @Published private(set) var connecting = false
     @Published private(set) var profile: MangaBakaProfile?
@@ -109,9 +101,10 @@ final class MangaBakaStore: ObservableObject {
     @Published private(set) var taxonomyError: String?
     private var tagsByName: [String: MangaBakaTag] = [:]
     private var credential: MangaBakaCredential?
-    private var refreshTask: Task<MangaBakaCredential, Error>?
+    private struct CredentialRefresh { let id = UUID(); let task: Task<MangaBakaCredential, Error> }
+    private var refreshTasks: [UUID: CredentialRefresh] = [:]
     private var recommendationTask: Task<Void, Never>?
-    private let recommendationCache = MangaBakaRecommendationCache()
+    private var recommendationCache = MangaBakaRecommendationCache()
     private var recommendationSnapshot: MangaBakaRecommendationSnapshot?
     @Published private(set) var connectionID = UUID()
     private var libraryGeneration = UUID()
@@ -145,65 +138,140 @@ final class MangaBakaStore: ObservableObject {
         } catch { failures.append("Tags: " + error.localizedDescription) }
         taxonomyError = failures.isEmpty ? nil : failures.joined(separator: "\n")
     }
+    private func cache(for id: UUID? = nil) -> MangaBakaRecommendationCache {
+        if let cacheDirectory { return MangaBakaRecommendationCache(directory: cacheDirectory, accountID: id) }
+        return MangaBakaRecommendationCache(accountID: id)
+    }
+    private var contentFilter: MangaBakaContentFilter {
+        MangaBakaContentFilter(saved: UserDefaults.standard.string(forKey: MangaBakaContentFilter.storageKey),
+            legacyIncludeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult"))
+    }
+    private func activate(_ value: MangaBakaAccounts, snapshot: MangaBakaRecommendationSnapshot? = nil) {
+        // Invalidate responses before cancelling work or publishing another identity.
+        connectionID = UUID(); authentication.cancel()
+        clearLibrary(); accounts = value; savedAccounts = value.identities
+        activeAccountID = value.selectedID; credential = value.selected?.credential
+        profile = value.selected?.profile; connected = credential != nil
+        accountError = nil; notice = nil
+        recommendationCache = cache(for: activeAccountID)
+        if let credential {
+            let scoped = try? recommendationCache.load(credential: credential)
+            // The old file is still encrypted with this exact connection. Retry
+            // migration if a previous launch stopped after migrating Keychain.
+            if let stored = snapshot ?? scoped ?? (try? cache().load(credential: credential)),
+               (try? recommendationState.restore(stored, account: connectionID, contentFilter: contentFilter)) == true {
+                recommendationSnapshot = stored
+                if snapshot != nil || scoped == nil {
+                    saveRecommendationCache(stored, credential: credential)
+                    if recommendationCacheNotice == nil { try? cache().clear() }
+                }
+            }
+        }
+        revision = UUID()
+    }
     func restore() async {
         guard !restored else { return }; restored = true
         #if DEBUG
-        if LibraryCustomizationPreview.active {
+        if previewAccounts {
+            if AccountSwitcherPreview.active && !AccountSwitcherPreview.mangaBakaConnected { return }
             do {
-                credential = try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-not-a-real-credential")
-                library = try LibraryCustomizationPreview.library(); libraryTotal = library.count
-                connected = true; revision = UUID()
+                var saved = try keychain.load()?.accounts ?? .init()
+                if saved.sessions.isEmpty {
+                    let credential = try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-not-a-real-credential")
+                    let first = saved.add(profile: try AccountSwitcherPreview.profile(), credential: credential)
+                    if MangaBakaAccountsPreview.active {
+                        saved.add(profile: try MangaBakaAccountsPreview.secondProfile(), credential: MangaBakaCredential(kind: .apiKey, secret: "owned-preview-second-account"))
+                        try saved.select(first)
+                    }
+                    try keychain.save(saved)
+                }
+                activate(saved)
+                library = try LibraryCustomizationPreview.library().filter {
+                    !MangaBakaAccountsPreview.active || $0.id == (profile?.id == "owned-reader-two" ? 74 : 73)
+                }
+                libraryTotal = library.count
             } catch { accountError = error.localizedDescription }
             return
         }
         #endif
         do {
-            guard let saved = try MangaBakaKeychain.load() else { return }
-            credential = saved
-            // Restore before publishing the connection so a view cannot start a
-            // replacement request before discovering the saved weekly result.
-            if let snapshot = try? recommendationCache.load(credential: saved),
-               (try? recommendationState.restore(snapshot, account: connectionID,
-                    includeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult"))) == true {
-                recommendationSnapshot = snapshot
-            }
-            connected = true
-            let attempt = connectionID
-            let value = try await api.profile(validCredential())
-            guard attempt == connectionID else { return }
-            profile = value; revision = UUID()
+            guard let saved = try keychain.load() else { return }
+            activate(saved.accounts)
+            await refreshProfile()
         } catch { accountError = error.localizedDescription }
+    }
+    private func refreshProfile() async {
+        guard let id = activeAccountID, connected else { return }
+        let attempt = connectionID
+        do {
+            let profile = try await api.profile(validCredential())
+            guard attempt == connectionID else { return }
+            var next = accounts
+            let resolved = try next.updateProfile(profile, for: id)
+            try keychain.save(next)
+            if resolved != id {
+                let retained = recommendationSnapshot
+                activate(next, snapshot: retained); try? cache(for: id).clear()
+            } else {
+                accounts = next; savedAccounts = next.identities; self.profile = profile; revision = UUID()
+            }
+        } catch is CancellationError {} catch {
+            if attempt == connectionID { accountError = error.localizedDescription }
+        }
     }
     func connect(apiKey: String? = nil) async {
         guard !connecting, saving.isEmpty else { return }; connecting = true; accountError = nil; notice = nil
         let attempt = connectionID
         defer { connecting = false }
         do {
+            // Do not replace an unreadable or newer registry with an empty list
+            // merely because restoring it failed earlier in this launch.
+            _ = try keychain.load()
             let candidate: MangaBakaCredential
             if let apiKey { candidate = try MangaBakaCredential(kind: .apiKey, secret: apiKey) }
-            else { candidate = try await authentication.signIn(clientID: clientID, api: api) }
-            let value = try await api.profile(candidate)
+            else { candidate = try await authentication.signIn(clientID: clientID, api: api, addingAccount: !accounts.sessions.isEmpty) }
+            let profile = try await api.profile(candidate)
             guard connectionID == attempt else { return }
-            try MangaBakaKeychain.save(candidate)
-            connectionID = UUID(); refreshTask?.cancel(); refreshTask = nil
-            clearLibrary(); credential = candidate; connected = true; profile = value; revision = UUID()
+            // Reload immediately before the transaction. Keychain may have
+            // recovered since launch, or another session may have renewed.
+            var next = try keychain.load()?.accounts ?? .init()
+            // Reconnecting the same person rotates their credentials, not their cache age.
+            let old = next.sessions.first { $0.profile?.id == profile.id }
+            let retained = old.flatMap { try? cache(for: $0.id).load(credential: $0.credential) }
+            next.add(profile: profile, credential: candidate)
+            try keychain.save(next)
+            activate(next, snapshot: retained)
         } catch is CancellationError {} catch {
             if (error as NSError).domain != ASWebAuthenticationSessionError.errorDomain || (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
                 accountError = error.localizedDescription
             }
         }
     }
-    func disconnect() {
+    func selectAccount(_ id: UUID) {
+        guard id != activeAccountID, !connecting, saving.isEmpty else { return }
         do {
-            try MangaBakaKeychain.delete(); connectionID = UUID(); authentication.cancel(); refreshTask?.cancel(); refreshTask = nil
-            credential = nil; connected = false; profile = nil; accountError = nil; notice = nil; clearLibrary(); revision = UUID()
+            var next = accounts; try next.select(id)
+            try keychain.save(next); activate(next)
+            let attempt = connectionID
+            Task { if attempt == connectionID { await refreshProfile() } }
         } catch { accountError = error.localizedDescription }
     }
+    func removeAccount(_ id: UUID) {
+        guard !connecting, saving.isEmpty, accounts.sessions.contains(where: { $0.id == id }) else { return }
+        do {
+            var next = accounts; next.remove(id)
+            try keychain.save(next)
+            refreshTasks.removeValue(forKey: id)?.task.cancel()
+            if id == activeAccountID { activate(next) }
+            else { accounts = next; savedAccounts = next.identities }
+            try? cache(for: id).clear()
+        } catch { accountError = error.localizedDescription }
+    }
+    func disconnect() { if let id = activeAccountID { removeAccount(id) } }
     private func clearLibrary() {
         recommendationTask?.cancel(); recommendationTask = nil
         recommendationState.reset()
         recommendationSnapshot = nil; recommendationCacheNotice = nil
-        try? recommendationCache.clear()
         libraryGeneration = UUID(); library = []; entries = [:]; libraryState = nil; libraryPage = 0
         loadingLibrary = false; hasMoreLibrary = false; libraryTotal = nil; libraryError = nil
     }
@@ -211,22 +279,38 @@ final class MangaBakaStore: ObservableObject {
         guard let current = credential else { throw MangaBakaError.unauthorized }
         guard current.needsRefresh() else { return current }
         let attempt = connectionID
-        let work: Task<MangaBakaCredential, Error>
-        if let existing = refreshTask { work = existing }
-        else { work = Task { try await api.refresh(current) }; refreshTask = work }
-        defer { if connectionID == attempt { refreshTask = nil } }
-        let renewed = try await work.value
+        guard let id = activeAccountID else { throw MangaBakaError.unauthorized }
+        let work: CredentialRefresh
+        if let existing = refreshTasks[id] { work = existing }
+        else {
+            work = CredentialRefresh(task: Task { try await api.refresh(current) })
+            refreshTasks[id] = work
+        }
+        defer { if refreshTasks[id]?.id == work.id { refreshTasks[id] = nil } }
+        let renewed = try await work.task.value
+        guard let saved = accounts.sessions.first(where: { $0.id == id }) else { throw CancellationError() }
+        if saved.credential == current {
+            // Finish rotation for its owning account even if it is no longer
+            // visible. Discarding a rotated refresh token would lose that login.
+            var next = accounts; try next.updateCredential(renewed, for: id)
+            try keychain.save(next); accounts = next
+            if activeAccountID == id {
+                credential = renewed
+                if let snapshot = recommendationSnapshot { saveRecommendationCache(snapshot, credential: renewed) }
+            } else if let snapshot = try? cache(for: id).load(credential: current) {
+                try? cache(for: id).save(snapshot, credential: renewed)
+            }
+        } else if saved.credential != renewed {
+            // A separate sign-in replaced this session while renewal was open.
+            throw CancellationError()
+        }
         guard connectionID == attempt else { throw CancellationError() }
-        try MangaBakaKeychain.save(renewed); credential = renewed
-        // OAuth rotates its secret. Move the already-loaded snapshot to the new
-        // encryption key without changing its original seven-day timestamp.
-        if let snapshot = recommendationSnapshot { saveRecommendationCache(snapshot, credential: renewed) }
         return renewed
     }
-    func loadRecommendations(includeAdult: Bool, refresh: Bool = false) async {
+    func loadRecommendations(contentFilter: MangaBakaContentFilter, refresh: Bool = false) async {
         guard connected, !Task.isCancelled else { return }
         guard let attempt = recommendationState.begin(account: connectionID,
-            includeAdult: includeAdult, refresh: refresh) else {
+            contentFilter: contentFilter, refresh: refresh) else {
             await recommendationTask?.value
             return
         }
@@ -240,7 +324,7 @@ final class MangaBakaStore: ObservableObject {
                 }
             }
             do {
-                let payload = try await api.recommendationPayload(validCredential(), includeAdult: includeAdult)
+                let payload = try await api.recommendationPayload(validCredential(), contentFilter: contentFilter)
                 let result = try payload.records()
                 var status: MangaBakaRecommendationStatus?
                 if result.isEmpty {
@@ -263,10 +347,32 @@ final class MangaBakaStore: ObservableObject {
     }
     private func saveRecommendationCache(_ snapshot: MangaBakaRecommendationSnapshot, credential: MangaBakaCredential) {
         #if DEBUG
-        if LibraryCustomizationPreview.active { return }
+        if previewAccounts { return }
         #endif
         do { try recommendationCache.save(snapshot, credential: credential); recommendationCacheNotice = nil }
         catch { recommendationCacheNotice = "For you could not be saved on this device. These recommendations are available until the app closes." }
+    }
+    /// Complete the selected list before presenting its final sort order.
+    /// Existing pages appear progressively and a failed page remains retryable.
+    func loadCompleteLibrary(state: String?, refresh: Bool = false) async {
+        let account = connectionID
+        if !refresh, libraryState == state, libraryPage > 0, hasMoreLibrary {
+            await loadLibrary(state: state, next: true)
+        } else {
+            await loadLibrary(state: state, refresh: refresh)
+        }
+        let request = libraryGeneration
+        while !Task.isCancelled, account == connectionID, request == libraryGeneration,
+              libraryState == state, hasMoreLibrary, libraryError == nil, !loadingLibrary {
+            await loadLibrary(state: state, next: true)
+        }
+    }
+    func loadSourceLinkingLibrary(refresh: Bool = false) async {
+        guard connected else { return }
+        let connection = connectionID
+        if profile == nil { await refreshProfile() }
+        guard !Task.isCancelled, connection == connectionID else { return }
+        await loadCompleteLibrary(state: nil, refresh: refresh)
     }
     func loadLibrary(state: String?, refresh: Bool = false, next: Bool = false) async {
         guard connected else { return }
@@ -293,12 +399,18 @@ final class MangaBakaStore: ObservableObject {
     }
     func loadEntry(_ series: MangaBakaSeries) async throws -> MangaBakaLibraryEntry? {
         let attempt = connectionID
-        let value = try await api.entry(id: series.id, credential: validCredential())?.attaching(series)
-        guard attempt == connectionID else { throw CancellationError() }
-        entries[series.id] = value
-        return value
+        do {
+            let value = try await api.entry(id: series.id, credential: validCredential())?.attaching(series)
+            guard attempt == connectionID else { throw CancellationError() }
+            entries[series.id] = value
+            return value
+        } catch {
+            guard attempt == connectionID else { throw CancellationError() }
+            throw error
+        }
     }
-    func save(_ series: MangaBakaSeries, update: MangaBakaLibraryUpdate, existing: Bool) async throws {
+    func save(_ series: MangaBakaSeries, update: MangaBakaLibraryUpdate, existing: Bool, expectedConnection: UUID? = nil) async throws {
+        guard expectedConnection.map({ $0 == connectionID }) ?? true else { throw CancellationError() }
         guard saving.insert(series.id).inserted else { throw MangaBakaError.message("This entry is already being saved.") }
         let attempt = connectionID
         defer { saving.remove(series.id) }
@@ -317,7 +429,8 @@ final class MangaBakaStore: ObservableObject {
         }
         libraryPage = 0; revision = UUID()
     }
-    func remove(_ series: MangaBakaSeries) async throws {
+    func remove(_ series: MangaBakaSeries, expectedConnection: UUID? = nil) async throws {
+        guard expectedConnection.map({ $0 == connectionID }) ?? true else { throw CancellationError() }
         guard saving.insert(series.id).inserted else { return }
         let attempt = connectionID
         defer { saving.remove(series.id) }

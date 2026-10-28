@@ -10,8 +10,8 @@ public struct MangaBakaRecommendationCache {
     private static let maximumBytes = 16_100_000
 
     public init(directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        .appendingPathComponent("MangaBakaPrivate", isDirectory: true)) {
-        file = directory.appendingPathComponent("recommendations.bin")
+        .appendingPathComponent("MangaBakaPrivate", isDirectory: true), accountID: UUID? = nil) {
+        file = directory.appendingPathComponent(accountID.map { $0.uuidString.lowercased() + ".bin" } ?? "recommendations.bin")
     }
     private func key(_ credential: MangaBakaCredential) -> SymmetricKey {
         SymmetricKey(data: SHA256.hash(data: Data(credential.secret.utf8)))

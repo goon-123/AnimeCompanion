@@ -13,7 +13,7 @@ struct MangaBakaRecommendationsView: View {
     private var visible: [MangaBakaSeries] {
         let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return account.recommendationState.items.filter { series in
-            series.isVisible(includeAdult: preferences.includeAdult)
+            series.isVisible(contentFilter: preferences.mangaBakaContent)
                 && (text.isEmpty || series.searchTitles.contains { $0.localizedStandardContains(text) })
         }
     }
@@ -40,7 +40,7 @@ struct MangaBakaRecommendationsView: View {
                             description: Text("Connect your account in Settings to see your recommendations."))
                     }
                 }.padding(20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
-            }.refreshable { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) }
+            }.refreshable { await account.loadRecommendations(contentFilter: preferences.mangaBakaContent, refresh: true) }
         }.background(Theme.background).navigationTitle("For you").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search, prompt: "Search your recommendations")
             .toolbar {
@@ -50,11 +50,11 @@ struct MangaBakaRecommendationsView: View {
                         .accessibilityLabel("Refresh manga recommendations")
                 }
             }
-            .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.includeAdult)") {
-                await account.loadRecommendations(includeAdult: preferences.includeAdult)
+            .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.mangaBakaContent)") {
+                await account.loadRecommendations(contentFilter: preferences.mangaBakaContent)
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await account.loadRecommendations(includeAdult: preferences.includeAdult) } }
+                if phase == .active { Task { await account.loadRecommendations(contentFilter: preferences.mangaBakaContent) } }
             }
     }
     private var header: some View {
@@ -98,5 +98,5 @@ struct MangaBakaRecommendationsView: View {
             }
         }
     }
-    private func refresh() { Task { await account.loadRecommendations(includeAdult: preferences.includeAdult, refresh: true) } }
+    private func refresh() { Task { await account.loadRecommendations(contentFilter: preferences.mangaBakaContent, refresh: true) } }
 }

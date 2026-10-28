@@ -32,10 +32,10 @@ public enum ExploreStory: Identifiable, Sendable {
     public var format: String {
         switch self { case .anime: return "Anime"; case .reading(let value): return value.formatLabel }
     }
-    public static func mix(anime: [Anime], reading: [MangaBakaSeries], novels: [MangaBakaSeries] = [], includeAdult: Bool) -> [Self] {
+    public static func mix(anime: [Anime], reading: [MangaBakaSeries], novels: [MangaBakaSeries] = [], includeAdult: Bool, contentFilter: MangaBakaContentFilter? = nil) -> [Self] {
         var seen = Set<String>()
         let shows = anime.filter { includeAdult || $0.isAdult != true }.map(Self.anime)
-        let books = (reading + novels).filter { $0.isVisible(includeAdult: includeAdult) }
+        let books = (reading + novels).filter { $0.isVisible(contentFilter: contentFilter ?? .legacy(includeAdult: includeAdult)) }
         let buckets = [shows, books.filter { $0.type != "novel" }.map(Self.reading), books.filter { $0.type == "novel" }.map(Self.reading)]
         var result: [Self] = []
         for index in 0..<(buckets.map(\.count).max() ?? 0) {

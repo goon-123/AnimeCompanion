@@ -71,7 +71,7 @@ struct WatchAnimeView: View {
         return englishDirect > 0 ? "English audio · \(englishDirect) playable \(englishDirect == 1 ? "source" : "sources")" : "No playable English source listed"
     }
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     episodeHeader
@@ -124,8 +124,8 @@ struct WatchAnimeView: View {
                 }
                 .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
-                .sheet(isPresented: $options) { NavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
-                .sheet(isPresented: $help) { NavigationStack { StreamPickerHelpView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { help = false } } } } }
+                .sheet(isPresented: $options) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
+                .sheet(isPresented: $help) { AppNavigationStack { StreamPickerHelpView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { help = false } } } } }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
@@ -314,7 +314,7 @@ struct SourceInformationView: View {
     let addonName: String
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section(stream.displayName) {
                     Text("Add-on · \(addonName)").font(.caption).foregroundStyle(.secondary)

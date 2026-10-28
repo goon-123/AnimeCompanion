@@ -14,7 +14,7 @@ struct RelatedMangaBakaView: View {
     @State private var attempt = UUID()
 
     private var visible: [MangaBakaSeries] {
-        (matches ?? []).filter { $0.isVisible(includeAdult: preferences.includeAdult) }
+        (matches ?? []).filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) }
     }
 
     var body: some View {
@@ -51,7 +51,7 @@ struct RelatedMangaBakaView: View {
             }
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
             .mangaBakaNavigation()
-            .task(id: "\(media.id)-\(preferences.includeAdult)") { await load() }
+            .task(id: "\(media.id)-\(preferences.mangaBakaContent)") { await load() }
     }
 
     private var searchLink: some View {

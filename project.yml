@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.27.1'
-    CURRENT_PROJECT_VERSION: '78'
+    MARKETING_VERSION: '0.33.0'
+    CURRENT_PROJECT_VERSION: '87'
 packages:
   AnimeCore:
     path: .
@@ -48,6 +48,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        CADisableMinimumFrameDurationOnPhone: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.animecompanion.ios
@@ -139,4 +140,3 @@ schemes:
         - MangaRuntimeTests
     archive:
       config: Release
-
