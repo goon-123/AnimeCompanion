@@ -81,6 +81,7 @@ struct AnimeDetailHero: View {
                 .overlay { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.16), lineWidth: 1) }
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption2)
+                        .foregroundStyle(.white)
                         .padding(7).background(.black.opacity(0.70), in: Circle()).padding(6)
                 }.shadow(color: .black.opacity(0.45), radius: 15, y: 6)
         }.buttonStyle(.plain).disabled(anime.coverURL == nil)

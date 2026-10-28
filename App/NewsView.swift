@@ -96,7 +96,7 @@ struct NewsView: View {
                 filterSummary(count: values.count)
                 if query.collection == .forYou {
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "sparkles").foregroundStyle(.cyan)
+                        Image(systemName: "sparkles").foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 5) {
                             Text("A little more you").font(.headline)
                             Text("Stories about series in your anime, manga and novel libraries, plus the topics you follow.")
@@ -137,7 +137,7 @@ struct NewsView: View {
                     }
                     Spacer(minLength: 8)
                     Button { feedSettings = true } label: {
-                        Image(systemName: "slider.horizontal.3").font(.title3).foregroundStyle(.cyan)
+                        Image(systemName: "slider.horizontal.3").font(.title3).foregroundStyle(Theme.accent)
                             .frame(width: 44, height: 44).background(Theme.surface, in: Circle())
                     }.buttonStyle(.plain).accessibilityLabel("Customize news").accessibilityIdentifier("news-customize")
                 }
