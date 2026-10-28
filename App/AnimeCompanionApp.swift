@@ -12,7 +12,14 @@ struct AnimeCompanionApp: App {
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaBaka = MangaBakaStore()
+    @StateObject private var firstRun: FirstRunSetupState
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        // Read legacy install state before other stores initialize defaults.
+        let shouldPresent = FirstRunSetupState.prepare()
+        _firstRun = StateObject(wrappedValue: FirstRunSetupState(showOnLaunch: shouldPresent))
+    }
     var body: some Scene {
         WindowGroup {
             root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
@@ -43,9 +50,11 @@ struct AnimeCompanionApp: App {
     @ViewBuilder private var root: some View {
         #if DEBUG
         if artworkPreview { ArtworkPerformancePreview() }
+        else if firstRun.showOnLaunch { FirstRunSetupView { firstRun.finish() } }
         else { AppTabs() }
         #else
-        AppTabs()
+        if firstRun.showOnLaunch { FirstRunSetupView { firstRun.finish() } }
+        else { AppTabs() }
         #endif
     }
 }
