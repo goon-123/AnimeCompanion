@@ -171,26 +171,31 @@ struct ScheduleView: View {
     }
     private func releaseDay(_ date: Date) -> some View {
         let releases = visible.filter { event in event.date.map { Calendar.current.isDate($0, inSameDayAs: date) } ?? false }
+        let isToday = date == today
         return Section {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(date == today ? "Today" : date.formatted(.dateTime.weekday(.wide))).font(.headline)
+                    Text(isToday ? "Today" : date.formatted(.dateTime.weekday(.wide))).font(.headline)
+                        .foregroundStyle(isToday ? Theme.accent : Color.primary)
                     Text(date.formatted(.dateTime.month(.abbreviated).day())).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text("\(releases.count) \(releases.count == 1 ? "release" : "releases")").font(.caption).foregroundStyle(.secondary)
             }.id("release-day-\(dayID(date))").accessibilityElement(children: .combine)
                 .accessibilityIdentifier("schedule-day-\(dayID(date))")
-                .accessibilityValue(date == today ? "Today" : "")
-                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                .accessibilityValue(isToday ? "Today" : "")
+                .listRowBackground(ScheduleDayBackground(isToday: isToday)).listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 18, leading: 18, bottom: 8, trailing: 18))
             ForEach(releases) { event in
-                ScheduleReleaseRow(event: event).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                ScheduleReleaseRow(event: event, isToday: isToday)
+                    .listRowBackground(ScheduleDayBackground(isToday: isToday)).listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
             }
             if releases.isEmpty {
                 Text(loading ? "Loading releases…" : "No listed releases for this day.").font(.caption).foregroundStyle(.secondary)
-                    .padding(.vertical, 10).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    .padding(.vertical, 10)
+                    .accessibilityIdentifier("schedule-empty-day-\(dayID(date))").accessibilityValue(isToday ? "Today" : "")
+                    .listRowBackground(ScheduleDayBackground(isToday: isToday)).listRowSeparator(.hidden)
             }
         }
     }
@@ -265,6 +270,12 @@ struct ScheduleView: View {
                 return ReleaseEvent(anime: anime, episode: index + 1, kind: .sub,
                     date: Calendar.current.date(byAdding: .hour, value: 12, to: date), certainty: .broadcast)
             }
+            if ProcessInfo.processInfo.arguments.contains("--ui-today-long-preview"), let today {
+                subEvents += (1...12).map { index in
+                    ReleaseEvent(anime: Anime(id: 990300 + index, title: "Today's release \(index)"), episode: index,
+                        kind: .sub, date: Calendar.current.date(byAdding: .minute, value: 720 + index, to: today), certainty: .broadcast)
+                }
+            }
             loading = false; return
         }
         #endif
@@ -323,6 +334,7 @@ struct ScheduleView: View {
 /// while every row still opens the same native detail destination.
 private struct ScheduleReleaseRow: View {
     let event: ReleaseEvent
+    var isToday = false
     @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
         AnimeLink(id: event.anime.id) {
@@ -330,8 +342,10 @@ private struct ScheduleReleaseRow: View {
                 HStack(alignment: .top, spacing: 12) { time; release }
                 VStack(alignment: .leading, spacing: 8) { time; release }
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16)).contentShape(Rectangle())
+                .background(isToday ? Theme.accent.opacity(0.10) : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                .contentShape(Rectangle())
         }.buttonStyle(.plain)
+            .accessibilityValue(isToday ? "Today" : "")
             .accessibilityIdentifier("release-entry-\(event.anime.id)-\(event.kind.rawValue)-\(event.episode)")
     }
     private var time: some View {
@@ -360,6 +374,20 @@ private struct ScheduleReleaseRow: View {
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// Identical backgrounds touch across the header, every release and empty states.
+/// The continuous leading rail remains recognizable after Today scrolls offscreen.
+private struct ScheduleDayBackground: View {
+    let isToday: Bool
+    var body: some View {
+        Group {
+            if isToday {
+                Theme.accent.opacity(0.12)
+                    .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 3) }
+            } else { Color.clear }
+        }.accessibilityHidden(true)
     }
 }
 

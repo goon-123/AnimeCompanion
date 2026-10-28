@@ -7,9 +7,9 @@ struct LibraryAnimeRow: View {
     let entry: LibraryEntry
     let anime: Anime
     var dub: LibraryDubProgress? = nil
-    var posterWidth: CGFloat = 76
+    var posterWidth: CGFloat = 128
 
-    private var coverWidth: CGFloat { textSize.isAccessibilitySize ? min(posterWidth, 60) : posterWidth }
+    private var coverWidth: CGFloat { textSize.isAccessibilitySize ? min(posterWidth, 100) : posterWidth }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -82,11 +82,7 @@ private struct LibraryPoster: View {
     let dub: LibraryDubProgress?
     var compact = false
     var body: some View {
-        GeometryReader { geometry in
-            ArtworkImage(url: anime.coverURL, pointSize: max(geometry.size.width, geometry.size.height)) {
-                image in image.resizable().scaledToFill()
-            } placeholder: { Theme.surface }
-                .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+        AnimeRowArtwork(anime: anime, identifierPrefix: "library")
                 .overlay(alignment: .topLeading) {
                     DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(compact ? 6 : 8)
                 }
@@ -102,7 +98,6 @@ private struct LibraryPoster: View {
                         LibraryRatingLabel(anime: anime, overArtwork: true, compact: compact)
                     }.padding(compact ? 6 : 8)
                 }
-        }
     }
 }
 

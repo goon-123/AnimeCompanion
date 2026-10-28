@@ -1,3 +1,11 @@
+## Balanced list artwork and Today highlighting — version 0.36.1 / build 92
+
+Raise the phone list-cover default to 128 points in My Library and Explore. Migrate the former 76/90-point defaults once while retaining other custom widths and narrow-window constraints. Both lists now use the same aspect-fill artwork renderer and fill the complete card height, including the genre area. Library ratings, DUB badges, broadcast catch-up/countdowns, card taps and independent genre actions remain intact.
+
+Highlight the entire actual Today section in the weekly agenda: header, all release cards, row spacing and empty-state row share a tint and a continuous accent rail. The styling follows the current local day independently of calendar selection and remains visible after its header scrolls offscreen.
+
+Focused iPhone/iPad regressions cover wide, full-height artwork, badge separation, poster taps, iPad rotation, long Today sections in both appearances and empty-day highlights. Focused screenshots upload before the existing broader regression suites. Current hosted build and test results are recorded on PR #65.
+
 ## Library and anime details — version 0.36.0 / build 91
 
 Library list and grid now share poster-embedded AniList ratings and a compact DUB badge for available English audio. List artwork fills the entire card height using aspect fill. Next-unwatched text retains the next original-broadcast countdown in both yellow (behind) and green (caught up); dub counts and the saved schedule-source preference cannot make broadcast catch-up green early. Missing or expired broadcast evidence stays neutral.

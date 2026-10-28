@@ -2,6 +2,17 @@ import XCTest
 @testable import AnimeCore
 
 final class PosterLayoutTests: XCTestCase {
+    func testBalancedListDefaultFitsPhonesWithoutThumbnailStrips() {
+        let preferred = PosterLayout.defaultListWidth(isTablet: false)
+        for available in [296.0, 366.0, 406.0] {
+            let width = PosterLayout.listWidth(preferred: preferred, availableWidth: available)
+            XCTAssertGreaterThanOrEqual(width, 110)
+            XCTAssertLessThanOrEqual(width, available * 0.38)
+        }
+        XCTAssertEqual(PosterLayout.listWidth(preferred: preferred, availableWidth: 406), 128)
+        XCTAssertEqual(PosterLayout.defaultListWidth(isTablet: true), 140)
+    }
+
     func testFeaturedArtworkFillsViewportAndRefitsAfterRotation() {
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 800, fillScreen: true), 752)
         XCTAssertEqual(PosterLayout.featuredHeight(preferred: 620, viewportHeight: 1100, fillScreen: true), 1034)

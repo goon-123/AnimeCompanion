@@ -2,6 +2,9 @@ import Foundation
 
 /// Fit the saved density to the actual window, without overwriting the user's choice.
 public enum PosterLayout {
+    /// Full-height list artwork needs a portrait column rather than a thumbnail strip.
+    public static func defaultListWidth(isTablet: Bool) -> Double { isTablet ? 140 : 128 }
+
     public static func featuredHeight(preferred: Double, viewportHeight: Double, fillScreen: Bool, balanced: Bool = false,
                                       splitColumnWidth: Double? = nil) -> Double {
         let viewport = viewportHeight.isFinite ? max(320, viewportHeight) : 800

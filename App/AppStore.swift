@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import UIKit
 import AnimeCore
 
 @MainActor
@@ -87,7 +88,12 @@ final class AppStore: ObservableObject {
                 UserDefaults.standard.set("list", forKey: "library.layout")
                 UserDefaults.standard.set(2, forKey: "library.columns")
                 UserDefaults.standard.set("Last updated", forKey: "library.sort")
-                UserDefaults.standard.set(76, forKey: "library.poster.list")
+                // Exercise upgrading the old thumbnail defaults in native layout tests.
+                let pad = UIDevice.current.userInterfaceIdiom == .pad
+                for (scope, legacy) in [("library", pad ? 140 : 76), ("explore", pad ? 140 : 90)] {
+                    UserDefaults.standard.set(legacy, forKey: "\(scope).poster.list")
+                    UserDefaults.standard.removeObject(forKey: "\(scope).poster.list.fullHeight.v1")
+                }
             }
             UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
             UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
