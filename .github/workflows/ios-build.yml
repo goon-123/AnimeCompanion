@@ -152,7 +152,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   library-customization:
-    needs: manga-runtime
+    # Package the installable app before occupying runners with simulator suites.
+    needs: [manga-runtime, build]
     name: Reader and library changes ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -293,7 +294,7 @@ jobs:
           env -u DEVELOPER_DIR swift test -j 2
   news-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
-    needs: manga-runtime
+    needs: [manga-runtime, build]
     name: News experience ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -339,7 +340,7 @@ jobs:
           retention-days: 30
   explore-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
-    needs: manga-runtime
+    needs: [manga-runtime, build]
     name: Explore, accounts and Airing Now ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -385,7 +386,7 @@ jobs:
           retention-days: 30
   weekly-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
-    needs: manga-runtime
+    needs: [manga-runtime, build]
     name: Library and schedule ${{ matrix.device }} regression
     runs-on: macos-15-intel
     timeout-minutes: 30

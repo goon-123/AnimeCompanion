@@ -231,7 +231,7 @@ struct LibraryView: View {
     }
     private var resultCount: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("\(filtered.count) titles").font(.subheadline.weight(.semibold))
+            Text("\(filtered.count) \(filtered.count == 1 ? "title" : "titles")").font(.subheadline.weight(.semibold))
                 .accessibilityLabel("\(filtered.count) anime in this list")
             Text(sort.rawValue + (reversed ? " · Reversed" : "")).font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

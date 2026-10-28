@@ -22,6 +22,14 @@ final class LibraryPresentationUITests: XCTestCase {
                 XCTAssertTrue(genres.buttons["genre-1-Action"].isHittable)
                 XCTAssertTrue(genres.buttons["genre-1-Sci-Fi"].exists)
                 capture("\(appearance)-\(layout)")
+                if layout == "List" {
+                    // Empty space beneath a short cover is still part of the
+                    // detail target; genre buttons remain separate above it.
+                    entry.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.85)).tap()
+                    XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 15))
+                    app.returnToBrowsing()
+                    XCTAssertTrue(entry.waitForExistence(timeout: 10))
+                }
             }
             // Opening a card must still navigate to details, without changing progress.
             entry.tap()

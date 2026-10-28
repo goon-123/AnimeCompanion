@@ -3,6 +3,7 @@ import AnimeCore
 
 struct LibraryAnimeRow: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @ScaledMetric(relativeTo: .caption) private var genreHeight: CGFloat = 44
     let entry: LibraryEntry
     let anime: Anime
     let nextDub: ReleaseEvent?
@@ -14,16 +15,13 @@ struct LibraryAnimeRow: View {
 
     var body: some View {
       VStack(alignment: .leading, spacing: 12) {
-        HStack(alignment: .top, spacing: 14) {
+        ZStack(alignment: .bottomTrailing) {
             AnimeLink(id: anime.id) {
-                AnimeCover(anime: anime, width: coverWidth, cornerRadius: 10)
-                    .overlay(alignment: .topLeading) {
-                        DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(5)
-                    }
-            }.buttonStyle(.plain).accessibilityLabel("Open \(anime.displayTitle)")
-                .accessibilityIdentifier("library-artwork-\(anime.id)")
-            VStack(alignment: .leading, spacing: 6) {
-                AnimeLink(id: anime.id) {
+                HStack(alignment: .top, spacing: 14) {
+                    AnimeCover(anime: anime, width: coverWidth, cornerRadius: 10)
+                        .overlay(alignment: .topLeading) {
+                            DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(5)
+                        }
                     VStack(alignment: .leading, spacing: 10) {
                         Text(anime.displayTitle).font(.subheadline.weight(.semibold))
                             .lineLimit(textSize.isAccessibilitySize ? nil : 3)
@@ -45,11 +43,16 @@ struct LibraryAnimeRow: View {
                             Text("\(nextDub.certainty == .unverified ? "DUB ESTIMATE" : "DUB") · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
                                 .font(.caption).foregroundStyle(nextDub.certainty == .verified ? Color.mint : Color.orange)
                         }
+                        if !(anime.genres ?? []).isEmpty {
+                            // The independent genre buttons sit above this reserved
+                            // area; the rest of the card remains one detail link.
+                            Color.clear.frame(height: genreHeight)
+                        }
                     }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-                AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
-            }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
+            AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
+                .padding(.leading, coverWidth + 14)
         }
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
       }.padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
