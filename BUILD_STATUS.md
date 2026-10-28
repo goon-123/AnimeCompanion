@@ -1,3 +1,11 @@
+## Library and anime details — version 0.36.0 / build 91
+
+Library list and grid now share poster-embedded AniList ratings and a compact DUB badge for available English audio. List artwork fills the entire card height using aspect fill. Next-unwatched text retains the next original-broadcast countdown in both yellow (behind) and green (caught up); dub counts and the saved schedule-source preference cannot make broadcast catch-up green early. Missing or expired broadcast evidence stays neutral.
+
+Anime details hide the tab dock and provide a scroll-independent right-side actions button for Edit Entry, Resume Episode and Find Manga / Manhwa. Outside taps and accessibility Escape dismiss the menu. Existing tracking, playback episode selection, source search and native back navigation are retained. A compact Aired / Dubbed / Watched row replaces the episode list; unknown values stay unknown and estimated dub totals retain their marker. Synopsis, metadata and additional information are visible without the former outer disclosures.
+
+Validation: local diff, shell and JSON checks passed. Five core regressions and native iPhone/iPad UI journeys cover broadcast-vs-dub catch-up, countdowns, badge positioning, the overview, menu dismissal, editor/player navigation and swipe-back. Hosted compilation, packaging and simulator execution are pending for this commit.
+
 ## My Library presentation — version 0.35.1 / build 90
 
 Rebuild anime Library grid cards as unified rounded poster/metadata panels, with ratings on artwork, aligned two-line titles, watched totals, a slim bounded progress track, next-episode text, dub counts and independent scrollable genre buttons. Compact list rows align metadata and genres beside the saved-size cover. Preserve saved layout, density, poster sizing, all sorting/status filters, native detail links and long-press playback/tracking actions. Combine layout/count/sort controls and adapt their arrangement at accessibility text sizes.

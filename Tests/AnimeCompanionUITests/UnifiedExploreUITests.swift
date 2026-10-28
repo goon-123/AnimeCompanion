@@ -18,7 +18,7 @@ final class UnifiedExploreUITests: XCTestCase {
             XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 15))
         }
         tap(app.buttons["related-anime-5"], app)
-        XCTAssertTrue(app.buttons["watch-in-vidhub"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
     }
     @MainActor func testUnlinkedAdaptationOffersMangaBakaSearch() {

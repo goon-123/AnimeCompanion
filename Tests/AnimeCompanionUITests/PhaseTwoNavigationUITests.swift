@@ -41,6 +41,7 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["library-coming-up"].exists)
         let entry = app.buttons["library-entry-1"]
         reveal(entry, in: app); entry.tap()
+        app.openAnimeActions()
         let watch = app.buttons["watch-in-vidhub"]
         reveal(watch, in: app)
         watch.tap()
@@ -77,7 +78,7 @@ final class PhaseTwoNavigationUITests: XCTestCase {
     }
 
     @MainActor
-    func testDetailsDisclosuresPreserveDubCountAndExplicitEpisodeChoice() throws {
+    func testVisibleDetailsPreserveDubCountAndPlayerEpisodeChoice() throws {
         let app = launch()
         app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
@@ -89,24 +90,17 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         app.buttons["detail-dub-disclosure"].tap()
         XCTAssertTrue(app.staticTexts["Upcoming releases"].exists)
         app.buttons["detail-dub-disclosure"].tap()
-        let episodes = app.buttons["detail-episodes-disclosure"]
-        reveal(episodes, in: app)
-        XCTAssertFalse(app.buttons["detail-episode-2"].exists)
-        episodes.tap()
-        reveal(app.buttons["detail-episode-2"], in: app)
-        app.buttons["detail-episode-2"].tap()
+        XCTAssertFalse(app.buttons["detail-episodes-disclosure"].exists)
+        app.openAnimeActions(); app.buttons["watch-in-vidhub"].tap()
         XCTAssertTrue(app.textFields["playback-episode-number"].waitForExistence(timeout: 10))
+        app.enterPlaybackEpisode(2); app.buttons["playback-episode-go"].tap()
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "2")
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["playback-source-0"].label.contains("anilist:1:2.json"))
         XCTAssertTrue(app.staticTexts["playback-anilist-progress"].label.contains("8 episodes watched"))
         app.buttons["Done"].tap()
-        reveal(episodes, in: app, upward: false); episodes.tap()
-        let more = app.buttons["detail-more-information"]
-        reveal(more, in: app)
-        XCTAssertFalse(app.staticTexts["Fixture studio"].exists)
-        more.tap()
-        reveal(app.staticTexts["Fixture studio"], in: app)
+        XCTAssertFalse(app.buttons["detail-more-information"].exists)
+        reveal(app.staticTexts["Fixture studio"], in: app, upward: false)
         XCTAssertTrue(app.staticTexts["Fixture studio"].exists)
         capture("Organized-Details-And-Episodes")
     }

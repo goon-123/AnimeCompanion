@@ -117,6 +117,7 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertTrue(app.buttons["expand-anime-banner"].exists)
         XCTAssertTrue(app.staticTexts["detail-title"].label.contains("Cowboy"))
         XCTAssertEqual(app.staticTexts["detail-release-status"].label, "Finished")
+        app.openAnimeActions()
         let watch = app.buttons["watch-in-vidhub"]
         reveal(watch, in: app)
         XCTAssertTrue(watch.label.contains("Resume episode 9"))
@@ -130,8 +131,7 @@ final class PolishedDesignUITests: XCTestCase {
         app.buttons["Done"].tap()
         let progress = app.buttons["tracking-set-episode"]
         reveal(progress, in: app); XCTAssertTrue(progress.label.contains("8 / 26"))
-        let expand = app.buttons["expand-synopsis"]
-        reveal(expand, in: app); expand.tap(); XCTAssertEqual(expand.label, "Show less"); expand.tap()
+        XCTAssertFalse(app.buttons["expand-synopsis"].exists)
         let dub = app.staticTexts["detail-dub-count"]
         reveal(dub, in: app)
         let count = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "26/26"), object: dub)
@@ -139,10 +139,11 @@ final class PolishedDesignUITests: XCTestCase {
         capture("Details-Dub-Counts-And-Schedule")
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
-            reveal(watch, in: app, upward: false)
+            app.openAnimeActions()
             XCTAssertGreaterThanOrEqual(watch.frame.minX, 0)
             XCTAssertLessThanOrEqual(watch.frame.maxX, app.frame.width)
             capture("Cinematic-Details-iPad-Landscape")
+            app.buttons["detail-actions"].tap()
             XCUIDevice.shared.orientation = .portrait
         }
         reveal(cover, in: app, upward: false); cover.tap()
@@ -160,9 +161,10 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertTrue(countdown.label.contains("Days"))
         XCTAssertTrue(countdown.label.contains("Seconds"))
         XCTAssertLessThanOrEqual(countdown.frame.maxX, app.frame.width)
-        XCTAssertEqual(app.staticTexts["library-airing-status-1"].label, "Caught up")
-        XCTAssertTrue(app.staticTexts["library-airing-progress-1"].label.contains("Watched Ep 8 · Aired Ep 8"))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-aired").firstMatch.label, "Aired: 8/26")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-watched").firstMatch.label, "Watched: 8")
         capture("Details-Airing-Countdown-And-Progress")
+        app.returnToBrowsing()
         app.appTab("Schedule").tap()
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable)
         let entry = app.buttons["library-entry-1"]

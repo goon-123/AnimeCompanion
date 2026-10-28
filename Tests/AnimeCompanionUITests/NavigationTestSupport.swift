@@ -1,6 +1,12 @@
 import XCTest
 
 extension XCUIApplication {
+    @MainActor func openAnimeActions() {
+        let actions = buttons["detail-actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 45))
+        if actions.value as? String != "Expanded" { actions.tap() }
+        XCTAssertTrue(buttons["watch-in-vidhub"].waitForExistence(timeout: 10))
+    }
     @MainActor func openLibraryActions(_ mediaID: Int) {
         let entry = buttons["library-entry-\(mediaID)"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); revealInContent(entry)

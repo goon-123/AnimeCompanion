@@ -111,7 +111,7 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(TorrentSort.seeders.rawValue, forKey: "playback.torrentSort")
             UserDefaults.standard.set(TorBoxWebDAVSort.newest.rawValue, forKey: "torbox.files.sort")
         }
-        if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") {
+        if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") && !ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
             for key in ["library.layout", "library.sort", "discovery.layout", "explore.poster.fillScreen", "explore.poster.balanced"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
@@ -136,6 +136,7 @@ final class AppStore: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
             if AccountSwitcherPreview.active && !AccountSwitcherPreview.aniListConnected { return }
+            if ProcessInfo.processInfo.arguments.contains("--ui-library-detail-dub-preference") { airingProgressSource = .dub }
             isSignedIn = true
             do {
                 entries = try PhaseTwoPreviewTransport.library(); savedAt = Date()

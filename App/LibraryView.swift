@@ -115,7 +115,7 @@ struct LibraryView: View {
                             LazyVStack(spacing: 12) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeRow(entry: entry, anime: anime, nextDub: nil, dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth))
+                                        LibraryAnimeRow(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.listPosterWidth(in: contentWidth))
                                     }
                                 }
                             }.accessibilityIdentifier("library-list")

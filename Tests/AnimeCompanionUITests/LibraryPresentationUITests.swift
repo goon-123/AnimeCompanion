@@ -23,8 +23,8 @@ final class LibraryPresentationUITests: XCTestCase {
                 XCTAssertTrue(genres.buttons["genre-1-Sci-Fi"].exists)
                 capture("\(appearance)-\(layout)")
                 if layout == "List" {
-                    // Empty space beneath a short cover is still part of the
-                    // detail target; genre buttons remain separate above it.
+                    // The full-height artwork remains part of the detail
+                    // target; genre buttons remain independently tappable.
                     entry.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.85)).tap()
                     XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 15))
                     app.returnToBrowsing()

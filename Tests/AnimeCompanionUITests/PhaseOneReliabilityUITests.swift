@@ -51,6 +51,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 10), .completed)
         capture("Callback-Progress-Isolated-By-Episode")
         app.buttons["Done"].tap()
+        app.openAnimeActions()
         let watch = app.buttons["watch-in-vidhub"]
         app.revealInContent(watch, upward: false); watch.tap()
         XCTAssertTrue(resume.waitForExistence(timeout: 10))

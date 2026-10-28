@@ -6,57 +6,40 @@ struct LibraryAnimeRow: View {
     @ScaledMetric(relativeTo: .caption) private var genreHeight: CGFloat = 44
     let entry: LibraryEntry
     let anime: Anime
-    let nextDub: ReleaseEvent?
     var dub: LibraryDubProgress? = nil
     var posterWidth: CGFloat = 76
-    var airing: LibraryAiringProgress? = nil
 
     private var coverWidth: CGFloat { textSize.isAccessibilitySize ? min(posterWidth, 60) : posterWidth }
 
     var body: some View {
-      VStack(alignment: .leading, spacing: 12) {
         ZStack(alignment: .bottomTrailing) {
             AnimeLink(id: anime.id) {
-                HStack(alignment: .top, spacing: 14) {
-                    AnimeCover(anime: anime, width: coverWidth, cornerRadius: 10)
-                        .overlay(alignment: .topLeading) {
-                            DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(5)
-                        }
                     VStack(alignment: .leading, spacing: 10) {
                         Text(anime.displayTitle).font(.subheadline.weight(.semibold))
                             .lineLimit(textSize.isAccessibilitySize ? nil : 3)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         LibraryEntryProgress(entry: entry, anime: anime)
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                LibraryDubLabel(anime: anime, progress: dub)
-                                Spacer(minLength: 0)
-                                LibraryRatingLabel(anime: anime)
-                            }
-                            VStack(alignment: .leading, spacing: 6) {
-                                LibraryDubLabel(anime: anime, progress: dub)
-                                LibraryRatingLabel(anime: anime)
-                            }
-                        }
-                        if airing != nil, let nextDub, let date = nextDub.date {
-                            Text("\(nextDub.certainty == .unverified ? "DUB ESTIMATE" : "DUB") · Episode \(nextDub.episode) · \(date.formatted(.relative(presentation: .named)))")
-                                .font(.caption).foregroundStyle(nextDub.certainty == .verified ? Color.mint : Color.orange)
-                        }
                         if !(anime.genres ?? []).isEmpty {
                             // The independent genre buttons sit above this reserved
                             // area; the rest of the card remains one detail link.
                             Color.clear.frame(height: genreHeight)
                         }
-                    }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
-                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }.foregroundStyle(.primary).padding(14)
+                        .frame(maxWidth: .infinity, minHeight: coverWidth * 1.45, alignment: .topLeading)
+                        .padding(.leading, coverWidth)
+                        // Artwork measures the completed metadata layout, so it fills
+                        // long titles, genre space and Dynamic Type rows edge to edge.
+                        .overlay(alignment: .leading) {
+                            LibraryPoster(anime: anime, dub: dub, compact: true).frame(width: coverWidth)
+                        }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
-                .padding(.leading, coverWidth + 14)
+                .padding(.leading, coverWidth + 14).padding(.trailing, 14).padding(.bottom, 14)
         }
-        if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
-      }.padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-            .overlay { RoundedRectangle(cornerRadius: 18).stroke(airing?.state.color.opacity(0.25) ?? Theme.border, lineWidth: 1).allowsHitTesting(false) }
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay { RoundedRectangle(cornerRadius: 18).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
             .modifier(LibraryEntryActions(entry: entry, anime: anime))
     }
 }
@@ -71,21 +54,12 @@ struct LibraryAnimeTile: View {
       VStack(alignment: .leading, spacing: 0) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 0) {
-                GeometryReader { geometry in
-                    AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 0)
-                        .overlay(alignment: .topLeading) {
-                            DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(8)
-                        }
-                        .overlay(alignment: .bottomTrailing) {
-                            LibraryRatingLabel(anime: anime, overArtwork: true).padding(8)
-                        }
-                }.aspectRatio(1 / 1.45, contentMode: .fit)
+                LibraryPoster(anime: anime, dub: dub).aspectRatio(1 / 1.45, contentMode: .fit)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold))
                         .lineLimit(textSize.isAccessibilitySize ? 4 : 2, reservesSpace: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     LibraryEntryProgress(entry: entry, anime: anime)
-                    LibraryDubLabel(anime: anime, progress: dub)
                 }.padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 4)
             }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
@@ -98,6 +72,37 @@ struct LibraryAnimeTile: View {
             .overlay { RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .modifier(LibraryEntryActions(entry: entry, anime: anime))
+    }
+}
+
+/// The same badge positions work on narrow row covers and large grid posters:
+/// airing at the top, DUB above the rating at the bottom, with no overlap.
+private struct LibraryPoster: View {
+    let anime: Anime
+    let dub: LibraryDubProgress?
+    var compact = false
+    var body: some View {
+        GeometryReader { geometry in
+            ArtworkImage(url: anime.coverURL, pointSize: max(geometry.size.width, geometry.size.height)) {
+                image in image.resizable().scaledToFill()
+            } placeholder: { Theme.surface }
+                .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                .overlay(alignment: .topLeading) {
+                    DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(compact ? 6 : 8)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if dub?.hasAvailableDub == true {
+                            Text("DUB").font(.system(size: 10, weight: .heavy)).tracking(0.8)
+                                .foregroundStyle(Color.mint).padding(.horizontal, 7).padding(.vertical, 5)
+                                .background(.black.opacity(0.80), in: RoundedRectangle(cornerRadius: 6))
+                                .accessibilityLabel("English dub available")
+                                .accessibilityIdentifier("library-dub-\(anime.id)")
+                        }
+                        LibraryRatingLabel(anime: anime, overArtwork: true, compact: compact)
+                    }.padding(compact ? 6 : 8)
+                }
+        }.accessibilityIdentifier("library-poster-\(anime.id)")
     }
 }
 
@@ -128,19 +133,21 @@ private struct LibraryEntryProgress: View {
 private struct LibraryRatingLabel: View {
     let anime: Anime
     var overArtwork = false
+    var compact = false
     var body: some View {
         if let score = anime.averageScore {
             HStack(spacing: 4) {
                 Image(systemName: "star.fill").foregroundStyle(overArtwork ? Color.yellow : Theme.highlight)
                 Text("\(Double(score) / 10, specifier: "%.1f")")
                     .foregroundStyle(overArtwork ? Color.white : Theme.highlight)
-            }.font(.caption.weight(.semibold)).monospacedDigit().fixedSize()
-                .padding(.horizontal, overArtwork ? 7 : 0).padding(.vertical, overArtwork ? 5 : 0)
+            }.font(overArtwork ? .system(size: compact ? 10 : 12, weight: .semibold) : .caption.weight(.semibold)).monospacedDigit().fixedSize()
+                .padding(.horizontal, overArtwork ? (compact ? 5 : 7) : 0).padding(.vertical, overArtwork ? 5 : 0)
                 .background {
                     if overArtwork { RoundedRectangle(cornerRadius: 7).fill(.black.opacity(0.78)) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("AniList rating \(Double(score) / 10, specifier: "%.1f") out of 10"))
+                .accessibilityIdentifier("library-rating-\(anime.id)")
         }
     }
 }
@@ -149,18 +156,15 @@ struct LibraryNextEpisodeLabel: View {
     let entry: LibraryEntry
     let anime: Anime
     var body: some View {
-        Text(LibraryWatchProgress(anime: anime, entry: entry).label)
-            .font(.caption.weight(.semibold)).foregroundStyle(.primary)
-            .accessibilityIdentifier("library-next-episode-\(anime.id)")
-    }
-}
-
-struct LibraryDubLabel: View {
-    let anime: Anime
-    let progress: LibraryDubProgress?
-    var body: some View {
-        DubStatusBadge(anime: anime, progress: progress)
-            .accessibilityIdentifier("library-dub-\(anime.id)")
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let broadcast = LibraryBroadcastSummary(anime: anime, watched: entry.progressValue, now: context.date)
+            let countdown = broadcast.countdown(at: context.date) ?? (anime.isCurrentlyAiring ? "Next airing TBA" : nil)
+            Text(LibraryWatchProgress(anime: anime, entry: entry).label + (countdown.map { " · \($0)" } ?? ""))
+                .font(.caption.weight(.semibold)).foregroundStyle(broadcast.state.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityValue(broadcast.state == .caughtUp ? "Caught up with original broadcast" : broadcast.state == .behind ? "Behind original broadcast" : "Broadcast count unavailable")
+                .accessibilityIdentifier("library-next-episode-\(anime.id)")
+        }
     }
 }
 
