@@ -31,12 +31,12 @@ struct LibraryAnimeRow: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-            LibraryEntryActions(entry: entry, anime: anime)
         }
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
       }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
             .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Theme.border, lineWidth: 1) }
+            .modifier(LibraryEntryActions(entry: entry, anime: anime))
     }
 }
 
@@ -64,8 +64,8 @@ struct LibraryAnimeTile: View {
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
-      }.overlay(alignment: .topTrailing) { LibraryEntryActions(entry: entry, anime: anime).padding(5) }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .modifier(LibraryEntryActions(entry: entry, anime: anime))
     }
 }
 
@@ -87,40 +87,37 @@ struct LibraryDubLabel: View {
     }
 }
 
-struct LibraryEntryActions: View {
+/// Keep artwork unobstructed. The same actions remain available on a long press
+/// and through named VoiceOver actions; opening a card never changes progress.
+struct LibraryEntryActions: ViewModifier {
     @EnvironmentObject private var store: AppStore
     let entry: LibraryEntry
     let anime: Anime
-    var horizontal = false
     @State private var editing = false
     @State private var watching = false
     @State private var error: String?
-    var body: some View {
-        let layout = horizontal ? AnyLayout(HStackLayout(spacing: 4)) : AnyLayout(VStackLayout(spacing: 4))
-        layout {
-            Button { watching = true } label: {
-                Image(systemName: "play.fill").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9))
-            }.disabled(anime.status == "NOT_YET_RELEASED")
+    private var updating: Bool { store.loadingLibrary || store.savingMedia.contains(anime.id) }
+    private var canMarkNext: Bool {
+        !updating && store.savedAt != nil && !(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
+    }
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            Button("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil))", systemImage: "play.fill") { watching = true }
+                .disabled(anime.status == "NOT_YET_RELEASED")
                 .accessibilityLabel("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)) of \(anime.displayTitle) in VidHub")
                 .accessibilityIdentifier("library-watch-\(anime.id)")
-            Button {
-                Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
-            } label: { Text("+1").font(.headline).frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
-                .disabled(store.loadingLibrary || store.savedAt == nil || store.savingMedia.contains(anime.id) || (anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false))
+            Button("Mark next episode watched", systemImage: "plus") { markNext() }
+                .disabled(!canMarkNext)
                 .accessibilityLabel("Mark next episode of \(anime.displayTitle) watched").accessibilityIdentifier("library-next-\(anime.id)")
-        Menu {
-            Button("Edit tracking, rating and notes", systemImage: "pencil") { editing = true }
-            Button("Mark next episode watched", systemImage: "plus") {
-                Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
-            }
-                .disabled(anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false)
+            Button("Edit tracking, rating and notes", systemImage: "pencil") { editing = true }.disabled(updating)
+                .accessibilityIdentifier("library-edit-\(anime.id)")
             Menu("Move to list") {
                 ForEach(LibraryStatus.allCases) { status in Button(status.label) { update(progress: entry.progressValue, status: status) } }
-            }
-        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 9)) }
-            .accessibilityLabel("Manage \(anime.displayTitle)")
+            }.disabled(updating)
         }
-            .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
+            .accessibilityHint("Touch and hold for playback and tracking actions")
+            .accessibilityAction(named: Text("Edit tracking")) { if !updating { editing = true } }
+            .accessibilityAction(named: Text("Mark next episode watched")) { markNext() }
             .sheet(isPresented: $editing) {
                 TrackingEditorView(anime: anime, entry: store.entry(for: anime.id))
             }
@@ -128,6 +125,10 @@ struct LibraryEntryActions: View {
             .alert("Couldn’t update your library", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
+    }
+    private func markNext() {
+        guard canMarkNext else { return }
+        Task { do { try await store.markNextWatched(anime: anime) } catch { self.error = error.localizedDescription } }
     }
     private func update(progress: Int, status: LibraryStatus) {
         Task { do { try await store.save(anime: anime, progress: progress, status: status) } catch { self.error = error.localizedDescription } }

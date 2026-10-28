@@ -60,8 +60,7 @@ final class SourceAudioUITests: XCTestCase {
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences", flag]
         app.launch()
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
-        let watch = app.buttons["library-watch-1"]
-        XCTAssertTrue(watch.waitForExistence(timeout: 45)); reveal(watch, in: app); watch.tap()
+        app.watchLibraryEntry(1)
         XCTAssertTrue(app.staticTexts["playback-english-availability"].waitForExistence(timeout: 15))
         return app
     }

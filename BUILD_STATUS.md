@@ -1,3 +1,9 @@
+## Library and calendar — version 0.35.0 / build 89
+
+Removed the visible play/+1/ellipsis stack from Library rows, posters and Airing Now. Native context menus retain playback, progress, tracking and list moves. Rebuilt Airing Now as compact neutral rows and Weekly Schedule as a seven-day date strip with selected-day highlighting, release dots and a time-led agenda. Today positioning, free full-week browsing, account-independent weekly access, saved filters and source certainty rules are retained.
+
+Local whitespace, shell syntax and YAML parsing checks pass. The PR runs the existing Core and universal Release IPA jobs plus focused iPhone/iPad checks for context actions, correct playback episode, clean list/grid artwork, catch-up states, date selection, late loading, empty filters, appearance and week browsing. Native compilation and execution are pending at this checkpoint.
+
 ## MangaBaka discovery feed repair — version 0.32.2 / build 86
 
 Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.

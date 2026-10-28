@@ -1,5 +1,11 @@
 # Anime Companion
 
+## Library and calendar — version 0.35.0 / build 89
+
+Library posters and rows now keep the artwork clear, with playback, mark-next, editing and list moves available by holding a card. Tapping still opens details. Airing Now uses compact catch-up rows and keeps layout choices in a small menu.
+
+Weekly Schedule is rebuilt as a seven-day calendar strip and time-led release agenda. The selected date has its own highlight, Today returns to the current day, and previous/next-week and date-picker browsing remain available. Sub/Dub and watching-list filters retain their saved values; original broadcasts, English dub releases, estimates and unconfirmed dates remain distinct.
+
 ## Experience redesign — version 0.34.0 / build 88
 
 A personal Home now brings watching, saved manga positions, tracked manga/novels and upcoming broadcasts together. New defaults focus on Home, Explore and My Library; explicitly saved navigation preferences remain intact. iPad gains a native sidebar while retaining full-width and browse/detail layouts.

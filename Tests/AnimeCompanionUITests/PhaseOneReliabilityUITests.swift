@@ -100,10 +100,7 @@ final class PhaseOneReliabilityUITests: XCTestCase {
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-reset-content-preferences"] + extra
         app.launch()
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
-        let watch = app.buttons["library-watch-1"]
-        XCTAssertTrue(watch.waitForExistence(timeout: 45))
-        for _ in 0..<10 where !watch.isHittable { app.contentSurface.swipeUp() }
-        XCTAssertTrue(watch.isHittable); watch.tap()
+        app.watchLibraryEntry(1)
         XCTAssertTrue(app.buttons["playback-source-0"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "9")
         return app

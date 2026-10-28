@@ -19,6 +19,8 @@ final class WeeklyScheduleUITests: XCTestCase {
         XCTAssertEqual(weekdays.buttons.count, 7)
         weekdays.swipeRight()
         app.buttons["schedule-jump-2026-10-04"].tap()
+        XCTAssertTrue(app.buttons["schedule-jump-2026-10-04"].isSelected)
+        XCTAssertFalse(app.buttons["schedule-jump-2026-10-07"].isSelected)
         assertAtTop(day("2026-10-04", in: app), app: app)
         XCTAssertTrue(app.buttons["release-entry-990200-sub-1"].waitForExistence(timeout: 30))
         assertAtTop(day("2026-10-04", in: app), app: app)

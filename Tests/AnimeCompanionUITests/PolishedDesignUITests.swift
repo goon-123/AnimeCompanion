@@ -20,7 +20,7 @@ final class PolishedDesignUITests: XCTestCase {
         capture("Genre-Filtered-Explore")
         app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-entry-1"].exists)
-        XCTAssertTrue(app.buttons["library-watch-1"].label.contains("episode 9"))
+        XCTAssertFalse(app.buttons["library-watch-1"].exists)
         app.buttons["library-entry-1"].tap()
         let detailTags = app.descendants(matching: .any).matching(identifier: "detail-genres-1").firstMatch
         XCTAssertTrue(detailTags.waitForExistence(timeout: 45)); reveal(detailTags, in: app)

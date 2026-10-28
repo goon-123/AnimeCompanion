@@ -384,11 +384,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   weekly-ui:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
-    needs: playback-fixes
-    name: Weekly schedule ${{ matrix.device }} regression
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    needs: manga-runtime
+    name: Library and schedule ${{ matrix.device }} regression
     runs-on: macos-15-intel
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -419,10 +419,10 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Check today positioning and manual week browsing
+      - name: Check clean library cards, catch-up, playback menus and calendar browsing
         run: |
           sudo mdutil -a -i off || true
-          bash scripts/check-simulator.sh ${{ matrix.device }} weekly
+          bash scripts/check-simulator.sh ${{ matrix.device }} schedule
       - name: Upload weekly screenshots and results
         if: always()
         uses: actions/upload-artifact@v4

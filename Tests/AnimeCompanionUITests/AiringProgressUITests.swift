@@ -59,7 +59,7 @@ final class AiringProgressUITests: XCTestCase {
         XCTAssertTrue(libraryBehind.label.contains("Watched 4/12"))
         XCTAssertTrue(libraryBehind.label.contains("Next: Ep 5"))
         XCTAssertTrue(app.images["library-airing-990101"].exists)
-        XCTAssertTrue(app.buttons["library-watch-990101"].exists)
+        XCTAssertFalse(app.buttons["library-watch-990101"].exists)
         XCTAssertFalse(behind.exists); XCTAssertFalse(caught.exists)
         XCTAssertFalse(app.staticTexts["library-airing-next-990101"].exists)
         capture("Library-Tracking-Without-Airing-Grid")
@@ -82,8 +82,7 @@ final class AiringProgressUITests: XCTestCase {
         app.launchArguments = ["--ui-library-preview", "--ui-playback-preview", "--ui-playback-stale-resume", "--ui-reset-content-preferences"]
         app.launch()
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("My Library").tap()
-        let watch = app.buttons["library-watch-1"]
-        XCTAssertTrue(watch.waitForExistence(timeout: 45)); reveal(watch, app: app); watch.tap()
+        app.watchLibraryEntry(1)
         let field = app.textFields["playback-episode-number"]
         XCTAssertTrue(field.waitForExistence(timeout: 15)); XCTAssertEqual(field.value as? String, "9")
         let source = app.buttons["playback-source-0"]
