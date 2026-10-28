@@ -4,22 +4,35 @@ import AnimeCore
 /// A compact directory. Credentials, provider management and long explanations
 /// live on their own screens instead of competing with everyday preferences.
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    let selectAccount: (TrackingAccount) -> Void
+    var body: some View {
+        AppNavigationStack {
+            SettingsDirectoryView(close: { dismiss() }, selectAccount: selectAccount)
+        }
+    }
+}
+
+struct SettingsDirectoryView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
-    @Environment(\.dismiss) private var dismiss
     @State private var setupGuide = false
+    let close: () -> Void
+    let selectAccount: (TrackingAccount) -> Void
     var body: some View {
-        NavigationStack {
             Form {
                 Section {
                     Button { setupGuide = true } label: {
-                        SettingsCategoryLabel(title: "Setup Guide", detail: "Review connections, extensions & privacy in one place",
-                                              symbol: "sparkles.rectangle.stack.fill", tint: .purple)
+                        SettingsCategoryLabel(title: "Setup Guide", detail: "Review accounts, extensions and privacy",
+                                              symbol: "sparkles.rectangle.stack", tint: .purple)
                     }.accessibilityIdentifier("settings-setup-guide")
                 }
                 Section {
+                    NavigationLink { AccountSwitcherView(showsSettings: false, close: close, select: selectAccount) } label: {
+                        SettingsCategoryLabel(title: "Switch account", detail: "AniList & MangaBaka · Stay signed in", symbol: "person.2.crop.square.stack.fill", tint: .mint)
+                    }.accessibilityIdentifier("settings-account-switcher")
                     NavigationLink { AniListSettingsView() } label: {
                         SettingsCategoryLabel(title: "AniList account", detail: store.isSignedIn ? store.viewer.map { "Signed in as \($0.name)" } ?? "Connected" : "Connect to sync your library", symbol: "person.crop.circle.fill", tint: .blue)
                     }.accessibilityIdentifier("settings-account")
@@ -62,8 +75,11 @@ struct SettingsView: View {
                         }.accessibilityIdentifier("settings-ipad-layout")
                     }
                     NavigationLink { BrowsingSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Browsing & content", detail: "Metadata source & adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
+                        SettingsCategoryLabel(title: "Browsing & content", detail: "MangaBaka ratings & AniList adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
                     }.accessibilityIdentifier("settings-browsing")
+                    NavigationLink { LibraryPreferencesView() } label: {
+                        SettingsCategoryLabel(title: "Library defaults", detail: "Open on Watching, Reading or In progress", symbol: "books.vertical.fill", tint: .teal)
+                    }.accessibilityIdentifier("settings-library-defaults")
                     NavigationLink { TrackingSettingsView() } label: {
                         SettingsCategoryLabel(title: "Watch tracking", detail: "Catch-up status & completion", symbol: "checkmark.circle.fill", tint: .green)
                     }.accessibilityIdentifier("settings-tracking")
@@ -76,19 +92,24 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity).padding(.top, 8)
                 }
             }.navigationTitle("Settings")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
-        .fullScreenCover(isPresented: $setupGuide) {
-            FirstRunSetupView(revisiting: true) { setupGuide = false }
-        }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
+                .fullScreenCover(isPresented: $setupGuide) {
+                    FirstRunSetupView(revisiting: true) { setupGuide = false }
+                }
     }
 }
 
 private struct AppSettingsSheet: ViewModifier {
     @EnvironmentObject private var navigation: AppNavigationStore
     @Binding var isPresented: Bool
+    @State private var selectedAccount: TrackingAccount?
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented, onDismiss: { navigation.applyLayoutPreference(); navigation.applyTabPreferences() }) { SettingsView() }
+        content.sheet(isPresented: $isPresented, onDismiss: {
+            navigation.applyLayoutPreference(); navigation.applyTabPreferences()
+            if let selectedAccount { self.selectedAccount = nil; navigation.openAccountLibrary(selectedAccount) }
+        }) {
+            SettingsView { account in selectedAccount = account; isPresented = false }
+        }
     }
 }
 
@@ -136,11 +157,16 @@ struct AniListSettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var clientID = AppConfiguration.clientID ?? ""
     @State private var confirmation = false
+    var useAccount: (() -> Void)? = nil
     var body: some View {
         Form {
             Section("Connection") {
                 if store.isSignedIn {
                     Label(store.viewer.map { "Signed in as \($0.name)" } ?? "Connected to AniList", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
+                    if let useAccount {
+                        Button(action: useAccount) { Label("Open AniList library", systemImage: "play.rectangle") }
+                            .foregroundStyle(.mint).accessibilityIdentifier("account-use-anilist")
+                    }
                     Button("Refresh library") { Task { await store.reloadLibrary() } }.disabled(store.loadingLibrary || !store.savingMedia.isEmpty)
                     if store.loadingLibrary { ProgressView("Refreshing library…") }
                     Button("Disconnect", role: .destructive) { confirmation = true }.disabled(!store.savingMedia.isEmpty)
@@ -174,8 +200,12 @@ private struct BrowsingSettingsView: View {
         Form {
             Section {
                 Toggle("Show adult content (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
-            } header: { Text("Content") } footer: {
-                Text("Applies to anime and MangaBaka browsing, search, libraries, schedules and known adult providers. Hidden entries stay in your online lists. External websites use their own filters.")
+            } header: { Text("AniList & video sources") } footer: {
+                Text("Applies to anime browsing, libraries, schedules and known adult video providers. Hidden entries stay in your online lists.")
+            }
+            MangaBakaRatingSection(filter: $store.mangaBakaContent)
+            Section {
+                NavigationLink("More MangaBaka content options") { MangaBakaContentSettingsView() }
             }
         }.navigationTitle("Browsing & content").navigationBarTitleDisplayMode(.inline)
     }

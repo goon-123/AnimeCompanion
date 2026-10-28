@@ -37,6 +37,12 @@ private struct GraphQLResponse<T: Decodable>: Decodable { let data: T?; let erro
 private struct RequestBody: Encodable { let query: String; let variables: [String: QueryValue] }
 private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
 private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
+private struct WrittenAdaptationsResponse: Decodable, Sendable { let Media: WrittenAdaptationsMedia? }
+private struct WrittenAdaptationsMedia: Decodable, Sendable {
+    let id: Int
+    let type: String
+    let relations: RelationConnection?
+}
 private struct ViewerResponse: Decodable, Sendable { let Viewer: Viewer }
 private struct MutationResponse: Decodable, Sendable { let SaveMediaListEntry: LibraryEntry }
 private struct DeleteResponse: Decodable, Sendable { let DeleteMediaListEntry: DeletedEntry }
@@ -108,6 +114,16 @@ public enum AniListQueries {
       }
     }
     """ + card
+    public static let writtenAdaptations = """
+    query WrittenAdaptations($id: Int!) {
+      Media(id: $id, type: MANGA) {
+        id type
+        relations { edges { relationType node {
+          id type isAdult genres title { romaji english userPreferred } coverImage { large }
+        } } }
+      }
+    }
+    """
     public static let viewer = "query ViewerProfile { Viewer { id name avatar { large } } }"
     public static let browse = """
     query Browse($page: Int!, $search: String, $genre: String,
@@ -271,6 +287,20 @@ public actor AniListClient {
         let result: DetailResponse = try await request(AniListQueries.detail, variables: vars, bypassCache: refresh)
         guard let media = result.Media else { throw ServiceError.message("Anime not found.") }
         return media
+    }
+    public func animeAdaptations(mangaID: Int, includeAdult: Bool = false, refresh: Bool = false) async throws -> [RelatedAnime] {
+        guard mangaID > 0 else { throw ServiceError.invalidResponse }
+        let result: WrittenAdaptationsResponse = try await request(AniListQueries.writtenAdaptations,
+            variables: ["id": .int(mangaID)], bypassCache: refresh)
+        guard let source = result.Media else { return [] }
+        guard source.id == mangaID, source.type == "MANGA" else { throw ServiceError.invalidResponse }
+        var seen = Set<Int>()
+        return (source.relations?.edges ?? []).compactMap { edge in
+            guard ["ADAPTATION", "SOURCE"].contains(edge.relationType ?? ""), let anime = edge.node,
+                  anime.id > 0, anime.type == "ANIME", includeAdult || anime.isAdult == false,
+                  seen.insert(anime.id).inserted else { return nil }
+            return anime
+        }
     }
     public func viewer(token: String) async throws -> Viewer {
         let result: ViewerResponse = try await request(AniListQueries.viewer, token: token)

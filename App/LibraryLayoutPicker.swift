@@ -28,6 +28,7 @@ struct MangaBakaLibraryTile: View {
             Text(MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized)
                 .font(.caption).foregroundStyle(.secondary)
             Text("Ch. " + (entry.chapter ?? 0).formatted()).font(.caption.monospacedDigit())
+            MangaSourceLinkBadge(series: series)
             if let total = series.totalChapters, total > 0 {
                 ProgressView(value: min(max(0, entry.chapter ?? 0), total), total: total).tint(.mint)
             }

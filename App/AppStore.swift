@@ -26,6 +26,11 @@ final class AppStore: ObservableObject {
     @Published var includeAdult = UserDefaults.standard.bool(forKey: "content.includeAdult") {
         didSet { UserDefaults.standard.set(includeAdult, forKey: "content.includeAdult") }
     }
+    @Published var mangaBakaContent = MangaBakaContentFilter(
+        saved: UserDefaults.standard.string(forKey: MangaBakaContentFilter.storageKey),
+        legacyIncludeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult")) {
+        didSet { UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey) }
+    }
     @Published var automaticallyComplete = UserDefaults.standard.object(forKey: "tracking.automaticallyComplete") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticallyComplete, forKey: "tracking.automaticallyComplete") }
     }
@@ -73,6 +78,14 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
             UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
             includeAdult = false; automaticallyComplete = true
+            mangaBakaContent = .init()
+            UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey)
+            for scope in LibraryScope.allCases {
+                UserDefaults.standard.removeObject(forKey: scope.defaultStatusKey)
+            }
+            for key in ["library.reversed", "mangabaka.library.sort", "mangabaka.library.ascending", "combined.library.sort", "combined.library.ascending"] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
             airingProgressSource = .broadcast
             // Property observers do not run for assignments during initialization.
             UserDefaults.standard.set(false, forKey: "content.includeAdult")
@@ -95,6 +108,8 @@ final class AppStore: ObservableObject {
         exploreCache = ExploreCache()
         visuals = AnimeVisualsClient()
         #endif
+        // Freeze the migration once so later AniList changes cannot change MangaBaka.
+        UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey)
     }
 
     func isVisible(_ anime: Anime) -> Bool { includeAdult || anime.isAdult != true }
@@ -106,8 +121,12 @@ final class AppStore: ObservableObject {
         guard !restored else { return }; restored = true
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
+            if AccountSwitcherPreview.active && !AccountSwitcherPreview.aniListConnected { return }
             isSignedIn = true
-            do { entries = try PhaseTwoPreviewTransport.library(); savedAt = Date() }
+            do {
+                entries = try PhaseTwoPreviewTransport.library(); savedAt = Date()
+                if AccountSwitcherPreview.active { viewer = try AccountSwitcherPreview.viewer() }
+            }
             catch { libraryError = error.localizedDescription }
             return
         }

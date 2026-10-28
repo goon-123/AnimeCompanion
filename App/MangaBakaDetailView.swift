@@ -23,7 +23,7 @@ struct MangaBakaDetailView: View {
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if series.isVisible(includeAdult: preferences.includeAdult) {
+                if series.isVisible(contentFilter: preferences.mangaBakaContent) {
                     VStack(alignment: .leading, spacing: 26) {
                         header(width: geometry.size.width).id("overview")
                         MangaBakaBadges(series: series)
@@ -35,6 +35,8 @@ struct MangaBakaDetailView: View {
                         story
                         metadata
                         sourceRatings
+                        MangaBakaAnimeSection(series: series, refreshToken: refreshToken).id("anime")
+                        animeCoverage
                         MangaBakaSeriesTags(series: series).id("tags")
                         officialLinks
                         MangaBakaCoverGallery(series: series, refreshToken: refreshToken).id("covers")
@@ -46,14 +48,23 @@ struct MangaBakaDetailView: View {
                 } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash") }
             }
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
-            .task(id: account.connected) { await reload() }
+            .navigationDestination(for: MangaBakaAnimeRoute.self) { route in
+                AnimeDetailView(mediaID: route.id).id(route.id)
+                    .environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
+                    .animeNavigation().mangaBakaNavigation()
+            }
+            .navigationDestination(for: MangaBakaAnimeSearchRoute.self) { route in
+                DiscoveryBrowseView(category: .trending, selection: .current(), initialQuery: route.title)
+                    .id(route).toolbar(.visible, for: .navigationBar).animeNavigation().mangaBakaNavigation()
+            }
+            .task(id: account.connectionID) { await reload() }
             .refreshable { refreshToken += 1; await reload(refresh: true) }
-            .sheet(isPresented: $editing) { NavigationStack { MangaBakaTrackingView(series: series) } }
+            .sheet(isPresented: $editing) { AppNavigationStack { MangaBakaTrackingView(series: series) } }
             .sheet(isPresented: $signingIn) {
-                NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
+                AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = false } } } }
             }
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
-            .onChange(of: preferences.includeAdult) { _, _ in preview = nil }
+            .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
         }
     }
     private func header(width: CGFloat) -> some View {
@@ -106,6 +117,7 @@ struct MangaBakaDetailView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
                 jump("Info", id: "overview", proxy: proxy)
+                jump("Anime", id: "anime", proxy: proxy)
                 jump("Tags", id: "tags", proxy: proxy)
                 jump("Covers", id: "covers", proxy: proxy)
                 jump("Related", id: "relationships", proxy: proxy)
@@ -193,17 +205,28 @@ struct MangaBakaDetailView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
         } else {
-            Button { navigation.openMangaSearch(titles: series.searchTitles) } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "book.closed").font(.title2)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Find a reading source").font(.headline)
-                        Text("Search your installed manga extensions").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(); Image(systemName: "arrow.right")
-                }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
-            }.buttonStyle(.plain)
+            MangaBakaSourceLinkSection(series: series)
         }
+    }
+    @ViewBuilder private var animeCoverage: some View {
+        if let anime = series.animeAdaptation, anime.exists || anime.hasCoverage {
+            VStack(alignment: .leading, spacing: 14) {
+                Label("Anime chapter coverage", systemImage: "play.rectangle").font(.title2.bold())
+                if let start = anime.start { coverageNote("Anime starts at", note: start) }
+                if let end = anime.end { coverageNote("Anime ends at", note: end) }
+                if !anime.hasCoverage {
+                    Text("An anime adaptation exists, but chapter and volume coverage has not been listed yet.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Text("MangaBaka · MangaUpdates coverage notes").font(.caption).foregroundStyle(.secondary)
+            }.accessibilityIdentifier("mangabaka-anime-coverage")
+        }
+    }
+    private func coverageNote(_ title: String, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.subheadline.bold()).foregroundStyle(.mint)
+            Text(note).font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var officialLinks: some View {
         DisclosureGroup(isExpanded: $linksExpanded) {

@@ -4,6 +4,7 @@ import AnimeCore
 private struct UnifiedSearchKey: Equatable {
     let text: String
     let adult: Bool
+    let contentFilter: MangaBakaContentFilter
 }
 
 @MainActor
@@ -40,7 +41,7 @@ private final class UnifiedExploreSearchModel: ObservableObject {
                 guard !next || !values.isEmpty || !hasMore else { throw ServiceError.message("No new anime on this page. Retry or change your search.") }
                 anime = next ? anime + values : values
             case .reading:
-                let response = try await books.browse(.init(text: key.text), page: page, limit: 24, includeAdult: key.adult, refresh: refresh)
+                let response = try await books.browse(.init(text: key.text), page: page, limit: 24, contentFilter: key.contentFilter, refresh: refresh)
                 try Task.checkCancellation(); guard attempt == generation else { return }
                 var known = Set(next ? reading.map(\.id) : [])
                 let values = response.items.filter { known.insert($0.id).inserted }
@@ -61,8 +62,8 @@ struct UnifiedExploreSearchView: View {
     @EnvironmentObject private var reading: MangaBakaStore
     @StateObject private var model = UnifiedExploreSearchModel()
     @State private var text = ""
-    private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult) }
-    private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult) }
+    private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult, contentFilter: anime.mangaBakaContent) }
+    private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -74,7 +75,7 @@ struct UnifiedExploreSearchView: View {
                     ContentUnavailableView("Find your next story", systemImage: "magnifyingglass",
                         description: Text("One search for anime, manga, manhwa, light novels and more. No account needed."))
                 } else {
-                    Text("\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(includeAdult: anime.includeAdult) }.count) manga & novels loaded")
+                    Text("\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("unified-search-counts")
                     ForEach(UnifiedExploreSearchModel.Provider.allCases, id: \.self) { provider in
                         if let error = model.errors[provider] {

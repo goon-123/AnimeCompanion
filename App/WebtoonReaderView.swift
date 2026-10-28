@@ -49,13 +49,17 @@ final class WebtoonReaderModel: ObservableObject {
     }
     func position(page: Int, fraction: Double, complete: Bool) {
         guard !pages.isEmpty, pages.indices.contains(page) else { return }
-        currentPage = page
+        // Fractional progress stays local to the model. Publishing the same
+        // page on every scroll report redraws the entire reader unnecessarily.
+        if currentPage != page { currentPage = page }
         let point = MangaReadingPosition(chapterURL: chapter.url, chapterName: chapter.name, pageIndex: page,
             pageCount: pages.count, fraction: fraction, completed: complete)
         confirmed = point
         guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
-            do { try await Task.sleep(for: .milliseconds(600)); try Task.checkCancellation() } catch { return }
+            // Keep disk writes and library publications out of the scroll hot
+            // path. Chapter changes, backgrounding and closing still flush.
+            do { try await Task.sleep(for: .seconds(2)); try Task.checkCancellation() } catch { return }
             guard let self, let reading = self.reading, let latest = self.confirmed else { return }
             self.saveTask = nil
             await reading.progress(self.title, position: latest)
@@ -174,6 +178,7 @@ struct WebtoonReaderView: View {
                 }.allowsHitTesting(false).accessibilityHidden(true)
             }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent).statusBarHidden(!model.controls && !model.pages.isEmpty)
+            .backSwipe(enabled: !closing && !settings && !chapters && !website) { Task { await close() } }
             .persistentSystemOverlays(model.controls ? .visible : .hidden)
             .task(id: model.chapter.url) {
                 await reading.load()
@@ -316,7 +321,7 @@ struct WebtoonReaderView: View {
     }
     private var controlPage: Int { scrubbing ? Int(scrubPage.rounded()) : model.currentPage }
     private var chapterPicker: some View {
-        NavigationStack {
+        AppNavigationStack {
             List(model.chapters) { chapter in
                 Button {
                     chapters = false
@@ -334,7 +339,12 @@ struct WebtoonReaderView: View {
         }.tint(MangaStyle.accent)
     }
     private func updateAwake() { UIApplication.shared.isIdleTimerDisabled = scene == .active && preferences.keepAwake ? true : originalIdleTimer }
-    private func close() async { guard !closing else { return }; closing = true; model.autoScroll = false; await model.flush(); dismiss() }
+    private func close() async {
+        guard !closing else { return }
+        closing = true; model.autoScroll = false; holdScrolling = false; model.cancelPrefetch()
+        await model.flush(); await reading.preferences(preferences)
+        dismiss()
+    }
 }
 
 private extension View {
@@ -349,7 +359,7 @@ private struct WebtoonSettingsView: View {
     @Binding var preferences: WebtoonPreferences
     @Binding var autoScroll: Bool
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     LabeledContent("Reading mode", value: "Continuous vertical")

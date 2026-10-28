@@ -39,7 +39,7 @@ struct AddonDirectoryBrowser: View {
                 Button("Directory") { session.navigate(AddonBrowserLink.directoryURL) }.accessibilityIdentifier("addon-directory-home")
             } }
             .sheet(item: $session.installLink) { link in
-                NavigationStack {
+                AppNavigationStack {
                     AddonInstallReview(endpoint: link.endpoint, configure: { url in
                         session.installLink = nil; session.navigate(url)
                     }, installed: { name in

@@ -64,6 +64,9 @@ struct WebtoonCanvas: UIViewRepresentable {
         private var pending: (Int, Double)?
         private var lastJump: UUID?
         private var layingOut = false
+        private var layoutScheduled = false
+        private var windowDirty = true
+        private var windowRange: ClosedRange<Int>?
         private var lastWidth: CGFloat = 0
         private var lastReport = 0.0
         private var displayLink: CADisplayLink?
@@ -74,7 +77,12 @@ struct WebtoonCanvas: UIViewRepresentable {
         init(_ parent: WebtoonCanvas) { self.parent = parent }
         func attach(_ scroll: WebtoonScrollView) {
             self.scroll = scroll; scroll.addSubview(content); content.addSubview(end)
-            scroll.onSizeChange = { [weak self] in self?.layout(preserving: self?.anchor()) }
+            scroll.onSizeChange = { [weak self] in
+                guard let self, let scroll = self.scroll else { return }
+                if self.lastWidth > 0 && abs(self.lastWidth - scroll.bounds.width) < 1 {
+                    self.windowDirty = true; self.window(); self.report(force: true)
+                } else { self.layout(preserving: self.anchor()) }
+            }
             let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
             tap.delegate = self; tap.cancelsTouchesInView = false; scroll.addGestureRecognizer(tap)
             let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
@@ -87,7 +95,7 @@ struct WebtoonCanvas: UIViewRepresentable {
             end.action = { [weak self] in self?.parent.onNext() }
         }
         func update(_ value: WebtoonCanvas) {
-            let preferencesChanged = parent.preferences != value.preferences
+            let appearanceChanged = parent.preferences.sidePadding != value.preferences.sidePadding || parent.preferences.background != value.preferences.background
             let interrupted = parent.scrollingAllowed && !value.scrollingAllowed
             parent = value
             if interrupted { continuation.reset(chapter: chapter) }
@@ -98,12 +106,14 @@ struct WebtoonCanvas: UIViewRepresentable {
                 cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
                 chapter = value.chapterKey; continuation.reset(chapter: chapter); pages = value.pages; ratios = Array(repeating: 1.7, count: pages.count)
                 offsets = []; failures.removeAll(); succeeded.removeAll(); lastJump = nil
+                layoutScheduled = false; windowDirty = true; windowRange = nil
                 pending = (min(max(0, value.initial?.pageIndex ?? 0), max(0, pages.count - 1)), value.initial?.fraction ?? 0)
                 scroll?.setZoomScale(1, animated: false); lastWidth = 0
                 layout(preserving: nil)
-            } else if preferencesChanged { layout(preserving: anchor()) }
+            } else if appearanceChanged { layout(preserving: anchor()) }
             if let jump = value.jump, jump.id != lastJump, !pages.isEmpty {
                 lastJump = jump.id; pending = (min(max(0, jump.page), pages.count - 1), min(1, max(0, jump.fraction)))
+                windowDirty = true
                 applyPending(); window()
             }
             end.button.setTitle(value.hasNext ? "Next chapter" : "Back to chapters", for: .normal)
@@ -116,6 +126,8 @@ struct WebtoonCanvas: UIViewRepresentable {
             if parent.scrollingAllowed && (parent.autoScroll || holding) && displayLink == nil {
                 motion.reset()
                 let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+                let maximum = Float(scroll?.window?.screen.maximumFramesPerSecond ?? 60)
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: min(30, maximum), maximum: maximum, preferred: maximum)
                 link.add(to: .main, forMode: .common); displayLink = link
             } else if !parent.scrollingAllowed || (!parent.autoScroll && !holding) { stopMotion() }
         }
@@ -154,15 +166,28 @@ struct WebtoonCanvas: UIViewRepresentable {
         private func layout(preserving anchor: (Int, CGFloat)?) {
             guard let scroll, scroll.bounds.width > 0, !layingOut else { return }
             layingOut = true
-            let zoom = lastWidth > 0 && abs(lastWidth - scroll.bounds.width) < 1 ? scroll.zoomScale : 1
-            let oldX = scroll.contentOffset.x / max(1, scroll.zoomScale)
-            if scroll.zoomScale != 1 { scroll.setZoomScale(1, animated: false) }
+            layoutScheduled = false
+            let resized = lastWidth == 0 || abs(lastWidth - scroll.bounds.width) >= 1
+            let oldOffset = scroll.contentOffset
+            let oldAnchorY = anchor.flatMap { index, fraction -> CGFloat? in
+                guard offsets.indices.contains(index + 1) else { return nil }
+                return offsets[index] + fraction * (offsets[index + 1] - offsets[index])
+            }
+            // Image arrivals must not reset zoom or restart scroll momentum.
+            // Only a real viewport-width change resets the zoom transform.
+            if resized && scroll.zoomScale != 1 { scroll.setZoomScale(1, animated: false) }
+            let zoom = scroll.zoomScale
             lastWidth = scroll.bounds.width
             let width = columnWidth(scroll)
             offsets = [0]
             for ratio in ratios { offsets.append(offsets.last! + width * CGFloat(ratio)) }
-            content.frame = CGRect(x: 0, y: 0, width: scroll.bounds.width, height: (offsets.last ?? 0) + (pages.isEmpty ? 0 : 180))
-            scroll.contentSize = content.bounds.size
+            let size = CGSize(width: scroll.bounds.width, height: (offsets.last ?? 0) + (pages.isEmpty ? 0 : 180))
+            // Set bounds/center rather than frame while UIScrollView owns a
+            // nonidentity zoom transform.
+            content.bounds.size = size
+            content.center = CGPoint(x: size.width * zoom / 2, y: size.height * zoom / 2)
+            let scaledSize = CGSize(width: size.width * zoom, height: size.height * zoom)
+            if scroll.contentSize != scaledSize { scroll.contentSize = scaledSize }
             let x = (scroll.bounds.width - width) / 2
             for (index, cell) in cells where index < pages.count {
                 cell.frame = CGRect(x: x, y: offsets[index], width: width, height: offsets[index + 1] - offsets[index])
@@ -176,13 +201,29 @@ struct WebtoonCanvas: UIViewRepresentable {
             }
             scroll.backgroundColor = background; content.backgroundColor = background
             end.label.textColor = parent.preferences.background == .paper ? .black : .white
-            if zoom != 1 { scroll.setZoomScale(zoom, animated: false) }
-            if let (index, fraction) = anchor, index < pages.count, pending == nil {
+            if let (index, fraction) = anchor, let oldAnchorY, index < pages.count, pending == nil, !scroll.isZooming {
                 let y = offsets[index] + fraction * (offsets[index + 1] - offsets[index])
-                scroll.contentOffset = CGPoint(x: oldX * zoom, y: clamp(y * zoom))
+                let correction = (y - oldAnchorY) * zoom
+                // Most arriving images are below the viewport: their height
+                // changes require no offset write at all. Preserve top bounce.
+                if resized || abs(correction) > 0.25 {
+                    let targetY = resized ? clamp(y * zoom) : oldOffset.y + correction
+                    scroll.contentOffset = CGPoint(x: resized ? 0 : oldOffset.x, y: targetY)
+                }
             }
             layingOut = false
-            applyPending(); window()
+            windowDirty = true
+            applyPending(); window(); report(force: true)
+        }
+        private func scheduleLayout() {
+            guard !layoutScheduled else { return }
+            layoutScheduled = true
+            let token = generation
+            // Coalesce image completions in one run loop into one geometry pass.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.generation == token, self.layoutScheduled else { return }
+                self.layout(preserving: self.anchor())
+            }
         }
         private func clamp(_ y: CGFloat) -> CGFloat {
             guard let scroll else { return 0 }
@@ -195,7 +236,7 @@ struct WebtoonCanvas: UIViewRepresentable {
             layingOut = true
             scroll.contentOffset = CGPoint(x: 0, y: clamp(y * scroll.zoomScale))
             layingOut = false
-            if cells[page]?.hasImage == true { pending = nil; report(force: true) }
+            if cells[page]?.hasImage == true { pending = nil; windowDirty = true; report(force: true) }
         }
         private func window() {
             guard let scroll, !layingOut, !pages.isEmpty, offsets.count == pages.count + 1, scroll.bounds.height > 0 else { return }
@@ -203,24 +244,42 @@ struct WebtoonCanvas: UIViewRepresentable {
             let top = max(0, scroll.contentOffset.y / scale), viewport = scroll.bounds.height / scale
             let first = index(at: max(0, top - viewport * 0.6))
             let last = index(at: min(offsets.last!, top + viewport * 1.6))
+            let range = first...last
+            let visible = CGRect(x: 0, y: max(0, top - viewport * 0.4), width: content.bounds.width, height: viewport * 1.8)
+            // Per-frame scrolling only updates the small visible tile window.
+            // Page allocation, sorting and load scheduling run at boundaries.
+            if !windowDirty && windowRange == range {
+                updateTiles(in: visible)
+                return
+            }
+            windowDirty = false; windowRange = range
             var needed = Set(first...last)
             if let pending { needed.insert(pending.0) }
-            for index in Array(cells.keys) where !needed.contains(index) {
+            // Retain a little more than we preload so small direction changes
+            // do not repeatedly cancel and recreate the same image request.
+            let retained = index(at: max(0, top - viewport * 1.2))...index(at: min(offsets.last!, top + viewport * 2.2))
+            for index in Array(cells.keys) where !retained.contains(index) && index != pending?.0 {
                 cells.removeValue(forKey: index)?.removeFromSuperview()
                 tasks.removeValue(forKey: index)?.1.cancel()
             }
             let width = columnWidth(scroll)
-            for index in needed.sorted(by: { abs($0 - self.index(at: top)) < abs($1 - self.index(at: top)) }) {
+            let current = index(at: top)
+            for index in needed.sorted(by: { abs($0 - current) < abs($1 - current) }) {
                 if cells[index] == nil {
                     let cell = WebtoonPageView(number: index + 1)
                     cell.frame = CGRect(x: (scroll.bounds.width - width) / 2, y: offsets[index], width: width, height: offsets[index + 1] - offsets[index])
                     cell.retry = { [weak self] in self?.retry(index) }
-                    content.addSubview(cell); cells[index] = cell
+                    content.insertSubview(cell, belowSubview: end); cells[index] = cell
                     if failures.contains(index) { cell.failed() }
                 }
                 if cells[index]?.hasImage == false, !failures.contains(index), tasks[index] == nil, tasks.count < 3 { load(index, refresh: false) }
             }
-            content.bringSubviewToFront(end)
+            updateTiles(in: visible)
+        }
+        private func updateTiles(in visible: CGRect) {
+            for cell in cells.values {
+                cell.updateVisibleTiles(in: visible.offsetBy(dx: -cell.frame.minX, dy: -cell.frame.minY))
+            }
         }
         private func load(_ index: Int, refresh: Bool) {
             guard let scroll, index < pages.count else { return }
@@ -233,26 +292,29 @@ struct WebtoonCanvas: UIViewRepresentable {
                     let bitmap = try await MangaImagePipeline.shared.image(key: key, width: width, refresh: refresh) { try await loader(page) }
                     guard let self, !Task.isCancelled, self.generation == token, self.tasks[index]?.0 == flight else { return }
                     self.tasks.removeValue(forKey: index)
-                    let anchor = self.anchor()
+                    let changedSize = abs(self.ratios[index] - bitmap.ratio) > 0.0001
                     self.ratios[index] = bitmap.ratio; self.failures.remove(index); self.succeeded.insert(index)
                     self.cells[index]?.show(bitmap)
-                    self.layout(preserving: anchor)
+                    self.windowDirty = true
+                    if changedSize || self.layoutScheduled { self.scheduleLayout() }
+                    else { self.applyPending(); self.window(); self.report(force: true) }
                     self.end.subtitle.text = self.succeeded.count == self.pages.count ? "You reached the end." : "Some pages have not loaded yet."
-                    self.report(force: true)
                 } catch is CancellationError {
                     guard let self, self.generation == token, self.tasks[index]?.0 == flight else { return }
                     self.tasks.removeValue(forKey: index)
+                    self.windowDirty = true
                 } catch {
                     guard let self, !Task.isCancelled, self.generation == token, self.tasks[index]?.0 == flight else { return }
                     self.tasks.removeValue(forKey: index); self.failures.insert(index)
                     self.cells[index]?.failed()
+                    self.windowDirty = true
                     self.window()
                 }
             }
             tasks[index] = (flight, task)
         }
         private func retry(_ index: Int) {
-            failures.remove(index); tasks.removeValue(forKey: index)?.1.cancel(); load(index, refresh: true)
+            failures.remove(index); tasks.removeValue(forKey: index)?.1.cancel(); windowDirty = true; load(index, refresh: true)
         }
         private func report(force: Bool = false) {
             guard let scroll, !layingOut, !pages.isEmpty, offsets.count == pages.count + 1 else { return }
@@ -344,7 +406,7 @@ struct WebtoonCanvas: UIViewRepresentable {
         }
         private func stopLoads() { tasks.values.forEach { $0.1.cancel() }; tasks.removeAll() }
         func stop() {
-            generation = UUID()
+            generation = UUID(); layoutScheduled = false; windowRange = nil
             endHold(); stopMotion(); stopLoads()
             cells.values.forEach { $0.removeFromSuperview() }; cells.removeAll()
             scroll?.delegate = nil; scroll?.onSizeChange = nil
@@ -366,12 +428,17 @@ private final class WebtoonPageView: UIView {
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let message = UILabel()
     private let button = UIButton(type: .system)
-    private var tiles: [(UIImageView, CGFloat)] = []
-    private var pixelWidth: CGFloat = 1
+    private var bitmap: MangaBitmap?
+    private var tiles: [Int: UIImageView] = [:]
+    private var reusableTiles: [UIImageView] = []
+    private var tileRange: ClosedRange<Int>?
+    private var tileWidth: CGFloat = 0
+    private var visibleRect = CGRect.null
     var retry: (() -> Void)?
     private(set) var hasImage = false
     init(number: Int) {
         self.number = number; super.init(frame: .zero)
+        clipsToBounds = true
         accessibilityIdentifier = "webtoon-page-\(number - 1)"
         spinner.color = .lightGray; addSubview(spinner)
         message.text = "This page could not load."; message.textColor = .lightGray; message.textAlignment = .center; message.font = .systemFont(ofSize: 14)
@@ -385,27 +452,55 @@ private final class WebtoonPageView: UIView {
     func loading() { message.isHidden = true; button.isHidden = true; spinner.startAnimating(); setNeedsLayout() }
     func failed() { spinner.stopAnimating(); message.isHidden = false; button.isHidden = false; setNeedsLayout() }
     func show(_ bitmap: MangaBitmap) {
-        tiles.forEach { $0.0.removeFromSuperview() }; tiles.removeAll()
+        recycleTiles(except: nil)
+        self.bitmap = bitmap; tileRange = nil
         spinner.stopAnimating(); message.isHidden = true; button.isHidden = true
-        pixelWidth = CGFloat(bitmap.image.width); hasImage = true
-        for y in stride(from: 0, to: bitmap.image.height, by: 2048) {
-            let height = min(2048, bitmap.image.height - y)
-            guard let image = bitmap.image.cropping(to: CGRect(x: 0, y: CGFloat(y), width: CGFloat(bitmap.image.width), height: CGFloat(height))) else { continue }
-            let view = UIImageView(image: UIImage(cgImage: image))
-            view.contentMode = .scaleToFill; view.isAccessibilityElement = true
-            view.accessibilityLabel = "Page \(number)"
-            if y == 0 { view.accessibilityIdentifier = "webtoon-page-image-\(number - 1)" }
-            addSubview(view); tiles.append((view, CGFloat(height)))
-        }
+        hasImage = true
+        updateVisibleTiles(in: visibleRect)
         setNeedsLayout()
+    }
+    func updateVisibleTiles(in rect: CGRect) {
+        visibleRect = rect
+        guard let bitmap, bounds.width > 0, !bitmap.tiles.isEmpty else { return }
+        let visible = bounds.intersection(rect)
+        guard !visible.isNull, !visible.isEmpty else {
+            if !tiles.isEmpty { recycleTiles(except: nil) }
+            tileRange = nil
+            return
+        }
+        let scale = bounds.width / CGFloat(bitmap.image.width)
+        let tileHeight = 2048 * scale
+        let first = max(0, min(bitmap.tiles.count - 1, Int(floor(visible.minY / tileHeight))))
+        let last = max(first, min(bitmap.tiles.count - 1, Int(floor(visible.maxY / tileHeight))))
+        let range = first...last
+        guard tileRange != range || tileWidth != bounds.width else { return }
+        tileRange = range; tileWidth = bounds.width
+        recycleTiles(except: range)
+        for index in range {
+            let view: UIImageView
+            if let existing = tiles[index] { view = existing }
+            else {
+                view = reusableTiles.popLast() ?? UIImageView()
+                view.image = UIImage(cgImage: bitmap.tiles[index])
+                view.contentMode = .scaleToFill; view.isAccessibilityElement = true
+                view.accessibilityLabel = "Page \(number)"
+                view.accessibilityIdentifier = index == 0 ? "webtoon-page-image-\(number - 1)" : nil
+                addSubview(view); tiles[index] = view
+            }
+            view.frame = CGRect(x: 0, y: CGFloat(index * 2048) * scale,
+                                width: bounds.width, height: CGFloat(bitmap.tiles[index].height) * scale)
+        }
+    }
+    private func recycleTiles(except range: ClosedRange<Int>?) {
+        for index in Array(tiles.keys) where range?.contains(index) != true {
+            guard let view = tiles.removeValue(forKey: index) else { continue }
+            view.removeFromSuperview(); view.image = nil
+            if reusableTiles.count < 4 { reusableTiles.append(view) }
+        }
     }
     override func layoutSubviews() {
         super.layoutSubviews()
-        var y: CGFloat = 0
-        for (view, height) in tiles {
-            let scaled = height * bounds.width / pixelWidth
-            view.frame = CGRect(x: 0, y: y, width: bounds.width, height: scaled); y += scaled
-        }
+        updateVisibleTiles(in: visibleRect)
         let center = min(max(90, bounds.height / 2), 300)
         spinner.center = CGPoint(x: bounds.midX, y: center)
         message.frame = CGRect(x: 12, y: center - 25, width: max(0, bounds.width - 24), height: 25)

@@ -92,7 +92,7 @@ enum MBKey: String, CodingKey {
     case endDate = "end_date", isLicensed = "is_licensed", tagsV2 = "tags_v2", linksV2 = "links_v2"
     case namePath = "name_path", parentID = "parent_id", isSpoiler = "is_spoiler", isImplied = "is_implied"
     case impliedBy = "implied_by_tag_ids", isExplicit = "is_explicit", sharedTags = "shared_tags_total", sharedUsers = "shared_users", matchedRelated = "matched_related"
-    case ratingNormalized = "rating_normalized", popularity, global, current
+    case ratingNormalized = "rating_normalized", popularity, global, current, anime
 }
 
 extension KeyedDecodingContainer {
@@ -183,6 +183,27 @@ public struct MangaBakaTag: Decodable, Hashable, Sendable {
     }
 }
 
+/// MangaUpdates chapter/volume notes supplied by MangaBaka. Keep season labels,
+/// exceptions and partial ranges intact rather than inferring a reading point.
+public struct MangaBakaAnimeAdaptation: Decodable, Hashable, Sendable {
+    public let exists: Bool
+    public let start: String?
+    public let end: String?
+    public var hasCoverage: Bool { start != nil || end != nil }
+
+    private enum CodingKeys: String, CodingKey { case exists, start, end }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        exists = (try? c.decode(Bool.self, forKey: .exists)) ?? false
+        func note(_ key: CodingKeys) -> String? {
+            guard let raw = try? c.decode(String.self, forKey: key) else { return nil }
+            let value = TextSanitizer.plain(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }
+        start = note(.start); end = note(.end)
+    }
+}
+
 public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public let id: Int
     public let title: String
@@ -207,6 +228,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
     public let publishers: [MangaBakaPublisher]
     public let providers: [String]
     public let anilistID: Int?
+    public let animeAdaptation: MangaBakaAnimeAdaptation?
     public let sourceRatings: [MangaBakaSourceRating]
     public let popularityRank: Int?
     private let cover: MBCover?
@@ -240,6 +262,7 @@ public struct MangaBakaSeries: Decodable, Hashable, Identifiable, Sendable {
         coverImage = c.mbString(.coverImage)
         let sources = (try? c.decode([String: MBProvider].self, forKey: .source)) ?? [:]
         anilistID = sources["anilist"]?.id.flatMap(Int.init)
+        animeAdaptation = try? c.decode(MangaBakaAnimeAdaptation.self, forKey: .anime)
         let labels = ["anilist": "AniList", "anime_planet": "Anime-Planet", "anime_news_network": "Anime News Network", "kitsu": "Kitsu", "manga_updates": "MangaUpdates", "my_anime_list": "MyAnimeList", "shikimori": "Shikimori"]
         providers = sources.filter { $0.value.present }.keys.map { labels[$0] ?? $0 }.sorted()
         sourceRatings = sources.keys.sorted().compactMap { key in
@@ -281,6 +304,11 @@ public struct MangaBakaPage<Item: Decodable & Sendable>: Decodable, Sendable {
     public let page: Int
     public let hasNext: Bool
     public let hasPagination: Bool
+    /// Public discovery rails are finite selections, even if a provider
+    /// accidentally attaches ordinary search pagination to their response.
+    init(selection: [Item]) {
+        items = selection; total = nil; page = 1; hasNext = false; hasPagination = false
+    }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
         if c.contains(.data) { items = try c.decode([Item].self, forKey: .data) }
@@ -335,7 +363,7 @@ public struct MangaBakaLibraryEntry: Decodable, Identifiable, Sendable {
     }
 }
 
-public struct MangaBakaProfile: Decodable, Sendable {
+public struct MangaBakaProfile: Codable, Equatable, Sendable {
     public let id: String
     public let name: String
     public let ratingSteps: Int
@@ -344,6 +372,11 @@ public struct MangaBakaProfile: Decodable, Sendable {
         guard let value = c.mbString(.id), !value.isEmpty else { throw MangaBakaError.invalidResponse }
         id = value; name = c.mbString(.nickname) ?? c.mbString(.preferredUsername) ?? "MangaBaka reader"
         ratingSteps = max(1, c.mbInt(.ratingSteps) ?? 1)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: MBKey.self)
+        try c.encode(id, forKey: .id); try c.encode(name, forKey: .nickname)
+        try c.encode(ratingSteps, forKey: .ratingSteps)
     }
 }
 

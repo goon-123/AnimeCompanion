@@ -1,3 +1,39 @@
+## MangaBaka discovery feed repair — version 0.32.2 / build 86
+
+Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.
+
+If a discovery request returns 404, retry the same feed, limit and content settings once using MangaBaka’s documented full response schema. Cache a successfully decoded recovery. If both responses are missing, show a feed-specific refresh message instead of saying that a manga entry is missing. Authentication, rate-limit failures and unrelated searches do not use this retry.
+
+Live HTTP inspection reproduced validation failures for the old limit=100 requests; both endpoints returned 20 titles successfully with the corrected limit, including the full-schema response. Four focused transport/contract regressions and one live app-client check cover the repaired requests. Hosted execution passed: five focused checks, zero failures, including the live app client for both discovery feeds. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40577219180](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180). [Download build 86 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180/artifacts/12768273069). App sources match packaging commit eec70d87dadcf1dd58364867615f1cb83b8b1cd8; the temporary workflow is removed from the PR. Device acceptance is left to the user.
+
+## In-app anime links — version 0.32.1 / build 85
+
+MangaBaka series now show Related anime from the exact linked AniList manga/novel identity. Tap a title to open its native anime detail page, including episodes and watch actions, on the current navigation stack. Multiple linked seasons remain separate choices. The lookup only accepts anime nodes with Source/Adaptation relations and respects AniList adult-content settings. No linked entry or a failed lookup retains an in-app anime search prefilled with the written title; errors offer Retry. The Anime jump reaches these links above the existing chapter/volume coverage notes. Remove the external AniList website action introduced in build 84.
+
+Includes all build-84 swipe-back, category hit-target, compact-tag and coverage changes. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40567529391](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391). [Download build 85 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391/artifacts/12764901156). Device acceptance is left to the user. App sources match packaging commit 649e99e91726f11ec104f433473e4a6c0142b67a; the temporary packaging workflow has been removed.
+
+## Swipe back and MangaBaka details — build 84
+
+Version 0.32.0, stacked on build 83. Shared navigation stacks retain native interactive Back and add a public left-edge fallback for hidden bars, modal roots and split-detail browsing. Full-screen reader back routes through its existing save/close action, stops automatic scrolling and flushes progress/preferences. Full-screen artwork also closes with the edge gesture. Embedded WebKit page history takes priority; modal saving locks remain enforced.
+
+Classic Explore expands the media buttons to a complete 44-point target and claims header whitespace so it cannot open the spotlight. MangaBaka tags start collapsed to eight, with one compact preview and full grouped expansion. Decode optional anime start/end notes without losing season text or breaking records with missing coverage. Add an Anime jump and the exact AniList manga/novel listing link from the existing source ID.
+
+Local diff, shared-stack coverage and Safari resource/version checks passed. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917 . Download build 84: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917/artifacts/12762005044 . Automated suites and device journeys are left to the user. The immutable build-81 native runtime was reused after its source inputs matched. Application sources at the final PR head match packaging commit 4d30a53581883705fca80676260a30add2d697b3; the temporary packaging workflow is absent from the final diff.
+
+## Saved MangaBaka accounts and account-page bar — build 81
+
+Version 0.30.0, stacked on build 80. Add/select/remove saved MangaBaka identities without discarding other credentials. Atomic Keychain registry migration preserves the old single connection, persists selection and deduplicates verified server identities. Account switches isolate visible entries, late responses, token refresh and editor writes. Account-specific encrypted For you snapshots preserve the seven-day timestamp, survive switches and clear only on removing that saved identity. Fresh browser sessions support adding a different login. Replace the blank bottom strip with an inline library action.
+
+Local diff, shell syntax and Safari bundle/version checks passed. New Core cases, native Keychain/store cases and three iPhone/iPad UI journeys cover restoration, removal, cache ownership, late requests and the inline action. Hosted Core/native execution, visual review and universal unsigned IPA packaging remain pending at this checkpoint.
+
+## Content ratings and library defaults — build 80
+
+Version 0.29.0. Stacked on account-switcher build 79. Independent persisted MangaBaka ratings and an unrated option are shared by Explore/search requests and immediate local filtering across shelves, recommendations, libraries, related titles and galleries. Retain the seven-day account-owned recommendation cache. One-time migration copies the old adult preference; AniList and video-source filtering remain separate afterward.
+
+Initial library statuses are Watching / Reading / In progress, each independently configurable in Settings and library sort menus. Reading/combined sorts and directions persist separately; Anime adds All, release year and completion and saves reverse direction. Automatically load remaining selected-library pages so final search/sort covers all entries; retain cancellation/generation checks, partial results and retry.
+
+Local checks: diff whitespace, simulator shell syntax and Safari bundle/version consistency passed. No local Swift/Xcode toolchain is available. Core type checking/execution, hosted iPhone/iPad journeys, visual review and unsigned Release packaging are pending. Native tests use neutral owned metadata and a two-page reading library; no real account mutations are part of these checks.
+
 ## Series headline matching and publisher search — build 77
 
 Version 0.27.1 fixes the series-detail Headlines route, which previously required an exact season title inside the current small RSS batch. Match full English/romaji/preferred aliases and conservative base titles by removing explicit terminal season/part/cour markers. Preserve intrinsic numbers and short ambiguous names. The same anime aliases improve News For You matches.

@@ -33,7 +33,7 @@ struct NewsView: View {
     private var library: [NewsLibraryTitle] {
         let anime = store.visibleEntries.filter { $0.status != .dropped }.compactMap(\.media).map(NewsLibraryTitle.init(anime:))
         let written = mangaBaka.library.filter { $0.state != "dropped" }.compactMap(\.series)
-            .filter { $0.isVisible(includeAdult: store.includeAdult) }.map { NewsLibraryTitle(title: $0.displayTitle, aliases: $0.searchTitles) }
+            .filter { $0.isVisible(contentFilter: store.mangaBakaContent) }.map { NewsLibraryTitle(title: $0.displayTitle, aliases: $0.searchTitles) }
         return anime + written
     }
     private var effectiveQuery: NewsFeedQuery {

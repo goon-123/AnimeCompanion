@@ -1,5 +1,55 @@
 # Anime Companion
 
+## MangaBaka discovery feed repair — version 0.32.2 / build 86
+
+Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.
+
+If a discovery request returns 404, retry the same feed, limit and content settings once using MangaBaka’s documented full response schema. Cache a successfully decoded recovery. If both responses are missing, show a feed-specific refresh message instead of saying that a manga entry is missing. Authentication, rate-limit failures and unrelated searches do not use this retry.
+
+Live HTTP inspection reproduced validation failures for the old limit=100 requests; both endpoints returned 20 titles successfully with the corrected limit, including the full-schema response. Four focused transport/contract regressions and one live app-client check cover the repaired requests. Hosted execution passed: five focused checks, zero failures, including the live app client for both discovery feeds. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40577219180](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180). [Download build 86 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180/artifacts/12768273069). App sources match packaging commit eec70d87dadcf1dd58364867615f1cb83b8b1cd8; the temporary workflow is removed from the PR. Device acceptance is left to the user.
+
+
+## In-app anime links — version 0.32.1 / build 85
+
+MangaBaka series now show Related anime from the exact linked AniList manga/novel identity. Tap a title to open its native anime detail page, including episodes and watch actions, on the current navigation stack. Multiple linked seasons remain separate choices. The lookup only accepts anime nodes with Source/Adaptation relations and respects AniList adult-content settings. No linked entry or a failed lookup retains an in-app anime search prefilled with the written title; errors offer Retry. The Anime jump reaches these links above the existing chapter/volume coverage notes. Remove the external AniList website action introduced in build 84.
+
+Includes all build-84 swipe-back, category hit-target, compact-tag and coverage changes. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40567529391](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391). [Download build 85 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391/artifacts/12764901156). Device acceptance is left to the user. App sources match packaging commit 649e99e91726f11ec104f433473e4a6c0142b67a; the temporary packaging workflow has been removed.
+
+
+## Swipe back and MangaBaka details — version 0.32.0 / build 84
+
+Swipe right from the left edge to go back one screen throughout the app. Native interactive navigation stays available; a shared fallback supports hidden navigation bars, sheet roots and the iPad detail pane. The full-screen manga reader saves progress and reader preferences before returning to chapters, including when its controls are hidden. Enlarged artwork also supports the same back gesture. Embedded browsers retain their own web-page history and saving editors retain their dismissal lock.
+
+Classic Explore gives both media categories complete 44-point touch targets and shields the header from spotlight-poster taps. MangaBaka series details start with eight priority-sorted tags in a compact group; Show all / Show fewer retains full tag browsing and the existing spoiler/implied display controls.
+
+Series pages show MangaBaka’s anime start/end chapter and volume notes, preserving season labels and exceptions. An Anime shortcut jumps to that section. Coverage comes from MangaUpdates through MangaBaka; an existing adaptation with no coverage is shown explicitly. View on AniList opens the exact linked manga/novel entry whenever its source ID is available.
+
+Builds on the saved reading-source links and scrolling improvements from builds 83 and 82. Compilation/packaging status is recorded in BUILD_STATUS.md and the PR. Device testing is left to the user as requested.
+
+## Saved MangaBaka accounts — version 0.30.0 / build 81
+
+Add multiple MangaBaka logins in account settings, then tap a saved name to switch. Credentials and the selected account stay in Keychain across restarts; the current single-account connection migrates automatically. Adding another account uses a fresh web-auth session so the existing browser login does not silently replace the account you meant to add. Reconnecting an existing MangaBaka identity refreshes its saved credentials without creating another row. Remove individual saved accounts from this device while retaining the others and their online libraries.
+
+Each saved account has its own encrypted weekly recommendation cache. Switches clear visible private library/entry state and invalidate previous responses. OAuth refresh writes only to its owning saved session; editing and removal actions are bound to the connection that loaded the editor. Saved account rows are also available in the main account switcher. The old bottom action strip is removed from both account pages; a readable inline Open library action takes its place. Includes build 80 content ratings, default statuses and saved sorting.
+
+Core, Keychain/store, cache isolation and iPhone/iPad account journeys are included in CI. See the PR for actual build and native verification results.
+
+## Content ratings and library preferences — version 0.29.0 / build 80
+
+**Content rating** on Explore or the reading/combined libraries opens four independent MangaBaka switches: Safe, Suggestive, Erotica and Pornographic. Unrated titles have their own switch. Settings → Browsing & content exposes the same controls beside the separate AniList adult setting. Existing adult preferences migrate once; later changes stay provider-specific. Ratings apply to public requests and local results, including unified search/Explore, library entries, related adaptations and cover galleries. For you refilters its weekly saved selection immediately without resetting its refresh date.
+
+Libraries default to **Watching** (Anime), **Reading** (MangaBaka) and **In progress** (All stories). Change each opening status under Settings → Library defaults or the library sort menu. MangaBaka and All stories now save sort order and direction independently: title, last updated, your score, community rating, progress, completion and publication year; reading also offers volumes. Anime keeps its existing sorts and adds release year, completion and an All status; its reverse direction now persists. Unknown sort values remain last. Combined completion compares percentages rather than chapter and episode counts.
+
+MangaBaka library pages load automatically for complete search/sorting; the page count and retry state remain visible while syncing. Nine Core regressions and four native journeys per device cover rating combinations, migration, request encoding, cached recommendations, independent defaults/sorts, restart persistence and automatic pagination. See BUILD_STATUS.md and the PR for actual hosted validation results.
+
+## Account switcher — version 0.28.0 / build 79
+
+Tap the profile button on Explore or My Library to see both AniList and MangaBaka accounts, sign into either service, manage each connection, or open App settings. Both logins remain saved independently. Choosing an account opens its library and remembers the selection across launches; the All library option remains available. A hidden My Library tab opens in a sheet without changing bottom-tab preferences.
+
+Switching never signs out the other service or transfers progress between services. AniList tracks anime and MangaBaka tracks manga and novels. The account menu shows the current provider and each signed-in username. Existing combined Explore designs and Related MangaBaka navigation are preserved.
+
+Validation targets: `TrackingAccountTests` and four offline `AccountSwitcherUITests` journeys on iPhone/iPad, covering switching, persistence, both sign-in screens, settings and hidden-library navigation. Native verification and IPA packaging run through the existing GitHub workflow; local checks alone do not establish successful OAuth with real accounts.
+
 ## Series headlines fix — version 0.27.1 / build 77
 
 Opening **Headlines** from a series now matches its English/romaji base title across season, part and cour suffixes. It combines recent publisher feeds with Anime Corner's public title-search listings, so stories can appear after leaving the latest RSS feeds. Whole-title boundaries keep unrelated results out. The main News feed's saved unread-only preference no longer hides stories on a newly opened series page.

@@ -3,6 +3,23 @@ import XCTest
 @testable import AnimeCore
 
 final class MangaBakaRecommendationCacheTests: XCTestCase {
+    func testSavedAccountsKeepSeparateWeeklyCachesAndRemovalClearsOnlyOne() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let aID = UUID(), bID = UUID()
+        let a = MangaBakaRecommendationCache(directory: directory, accountID: aID)
+        let b = MangaBakaRecommendationCache(directory: directory, accountID: bID)
+        let first = try MangaBakaCredential(kind: .apiKey, secret: "owned-account-A")
+        let second = try MangaBakaCredential(kind: .apiKey, secret: "owned-account-B")
+        try a.save(snapshot(81), credential: first); try b.save(snapshot(82), credential: second)
+        let reopened = MangaBakaRecommendationCache(directory: directory, accountID: aID)
+        XCTAssertEqual(try reopened.load(credential: first)?.payload.records().map(\.id), [81])
+        XCTAssertEqual(try reopened.load(credential: first)?.fetchedAt, snapshot(81).fetchedAt)
+        XCTAssertThrowsError(try reopened.load(credential: second))
+        try a.clear()
+        XCTAssertNil(try a.load(credential: first))
+        XCTAssertEqual(try b.load(credential: second)?.payload.records().map(\.id), [82])
+    }
     private func snapshot(_ id: Int = 81) -> MangaBakaRecommendationSnapshot {
         .init(payload: .init(response: Data("{\"results\":[{\"id\":\(id),\"title\":\"Owned private recommendation\",\"content_rating\":\"safe\"}]}".utf8)),
             fetchedAt: Date(timeIntervalSince1970: 100_000))

@@ -4,6 +4,7 @@ import AnimeCore
 
 struct MangaBitmap: @unchecked Sendable {
     let image: CGImage
+    let tiles: [CGImage]
     var ratio: Double { Double(image.height) / Double(image.width) }
     var cost: Int { image.bytesPerRow * image.height }
 }
@@ -59,7 +60,18 @@ actor MangaImagePipeline {
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnail as CFDictionary) else { throw ArtworkError.invalidData }
         try Task.checkCancellation()
-        let value = MangaBitmap(image: image)
+        // Prepare long-strip slices on this actor too. Scrolling should only
+        // attach the already decoded tiles that are near the viewport.
+        var tiles: [CGImage] = []
+        for y in stride(from: 0, to: image.height, by: 2048) {
+            try Task.checkCancellation()
+            let height = min(2048, image.height - y)
+            guard let tile = image.cropping(to: CGRect(x: 0, y: CGFloat(y), width: CGFloat(image.width), height: CGFloat(height))) else {
+                throw ArtworkError.invalidData
+            }
+            tiles.append(tile)
+        }
+        let value = MangaBitmap(image: image, tiles: tiles)
         if generation == started { images.insert(value, for: variant, cost: value.cost, expiresAt: Date().addingTimeInterval(300)) }
         return value
     }
