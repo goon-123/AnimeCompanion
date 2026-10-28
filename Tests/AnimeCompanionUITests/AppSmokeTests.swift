@@ -235,7 +235,7 @@ final class AppSmokeTests: XCTestCase {
         app.appTab("My Library").tap()
         app.buttons["Account and settings"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["settings-torbox"].exists)
+        XCTAssertTrue(app.buttons["settings-sources"].exists)
         app.buttons["settings-account"].tap()
         XCTAssertTrue(app.textFields["AniList app ID"].exists)
         XCTAssertTrue(app.buttons["Connect AniList"].exists)

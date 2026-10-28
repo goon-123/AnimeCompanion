@@ -20,6 +20,7 @@ struct AnimeDetailView: View {
     @State private var playbackRequest: DetailPlaybackRequest?
     @State private var episodesExpanded = false
     @State private var moreExpanded = false
+    @State private var scheduleExpanded = false
     @State private var episodeLimit = 24
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
@@ -39,11 +40,13 @@ struct AnimeDetailView: View {
                         watchButton(anime)
                         FindMangaButton(anime: anime)
                         AnimeUpdatesLinks(anime: anime)
-                        if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         progress(anime)
-                        AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
-                                         events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
                         synopsis(anime)
+                        DetailDisclosure("Airing & English dubs", identifier: "detail-airing-disclosure", isExpanded: $scheduleExpanded) {
+                            if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
+                            AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
+                                events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
+                        }.companionPanel()
                         episodes(anime)
                         related(anime)
                         recommendations(anime)
@@ -88,7 +91,7 @@ struct AnimeDetailView: View {
                 }
                 Spacer()
                 Image(systemName: "arrow.up.right").font(.subheadline.bold())
-            }.padding(16).foregroundStyle(.black).background(.white, in: RoundedRectangle(cornerRadius: 16))
+            }.padding(16).foregroundStyle(Theme.background).background(Theme.accent, in: RoundedRectangle(cornerRadius: 16))
         }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED" || (store.isSignedIn && store.loadingLibrary))
             .accessibilityIdentifier("watch-in-vidhub")
     }

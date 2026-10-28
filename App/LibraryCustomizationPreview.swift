@@ -52,6 +52,7 @@ struct LibraryCustomizationTransport: HTTPTransport {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
             let state = query?.first { $0.name == "state" }?.value
             let page = Int(query?.first { $0.name == "page" }?.value ?? "1") ?? 1
+            if page == 1, ProcessInfo.processInfo.arguments.contains("--ui-home-library-delay") { try await Task.sleep(for: .seconds(5)) }
             let all = try LibraryCustomizationPreview.library(state: state).filter {
                 !MangaBakaAccountsPreview.active || $0.id == (request.value(forHTTPHeaderField: "X-API-Key") == "owned-preview-second-account" ? 74 : 73)
             }

@@ -61,7 +61,7 @@ private struct FeaturedAnimePanel: View {
                 LinearGradient(stops: [.init(color: .black.opacity(0.34), location: 0), .init(color: .clear, location: 0.28),
                     .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 LinearGradient(stops: [.init(color: .clear, location: 0.30), .init(color: background.color.opacity(0.15), location: 0.46),
-                    .init(color: background.color.opacity(0.80), location: 0.73), .init(color: Theme.background, location: 1)],
+                    .init(color: background.color.opacity(0.80), location: 0.73), .init(color: .black, location: 1)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 information.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
                     .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)

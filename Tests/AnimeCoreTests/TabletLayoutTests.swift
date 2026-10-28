@@ -2,9 +2,9 @@ import XCTest
 @testable import AnimeCore
 
 final class TabletLayoutTests: XCTestCase {
-    func testFullWidthIsTheDefaultWithoutOptingExistingInstallationsIntoSplitView() {
-        XCTAssertEqual(TabletLayout(preference: nil), .fullWidth)
-        XCTAssertEqual(TabletLayout(preference: "old-or-invalid"), .fullWidth)
+    func testSidebarDefaultRetainsEveryExplicitLegacyLayout() {
+        XCTAssertEqual(TabletLayout(preference: nil), .sidebar)
+        XCTAssertEqual(TabletLayout(preference: "old-or-invalid"), .sidebar)
         for layout in TabletLayout.allCases { XCTAssertEqual(TabletLayout(preference: layout.rawValue), layout) }
     }
     func testSplitBrowsingGetsMostOfTheWindowWithSensibleBounds() {

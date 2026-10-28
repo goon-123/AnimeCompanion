@@ -39,6 +39,7 @@ struct LibraryDefaultMenu: View {
         Menu("Open library on") {
             ForEach(scope.statuses) { status in
                 MenuChoice(title: status.label, selected: saved == status.id) { saved = status.id }
+                    .accessibilityIdentifier("library-default-choice-" + scope.rawValue + "-" + status.id)
             }
         }.accessibilityIdentifier("library-default-" + scope.rawValue)
     }
@@ -51,27 +52,20 @@ struct ReadingLibrarySortControls: View {
     private var sort: ReadingLibrarySort { ReadingLibrarySort(rawValue: sortValue) ?? .updated }
     private var choices: [ReadingLibrarySort] { ReadingLibrarySort.allCases.filter { scope != .combined || $0 != .volumes } }
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack { sortMenu; Spacer(minLength: 8); directionMenu }
-            VStack(alignment: .leading, spacing: 8) { sortMenu; directionMenu }
-        }
-    }
-    private var sortMenu: some View {
         Menu {
-            ForEach(choices) { order in
-                MenuChoice(title: order.rawValue, selected: sort == order) {
-                    sortValue = order.rawValue; ascending = order.defaultAscending
+            Section("Sort by") {
+                ForEach(choices) { order in
+                    MenuChoice(title: order.rawValue, selected: sort == order) { sortValue = order.rawValue; ascending = order.defaultAscending }
                 }
             }
+            Section("Direction") {
+                MenuChoice(title: sort.directionLabel(ascending: true), selected: ascending) { ascending = true }
+                MenuChoice(title: sort.directionLabel(ascending: false), selected: !ascending) { ascending = false }
+            }
             Section("Default view") { LibraryDefaultMenu(scope: scope) }
-        } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down") }
-            .accessibilityIdentifier(scope.rawValue + "-library-sort")
-    }
-    private var directionMenu: some View {
-        Menu {
-            MenuChoice(title: sort.directionLabel(ascending: true), selected: ascending) { ascending = true }
-            MenuChoice(title: sort.directionLabel(ascending: false), selected: !ascending) { ascending = false }
-        } label: { Label(sort.directionLabel(ascending: ascending), systemImage: ascending ? "arrow.up" : "arrow.down") }
-            .accessibilityIdentifier(scope.rawValue + "-library-direction")
+        } label: {
+            Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline.weight(.medium)).frame(minHeight: 44)
+        }.accessibilityIdentifier(scope.rawValue + "-library-sort")
+            .accessibilityValue(sort.directionLabel(ascending: ascending))
     }
 }

@@ -15,87 +15,77 @@ struct SettingsView: View {
 
 struct SettingsDirectoryView: View {
     @EnvironmentObject private var store: AppStore
-    @EnvironmentObject private var playback: PlaybackStore
-    @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
     @State private var setupGuide = false
+    @State private var query = ""
     let close: () -> Void
     let selectAccount: (TrackingAccount) -> Void
+    private func matches(_ value: String) -> Bool { query.isEmpty || value.localizedCaseInsensitiveContains(query) }
     var body: some View {
-            Form {
-                Section {
-                    Button { setupGuide = true } label: {
-                        SettingsCategoryLabel(title: "Setup Guide", detail: "Review accounts, extensions and privacy",
-                                              symbol: "sparkles.rectangle.stack", tint: .purple)
-                    }.accessibilityIdentifier("settings-setup-guide")
-                }
-                Section {
+        Form {
+            Section("Accounts") {
+                if matches("Switch account profiles AniList MangaBaka") {
                     NavigationLink { AccountSwitcherView(showsSettings: false, close: close, select: selectAccount) } label: {
-                        SettingsCategoryLabel(title: "Switch account", detail: "AniList & MangaBaka · Stay signed in", symbol: "person.2.crop.square.stack.fill", tint: .mint)
+                        SettingsCategoryLabel(title: "Switch account", detail: "Your connected libraries", symbol: "person.2.crop.square.stack", tint: Theme.accent)
                     }.accessibilityIdentifier("settings-account-switcher")
+                }
+                if matches("AniList account sync anime") {
                     NavigationLink { AniListSettingsView() } label: {
-                        SettingsCategoryLabel(title: "AniList account", detail: store.isSignedIn ? store.viewer.map { "Signed in as \($0.name)" } ?? "Connected" : "Connect to sync your library", symbol: "person.crop.circle.fill", tint: .blue)
+                        SettingsCategoryLabel(title: "AniList", detail: store.viewer.map { $0.name } ?? (store.isSignedIn ? "Connected" : "Connect your anime library"), symbol: "play.rectangle", tint: .blue)
                     }.accessibilityIdentifier("settings-account")
+                }
+                if matches("MangaBaka account sync manga novel") {
                     NavigationLink { MangaBakaAccountView() } label: {
-                        SettingsCategoryLabel(title: "MangaBaka account", detail: mangaBaka.connected ? mangaBaka.profile?.name ?? "Connected" : "Manga & novels · Library sync", symbol: "books.vertical.fill", tint: .teal)
+                        SettingsCategoryLabel(title: "MangaBaka", detail: mangaBaka.profile?.name ?? (mangaBaka.connected ? "Connected" : "Connect manga & novels"), symbol: "books.vertical", tint: .teal)
                     }.accessibilityIdentifier("settings-mangabaka-account")
                 }
-                Section("Playback & sources") {
-                    NavigationLink { TorBoxSettingsView() } label: {
-                        SettingsCategoryLabel(title: "TorBox", detail: seanime.hasTorBoxKey ? "Key saved · Cloud files & connection" : "Connect your account · Cloud files", symbol: "cloud.fill", tint: .mint)
-                    }.accessibilityIdentifier("settings-torbox")
-                    NavigationLink { PlaybackSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Stremio add-ons", detail: "\(playback.installations.count) installed · Manifests & catalogs", symbol: "puzzlepiece.extension.fill", tint: .purple)
-                    }.accessibilityIdentifier("playback-settings")
-                    NavigationLink { SeanimeSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Seanime extensions", detail: "\(seanime.installations.count) installed · Torrent providers", symbol: "shippingbox.fill", tint: .orange)
-                    }.accessibilityIdentifier("seanime-settings")
-                    NavigationLink { PlayerSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Video player", detail: "VidHub · Playback & resume", symbol: "play.rectangle.fill", tint: .pink)
-                    }.accessibilityIdentifier("settings-player")
-                    NavigationLink { SafariVideoSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Safari → VidHub", detail: "Open website videos in your player", symbol: "safari.fill", tint: .cyan)
-                    }.accessibilityIdentifier("settings-safari-vidhub")
+            }
+            if query.isEmpty {
+                Section("Your experience") {
+                    NavigationLink { SourcesSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Sources & playback", detail: "Extensions, Stremio, AIOStreams, TorBox & VidHub", symbol: "puzzlepiece.extension", tint: Theme.accent)
+                    }.accessibilityIdentifier("settings-sources")
+                    NavigationLink { AppearanceSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Appearance & layout", detail: "Theme, Home, navigation & Explore", symbol: "paintpalette", tint: .indigo)
+                    }.accessibilityIdentifier("settings-personalization")
                 }
-                Section("Reading") {
-                    NavigationLink { MangaExtensionsView() } label: {
-                        SettingsCategoryLabel(title: "Manga extensions", detail: "Keiyoushi · Manga & manhwa sources", symbol: "book.closed.fill", tint: .teal)
-                    }.accessibilityIdentifier("settings-manga-extensions")
+            } else {
+                SourcesSettingsRows(query: query)
+                if matches("Appearance layout color theme light dark system Home navigation tabs iPad Explore") {
+                    NavigationLink("Appearance & layout") { AppearanceSettingsView() }.accessibilityIdentifier("settings-personalization")
                 }
-                Section("Preferences") {
-                    NavigationLink { ExploreDesignSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Explore design", detail: "Combined shelves, mixed grid or Classic", symbol: "rectangle.stack.fill", tint: .mint)
-                    }.accessibilityIdentifier("settings-explore-design")
-                    NavigationLink { TabCustomizationView() } label: {
-                        SettingsCategoryLabel(title: "Bottom tabs", detail: "Reorder or hide sections", symbol: "rectangle.bottomthird.inset.filled", tint: .cyan)
-                    }.accessibilityIdentifier("settings-bottom-tabs")
-                    if UIDevice.current.userInterfaceIdiom == .pad {
-                        NavigationLink { TabletLayoutSettingsView() } label: {
-                            SettingsCategoryLabel(title: "iPad layout", detail: "Full-width pages or side-by-side browsing", symbol: "rectangle.split.2x1", tint: .cyan)
-                        }.accessibilityIdentifier("settings-ipad-layout")
-                    }
+            }
+            Section("Preferences") {
+                if matches("Content browsing explicit adult ratings filters privacy") {
                     NavigationLink { BrowsingSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Browsing & content", detail: "MangaBaka ratings & AniList adult content", symbol: "square.grid.2x2.fill", tint: .indigo)
+                        SettingsCategoryLabel(title: "Content preferences", detail: "Ratings, explicit content & filtering", symbol: "line.3.horizontal.decrease.circle", tint: .orange)
                     }.accessibilityIdentifier("settings-browsing")
+                }
+                if matches("Library defaults status watching reading progress sorting") {
                     NavigationLink { LibraryPreferencesView() } label: {
-                        SettingsCategoryLabel(title: "Library defaults", detail: "Open on Watching, Reading or In progress", symbol: "books.vertical.fill", tint: .teal)
+                        SettingsCategoryLabel(title: "Library defaults", detail: "Your starting lists & status", symbol: "books.vertical", tint: .teal)
                     }.accessibilityIdentifier("settings-library-defaults")
+                }
+                if matches("Watch tracking progress completion airing dub") {
                     NavigationLink { TrackingSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Watch tracking", detail: "Catch-up status & completion", symbol: "checkmark.circle.fill", tint: .green)
+                        SettingsCategoryLabel(title: "Watch tracking", detail: "Catch-up status & completion", symbol: "checkmark.circle", tint: .green)
                     }.accessibilityIdentifier("settings-tracking")
                 }
-                Section {
-                    NavigationLink { AboutSettingsView() } label: { Label("About & data sources", systemImage: "info.circle") }
-                        .accessibilityIdentifier("settings-about")
-                } footer: {
-                    Text("Anime Companion \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")")
-                        .frame(maxWidth: .infinity).padding(.top, 8)
+            }
+            Section {
+                if matches("Setup guide onboarding connect configure") {
+                    Button { setupGuide = true } label: { Label("Setup Guide", systemImage: "sparkles") }.accessibilityIdentifier("settings-setup-guide")
                 }
-            }.navigationTitle("Settings")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
-                .fullScreenCover(isPresented: $setupGuide) {
-                    FirstRunSetupView(revisiting: true) { setupGuide = false }
+                if matches("About data sources licenses version") {
+                    NavigationLink { AboutSettingsView() } label: { Label("About & data sources", systemImage: "info.circle") }.accessibilityIdentifier("settings-about")
                 }
+            } footer: {
+                Text("AnimeCompanion \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")")
+                    .font(.caption).frame(maxWidth: .infinity).padding(.top, 8)
+            }
+        }.navigationTitle("Settings").searchable(text: $query, prompt: "Search settings & services")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
+            .fullScreenCover(isPresented: $setupGuide) { FirstRunSetupView(revisiting: true) { setupGuide = false } }
     }
 }
 
@@ -119,17 +109,20 @@ extension View {
     }
 }
 
-private struct TabletLayoutSettingsView: View {
-    @AppStorage(TabletLayout.preferenceKey) private var layoutValue = TabletLayout.fullWidth.rawValue
+struct TabletLayoutSettingsView: View {
+    @AppStorage(TabletLayout.preferenceKey) private var layoutValue = TabletLayout.sidebar.rawValue
     var body: some View {
         Form {
             Section {
+                Toggle("Sidebar navigation", isOn: Binding(get: { TabletLayout(preference: layoutValue) == .sidebar },
+                    set: { layoutValue = ($0 ? TabletLayout.sidebar : .fullWidth).rawValue }))
+                    .accessibilityIdentifier("settings-ipad-sidebar")
                 Toggle("Side-by-side browsing", isOn: Binding(get: {
                     TabletLayout(preference: layoutValue) == .sideBySide
                 }, set: { layoutValue = ($0 ? TabletLayout.sideBySide : .fullWidth).rawValue }))
                     .accessibilityIdentifier("settings-ipad-split-view")
             } header: { Text("iPad layout") } footer: {
-                Text("Off: browse full-width pages and open titles like on iPhone. On: keep browsing beside anime details. Compact windows use one column. News always uses the full page. Your choice is saved and applies when you close Settings.")
+                Text("Choose sidebar navigation for quick access to every area. Side-by-side browsing keeps anime results beside details. Turn both off for single-column pages. Compact windows adapt automatically. Changes apply when Settings closes.")
             }
         }.navigationTitle("iPad layout").navigationBarTitleDisplayMode(.inline)
     }
@@ -142,8 +135,8 @@ struct SettingsCategoryLabel: View {
     let tint: Color
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol).font(.body.weight(.semibold)).foregroundStyle(.white)
-                .frame(width: 34, height: 34).background(tint.gradient, in: RoundedRectangle(cornerRadius: 9))
+            Image(systemName: symbol).font(.body.weight(.semibold)).foregroundStyle(tint)
+                .frame(width: 34, height: 34).background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).foregroundStyle(.primary)

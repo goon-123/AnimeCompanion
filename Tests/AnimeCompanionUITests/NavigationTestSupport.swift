@@ -12,16 +12,36 @@ extension XCUIApplication {
         let action = buttons[id].exists ? buttons[id].firstMatch : buttons[labels[id] ?? id].firstMatch
         XCTAssertTrue(action.waitForExistence(timeout: 10)); action.tap()
     }
+    @MainActor func revealSettingsDestination(_ id: String) {
+        let sources = ["playback-settings", "seanime-settings", "settings-torbox", "settings-player", "settings-safari-vidhub", "settings-manga-extensions"]
+        let appearance = ["settings-bottom-tabs", "settings-explore-design", "settings-ipad-layout", "settings-home-sections"]
+        let parent = sources.contains(id) ? "settings-sources" : appearance.contains(id) ? "settings-personalization" : nil
+        if buttons[id].exists { return }
+        for title in ["Sources & playback", "Appearance & layout"] where navigationBars[title].exists {
+            let back = navigationBars[title].buttons["Settings"]
+            if back.exists { back.tap() }
+        }
+        if let parent {
+            let row = buttons[parent]; revealInContent(row)
+            XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        }
+    }
     /// iPad's adaptive tabs may be represented as a top bar or sidebar rather
     /// than the phone's bottom tab bar. Keep feature assertions in both modes.
     @MainActor func appTab(_ title: String) -> XCUIElement {
+        let ids = ["Home": "home", "Explore": "explore", "My Library": "library", "Manga": "manga", "Schedule": "schedule", "News": "news"]
+        if let id = ids[title] {
+            let sidebar = descendants(matching: .any).matching(identifier: "sidebar-tab-" + id).firstMatch
+            if sidebar.exists && sidebar.isHittable { return sidebar }
+        }
         let tab = tabBars.buttons[title].firstMatch
-        if tab.exists { return tab }
-        return buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
+        if tab.exists && tab.isHittable { return tab }
+        let button = buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
+        return button.exists ? button : staticTexts[title].firstMatch
     }
 
     @MainActor var browseSurface: XCUIElement {
-        for id in ["unified-search", "unified-explore-discover", "unified-explore-posterGrid", "discovery-scroll", "library-scroll", "explore-scroll", "schedule-airing-scroll", "news-list"] {
+        for id in ["home-dashboard", "combined-library", "unified-search", "unified-explore-discover", "unified-explore-posterGrid", "discovery-scroll", "library-scroll", "explore-scroll", "schedule-airing-scroll", "news-list"] {
             let scroll = scrollViews[id]
             if scroll.exists { return scroll }
         }
@@ -37,7 +57,7 @@ extension XCUIApplication {
         if descendants(matching: .any).matching(identifier: "torbox-webdav-list").firstMatch.exists { return self }
         // A sheet sits over the browse/detail panes; drag its form, not the
         // retained view underneath. The screen center is inside these sheets.
-        if ["Accounts", "MangaBaka account", "Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
+        if ["Sources & playback", "Appearance & layout", "Customize Home", "Saved views", "Accounts", "MangaBaka account", "Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
             return self
         }
         if navigationBars["iPad layout"].exists { return self }

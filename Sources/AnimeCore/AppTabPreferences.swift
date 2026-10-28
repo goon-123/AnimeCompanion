@@ -1,14 +1,14 @@
 import Foundation
 
 public enum AppTab: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
-    case explore, library, manga, schedule, news
+    case home, explore, library, manga, schedule, news
     public var id: String { rawValue }
     public var title: String {
-        switch self { case .explore: return "Explore"; case .library: return "My Library"
+        switch self { case .home: return "Home"; case .explore: return "Explore"; case .library: return "My Library"
         case .manga: return "Manga"; case .schedule: return "Schedule"; case .news: return "News" }
     }
     public var symbol: String {
-        switch self { case .explore: return "safari"; case .library: return "books.vertical"
+        switch self { case .home: return "house"; case .explore: return "safari"; case .library: return "books.vertical"
         case .manga: return "book.closed"; case .schedule: return "calendar"; case .news: return "newspaper" }
     }
 }
@@ -19,7 +19,7 @@ public struct AppTabPreferences: Equatable, Sendable {
     public static let storageKey = "navigation.tabs.v1"
     public var order: [AppTab]
     public private(set) var hidden: Set<AppTab>
-    public init(order: [AppTab] = AppTab.allCases, hidden: Set<AppTab> = [.manga]) {
+    public init(order: [AppTab] = AppTab.allCases, hidden: Set<AppTab> = [.manga, .schedule, .news]) {
         var seen = Set<AppTab>()
         self.order = (order + AppTab.allCases).filter { seen.insert($0).inserted }
         self.hidden = hidden
@@ -30,7 +30,11 @@ public struct AppTabPreferences: Equatable, Sendable {
         guard let saved, let data = saved.data(using: .utf8), let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
             self.init(); return
         }
-        self.init(order: stored.order.compactMap(AppTab.init(rawValue:)), hidden: Set(stored.hidden.compactMap(AppTab.init(rawValue:))))
+        var hidden = Set(stored.hidden.compactMap(AppTab.init(rawValue:)))
+        // An explicitly customized pre-redesign tab bar keeps its exact visible
+        // order. Home remains reachable from Explore and can be enabled in Settings.
+        if !stored.order.contains(AppTab.home.rawValue) { hidden.insert(.home) }
+        self.init(order: stored.order.compactMap(AppTab.init(rawValue:)), hidden: hidden)
     }
     public var visible: [AppTab] { order.filter { !hidden.contains($0) } }
     public var saved: String {

@@ -56,12 +56,12 @@ final class LibraryCustomizationUITests: XCTestCase {
         tapWhenVisible(entry, in: app)
         let cover = app.buttons["mangabaka-series-cover"], title = app.staticTexts["mangabaka-series-title"]
         XCTAssertTrue(cover.waitForExistence(timeout: 15)); XCTAssertTrue(title.waitForExistence(timeout: 15))
-        XCTAssertGreaterThanOrEqual(cover.frame.width, 180)
+        XCTAssertGreaterThanOrEqual(cover.frame.width, 100)
         if app.frame.width < 650 {
-            XCTAssertEqual(cover.frame.midX, app.frame.midX, accuracy: 8)
-            XCTAssertGreaterThanOrEqual(title.frame.minY, cover.frame.maxY)
+            XCTAssertGreaterThan(title.frame.minX, cover.frame.maxX)
+            XCTAssertLessThan(cover.frame.width, 180)
         } else { XCTAssertGreaterThan(title.frame.minX, cover.frame.maxX) }
-        capture("Series-Centered-Cover", app)
+        capture("Series-Compact-Cover", app)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
             XCTAssertTrue(cover.waitForExistence(timeout: 10)); capture("Series-Wide-Cover", app)
@@ -83,14 +83,16 @@ final class LibraryCustomizationUITests: XCTestCase {
         capture("Reading-Library-Grid", app)
         layout.buttons.element(boundBy: 1).tap(); capture("Reading-Library-List", app)
         app.buttons["Account and settings"].tap()
+        tapWhenVisible(app.buttons["settings-personalization"], in: app)
         tapWhenVisible(app.buttons["settings-bottom-tabs"], in: app)
         let manga = app.switches["tab-visible-manga"], library = app.switches["tab-visible-library"]
         XCTAssertTrue(manga.waitForExistence(timeout: 10))
         tapWhenVisible(manga, in: app); XCTAssertEqual(manga.value as? String, "1")
         tapWhenVisible(library, in: app); XCTAssertEqual(library.value as? String, "0")
-        XCTAssertTrue(app.navigationBars["Bottom tabs"].exists, "Editing visibility must not tear down the Settings sheet")
+        XCTAssertTrue(app.navigationBars["Navigation"].exists, "Editing visibility must not tear down the Settings sheet")
         capture("Customize-Bottom-Tabs", app)
-        app.navigationBars["Bottom tabs"].buttons["Settings"].tap()
+        app.navigationBars["Navigation"].buttons["Appearance & layout"].tap()
+        app.navigationBars["Appearance & layout"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
         XCTAssertTrue(app.appTab("Manga").waitForExistence(timeout: 15)); XCTAssertFalse(app.appTab("My Library").exists)
         app.terminate()
@@ -104,10 +106,12 @@ final class LibraryCustomizationUITests: XCTestCase {
         // their saved data remain present even when their tab starts hidden.
         app.buttons["account-switcher"].tap()
         tapWhenVisible(app.buttons["account-app-settings"], in: app)
+        tapWhenVisible(app.buttons["settings-personalization"], in: app)
         tapWhenVisible(app.buttons["settings-bottom-tabs"], in: app)
         tapWhenVisible(app.switches["tab-visible-manga"], in: app)
         XCTAssertEqual(app.switches["tab-visible-manga"].value as? String, "1")
-        app.navigationBars["Bottom tabs"].buttons["Settings"].tap()
+        app.navigationBars["Navigation"].buttons["Appearance & layout"].tap()
+        app.navigationBars["Appearance & layout"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
         XCTAssertTrue(app.appTab("Manga").waitForExistence(timeout: 15), "Apply the saved tabs after Settings finishes dismissing")
         app.appTab("Manga").tap()

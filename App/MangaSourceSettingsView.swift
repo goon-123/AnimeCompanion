@@ -28,7 +28,7 @@ struct MangaSourceSettingsView: View {
                     actions: { Button("Try again") { Task { await load() } } }
                 }
             }
-            .background(Color.black).navigationTitle("Source settings").navigationBarTitleDisplayMode(.inline)
+            .background(Theme.background).navigationTitle("Source settings").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.disabled(saving).accessibilityIdentifier("source-settings-cancel")

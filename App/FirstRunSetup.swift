@@ -208,7 +208,7 @@ struct FirstRunSetupView: View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
-                RadialGradient(colors: [page.tint.opacity(0.22), .clear],
+                RadialGradient(colors: [page.tint.opacity(0.08), .clear],
                                center: .topTrailing, startRadius: 8, endRadius: 460)
                     .ignoresSafeArea().allowsHitTesting(false)
                 VStack(spacing: 0) {
@@ -233,8 +233,7 @@ struct FirstRunSetupView: View {
                 Text("No accounts or extensions are required. You can return to the Setup Guide from Settings.")
             }
         }
-        .tint(.white)
-        .preferredColorScheme(.dark)
+        .tint(Theme.accent)
         .accessibilityIdentifier("first-run-setup")
     }
 
@@ -264,7 +263,7 @@ struct FirstRunSetupView: View {
             }
             HStack(spacing: 5) {
                 ForEach(SetupPage.allCases, id: \.rawValue) { item in
-                    Capsule().fill(item.rawValue <= index ? page.tint : Color.white.opacity(0.16))
+                    Capsule().fill(item.rawValue <= index ? page.tint : Theme.border)
                         .frame(height: 4)
                 }
             }.accessibilityLabel("Setup step \(index + 1) of \(SetupPage.allCases.count)")
@@ -388,7 +387,7 @@ struct FirstRunSetupView: View {
 
     private func feature(_ title: String, symbol: String, detail: String) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: symbol).font(.title3).frame(width: 34).foregroundStyle(.white)
+            Image(systemName: symbol).font(.title3).frame(width: 34).foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -411,7 +410,7 @@ struct FirstRunSetupView: View {
         HStack(spacing: 14) {
             Image(systemName: symbol).font(.title3).foregroundStyle(page.tint).frame(width: 34)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 5)
@@ -432,8 +431,8 @@ struct FirstRunSetupView: View {
                     Spacer()
                 }
                 .font(.headline).padding(.vertical, 17)
-                .background(.white, in: RoundedRectangle(cornerRadius: 17))
-                .foregroundStyle(Color.black)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 17))
+                .foregroundStyle(Theme.background)
             }
             .accessibilityIdentifier(page == .finish ? "setup-start-exploring" : "setup-continue")
             if page != .welcome && page != .finish {
@@ -447,6 +446,6 @@ struct FirstRunSetupView: View {
         .frame(maxWidth: 580)
         .padding(.horizontal, 24).padding(.top, 15).padding(.bottom, 12)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+        .background(Theme.background)
     }
 }

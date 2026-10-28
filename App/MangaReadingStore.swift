@@ -60,6 +60,6 @@ final class MangaReadingStore: ObservableObject {
 }
 
 enum MangaStyle {
-    static let accent = Color(red: 0.69, green: 0.77, blue: 1)
-    static let surface = Color(white: 0.09)
+    static let accent = Theme.accent
+    static let surface = Theme.surface
 }

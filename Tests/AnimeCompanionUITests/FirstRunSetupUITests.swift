@@ -38,6 +38,7 @@ final class FirstRunSetupUITests: XCTestCase {
         app.buttons["setup-start-exploring"].tap()
 
         XCTAssertFalse(app.buttons["setup-start-exploring"].exists)
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15)
+            || app.descendants(matching: .any).matching(identifier: "companion-sidebar").firstMatch.exists)
     }
 }

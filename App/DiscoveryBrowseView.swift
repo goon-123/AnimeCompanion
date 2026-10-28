@@ -191,8 +191,8 @@ struct DiscoveryBrowseView: View {
     }
     private func chip(_ label: String, selected: Bool) -> some View {
         Text(label).font(.subheadline.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 11)
-            .foregroundStyle(selected ? Color.black : Color.white)
-            .background(selected ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 9))
+            .foregroundStyle(selected ? Theme.accent : Color.secondary)
+            .background(selected ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 9))
     }
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {

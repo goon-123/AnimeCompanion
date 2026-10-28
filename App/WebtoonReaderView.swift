@@ -168,13 +168,13 @@ struct WebtoonReaderView: View {
             }
             if model.controls || model.pages.isEmpty { chrome }
             if model.advancing {
-                VStack { Spacer(); ProgressView("Loading next chapter…").padding(16).background(.ultraThinMaterial, in: Capsule()).padding(.bottom, 28) }
+                VStack { Spacer(); ProgressView("Loading next chapter…").padding(16).readerControlSurface(in: Capsule()).padding(.bottom, 28) }
                     .allowsHitTesting(false)
             }
             if holdScrolling {
                 VStack { Spacer(); Label("\(Int(preferences.autoScrollSpeed)) pt/s · Lift to stop", systemImage: "hand.point.up.left.fill")
                     .font(.caption.monospacedDigit().bold()).padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule()).padding(.bottom, 24)
+                    .readerControlSurface(in: Capsule()).padding(.bottom, 24)
                 }.allowsHitTesting(false).accessibilityHidden(true)
             }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent).statusBarHidden(!model.controls && !model.pages.isEmpty)
@@ -260,14 +260,14 @@ struct WebtoonReaderView: View {
                             Text(model.title.manga.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Image(systemName: "chevron.down").font(.caption)
-                    }.padding(.horizontal, 16).padding(.vertical, 10).background(.ultraThinMaterial, in: Capsule())
+                    }.padding(.horizontal, 16).padding(.vertical, 10).readerControlSurface(in: Capsule())
                 }.buttonStyle(.plain).accessibilityIdentifier("webtoon-chapters")
                 Spacer(minLength: 0)
                 Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }
                     .readerCircle().accessibilityLabel("Reader settings").accessibilityIdentifier("webtoon-settings")
             }.padding(.horizontal, 16).padding(.top, 8)
             if let message = reading.error {
-                Text(message).font(.caption).padding(12).background(.ultraThinMaterial, in: Capsule()).padding(.top, 8)
+                Text(message).font(.caption).padding(12).readerControlSurface(in: Capsule()).padding(.top, 8)
             }
             Spacer()
             if !model.pages.isEmpty {
@@ -292,12 +292,12 @@ struct WebtoonReaderView: View {
                             .disabled(model.pages.count == 1).accessibilityLabel("Page")
                             .accessibilityValue("Page \(controlPage + 1) of \(model.pages.count)")
                             .accessibilityIdentifier("webtoon-page-scrubber")
-                    }.padding(.horizontal, 16).padding(.vertical, 10).background(.ultraThinMaterial, in: Capsule())
+                    }.padding(.horizontal, 16).padding(.vertical, 10).readerControlSurface(in: Capsule())
                     Button { Task { await model.move(1) } } label: { Image(systemName: "forward.end.fill") }
                         .readerCircle().disabled(!model.hasNext).accessibilityLabel("Next chapter").accessibilityIdentifier("webtoon-next-chapter")
                 }.padding(.horizontal, 16).padding(.bottom, 12)
             }
-        }.foregroundStyle(.white)
+        }.foregroundStyle(.white).environment(\.colorScheme, .dark)
     }
     private var scrollControls: some View {
         HStack(spacing: 10) {
@@ -314,7 +314,7 @@ struct WebtoonReaderView: View {
             Button { adjustSpeed(15) } label: { Image(systemName: "plus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed >= WebtoonPreferences.scrollSpeedRange.upperBound)
                 .accessibilityLabel("Scroll faster").accessibilityIdentifier("webtoon-scroll-faster")
-        }.padding(.horizontal, 14).background(.ultraThinMaterial, in: Capsule()).buttonStyle(.plain)
+        }.padding(.horizontal, 14).readerControlSurface(in: Capsule()).buttonStyle(.plain)
     }
     private func adjustSpeed(_ delta: Double) {
         preferences.autoScrollSpeed += delta; preferences.normalize()
@@ -332,7 +332,7 @@ struct WebtoonReaderView: View {
                         Spacer()
                         if chapter == model.chapter { Image(systemName: "book") }
                         else if reading.record(model.title.id)?.position(for: chapter.url)?.completed == true { Image(systemName: "checkmark") }
-                    }.foregroundStyle(chapter == model.chapter ? MangaStyle.accent : .white)
+                    }.foregroundStyle(chapter == model.chapter ? MangaStyle.accent : Color.primary)
                 }.accessibilityIdentifier("webtoon-choose-chapter-\(model.chapters.firstIndex(of: chapter) ?? 0)")
             }.navigationTitle("Chapters").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { chapters = false } } }
@@ -350,7 +350,7 @@ struct WebtoonReaderView: View {
 private extension View {
     func readerCircle() -> some View {
         font(.system(size: 17, weight: .semibold)).frame(width: 46, height: 46)
-            .background(.ultraThinMaterial, in: Circle()).buttonStyle(.plain)
+            .readerControlSurface(in: Circle()).buttonStyle(.plain)
     }
 }
 

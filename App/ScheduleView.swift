@@ -155,7 +155,7 @@ struct ScheduleView: View {
             HStack {
                 Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.subheadline.bold())
                 Spacer()
-                if date == today { Text("Today").font(.caption.bold()).padding(.horizontal, 9).padding(.vertical, 5).background(Color.white.opacity(0.12), in: Capsule()) }
+                if date == today { Text("Today").font(.caption.bold()).padding(.horizontal, 9).padding(.vertical, 5).background(Theme.accent.opacity(0.12), in: Capsule()) }
             }.id("release-day-\(dayID(date))").accessibilityElement(children: .combine)
                 .accessibilityIdentifier("schedule-day-\(dayID(date))")
                 .accessibilityValue(date == today ? "Today" : "")
@@ -179,8 +179,8 @@ struct ScheduleView: View {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption2.weight(.semibold))
                                 Text(date.formatted(.dateTime.day())).font(.subheadline.bold())
                             }.frame(minWidth: 47, minHeight: weekdayHeight)
-                                .foregroundStyle(date == today ? Color.black : Color.white)
-                                .background(date == today ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                                .foregroundStyle(date == today ? Theme.accent : Color.secondary)
+                                .background(date == today ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
                         }.buttonStyle(.plain).id(dayID(date))
                             .accessibilityIdentifier("schedule-jump-\(dayID(date))")
                             .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + (date == today ? ", Today" : ""))

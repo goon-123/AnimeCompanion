@@ -67,6 +67,14 @@ final class AppStore: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--ui-ipad-split-preview") {
             UserDefaults.standard.set(TabletLayout.sideBySide.rawValue, forKey: TabletLayout.preferenceKey)
         }
+        if ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+                UserDefaults.standard.removeObject(forKey: HomePreferences.storageKey)
+                UserDefaults.standard.removeObject(forKey: LibraryViewPresets.storageKey)
+            }
+            UserDefaults.standard.set(TabletLayout.sidebar.rawValue, forKey: TabletLayout.preferenceKey)
+            UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("--ui-redesign-dark") ? AppAppearance.dark.rawValue : AppAppearance.light.rawValue, forKey: AppAppearance.storageKey)
+        }
         if UnifiedExplorePreview.active { aniList = AniListClient(transport: UnifiedAnimePreviewTransport(), minimumRequestInterval: 0) }
         else if phaseTwoPreview { aniList = AniListClient(transport: PhaseTwoPreviewTransport(), minimumRequestInterval: 0) }
         else { aniList = discoveryPreview ? AniListClient(transport: DiscoveryPreviewTransport(), minimumRequestInterval: 0) : AniListClient() }

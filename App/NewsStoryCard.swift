@@ -36,6 +36,7 @@ struct NewsStoryCard: View {
                                 artwork.frame(height: featured ? 235 : 170).contentShape(Rectangle()).clipped()
                                 if featured {
                                     Label("IN FOCUS", systemImage: "sparkles").font(.caption2.bold())
+                                        .foregroundStyle(.white)
                                         .padding(9).background(.black.opacity(0.7), in: Capsule()).padding(14)
                                 }
                             }
@@ -70,7 +71,7 @@ struct NewsStoryCard: View {
     private var storyText: some View {
         VStack(alignment: .leading, spacing: 9) {
             if let topic {
-                Text(topic.label.uppercased()).font(.caption2.weight(.bold)).tracking(1.2).foregroundStyle(.cyan)
+                Text(topic.label.uppercased()).font(.caption2.weight(.bold)).tracking(1.2).foregroundStyle(Theme.accent)
             }
             Text(article.title).font(featured ? .title2.bold() : .headline).foregroundStyle(.primary)
                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
@@ -78,7 +79,7 @@ struct NewsStoryCard: View {
                 Text(summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(featured ? 3 : 2).multilineTextAlignment(.leading)
             }
             if let reason {
-                Label(reason, systemImage: "sparkles").font(.caption).foregroundStyle(.cyan).lineLimit(2).multilineTextAlignment(.leading)
+                Label(reason, systemImage: "sparkles").font(.caption).foregroundStyle(Theme.accent).lineLimit(2).multilineTextAlignment(.leading)
             }
             HStack(spacing: 5) {
                 if isRead { Label("Read", systemImage: "checkmark.circle.fill").foregroundStyle(.secondary) }
@@ -94,7 +95,7 @@ struct NewsStoryCard: View {
             }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("More from \(article.source.label)")
             Spacer(minLength: 5)
             Button { save(enriched) } label: {
-                Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44).foregroundStyle(isSaved ? Color.cyan : Color.white)
+                Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44).foregroundStyle(isSaved ? Theme.accent : Color.primary)
             }.buttonStyle(.plain).accessibilityLabel(isSaved ? "Remove saved story" : "Save story").accessibilityIdentifier("news-save-\(identifier)")
             Menu {
                 Button(isRead ? "Mark as unread" : "Mark as read", systemImage: isRead ? "circle" : "checkmark.circle") { markRead(article) }

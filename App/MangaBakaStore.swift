@@ -180,7 +180,7 @@ final class MangaBakaStore: ObservableObject {
                     let credential = try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-not-a-real-credential")
                     let first = saved.add(profile: try AccountSwitcherPreview.profile(), credential: credential)
                     if MangaBakaAccountsPreview.active {
-                        saved.add(profile: try MangaBakaAccountsPreview.secondProfile(), credential: MangaBakaCredential(kind: .apiKey, secret: "owned-preview-second-account"))
+                        saved.add(profile: try MangaBakaAccountsPreview.secondProfile(), credential: try MangaBakaCredential(kind: .apiKey, secret: "owned-preview-second-account"))
                         try saved.select(first)
                     }
                     try keychain.save(saved)
@@ -190,6 +190,7 @@ final class MangaBakaStore: ObservableObject {
                     !MangaBakaAccountsPreview.active || $0.id == (profile?.id == "owned-reader-two" ? 74 : 73)
                 }
                 libraryTotal = library.count
+                if ProcessInfo.processInfo.arguments.contains("--ui-home-library-delay") { library = []; libraryTotal = nil }
             } catch { accountError = error.localizedDescription }
             return
         }

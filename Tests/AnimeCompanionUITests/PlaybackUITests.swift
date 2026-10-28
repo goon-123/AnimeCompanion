@@ -7,6 +7,7 @@ final class PlaybackUITests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--ui-reset-content-preferences"]; app.launch()
         app.openExploreControl("explore-settings")
+        app.revealSettingsDestination("playback-settings")
         let playback = app.buttons["playback-settings"]
         for _ in 0..<6 where !playback.isHittable { app.contentSurface.swipeUp() }
         XCTAssertTrue(playback.waitForExistence(timeout: 10)); playback.tap()

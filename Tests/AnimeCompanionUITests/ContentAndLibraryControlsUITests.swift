@@ -65,8 +65,8 @@ final class ContentAndLibraryControlsUITests: XCTestCase {
     @MainActor func testIndependentSortsAndDirectionSurviveRelaunch() {
         let app = launch(); showReading(app)
         app.buttons["reading-library-sort"].tap(); app.buttons["Title"].tap()
-        app.buttons["reading-library-direction"].tap(); app.buttons["Z–A"].tap()
-        XCTAssertTrue(app.buttons["reading-library-direction"].label.contains("Z–A"))
+        app.buttons["reading-library-sort"].tap(); app.buttons["Z–A"].tap()
+        XCTAssertTrue((app.buttons["reading-library-sort"].value as? String ?? "").contains("Z–A"))
         app.segmentedControls["library-media-picker"].buttons["All"].tap()
         app.buttons["combined-library-sort"].tap(); app.buttons["Completion"].tap()
         XCTAssertTrue(app.buttons["combined-library-sort"].label.contains("Completion"))
@@ -76,13 +76,13 @@ final class ContentAndLibraryControlsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["combined-library-sort"].label.contains("Completion"))
         showReading(app)
         XCTAssertTrue(app.buttons["reading-library-sort"].label.contains("Title"))
-        XCTAssertTrue(app.buttons["reading-library-direction"].label.contains("Z–A"))
+        XCTAssertTrue((app.buttons["reading-library-sort"].value as? String ?? "").contains("Z–A"))
     }
     @MainActor func testCustomOpeningStatusPersistsAndDoesNotChangeOtherLibraries() {
         let app = launch(); showReading(app)
         app.buttons["reading-library-sort"].tap()
         app.buttons["library-default-reading"].tap()
-        app.buttons["Completed"].tap()
+        app.buttons["library-default-choice-reading-completed"].tap()
         XCTAssertTrue(app.buttons["mangabaka-library-status-completed"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["mangabaka-library-status-completed"].isSelected)
         XCTAssertTrue(app.staticTexts["Finished Letters"].waitForExistence(timeout: 10))

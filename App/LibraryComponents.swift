@@ -35,8 +35,8 @@ struct LibraryAnimeRow: View {
         }
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
-      }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
-            .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Color.white.opacity(0.06), lineWidth: 1) }
+      }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Theme.border, lineWidth: 1) }
     }
 }
 
@@ -146,7 +146,7 @@ struct LibraryGuestView: View {
                 if AppConfiguration.clientID == nil { showSettings = true } else { Task { await store.connect() } }
             } label: {
                 if store.connecting { ProgressView() } else { Text("Connect AniList").frame(maxWidth: .infinity) }
-            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(.white).foregroundStyle(.black)
+            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(Theme.accent).foregroundStyle(Theme.background)
             if let error = store.accountError { NoticeView(message: error) }
             Text("Browsing and news work without an account.").font(.caption).foregroundStyle(.secondary)
         }.padding(28).frame(maxWidth: 480).frame(maxWidth: .infinity, maxHeight: .infinity)

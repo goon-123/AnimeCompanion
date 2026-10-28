@@ -182,15 +182,15 @@ struct LibraryView: View {
             HStack(spacing: 9) {
                 Button { selected = nil } label: {
                     Text("All").font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
-                        .foregroundStyle(selected == nil ? Color.black : Color.white)
-                        .background(selected == nil ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(selected == nil ? Theme.accent : Color.secondary)
+                        .background(selected == nil ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
                 }.buttonStyle(.plain).accessibilityIdentifier("library-status-all")
                     .accessibilityAddTraits(selected == nil ? .isSelected : [])
                 ForEach(statuses) { status in
                     Button { selected = status } label: {
                         Text(status.label).font(.subheadline.bold()).padding(.horizontal, 14).padding(.vertical, 12)
-                            .foregroundStyle(selected == status ? Color.black : Color.white)
-                            .background(selected == status ? Color.white : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                            .foregroundStyle(selected == status ? Theme.accent : Color.secondary)
+                            .background(selected == status ? Theme.accent.opacity(0.12) : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
                     }.buttonStyle(.plain).accessibilityIdentifier("library-status-\(status.rawValue)")
                         .accessibilityAddTraits(selected == status ? .isSelected : [])
                 }
@@ -226,7 +226,7 @@ struct LibraryView: View {
                 Section("Default view") { LibraryDefaultMenu(scope: .anime) }
             } label: { Label(sort.rawValue, systemImage: "arrow.up.arrow.down").font(.subheadline).padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)) }
                 .accessibilityIdentifier("library-sort")
-            Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 40, height: 40).background(Theme.surface, in: Circle()) }
+            Button { reversed.toggle() } label: { Image(systemName: reversed ? "arrow.down" : "arrow.up").frame(width: 44, height: 44).background(Theme.surface, in: Circle()) }
                 .accessibilityLabel("Reverse library sort")
                 .accessibilityValue(reversed ? "Reversed" : "Default direction")
         }

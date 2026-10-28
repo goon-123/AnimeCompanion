@@ -68,7 +68,7 @@ struct MangaSourceBrowseView: View {
                 ContentUnavailableView("Source collection hidden", systemImage: "eye.slash",
                     description: Text("This collection is hidden by your mature-source setting."))
             } else { catalog }
-        }.background(Color.black).navigationTitle(source.name).navigationBarTitleDisplayMode(.large).tint(MangaStyle.accent)
+        }.background(Theme.background).navigationTitle(source.name).navigationBarTitleDisplayMode(.large).tint(MangaStyle.accent)
             .searchable(text: $query, prompt: "Search this source")
             .onSubmit(of: .search) {
                 submitted = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -159,7 +159,7 @@ struct MangaSourceBrowseView: View {
         Button { mode = value } label: {
             Label(label, systemImage: icon).font(.subheadline.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 10)
                 .background(mode == value ? MangaStyle.accent.opacity(0.22) : MangaStyle.surface, in: Capsule())
-                .foregroundStyle(mode == value ? MangaStyle.accent : .white)
+                .foregroundStyle(mode == value ? MangaStyle.accent : Color.primary)
         }.buttonStyle(.plain)
     }
     private func more(automatic: Bool = false) async {
