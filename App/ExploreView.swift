@@ -146,7 +146,7 @@ struct ExploreView: View {
         }.accessibilityElement(children: .contain).accessibilityIdentifier("explore-shelf-\(category.rawValue)")
     }
     private var seasonPicker: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Picker("Season", selection: $selection.season) { ForEach(AnimeSeason.allCases, id: \.self) { Text($0.label).tag($0) } }
                 Picker("Year", selection: $selection.year) { ForEach(Array((1970...SeasonSelection.current().year + 2).reversed()), id: \.self) { Text(String($0)).tag($0) } }

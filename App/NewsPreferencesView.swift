@@ -7,7 +7,7 @@ struct NewsPreferencesView: View {
     @Binding var compact: Bool
     @State private var mutedText = ""
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     ForEach(NewsTopic.allCases.filter { $0 != .all }, id: \.self) { topic in

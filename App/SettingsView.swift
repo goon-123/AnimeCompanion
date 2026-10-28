@@ -7,7 +7,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     let selectAccount: (TrackingAccount) -> Void
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             SettingsDirectoryView(close: { dismiss() }, selectAccount: selectAccount)
         }
     }

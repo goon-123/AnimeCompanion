@@ -178,6 +178,7 @@ struct WebtoonReaderView: View {
                 }.allowsHitTesting(false).accessibilityHidden(true)
             }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent).statusBarHidden(!model.controls && !model.pages.isEmpty)
+            .backSwipe(enabled: !closing && !settings && !chapters && !website) { Task { await close() } }
             .persistentSystemOverlays(model.controls ? .visible : .hidden)
             .task(id: model.chapter.url) {
                 await reading.load()
@@ -320,7 +321,7 @@ struct WebtoonReaderView: View {
     }
     private var controlPage: Int { scrubbing ? Int(scrubPage.rounded()) : model.currentPage }
     private var chapterPicker: some View {
-        NavigationStack {
+        AppNavigationStack {
             List(model.chapters) { chapter in
                 Button {
                     chapters = false
@@ -338,7 +339,12 @@ struct WebtoonReaderView: View {
         }.tint(MangaStyle.accent)
     }
     private func updateAwake() { UIApplication.shared.isIdleTimerDisabled = scene == .active && preferences.keepAwake ? true : originalIdleTimer }
-    private func close() async { guard !closing else { return }; closing = true; model.autoScroll = false; await model.flush(); dismiss() }
+    private func close() async {
+        guard !closing else { return }
+        closing = true; model.autoScroll = false; holdScrolling = false; model.cancelPrefetch()
+        await model.flush(); await reading.preferences(preferences)
+        dismiss()
+    }
 }
 
 private extension View {
@@ -353,7 +359,7 @@ private struct WebtoonSettingsView: View {
     @Binding var preferences: WebtoonPreferences
     @Binding var autoScroll: Bool
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     LabeledContent("Reading mode", value: "Continuous vertical")

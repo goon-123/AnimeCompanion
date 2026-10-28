@@ -61,6 +61,7 @@ struct AnimeImageViewer: View {
                     .background(LinearGradient(colors: [.clear, .black.opacity(0.92)], startPoint: .top, endPoint: .bottom))
             }
         }.foregroundStyle(.white).accessibilityElement(children: .contain).accessibilityIdentifier("expanded-anime-image")
+            .backSwipe { dismiss() }
     }
 }
 

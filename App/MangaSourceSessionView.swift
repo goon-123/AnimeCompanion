@@ -32,7 +32,7 @@ struct MangaSourceSessionView: View {
         return url
     }
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             VStack(spacing: 0) {
                 Text("If this website asks you to sign in or verify, complete it here. Then tap Use session to retry the source. This private session stays on your iPhone until the app closes.")
                     .font(.footnote).foregroundStyle(.secondary).padding()

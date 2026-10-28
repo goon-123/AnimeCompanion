@@ -7,7 +7,7 @@ struct TorBoxFilesView: View {
     var episode = 1
     var restart = false
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             folder(nil)
                 .navigationDestination(for: TorBoxWebDAVEntry.self) { entry in folder(entry) }
         }

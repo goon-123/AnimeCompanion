@@ -1,3 +1,17 @@
+## In-app anime links — version 0.32.1 / build 85
+
+MangaBaka series now show Related anime from the exact linked AniList manga/novel identity. Tap a title to open its native anime detail page, including episodes and watch actions, on the current navigation stack. Multiple linked seasons remain separate choices. The lookup only accepts anime nodes with Source/Adaptation relations and respects AniList adult-content settings. No linked entry or a failed lookup retains an in-app anime search prefilled with the written title; errors offer Retry. The Anime jump reaches these links above the existing chapter/volume coverage notes. Remove the external AniList website action introduced in build 84.
+
+Includes all build-84 swipe-back, category hit-target, compact-tag and coverage changes. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40567529391](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391). [Download build 85 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40567529391/artifacts/12764901156). Device acceptance is left to the user. App sources match packaging commit 649e99e91726f11ec104f433473e4a6c0142b67a; the temporary packaging workflow has been removed.
+
+## Swipe back and MangaBaka details — build 84
+
+Version 0.32.0, stacked on build 83. Shared navigation stacks retain native interactive Back and add a public left-edge fallback for hidden bars, modal roots and split-detail browsing. Full-screen reader back routes through its existing save/close action, stops automatic scrolling and flushes progress/preferences. Full-screen artwork also closes with the edge gesture. Embedded WebKit page history takes priority; modal saving locks remain enforced.
+
+Classic Explore expands the media buttons to a complete 44-point target and claims header whitespace so it cannot open the spotlight. MangaBaka tags start collapsed to eight, with one compact preview and full grouped expansion. Decode optional anime start/end notes without losing season text or breaking records with missing coverage. Add an Anime jump and the exact AniList manga/novel listing link from the existing source ID.
+
+Local diff, shared-stack coverage and Safari resource/version checks passed. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917 . Download build 84: https://github.com/goon-123/AnimeCompanion/actions/runs/40558656917/artifacts/12762005044 . Automated suites and device journeys are left to the user. The immutable build-81 native runtime was reused after its source inputs matched. Application sources at the final PR head match packaging commit 4d30a53581883705fca80676260a30add2d697b3; the temporary packaging workflow is absent from the final diff.
+
 ## Saved MangaBaka accounts and account-page bar — build 81
 
 Version 0.30.0, stacked on build 80. Add/select/remove saved MangaBaka identities without discarding other credentials. Atomic Keychain registry migration preserves the old single connection, persists selection and deduplicates verified server identities. Account switches isolate visible entries, late responses, token refresh and editor writes. Account-specific encrypted For you snapshots preserve the seven-day timestamp, survive switches and clear only on removing that saved identity. Fresh browser sessions support adding a different login. Replace the blank bottom strip with an inline library action.

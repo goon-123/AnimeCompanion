@@ -37,7 +37,7 @@ struct MangaBakaLibraryView: View {
             } }
             .appSettingsSheet(isPresented: $appSettings)
             .sheet(isPresented: $connection) {
-                NavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
+                AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
             }
             .onChange(of: defaultStatus) { _, _ in state = LibraryScope.reading.openingStatus() }
             .task(id: "\(state)-\(account.revision)") { await account.loadCompleteLibrary(state: selectedState, refresh: true) }

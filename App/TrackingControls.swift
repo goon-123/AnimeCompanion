@@ -93,7 +93,7 @@ struct TrackingEditorView: View {
         _repeats = State(initialValue: entry?.repeatCount ?? 0)
     }
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 Section {

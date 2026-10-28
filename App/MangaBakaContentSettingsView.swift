@@ -46,7 +46,7 @@ struct MangaBakaContentButton: View {
             .accessibilityLabel("MangaBaka content rating").accessibilityValue(preferences.mangaBakaContent.summary)
             .accessibilityIdentifier("mangabaka-content-settings")
             .sheet(isPresented: $presented) {
-                NavigationStack {
+                AppNavigationStack {
                     MangaBakaContentSettingsView().toolbar {
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { presented = false } }
                     }

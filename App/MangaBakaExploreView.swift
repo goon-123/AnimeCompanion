@@ -41,8 +41,9 @@ struct MediaSectionPicker: View {
             mode = value
         } label: {
             Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
-                .lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity).padding(.vertical, 10)
+                .lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, minHeight: 44)
                 .background(mode == value ? Color.white.opacity(0.19) : .clear, in: Capsule())
+                .contentShape(Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(mode == value ? .isSelected : [])
             .accessibilityIdentifier("media-section-" + value)
     }
@@ -68,13 +69,19 @@ struct MediaExploreView: View {
                 }.buttonStyle(.plain).accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
                 AccountSwitcherButton()
             }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
+                .background {
+                    // Claim the complete header, including transparent glass and
+                    // gaps, so taps cannot reach the spotlight poster behind it.
+                    Color.clear.contentShape(Rectangle()).onTapGesture { }
+                }
+                .zIndex(10)
             }
         }.mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in
                 UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
             }
             .sheet(isPresented: $designs) {
-                NavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
+                AppNavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
             }
     }
 }

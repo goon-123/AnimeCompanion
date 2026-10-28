@@ -122,7 +122,7 @@ struct MangaBakaFilterSheet: View {
     @State private var draft: MangaBakaQuery
     init(query: Binding<MangaBakaQuery>) { _query = query; _draft = State(initialValue: query.wrappedValue) }
     var body: some View {
-        NavigationStack {
+        AppNavigationStack {
             Form {
                 Section {
                     NavigationLink { MangaBakaContentSettingsView() } label: {
