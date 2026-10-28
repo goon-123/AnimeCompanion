@@ -153,6 +153,7 @@ jobs:
           retention-days: 30
   library-customization:
     # Package the installable app before occupying runners with simulator suites.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs['weekly-ui'].result == 'success' || needs['weekly-ui'].result == 'skipped') }}
     needs: [manga-runtime, build, weekly-ui]
     name: Reader and library changes ${{ matrix.device }}
     runs-on: macos-15-intel
