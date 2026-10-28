@@ -79,6 +79,23 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         XCTAssertTrue(entry.label.contains("Watched 16/26"))
     }
 
+    @MainActor func testFindMangaActionOpensExistingSourceSearchAndRetainsAnimeProgress() {
+        let app = launch(extra: ["--ui-webtoon-preview", "--ui-webtoon-session", UUID().uuidString])
+        let entry = app.buttons["library-entry-1"]
+        app.revealInContent(entry); entry.tap()
+        app.openAnimeActions(); app.buttons["detail-find-manga"].tap()
+        let search = app.textFields["manga-search-title"]
+        XCTAssertTrue(search.waitForExistence(timeout: 15))
+        XCTAssertTrue((search.value as? String)?.contains("The Archivist") == true)
+        XCTAssertTrue(app.buttons["manga-search-source-preview-en"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.appTab("My Library").isHittable)
+        capture("Detail-To-Manga-Source-Search")
+        app.appTab("My Library").tap()
+        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 10))
+        app.returnToBrowsing(); app.revealInContent(entry)
+        XCTAssertTrue(entry.label.contains("Watched 16/26"))
+    }
+
     @MainActor private func launch(extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()

@@ -75,7 +75,7 @@ struct AnimeEpisodeOverview: View {
             }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 17)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
                 .overlay { RoundedRectangle(cornerRadius: 18).stroke(Theme.border, lineWidth: 1) }
-        }.accessibilityIdentifier("detail-episode-overview")
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("detail-episode-overview")
     }
     private var dubCount: String {
         guard let dub, let count = dub.released else { return "—" }

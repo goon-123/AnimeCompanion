@@ -125,7 +125,7 @@ struct LibraryView: View {
                                                    systemImage: "books.vertical", description: Text(query.isEmpty ? "Add a title from Explore." : "Try another title or list status."))
                         }
                         if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-                        Text("Dub counts use reported releases and complete-dub listings. Missing counts stay unknown.").font(.caption2).foregroundStyle(.secondary)
+                        Text("DUB marks English audio availability. Yellow: behind the original broadcast. Green: caught up. Countdown uses the original broadcast.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
                     }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
                 }.accessibilityIdentifier("library-scroll").scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }

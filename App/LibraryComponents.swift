@@ -102,7 +102,7 @@ private struct LibraryPoster: View {
                         LibraryRatingLabel(anime: anime, overArtwork: true, compact: compact)
                     }.padding(compact ? 6 : 8)
                 }
-        }.accessibilityIdentifier("library-poster-\(anime.id)")
+        }
     }
 }
 
