@@ -9,9 +9,16 @@ struct SettingsView: View {
     @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
     @Environment(\.dismiss) private var dismiss
+    @State private var setupGuide = false
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button { setupGuide = true } label: {
+                        SettingsCategoryLabel(title: "Setup Guide", detail: "Review connections, extensions & privacy in one place",
+                                              symbol: "sparkles.rectangle.stack.fill", tint: .purple)
+                    }.accessibilityIdentifier("settings-setup-guide")
+                }
                 Section {
                     NavigationLink { AniListSettingsView() } label: {
                         SettingsCategoryLabel(title: "AniList account", detail: store.isSignedIn ? store.viewer.map { "Signed in as \($0.name)" } ?? "Connected" : "Connect to sync your library", symbol: "person.crop.circle.fill", tint: .blue)
@@ -71,6 +78,9 @@ struct SettingsView: View {
             }.navigationTitle("Settings")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+        .fullScreenCover(isPresented: $setupGuide) {
+            FirstRunSetupView(revisiting: true) { setupGuide = false }
+        }
     }
 }
 
@@ -122,7 +132,7 @@ struct SettingsCategoryLabel: View {
     }
 }
 
-private struct AniListSettingsView: View {
+struct AniListSettingsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var clientID = AppConfiguration.clientID ?? ""
     @State private var confirmation = false
