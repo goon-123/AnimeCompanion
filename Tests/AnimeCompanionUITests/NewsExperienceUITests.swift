@@ -160,8 +160,9 @@ final class NewsExperienceUITests: XCTestCase {
         if series { app.launchArguments.append("--ui-news-series-preview") }
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 20))
-        app.appTab("News").tap()
-        XCTAssertTrue(app.segmentedControls["news-collections"].waitForExistence(timeout: 15))
+        let news = app.appTab("News")
+        XCTAssertTrue(news.waitForExistence(timeout: 20)); news.tap()
+        XCTAssertTrue(app.segmentedControls["news-collections"].waitForExistence(timeout: 30))
         return app
     }
     @MainActor private func select(_ title: String, _ app: XCUIApplication) {

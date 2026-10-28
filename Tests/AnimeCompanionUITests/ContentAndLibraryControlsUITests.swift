@@ -82,7 +82,7 @@ final class ContentAndLibraryControlsUITests: XCTestCase {
         let app = launch(); showReading(app)
         app.buttons["reading-library-sort"].tap()
         app.buttons["library-default-reading"].tap()
-        app.buttons["Completed"].tap()
+        app.buttons["library-default-choice-reading-completed"].tap()
         XCTAssertTrue(app.buttons["mangabaka-library-status-completed"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["mangabaka-library-status-completed"].isSelected)
         XCTAssertTrue(app.staticTexts["Finished Letters"].waitForExistence(timeout: 10))

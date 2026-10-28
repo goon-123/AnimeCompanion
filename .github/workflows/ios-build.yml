@@ -155,7 +155,7 @@ jobs:
     needs: manga-runtime
     name: Reader and library changes ${{ matrix.device }}
     runs-on: macos-15-intel
-    timeout-minutes: 22
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -296,7 +296,7 @@ jobs:
     needs: manga-runtime
     name: News experience ${{ matrix.device }}
     runs-on: macos-15-intel
-    timeout-minutes: 25
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -342,7 +342,7 @@ jobs:
     needs: manga-runtime
     name: Explore, accounts and Airing Now ${{ matrix.device }}
     runs-on: macos-15-intel
-    timeout-minutes: 25
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

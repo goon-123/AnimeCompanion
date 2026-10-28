@@ -39,6 +39,7 @@ struct LibraryDefaultMenu: View {
         Menu("Open library on") {
             ForEach(scope.statuses) { status in
                 MenuChoice(title: status.label, selected: saved == status.id) { saved = status.id }
+                    .accessibilityIdentifier("library-default-choice-" + scope.rawValue + "-" + status.id)
             }
         }.accessibilityIdentifier("library-default-" + scope.rawValue)
     }
