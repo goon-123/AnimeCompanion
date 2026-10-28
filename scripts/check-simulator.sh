@@ -204,7 +204,7 @@ if [[ "$test_scope" == visuals ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/NativeVisualGalleryUITests)
 fi
 if [[ "$test_scope" == customization ]]; then
-  test_arguments=(-only-testing:AnimeCompanionUITests/LibraryCustomizationUITests -only-testing:AnimeCompanionUITests/ContentAndLibraryControlsUITests -only-testing:AnimeCompanionUITests/ExperienceRedesignUITests)
+  test_arguments=(-only-testing:AnimeCompanionUITests/LibraryCustomizationUITests -only-testing:AnimeCompanionUITests/ContentAndLibraryControlsUITests -only-testing:AnimeCompanionUITests/ExperienceRedesignUITests -only-testing:AnimeCompanionUITests/FirstRunSetupUITests)
 fi
 if [[ "$test_scope" == news ]]; then
   test_arguments=(-only-testing:AnimeCompanionUITests/NewsExperienceUITests)

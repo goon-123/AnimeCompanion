@@ -10,6 +10,9 @@ struct PlaybackSettingsView: View {
     var body: some View {
         Form {
             Section {
+                NavigationLink { AddonDirectoryBrowser(startURL: URL(string: "https://aiostreams.elfhosted.com/stremio/configure")!) } label: {
+                    Label("Configure AIOStreams", systemImage: "square.stack.3d.up")
+                }.accessibilityIdentifier("configure-aiostreams")
                 NavigationLink { AddonDirectoryBrowser() } label: { Label("Browse stremio-addons.net", systemImage: "globe") }
                     .accessibilityIdentifier("browse-addon-directory")
                 NavigationLink { AddonCatalogHome() } label: { Label("Browse installed catalogs", systemImage: "rectangle.stack") }

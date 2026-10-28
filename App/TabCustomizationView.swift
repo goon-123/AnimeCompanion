@@ -17,14 +17,14 @@ struct TabCustomizationView: View {
                             .accessibilityIdentifier("tab-visible-" + tab.rawValue)
                     }.accessibilityElement(children: .contain)
                 }.onMove { from, to in preferences.order.move(fromOffsets: from, toOffset: to) }
-            } header: { Text("Bottom tabs") }
-            footer: { Text("Drag the handles to change the order. Turn off a tab to hide its whole section. Keep at least one visible. Your library, sources and reading progress are kept. Changes apply when you close Settings.") }
+            } header: { Text("Main destinations") }
+            footer: { Text("Drag to reorder your main destinations. Other sections stay available from Home and Explore tools. Keep at least one visible. Your library, sources and progress stay saved. Changes apply when Settings closes.") }
             Section {
                 Button("Show all tabs") { preferences = .init(order: preferences.order, hidden: []) }
                 Button("Reset tab order") { preferences.order = AppTab.allCases }
             }
         }.environment(\.editMode, .constant(.active))
-            .navigationTitle("Bottom tabs").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Navigation").navigationBarTitleDisplayMode(.inline)
             .onChange(of: preferences) { _, value in UserDefaults.standard.set(value.saved, forKey: AppTabPreferences.storageKey) }
     }
 }

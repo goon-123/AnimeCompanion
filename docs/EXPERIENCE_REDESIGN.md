@@ -40,7 +40,7 @@ The navigation and search choices follow Apple's [sidebar guidance](https://deve
 - Saved Library views store search text, status, sort, direction and list/grid layout locally. Up to twelve views can be named, recalled and removed. They do not modify account entries.
 - Search scopes constrain provider work and result types while retaining the original all-catalog search.
 - Appearance supports System, Light and Dark. iPad offers sidebar navigation, single-column pages and the retained browse/detail presentation.
-- Source/settings search finds Stremio/AIOStreams, torrent extensions, TorBox, VidHub, Safari and reading extensions without inspecting credentials.
+- Source/settings search finds Stremio/AIOStreams, torrent extensions, TorBox, VidHub, Safari and reading extensions without inspecting credentials. Stremio settings also expose the existing AIOStreams configuration flow directly.
 
 ## Workflow changes
 

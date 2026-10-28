@@ -297,7 +297,7 @@ struct WebtoonReaderView: View {
                         .readerCircle().disabled(!model.hasNext).accessibilityLabel("Next chapter").accessibilityIdentifier("webtoon-next-chapter")
                 }.padding(.horizontal, 16).padding(.bottom, 12)
             }
-        }.foregroundStyle(.white).colorScheme(.dark)
+        }.foregroundStyle(.white).environment(\.colorScheme, .dark)
     }
     private var scrollControls: some View {
         HStack(spacing: 10) {
@@ -332,7 +332,7 @@ struct WebtoonReaderView: View {
                         Spacer()
                         if chapter == model.chapter { Image(systemName: "book") }
                         else if reading.record(model.title.id)?.position(for: chapter.url)?.completed == true { Image(systemName: "checkmark") }
-                    }.foregroundStyle(chapter == model.chapter ? MangaStyle.accent : .white)
+                    }.foregroundStyle(chapter == model.chapter ? MangaStyle.accent : Color.primary)
                 }.accessibilityIdentifier("webtoon-choose-chapter-\(model.chapters.firstIndex(of: chapter) ?? 0)")
             }.navigationTitle("Chapters").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { chapters = false } } }

@@ -263,7 +263,7 @@ struct FirstRunSetupView: View {
             }
             HStack(spacing: 5) {
                 ForEach(SetupPage.allCases, id: \.rawValue) { item in
-                    Capsule().fill(item.rawValue <= index ? page.tint : Color.white.opacity(0.16))
+                    Capsule().fill(item.rawValue <= index ? page.tint : Theme.border)
                         .frame(height: 4)
                 }
             }.accessibilityLabel("Setup step \(index + 1) of \(SetupPage.allCases.count)")
@@ -387,7 +387,7 @@ struct FirstRunSetupView: View {
 
     private func feature(_ title: String, symbol: String, detail: String) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: symbol).font(.title3).frame(width: 34).foregroundStyle(.white)
+            Image(systemName: symbol).font(.title3).frame(width: 34).foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -410,7 +410,7 @@ struct FirstRunSetupView: View {
         HStack(spacing: 14) {
             Image(systemName: symbol).font(.title3).foregroundStyle(page.tint).frame(width: 34)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 5)

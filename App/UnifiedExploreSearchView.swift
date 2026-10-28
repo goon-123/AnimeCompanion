@@ -85,7 +85,7 @@ struct UnifiedExploreSearchView: View {
                     ContentUnavailableView("Find your next story", systemImage: "magnifyingglass",
                         description: Text("One search for anime, manga, manhwa, light novels and more. No account needed."))
                 } else {
-                    Text("\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded")
+                    Text(scope == .all ? "\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded" : "\(results.count) \(scope.label.lowercased()) loaded")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("unified-search-counts")
                     ForEach(activeProviders, id: \.self) { provider in
                         if let error = model.errors[provider] {

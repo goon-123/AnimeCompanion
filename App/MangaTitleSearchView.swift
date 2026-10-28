@@ -77,7 +77,7 @@ struct MangaTitleSearchView: View {
                     }
                 }
             } header: { Text("Search in a source") } footer: { Text("Only the source you select receives your search. Read results vertically in the webtoon reader.") }
-        }.scrollContentBackground(.hidden).background(Color.black).navigationTitle("Find manga")
+        }.scrollContentBackground(.hidden).background(Theme.background).navigationTitle("Find manga")
             .navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

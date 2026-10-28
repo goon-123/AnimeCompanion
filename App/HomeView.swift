@@ -7,6 +7,7 @@ struct HomeView: View {
     @EnvironmentObject private var reading: MangaReadingStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var sourceLinks: MangaSourceLinkStore
+    @EnvironmentObject private var extensions: MangaExtensionStore
     @AppStorage(HomePreferences.storageKey) private var sections = ""
     @AppStorage("manga.showMatureSources") private var matureSources = false
     @State private var customize = false
@@ -17,7 +18,11 @@ struct HomeView: View {
         Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(8))
     }
     private var recent: [MangaReadingRecord] {
-        Array(reading.state.records.filter { $0.lastReadAt != nil && (matureSources || !$0.title.source.adult) }
+        guard !extensions.loading else { return [] }
+        return Array(reading.state.records.filter { record in
+            let mature = record.title.source.adult || extensions.installed(record.title.source.extensionID)?.descriptor.adult == true
+            return record.lastReadAt != nil && (matureSources || !mature)
+        }
             .sorted { ($0.lastReadAt ?? .distantPast) > ($1.lastReadAt ?? .distantPast) }.prefix(6))
     }
     private var trackedBooks: [MangaBakaLibraryEntry] {
@@ -65,7 +70,10 @@ struct HomeView: View {
             }
             .animeNavigation().mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation() }
-            .task { await reading.load(); await sourceLinks.load() }
+            .task {
+                await reading.load(); await sourceLinks.load()
+                if !reading.state.records.isEmpty { await extensions.load() }
+            }
             .task(id: "\(books.connected)-\(books.connectionID)") { if books.connected { await books.loadLibrary(state: nil) } }
             .refreshable {
                 async let shows: Void = refreshAnime()
@@ -98,7 +106,7 @@ struct HomeView: View {
             Text("Connect a library to bring your watchlist and reading progress here. You can explore without an account.")
                 .font(.subheadline).foregroundStyle(.secondary)
             HStack {
-                Button("Connect a library") { settings = true }.buttonStyle(.borderedProminent)
+                Button("Connect a library") { settings = true }.buttonStyle(.borderedProminent).foregroundStyle(Theme.background)
                 Button("Explore") { navigation.open(.explore) }.buttonStyle(.bordered)
             }
         }.companionPanel().accessibilityIdentifier("home-welcome")
@@ -140,7 +148,7 @@ struct HomeView: View {
             Button { watching = value } label: {
                 Label(value.format == "MOVIE" ? "Watch movie" : "Continue · Episode \(episode)", systemImage: "play.fill")
                     .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(.borderedProminent).disabled(value.status == "NOT_YET_RELEASED")
+            }.buttonStyle(.borderedProminent).foregroundStyle(Theme.background).disabled(value.status == "NOT_YET_RELEASED")
                 .accessibilityIdentifier("home-watch-\(value.id)")
         }.frame(width: 275).companionPanel()
     }
