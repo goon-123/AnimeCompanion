@@ -27,7 +27,7 @@ struct HomeView: View {
     }
     private var trackedBooks: [MangaBakaLibraryEntry] {
         let resumed = Set(recent.map { $0.title.id })
-        return Array(books.library.filter { entry in
+        return Array(books.library.map { books.entries[$0.id] ?? $0 }.filter { entry in
             guard ["reading", "rereading"].contains(entry.state), let series = entry.series,
                   series.isVisible(contentFilter: anime.mangaBakaContent) else { return false }
             if let target = books.sourceLinkTarget(for: series), let link = sourceLinks.link(for: target), resumed.contains(link.title.id) { return false }
@@ -74,7 +74,7 @@ struct HomeView: View {
                 await reading.load(); await sourceLinks.load()
                 if !reading.state.records.isEmpty { await extensions.load() }
             }
-            .task(id: "\(books.connected)-\(books.connectionID)") { if books.connected { await books.loadLibrary(state: nil) } }
+            .task(id: "\(books.connected)-\(books.connectionID)-\(books.revision)") { if books.connected { await books.loadLibrary(state: nil) } }
             .refreshable {
                 async let shows: Void = refreshAnime()
                 async let titles: Void = refreshBooks()
