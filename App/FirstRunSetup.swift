@@ -83,7 +83,7 @@ private enum SetupPage: Int, CaseIterable {
 
     var icon: String {
         switch self {
-        case .welcome: return "sparkles.tv"
+        case .welcome: return "sparkles"
         case .aniList: return "play.rectangle.on.rectangle"
         case .mangaBaka: return "books.vertical.fill"
         case .torrent: return "puzzlepiece.extension.fill"
@@ -306,26 +306,26 @@ struct FirstRunSetupView: View {
             }
         case .aniList:
             connectionBadge(page)
-            NavigationLink { AniListSettingsView() } label: {
+            NavigationLink { AniListSettingsView().toolbar(.visible, for: .navigationBar) } label: {
                 actionCard("Connect or manage AniList", detail: "Secure sign-in and library syncing", symbol: "person.crop.circle.badge.checkmark")
             }.accessibilityIdentifier("setup-anilist-connect")
             Text("You can browse anime even without an AniList account.")
                 .font(.caption).foregroundStyle(.secondary)
         case .mangaBaka:
             connectionBadge(page)
-            NavigationLink { MangaBakaAccountView() } label: {
+            NavigationLink { MangaBakaAccountView().toolbar(.visible, for: .navigationBar) } label: {
                 actionCard("Connect or manage MangaBaka", detail: "Sign in or connect with an API key", symbol: "books.vertical.fill")
             }.accessibilityIdentifier("setup-mangabaka-connect")
         case .torrent:
             connectionBadge(page)
-            NavigationLink { SeanimeSettingsView() } label: {
+            NavigationLink { SeanimeSettingsView().toolbar(.visible, for: .navigationBar) } label: {
                 actionCard("Browse & install extensions", detail: "Open the marketplace, review and install providers", symbol: "shippingbox.fill")
             }.accessibilityIdentifier("setup-torrent-install")
             Text("Extensions run third-party code. Only install from sources you trust. They can be added or disabled later.")
                 .font(.caption).foregroundStyle(.secondary)
         case .torBox:
             connectionBadge(page)
-            NavigationLink { TorBoxSettingsView() } label: {
+            NavigationLink { TorBoxSettingsView().toolbar(.visible, for: .navigationBar) } label: {
                 actionCard("Connect TorBox", detail: "Save and verify your API key", symbol: "key.fill")
             }.accessibilityIdentifier("setup-torbox-connect")
             Text("A TorBox subscription or account is separate from Anime Companion. You can use the app without TorBox.")
@@ -334,10 +334,11 @@ struct FirstRunSetupView: View {
             connectionBadge(page)
             NavigationLink {
                 AddonDirectoryBrowser(startURL: URL(string: "https://aiostreams.elfhosted.com/stremio/configure")!)
+                    .toolbar(.visible, for: .navigationBar)
             } label: {
                 actionCard("Create or open AIOStreams setup", detail: "Use its configuration site, including existing accounts", symbol: "slider.horizontal.3")
             }.accessibilityIdentifier("setup-aiostreams-configure")
-            NavigationLink { PlaybackSettingsView() } label: {
+            NavigationLink { PlaybackSettingsView().toolbar(.visible, for: .navigationBar) } label: {
                 actionCard("Install an existing manifest", detail: "Paste your private AIOStreams manifest URL", symbol: "link")
             }.accessibilityIdentifier("setup-aiostreams-install")
             Text("After configuring AIOStreams, select its manifest install link or paste the URL under Stremio add-ons. It is an optional third-party service.")
