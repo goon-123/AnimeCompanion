@@ -1,10 +1,10 @@
 import Foundation
 
 public enum TabletLayout: String, CaseIterable, Sendable {
-    case fullWidth, sideBySide
+    case fullWidth, sideBySide, sidebar
     public static let preferenceKey = "display.ipad.layout"
 
-    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .fullWidth }
+    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .sidebar }
 
     /// Favor the catalog over an oversized detail pane. The native split view
     /// still adapts/collapses for compact windows without changing this choice.

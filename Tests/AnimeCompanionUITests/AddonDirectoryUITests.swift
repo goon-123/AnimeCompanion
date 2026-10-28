@@ -113,6 +113,7 @@ final class AddonDirectoryUITests: XCTestCase {
     }
     @MainActor private func openSettings(_ app: XCUIApplication) {
         app.openExploreControl("explore-settings")
+        app.revealSettingsDestination("playback-settings")
         let setup = app.buttons["playback-settings"]
         app.revealInContent(setup); setup.tap()
         XCTAssertTrue(app.navigationBars["Stremio add-ons"].waitForExistence(timeout: 10))

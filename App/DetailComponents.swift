@@ -7,14 +7,14 @@ struct DetailCard<Content: View>: View {
     init(title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
         VStack(alignment: .leading, spacing: 13) { Text(title).font(.headline); content }
-            .frame(maxWidth: .infinity, alignment: .leading).padding(18).background(Theme.surface.opacity(0.75), in: RoundedRectangle(cornerRadius: 18))
-            .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.04), lineWidth: 1) }
+            .frame(maxWidth: .infinity, alignment: .leading).companionPanel()
     }
 }
 
 /// The accessibility identifier belongs only to the toggle button. Assigning
 /// it to a containing group can overwrite identifiers of episode actions.
 struct DetailDisclosure<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let identifier: String
     @Binding var isExpanded: Bool
@@ -33,8 +33,8 @@ struct DetailDisclosure<Content: View>: View {
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier(identifier)
                 .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-            if isExpanded { content }
-        }
+            if isExpanded { content.transition(.opacity) }
+        }.animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isExpanded)
     }
 }
 
@@ -43,7 +43,7 @@ struct AnimeDetailHero: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let anime: Anime
     let expand: (URL) -> Void
-    private var bannerHeight: CGFloat { sizeClass == .regular ? 280 : 220 }
+    private var bannerHeight: CGFloat { sizeClass == .regular ? 250 : 185 }
     private var posterWidth: CGFloat { sizeClass == .regular ? 112 : 92 }
     private var artworkURL: URL? { anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL }
     private var accent: Color { (PosterAccent(hex: anime.coverImage?.color)?.backdrop ?? PosterAccent.fallback.backdrop).color }

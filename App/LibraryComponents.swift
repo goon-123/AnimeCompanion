@@ -35,8 +35,8 @@ struct LibraryAnimeRow: View {
         }
         AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
         if let airing { LibraryAiringStatus(status: airing, animeID: anime.id) }
-      }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
-            .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Color.white.opacity(0.06), lineWidth: 1) }
+      }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(airing?.state.color.opacity(0.25) ?? Theme.border, lineWidth: 1) }
     }
 }
 

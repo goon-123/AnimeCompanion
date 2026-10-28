@@ -38,7 +38,7 @@ struct MangaHubView: View {
             else if section == "Sources" { sourceList }
             else if section == "History" { historyList }
             else { library }
-        }.background(Color.black).navigationTitle("Manga").tint(MangaStyle.accent)
+        }.background(Theme.background).navigationTitle("Manga").tint(MangaStyle.accent)
             .searchable(text: $query, prompt: section == "Sources" ? "Find a source" : "Find a title")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -116,7 +116,7 @@ struct MangaHubView: View {
     }
     private func pageHeading(_ title: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.title2.bold()).foregroundStyle(.white)
+            Text(title).font(.title2.bold()).foregroundStyle(.primary)
             Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
         }.padding(.top, 4)
     }

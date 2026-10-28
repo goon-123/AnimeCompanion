@@ -10,6 +10,7 @@ final class SafariExtensionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
         app.appTab("My Library").tap()
         app.buttons["Account and settings"].firstMatch.tap()
+        app.revealSettingsDestination("settings-safari-vidhub")
         let row = app.buttons["settings-safari-vidhub"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         app.revealInContent(row); row.tap()

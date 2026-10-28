@@ -94,7 +94,7 @@ struct NewsStoryCard: View {
             }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("More from \(article.source.label)")
             Spacer(minLength: 5)
             Button { save(enriched) } label: {
-                Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44).foregroundStyle(isSaved ? Color.cyan : Color.white)
+                Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44).foregroundStyle(isSaved ? Theme.accent : Color.primary)
             }.buttonStyle(.plain).accessibilityLabel(isSaved ? "Remove saved story" : "Save story").accessibilityIdentifier("news-save-\(identifier)")
             Menu {
                 Button(isRead ? "Mark as unread" : "Mark as read", systemImage: isRead ? "circle" : "checkmark.circle") { markRead(article) }

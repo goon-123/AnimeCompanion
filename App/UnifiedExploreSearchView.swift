@@ -5,6 +5,7 @@ private struct UnifiedSearchKey: Equatable {
     let text: String
     let adult: Bool
     let contentFilter: MangaBakaContentFilter
+    let scope: StorySearchScope
 }
 
 @MainActor
@@ -41,7 +42,7 @@ private final class UnifiedExploreSearchModel: ObservableObject {
                 guard !next || !values.isEmpty || !hasMore else { throw ServiceError.message("No new anime on this page. Retry or change your search.") }
                 anime = next ? anime + values : values
             case .reading:
-                let response = try await books.browse(.init(text: key.text), page: page, limit: 24, contentFilter: key.contentFilter, refresh: refresh)
+                let response = try await books.browse(.init(text: key.text, format: key.scope == .novels ? .novel : nil), page: page, limit: 24, contentFilter: key.contentFilter, refresh: refresh)
                 try Task.checkCancellation(); guard attempt == generation else { return }
                 var known = Set(next ? reading.map(\.id) : [])
                 let values = response.items.filter { known.insert($0.id).inserted }
@@ -62,11 +63,20 @@ struct UnifiedExploreSearchView: View {
     @EnvironmentObject private var reading: MangaBakaStore
     @StateObject private var model = UnifiedExploreSearchModel()
     @State private var text = ""
-    private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult, contentFilter: anime.mangaBakaContent) }
-    private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent) }
+    @State private var scope = StorySearchScope.all
+    private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult, contentFilter: anime.mangaBakaContent, scope: scope) }
+    private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent).filter(scope.includes) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(StorySearchScope.allCases) { value in
+                            CompanionFilterChip(title: value.label, selected: scope == value) { scope = value }
+                                .accessibilityIdentifier("search-scope-" + value.rawValue)
+                        }
+                    }
+                }
                 if !text.isEmpty {
                     Button { text = "" } label: { Label("Clear search", systemImage: "xmark.circle") }
                         .font(.caption).accessibilityLabel("Clear all-catalog search")
@@ -77,7 +87,7 @@ struct UnifiedExploreSearchView: View {
                 } else {
                     Text("\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("unified-search-counts")
-                    ForEach(UnifiedExploreSearchModel.Provider.allCases, id: \.self) { provider in
+                    ForEach(activeProviders, id: \.self) { provider in
                         if let error = model.errors[provider] {
                             NoticeView(message: (provider == .anime ? "Anime: " : "Manga & novels: ") + error) {
                                 Task { await load(provider, next: model.more.contains(provider), refresh: true) }
@@ -89,7 +99,7 @@ struct UnifiedExploreSearchView: View {
                     if results.isEmpty && model.loading.isEmpty && model.errors.isEmpty && key == modelKey {
                         ContentUnavailableView.search(text: key.text)
                     }
-                    ForEach(UnifiedExploreSearchModel.Provider.allCases, id: \.self) { provider in
+                    ForEach(activeProviders, id: \.self) { provider in
                         if model.more.contains(provider) {
                             Button(provider == .anime ? "More anime" : "More manga & novels") { Task { await load(provider, next: true) } }
                                 .buttonStyle(.bordered).disabled(model.loading.contains(provider)).frame(maxWidth: .infinity)
@@ -127,7 +137,11 @@ struct UnifiedExploreSearchView: View {
             }
     }
     @State private var modelKey: UnifiedSearchKey?
+    private var activeProviders: [UnifiedExploreSearchModel.Provider] {
+        UnifiedExploreSearchModel.Provider.allCases.filter { $0 == .anime ? scope.needsAnime : scope.needsReading }
+    }
     private func load(_ provider: UnifiedExploreSearchModel.Provider, next: Bool = false, refresh: Bool = false) async {
+        guard activeProviders.contains(provider) else { return }
         await model.load(provider, key: key, api: anime.aniList, books: reading.api, next: next, refresh: refresh)
     }
 }

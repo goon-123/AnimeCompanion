@@ -17,6 +17,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     var body: some Scene {
         WindowGroup {
             root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
@@ -30,7 +31,7 @@ struct AnimeCompanionApp: App {
                     Task { await ArtworkPipeline.shared.clearMemory() }
                     Task { await MangaImagePipeline.shared.clearMemory() }
                 }
-                .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
+                .preferredColorScheme(Theme.scheme(appearance)).task { if !artworkPreview { await store.restore() } }
                 .task { if !artworkPreview { await mangaBaka.restore() } }
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
@@ -58,13 +59,6 @@ struct AnimeCompanionApp: App {
     }
 }
 
-enum Theme {
-    static let accent = Color.white
-    static let background = Color(red: 0.045, green: 0.05, blue: 0.065)
-    static let surface = Color(red: 0.09, green: 0.105, blue: 0.135)
-    static let highlight = Color.yellow
-}
-
 struct AnimeRoute: Identifiable, Hashable { let id: Int }
 struct AnimeVisualsRoute: Hashable { let anime: Anime? }
 struct MangaSearchRoute: Hashable {
@@ -89,7 +83,7 @@ struct DiscoveryRoute: Hashable {
 }
 
 struct SupplementaryDestination: Identifiable {
-    enum Kind { case manga([String], linkingTo: MangaSourceLinkTarget? = nil), linkedManga(MangaSourceLink), schedule, genre(String), library }
+    enum Kind { case manga([String], linkingTo: MangaSourceLinkTarget? = nil), linkedManga(MangaSourceLink), schedule, genre(String), library, tab(AppTab), search }
     let id = UUID()
     let kind: Kind
 }
@@ -108,9 +102,14 @@ final class TabNavigationState: ObservableObject {
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
-    @Published var selectedTab: AppTab = .explore
+    @Published var selectedTab: AppTab = .home
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
+    func open(_ tab: AppTab) {
+        if tabPreferences.visible.contains(tab) { selectedTab = tab }
+        else { supplementary = .init(kind: .tab(tab)) }
+    }
+    func openSearch() { supplementary = .init(kind: .search) }
     func applyTabPreferences() {
         let value = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
         selectedTab = value.selection(for: selectedTab)
@@ -122,6 +121,7 @@ final class AppNavigationStore: ObservableObject {
     }
     @Published private(set) var tabletLayout = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
     let explore = TabNavigationState()
+    let home = TabNavigationState()
     let schedule = TabNavigationState()
     let library = TabNavigationState()
     let news = TabNavigationState()
@@ -142,7 +142,7 @@ final class AppNavigationStore: ObservableObject {
     func applyLayoutPreference() {
         let value = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
         guard value != tabletLayout else { return }
-        for state in [explore, schedule, library, news] {
+        for state in [home, explore, schedule, library, news, manga] {
             state.path = NavigationPath(); state.detailPath = NavigationPath()
             state.animeID = nil; state.column = .sidebar; state.visibility = .all
         }
@@ -151,6 +151,7 @@ final class AppNavigationStore: ObservableObject {
 
     func state(for tab: AppTab) -> TabNavigationState {
         switch tab {
+        case .home: return home
         case .explore: return explore
         case .schedule: return schedule
         case .library: return library
@@ -203,20 +204,27 @@ struct AppTabs: View {
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
     @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.discover.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
+    @State private var sidebarSettings = false
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var sidebarColumn: NavigationSplitViewColumn = .detail
     var body: some View {
         tabs.task {
             guard !loadedLayout else { return }
             loadedLayout = true
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-") }) {
+                navigation.selectedTab = ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") ? .home : .explore
+            }
             if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
                 var hidden: Set<AppTab> = ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? [.manga] : []
                 if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { hidden.insert(.library) }
+                if !ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") { hidden.insert(.home) }
                 UserDefaults.standard.removeObject(forKey: TrackingAccount.storageKey)
-                UserDefaults.standard.set(AppTabPreferences(hidden: hidden).saved, forKey: AppTabPreferences.storageKey)
+                UserDefaults.standard.set((ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") ? AppTabPreferences() : AppTabPreferences(hidden: hidden)).saved, forKey: AppTabPreferences.storageKey)
                 UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? "all" : "anime", forKey: "library.mediaSection")
                 UserDefaults.standard.set("anime", forKey: "app.mediaSection")
             } else if !LibraryCustomizationPreview.active && (MangaReaderPreview.active || ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")) {
-                UserDefaults.standard.set(AppTabPreferences(hidden: []).saved, forKey: AppTabPreferences.storageKey)
+                UserDefaults.standard.set(AppTabPreferences(hidden: [.home]).saved, forKey: AppTabPreferences.storageKey)
                 UserDefaults.standard.set("anime", forKey: "library.mediaSection")
             }
             #endif
@@ -224,13 +232,9 @@ struct AppTabs: View {
         }
     }
     private var tabs: some View {
-        TabView(selection: $navigation.selectedTab) {
-            ForEach(navigation.tabPreferences.visible) { tab in
-                pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
-            }
-        }.sheet(item: $navigation.supplementary) { destination in
+        navigationSurface.sheet(item: $navigation.supplementary) { destination in
             AppNavigationStack {
-                supplementary(destination.kind).animeNavigation()
+                supplementary(destination.kind).animeNavigation().mangaBakaNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }
@@ -247,8 +251,46 @@ struct AppTabs: View {
             }
         }
     }
+    @ViewBuilder private var navigationSurface: some View {
+        if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
+        else { phoneTabs }
+    }
+    private var phoneTabs: some View {
+        TabView(selection: $navigation.selectedTab) {
+            ForEach(navigation.tabPreferences.visible) { tab in
+                pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
+            }
+        }
+    }
+    private var sidebar: some View {
+        NavigationSplitView(columnVisibility: $sidebarVisibility, preferredCompactColumn: $sidebarColumn) {
+            List(selection: Binding<AppTab?>(get: { navigation.selectedTab }, set: {
+                if let value = $0 { navigation.open(value); sidebarColumn = .detail }
+            })) {
+                Section("Your world") {
+                    ForEach(navigation.tabPreferences.visible) { tab in Label(tab.title, systemImage: tab.symbol).tag(tab) }
+                }
+                if !navigation.tabPreferences.hidden.isEmpty {
+                    DisclosureGroup("More") {
+                        ForEach(navigation.tabPreferences.order.filter { navigation.tabPreferences.hidden.contains($0) }) { tab in
+                            Button { navigation.open(tab) } label: { Label(tab.title, systemImage: tab.symbol) }
+                        }
+                    }
+                }
+                Section {
+                    Button { navigation.openSearch() } label: { Label("Search all stories", systemImage: "magnifyingglass") }
+                    Button { sidebarSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                }
+            }.listStyle(.sidebar).navigationTitle("AnimeCompanion").navigationBarTitleDisplayMode(.inline)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
+                .appSettingsSheet(isPresented: $sidebarSettings)
+                .accessibilityIdentifier("companion-sidebar")
+        } detail: { pane(navigation.selectedTab) }
+        .navigationSplitViewStyle(.balanced)
+    }
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {
         switch tab {
+        case .home: AnimeTabPane(state: navigation.home, layout: .fullWidth) { HomeView() }
         case .explore:
             AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
         case .library:
@@ -265,6 +307,16 @@ struct AppTabs: View {
         case .schedule: ScheduleView()
         case .library: MediaLibraryView()
         case .genre(let genre): DiscoveryBrowseView(category: .trending, selection: .current(), titleOverride: genre, initialGenre: genre)
+        case .search: UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
+        case .tab(let tab):
+            switch tab {
+            case .home: HomeView()
+            case .explore: MediaExploreView()
+            case .library: MediaLibraryView()
+            case .manga: MangaHubView()
+            case .schedule: ScheduleView()
+            case .news: NewsView()
+            }
         }
     }
 

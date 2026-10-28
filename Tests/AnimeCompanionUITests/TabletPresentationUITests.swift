@@ -104,6 +104,7 @@ final class TabletPresentationUITests: XCTestCase {
     @MainActor private func setSplit(_ enabled: Bool, app: XCUIApplication) {
         app.buttons["Account and settings"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        app.revealSettingsDestination("settings-ipad-layout")
         let row = app.buttons["settings-ipad-layout"]
         app.revealInContent(row); XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
         let toggle = app.switches["settings-ipad-split-view"]
@@ -115,7 +116,8 @@ final class TabletPresentationUITests: XCTestCase {
         let result = XCTWaiter.wait(for: [changed], timeout: 5)
         capture(enabled ? "Enable-Side-By-Side" : "Disable-Side-By-Side")
         XCTAssertEqual(result, .completed)
-        app.navigationBars["iPad layout"].buttons["Settings"].tap()
+        app.navigationBars["iPad layout"].buttons["Appearance & layout"].tap()
+        app.navigationBars["Appearance & layout"].buttons["Settings"].tap()
         app.navigationBars["Settings"].buttons["Done"].tap()
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.navigationBars["Settings"])
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed)

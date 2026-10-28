@@ -10,6 +10,7 @@ final class MangaExtensionsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
         app.appTab("My Library").tap()
         app.buttons["Account and settings"].firstMatch.tap()
+        app.revealSettingsDestination("settings-manga-extensions")
         let row = app.buttons["settings-manga-extensions"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         app.revealInContent(row); row.tap()

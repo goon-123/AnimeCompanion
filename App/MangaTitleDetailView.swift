@@ -74,7 +74,7 @@ struct MangaTitleDetailView: View {
             if matureSource && !showMature { ContentUnavailableView("Collection hidden", systemImage: "eye.slash") }
             else if !sourceReady && !extensions.loading { unavailableSource }
             else { content }
-        }.background(Color.black).navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
+        }.background(Theme.background).navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
             .task(id: availabilityKey) {
                 await extensions.load()
                 guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }

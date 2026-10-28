@@ -47,6 +47,7 @@ struct UnifiedExploreView: View {
     @EnvironmentObject private var anime: AppStore
     @EnvironmentObject private var reading: MangaBakaStore
     @EnvironmentObject private var dubs: ExploreDubStore
+    @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var filters: DiscoveryFilterStore
     @Environment(\.scenePhase) private var scene
     @Environment(\.dynamicTypeSize) private var textSize
@@ -70,7 +71,7 @@ struct UnifiedExploreView: View {
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            LazyVStack(alignment: .leading, spacing: 24) {
                 header
                 notices
                 if design == .posterGrid {
@@ -85,17 +86,16 @@ struct UnifiedExploreView: View {
                     Text("A discovery selection from both catalogs. Browse a format above for its full catalog and filters.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
+                    catalogDirectory
                     if !trending.isEmpty { spotlight }
                     else if isLoading { loadingPosters }
-                    storyShelf("Trending across your world", subtitle: "Anime, comics & novels, together", items: Array(trending.prefix(18)))
-                    catalogDirectory
-                    animeShelf(.seasonal, title: "Watch this season", subtitle: selection.label, values: response?.seasonal.media ?? [])
-                    readingShelf(.novels, title: "A little more imagination", subtitle: "Light novels & web novels")
-                    readingShelf(.trending, title: "Your next read", subtitle: "Trending manga, manhwa & more")
+                    storyShelf("Trending", subtitle: "Across anime, manga & novels", items: Array(trending.dropFirst(4).prefix(12)))
+                    animeShelf(.seasonal, title: "This season", subtitle: selection.label, values: response?.seasonal.media ?? [])
+                    readingShelf(.novels, title: "Novels", subtitle: "Light novels & web novels")
+                    readingShelf(.trending, title: "Manga & manhwa", subtitle: "Trending manga, manhwa & more")
                     if reading.connected { MangaBakaPersonalShelf().padding(.horizontal, -20) }
-                    readingShelf(.gems, title: "Off the beaten path", subtitle: "MangaBaka's hidden gems")
-                    animeShelf(.upcoming, title: "On the horizon", subtitle: "Upcoming anime", values: response?.upcoming.media ?? [])
-                    animeShelf(.trending, title: "More anime to explore", subtitle: "Trending now", values: response?.trending.media ?? [])
+                    readingShelf(.gems, title: "Hidden gems", subtitle: "MangaBaka's hidden gems")
+                    animeShelf(.upcoming, title: "Coming soon", subtitle: "Upcoming anime", values: response?.upcoming.media ?? [])
                 }
                 if wall.isEmpty && !isLoading {
                     ContentUnavailableView("No discoveries to show", systemImage: "sparkles",
@@ -105,8 +105,10 @@ struct UnifiedExploreView: View {
                     Text("Anime catalog updated \(saved.formatted(.relative(presentation: .named)))")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
-                DiscoveryDataNote()
-                MangaBakaAttribution()
+                DisclosureGroup("About these catalogs") {
+                    DiscoveryDataNote()
+                    MangaBakaAttribution()
+                }.font(.caption).foregroundStyle(.secondary)
             }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar).animeNavigation()
@@ -129,28 +131,18 @@ struct UnifiedExploreView: View {
     }
     private var isLoading: Bool { catalog.state.loading || !books.loading.isEmpty }
     private var header: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("EXPLORE", systemImage: "sparkles").font(.caption.weight(.bold)).tracking(2).foregroundStyle(.mint)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Explore").font(.largeTitle.weight(.bold)).tracking(-0.7)
+                    Text("Find your next favorite.").font(.subheadline).foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button { designs = true } label: { Image(systemName: design.symbol).frame(width: 44, height: 44).silverGlass(in: Circle()) }
                     .accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
                 AccountSwitcherButton()
             }.buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Your next story.").font(.largeTitle.bold())
-                Text("Anime, manga & novels. One place to discover.").font(.subheadline).foregroundStyle(.secondary)
-                MangaBakaContentButton().font(.subheadline)
-            }
-            NavigationLink(value: ExploreSearchRoute()) {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.mint)
-                    Text("Search anime, manga & novels").foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right").font(.caption.bold()).foregroundStyle(.secondary)
-                }.font(.subheadline).padding(17).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay { RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08)) }
-            }.buttonStyle(.plain).accessibilityIdentifier("unified-explore-search")
+            CompanionSearchLink().accessibilityIdentifier("unified-explore-search")
         }
     }
     private var notices: some View {
@@ -173,31 +165,37 @@ struct UnifiedExploreView: View {
     }
     private var spotlight: some View {
         TabView {
-            ForEach(Array(trending.prefix(6))) { item in
+            ForEach(Array(trending.prefix(4))) { item in
                 ExploreStoryLink(item: item) {
                     HStack(spacing: 18) {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("IN THE SPOTLIGHT").font(.caption2.bold()).tracking(1.5).foregroundStyle(.mint)
+                            Text("SPOTLIGHT").font(.caption2.bold()).tracking(1.5).foregroundStyle(Theme.accent)
                             Text(item.title).font(.title2.bold()).lineLimit(3)
                             Text(item.format).font(.subheadline).foregroundStyle(.secondary)
                             Label("Explore story", systemImage: "arrow.up.right").font(.subheadline.bold())
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         if !textSize.isAccessibilitySize {
-                            ExploreStoryCover(item: item, width: 104).rotationEffect(.degrees(5)).shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+                            ExploreStoryCover(item: item, width: 92)
                         }
-                    }.padding(22).padding(.bottom, 20).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }.padding(18).padding(.bottom, 20).frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(LinearGradient(colors: [.teal.opacity(0.2), Theme.surface, .indigo.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .clipShape(RoundedRectangle(cornerRadius: 26)).contentShape(RoundedRectangle(cornerRadius: 26))
                 }
             }
-        }.tabViewStyle(.page(indexDisplayMode: .automatic)).frame(height: textSize.isAccessibilitySize ? 420 : 280).accessibilityIdentifier("unified-spotlight")
+        }.tabViewStyle(.page(indexDisplayMode: .automatic)).frame(height: textSize.isAccessibilitySize ? 370 : 225).accessibilityIdentifier("unified-spotlight")
     }
     private var catalogDirectory: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Go exploring").font(.title2.bold())
+                Text("Browse by format").font(.headline)
                 Spacer()
                 Menu {
+                    Button("Home", systemImage: "house") { navigation.open(.home) }
+                    Button("Release calendar", systemImage: "calendar") { navigation.open(.schedule) }
+                    Button("Reading sources", systemImage: "book") { navigation.open(.manga) }
+                    Button("News", systemImage: "newspaper") { navigation.open(.news) }
+                    Divider()
+                    NavigationLink("Content preferences") { MangaBakaContentSettingsView().toolbar(.visible, for: .navigationBar) }
                     Button("Browse anime seasons", systemImage: "calendar") { seasons = true }
                     Button("Anime dub filters", systemImage: "waveform") { dubFilters = true }
                     NavigationLink("Manga genres & tags") { MangaBakaTaxonomyView().toolbar(.visible, for: .navigationBar) }
@@ -219,18 +217,15 @@ struct UnifiedExploreView: View {
         }
     }
     private func directoryTile(_ title: String, detail: String, symbol: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: symbol).font(.title2).foregroundStyle(color)
-            Text(title).font(.headline)
-            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-        }.padding(16).frame(width: 164, alignment: .leading).frame(minHeight: 125)
-            .background(color.opacity(0.09), in: RoundedRectangle(cornerRadius: 18))
-            .overlay { RoundedRectangle(cornerRadius: 18).stroke(color.opacity(0.2)) }
-            .foregroundStyle(.primary).contentShape(RoundedRectangle(cornerRadius: 18))
+        Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+            .foregroundStyle(Theme.accent).padding(.horizontal, 16).frame(minHeight: 48)
+            .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).stroke(Theme.accent.opacity(0.14)) }
+            .contentShape(Rectangle()).accessibilityHint(detail)
     }
     private func shelfHeading(_ title: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.title2.bold())
+            Text(title).font(.title3.bold())
             Text(subtitle).font(.caption).foregroundStyle(.secondary)
         }.foregroundStyle(.primary)
     }
@@ -252,7 +247,7 @@ struct UnifiedExploreView: View {
                 HStack {
                     shelfHeading(title, subtitle: subtitle)
                     Spacer()
-                    Label("See all", systemImage: "chevron.right").font(.caption).foregroundStyle(.mint)
+                    Label("See all", systemImage: "chevron.right").font(.caption).foregroundStyle(Theme.accent)
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(.plain)
             storyShelf(title, subtitle: subtitle, items: visible(values).map(ExploreStory.anime), showHeading: false)
@@ -264,7 +259,7 @@ struct UnifiedExploreView: View {
                 HStack {
                     shelfHeading(title, subtitle: subtitle)
                     Spacer()
-                    Label("See all", systemImage: "chevron.right").font(.caption).foregroundStyle(.mint)
+                    Label("See all", systemImage: "chevron.right").font(.caption).foregroundStyle(Theme.accent)
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(.plain)
             storyShelf(title, subtitle: subtitle, items: (books.items[shelf] ?? []).filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.map(ExploreStory.reading), showHeading: false)
@@ -328,8 +323,8 @@ struct ExploreStoryCard: View {
             case .anime(let value): DiscoveryIndicators(anime: value)
             case .reading(let value):
                 HStack(spacing: 6) {
-                    if let score = value.rating { Label(score.formatted(.number.precision(.fractionLength(0))) + "%", systemImage: "star.fill").foregroundStyle(.yellow) }
-                    if let entry = reading.library.first(where: { $0.id == value.id }) { Text(MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized).foregroundStyle(.mint) }
+                    if let score = value.rating { Label(score.formatted(.number.precision(.fractionLength(0))) + "%", systemImage: "star.fill").foregroundStyle(Theme.highlight) }
+                    if let entry = reading.entries[value.id] { Text(MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized).foregroundStyle(Theme.accent) }
                     else { Text(value.status.capitalized).foregroundStyle(.secondary) }
                 }.font(.caption2).lineLimit(1)
             }

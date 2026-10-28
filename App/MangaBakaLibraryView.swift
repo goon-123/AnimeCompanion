@@ -32,7 +32,8 @@ struct MangaBakaLibraryView: View {
                 } actions: { Button("Connect MangaBaka") { connection = true }.buttonStyle(.borderedProminent) }
             }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+            .toolbar { ToolbarItemGroup(placement: .topBarTrailing) {
+                MangaBakaContentButton().labelStyle(.iconOnly)
                 Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             } }
             .appSettingsSheet(isPresented: $appSettings)
@@ -54,9 +55,14 @@ struct MangaBakaLibraryView: View {
                     Spacer()
                     if let total = account.libraryTotal { Text("\(total.formatted()) titles").font(.caption).foregroundStyle(.secondary) }
                 }
-                LibraryLayoutPicker(layout: $layout)
-                ReadingLibrarySortControls(scope: .reading, sortValue: $sortValue, ascending: $ascending)
-                MangaBakaContentButton().font(.subheadline)
+                HStack {
+                    ReadingLibrarySortControls(scope: .reading, sortValue: $sortValue, ascending: $ascending)
+                    Spacer(minLength: 8)
+                    Picker("Library layout", selection: $layout) {
+                        Image(systemName: "square.grid.2x2").accessibilityLabel("Poster grid").tag("grid")
+                        Image(systemName: "list.bullet").accessibilityLabel("Detailed list").tag("list")
+                    }.pickerStyle(.segmented).frame(width: 108).accessibilityIdentifier("reading-library-layout")
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         status("All", value: "all")
@@ -106,12 +112,8 @@ struct MangaBakaLibraryView: View {
         }.refreshable { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private func status(_ title: String, value: String) -> some View {
-        Button { state = value } label: {
-            Text(title).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
-                .background(state == value ? Color.white : Theme.surface, in: Capsule())
-                .foregroundStyle(state == value ? Color.black : Color.white)
-        }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-library-status-" + value)
-            .accessibilityAddTraits(state == value ? .isSelected : [])
+        CompanionFilterChip(title: title, selected: state == value) { state = value }
+            .accessibilityIdentifier("mangabaka-library-status-" + value)
     }
 }
 

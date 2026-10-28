@@ -42,7 +42,7 @@ struct MediaSectionPicker: View {
         } label: {
             Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
                 .lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, minHeight: 44)
-                .background(mode == value ? Color.white.opacity(0.19) : .clear, in: Capsule())
+                .background(mode == value ? Theme.accent.opacity(0.12) : .clear, in: Capsule())
                 .contentShape(Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(mode == value ? .isSelected : [])
             .accessibilityIdentifier("media-section-" + value)

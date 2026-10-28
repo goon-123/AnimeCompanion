@@ -1,20 +1,6 @@
 import SwiftUI
 import AnimeCore
 
-struct LibraryLayoutPicker: View {
-    @Binding var layout: String
-    var body: some View {
-        HStack {
-            Text("Your titles").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            Spacer()
-            Picker("Library layout", selection: $layout) {
-                Image(systemName: "square.grid.2x2").accessibilityLabel("Poster grid").tag("grid")
-                Image(systemName: "list.bullet.rectangle").accessibilityLabel("Detailed list").tag("list")
-            }.pickerStyle(.segmented).frame(width: 112).accessibilityIdentifier("reading-library-layout")
-        }
-    }
-}
-
 struct MangaBakaLibraryTile: View {
     let entry: MangaBakaLibraryEntry
     let series: MangaBakaSeries

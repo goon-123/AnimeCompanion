@@ -73,7 +73,7 @@ struct WatchAnimeView: View {
     var body: some View {
         AppNavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 14) {
                     episodeHeader
                     StreamPickerFilters(kind: $sourceKind, audio: $audioFilterValue, query: $filter,
                         englishSummary: englishSummary, hasEnglish: hasEnglishReports)

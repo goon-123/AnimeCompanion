@@ -158,7 +158,7 @@ struct NewsView: View {
                         Label(topic.label, systemImage: topic.symbol).font(.caption.weight(.semibold))
                             .padding(.horizontal, 13).frame(minHeight: 44)
                             .background(query.topic == topic ? Color.cyan.opacity(0.2) : Theme.surface, in: Capsule())
-                            .foregroundStyle(query.topic == topic ? Color.cyan : Color.white)
+                            .foregroundStyle(query.topic == topic ? Theme.accent : Color.primary)
                     }.buttonStyle(.plain).accessibilityIdentifier("news-topic-\(topic.rawValue)")
                         .accessibilityAddTraits(query.topic == topic ? .isSelected : [])
                 }

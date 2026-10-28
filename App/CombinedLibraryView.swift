@@ -19,16 +19,13 @@ struct CombinedLibraryView: View {
         return (ReadingLibrarySort(rawValue: sortValue) ?? .title).sorted(values, ascending: ascending)
     }
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("All your stories").font(.title2.bold())
-                    Spacer()
-                    Text("\(items.count) loaded").font(.caption).foregroundStyle(.secondary)
+        let values = items
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    CompanionSectionHeading(title: "All your stories", subtitle: "\(values.count) titles loaded")
+                    LibrarySavedViewsMenu(query: $search, status: $status, sort: $sortValue, ascending: $ascending, layout: $layout)
                 }
-                LibraryLayoutPicker(layout: $layout)
-                ReadingLibrarySortControls(scope: .combined, sortValue: $sortValue, ascending: $ascending)
-                MangaBakaContentButton().font(.subheadline)
                 filters
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -36,6 +33,14 @@ struct CombinedLibraryView: View {
                         .accessibilityIdentifier("combined-library-search")
                     if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear library search") }
                 }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+                HStack {
+                    ReadingLibrarySortControls(scope: .combined, sortValue: $sortValue, ascending: $ascending)
+                    Spacer(minLength: 8)
+                    Picker("Library layout", selection: $layout) {
+                        Image(systemName: "square.grid.2x2").accessibilityLabel("Poster grid").tag("grid")
+                        Image(systemName: "list.bullet").accessibilityLabel("Detailed list").tag("list")
+                    }.pickerStyle(.segmented).frame(width: 108).accessibilityIdentifier("reading-library-layout")
+                }
                 if !anime.isSignedIn || !reading.connected {
                     Button { settings = true } label: {
                         Label(!anime.isSignedIn && !reading.connected ? "Connect your libraries" : !anime.isSignedIn ? "Add your AniList library" : "Add your MangaBaka library",
@@ -44,9 +49,9 @@ struct CombinedLibraryView: View {
                 }
                 if let error = anime.libraryError, anime.isSignedIn { NoticeView(message: error) { Task { await anime.reloadLibrary() } } }
                 if let error = reading.libraryError, reading.connected { NoticeView(message: error) { Task { await loadReading(refresh: true) } } }
-                results
+                results(values)
                 if anime.loadingLibrary || reading.loadingLibrary { ProgressView("Loading your stories…").frame(maxWidth: .infinity).padding() }
-                if items.isEmpty && !anime.loadingLibrary && !reading.loadingLibrary {
+                if values.isEmpty && !anime.loadingLibrary && !reading.loadingLibrary {
                     ContentUnavailableView("No matching titles", systemImage: "books.vertical",
                         description: Text("Choose another status, change your search, or add a title from Explore."))
                 }
@@ -63,12 +68,13 @@ struct CombinedLibraryView: View {
             }.padding(20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.scrollDismissesKeyboard(.interactively).background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
             .animeNavigation().accessibilityIdentifier("combined-library")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+            .toolbar { ToolbarItemGroup(placement: .topBarTrailing) {
+                MangaBakaContentButton().labelStyle(.iconOnly)
                 Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
             } }
             .appSettingsSheet(isPresented: $settings)
             .onChange(of: defaultStatus) { _, _ in status = CombinedLibraryStatus(rawValue: LibraryScope.combined.openingStatus()) ?? .active }
-            .task(id: "\(reading.connected)-\(reading.connectionID)-\(reading.revision)") { await loadReading(refresh: true) }
+            .task(id: "\(reading.connected)-\(reading.connectionID)-\(reading.revision)") { await loadReading() }
             .task(id: "\(anime.isSignedIn)-\(scene)") {
                 guard scene == .active else { return }
                 while !Task.isCancelled {
@@ -86,24 +92,20 @@ struct CombinedLibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(CombinedLibraryStatus.allCases) { value in
-                    Button { status = value } label: {
-                        Text(value.label).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
-                            .background(status == value ? Color.white : Theme.surface, in: Capsule())
-                            .foregroundStyle(status == value ? Color.black : Color.white)
-                    }.buttonStyle(.plain).accessibilityIdentifier("combined-library-status-" + value.rawValue)
-                        .accessibilityAddTraits(status == value ? .isSelected : [])
+                    CompanionFilterChip(title: value.label, selected: status == value) { status = value }
+                        .accessibilityIdentifier("combined-library-status-" + value.rawValue)
                 }
             }
         }
     }
-    @ViewBuilder private var results: some View {
+    @ViewBuilder private func results(_ values: [CombinedLibraryItem]) -> some View {
         if layout == "grid" {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 190 : 140), spacing: 14)], alignment: .leading, spacing: 22) {
-                ForEach(items) { item in destination(item) { CombinedLibraryCard(item: item, grid: true) } }
+                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: true) } }
             }.accessibilityIdentifier("combined-library-grid")
         } else {
             LazyVStack(spacing: 14) {
-                ForEach(items) { item in destination(item) { CombinedLibraryCard(item: item, grid: false) } }
+                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: false) } }
             }.accessibilityIdentifier("combined-library-list")
         }
     }

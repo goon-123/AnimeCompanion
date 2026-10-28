@@ -41,7 +41,7 @@ struct StreamPickerFilters: View {
                         Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                             .accessibilityLabel("Clear release filter")
                     }
-                }.padding(10).background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+                }.padding(10).background(Theme.secondarySurface, in: RoundedRectangle(cornerRadius: 10))
             }
             Picker("Audio language", selection: $audio) {
                 ForEach(StreamAudioFilter.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
@@ -63,7 +63,7 @@ struct StreamPickerHeading: View {
         HStack(spacing: 8) {
             Text(title).font(.headline)
             Text("\(count)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                .padding(.horizontal, 7).padding(.vertical, 3).background(.white.opacity(0.07), in: Capsule())
+                .padding(.horizontal, 7).padding(.vertical, 3).background(Theme.secondarySurface, in: Capsule())
                 .accessibilityLabel("\(count) \(title)").accessibilityIdentifier(countID)
             Spacer()
             if loading { ProgressView().controlSize(.small) }

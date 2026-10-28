@@ -30,7 +30,7 @@ actor ArtworkPipeline {
     init(data: ArtworkDataClient = ArtworkDataClient()) { self.data = data }
     func image(at url: URL, pixels: Int, refresh: Bool = false) async throws -> ArtworkBitmap {
         try Task.checkCancellation()
-        let key = Key(url: url, pixels: min(3200, max(128, pixels)))
+        let key = Key(url: url, pixels: ArtworkDecodeSize.pixels(for: pixels))
         if !refresh, let image = cache.value(for: key) { return image }
         return try await requests.value(for: FlightKey(image: key, refresh: refresh)) {
             try await self.decode(key, refresh: refresh)

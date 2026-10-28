@@ -227,6 +227,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let app = launch()
         app.openExploreControl("explore-settings")
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout:10))
+        app.revealSettingsDestination("settings-torbox")
         XCTAssertTrue(app.buttons["settings-torbox"].exists)
         XCTAssertTrue(app.buttons["playback-settings"].exists)
         XCTAssertTrue(app.buttons["seanime-settings"].exists)
@@ -237,6 +238,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
             ("settings-browsing", "Browsing & content", "settings-adult-content"),
             ("settings-tracking", "Watch tracking", "settings-auto-complete")
         ] {
+            app.revealSettingsDestination(id)
             let row = app.buttons[id]; app.revealInContent(row); row.tap()
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout:10))
             if !control.isEmpty { XCTAssertTrue(app.descendants(matching:.any).matching(identifier:control).firstMatch.exists) }
@@ -254,6 +256,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
     }
     @MainActor private func openSettings(_ app: XCUIApplication) {
         app.openExploreControl("explore-settings")
+        app.revealSettingsDestination("seanime-settings")
         let seanime = app.buttons["seanime-settings"]; XCTAssertTrue(seanime.waitForExistence(timeout: 10)); app.revealInContent(seanime); seanime.tap()
         XCTAssertTrue(app.navigationBars["Seanime extensions"].waitForExistence(timeout: 10))
     }
