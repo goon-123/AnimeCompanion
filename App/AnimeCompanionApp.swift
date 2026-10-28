@@ -4,6 +4,9 @@ import AnimeCore
 
 @main
 struct AnimeCompanionApp: App {
+    // Declare before all stores: classify fresh vs. upgraded installations before
+    // AppStore writes its initialization defaults.
+    @StateObject private var firstRun = FirstRunSetupState(showOnLaunch: FirstRunSetupState.prepare())
     @StateObject private var store = AppStore()
     @StateObject private var discoveryFilters = DiscoveryFilterStore()
     @StateObject private var playback = PlaybackStore()
@@ -13,14 +16,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
-    @StateObject private var firstRun: FirstRunSetupState
     @Environment(\.scenePhase) private var scenePhase
-
-    init() {
-        // Detect an existing install before AppStore initializes first-use defaults.
-        let shouldPresent = FirstRunSetupState.prepare()
-        _firstRun = StateObject(wrappedValue: FirstRunSetupState(showOnLaunch: shouldPresent))
-    }
     var body: some Scene {
         WindowGroup {
             root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
