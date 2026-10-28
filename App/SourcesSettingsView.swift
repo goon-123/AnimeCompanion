@@ -65,7 +65,7 @@ struct AppearanceSettingsView: View {
                     ForEach(AppAppearance.allCases) { Text($0.label).tag($0.rawValue) }
                 }.accessibilityIdentifier("appearance-scheme")
             }
-            Section("Make it yours") {
+            Section {
                 NavigationLink { HomeCustomizationView() } label: { Label("Home sections", systemImage: "house") }
                     .accessibilityIdentifier("settings-home-sections")
                 NavigationLink { ExploreDesignSettingsView() } label: { Label("Explore layout", systemImage: "rectangle.stack") }
@@ -76,7 +76,7 @@ struct AppearanceSettingsView: View {
                     NavigationLink { TabletLayoutSettingsView() } label: { Label("iPad layout", systemImage: "sidebar.left") }
                         .accessibilityIdentifier("settings-ipad-layout")
                 }
-            } footer: { Text("Your existing layouts, hidden tabs, sources and progress stay saved. Home and Explore layouts can also be adjusted from their own screens.") }
+            } header: { Text("Make it yours") } footer: { Text("Your existing layouts, hidden tabs, sources and progress stay saved. Home and Explore layouts can also be adjusted from their own screens.") }
         }.navigationTitle("Appearance & layout").navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -42,7 +42,7 @@ private final class UnifiedExploreSearchModel: ObservableObject {
                 guard !next || !values.isEmpty || !hasMore else { throw ServiceError.message("No new anime on this page. Retry or change your search.") }
                 anime = next ? anime + values : values
             case .reading:
-                let response = try await books.browse(.init(text: key.text, format: key.scope == .novels ? .novel : nil), page: page, limit: 24, contentFilter: key.contentFilter, refresh: refresh)
+                let response = try await books.browse(.init(format: key.scope == .novels ? .novel : nil, text: key.text), page: page, limit: 24, contentFilter: key.contentFilter, refresh: refresh)
                 try Task.checkCancellation(); guard attempt == generation else { return }
                 var known = Set(next ? reading.map(\.id) : [])
                 let values = response.items.filter { known.insert($0.id).inserted }
