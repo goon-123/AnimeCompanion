@@ -70,11 +70,13 @@ public actor MangaBakaClient {
         let taxonomyFilters = !query.genres.isEmpty || !query.tags.isEmpty || !query.excludedTags.isEmpty
             || (query.publisher != nil && query.publisher?.id == nil)
         var path = taxonomyFilters ? "/v1/series/search" : "/v2/series/search"
-        let curated = !searching && query.format == nil && query.status == nil && !query.hasFacets
-        if curated && query.shelf == .rising { path = "/v2/series/discover/rising" }
-        if curated && query.shelf == .hiddenGems { path = "/v2/series/discover/hidden-gems" }
+        if let discoveryPath = query.discoveryPath { path = discoveryPath }
         var c = URLComponents(string: "https://api.mangabaka.org" + path)!
-        var items = [URLQueryItem(name: "limit", value: String(min(100, max(1, limit))))]
+        // Discovery endpoints return one selection of at most 20 titles, not
+        // the 100-item pages accepted by catalog search.
+        let maximumLimit = query.discoveryPath == nil ? 100 : 20
+        var items = [URLQueryItem(name: "limit", value: String(min(maximumLimit, max(1, limit))))]
+        if query.discoveryPath != nil && query.shelf == .rising { items.append(.init(name: "window_days", value: "7")) }
         let ratings = query.allowedRatings(contentFilter: contentFilter).map(\.rawValue)
         if path.hasSuffix("/hidden-gems") {
             for rating in MangaBakaContentRating.allCases where !ratings.contains(rating.rawValue) {
@@ -114,10 +116,35 @@ public actor MangaBakaClient {
             throw MangaBakaError.message("This publisher is missing its identity.")
         }
         guard !query.allowedRatings(contentFilter: contentFilter).isEmpty else { throw MangaBakaError.message("Enable a matching MangaBaka content rating in Browsing & content.") }
+        let discovery = query.discoveryPath != nil
+        if discovery && page > 1 { return .init(selection: []) }
         let url = Self.browseURL(query, page: page, limit: limit, contentFilter: contentFilter)
-        let data = try await publicData(url, refresh: refresh)
-        do { return try decode(MangaBakaPage<MangaBakaSeries>.self, data) }
-        catch { cache[url] = nil; trimCache(); throw error }
+        var responseURL = url
+        let data: Data
+        do { data = try await publicData(url, refresh: refresh) }
+        catch MangaBakaError.http(404) where discovery {
+            // Retry the same selection's documented full response contract.
+            // Keep the exact limit and rating filters; never substitute a
+            // popular/search rail or silently open a different category.
+            var alternate = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            alternate.queryItems = (alternate.queryItems ?? []) + [.init(name: "schema", value: "full")]
+            responseURL = alternate.url!
+            do { data = try await publicData(responseURL, refresh: refresh) }
+            catch MangaBakaError.http(404) {
+                throw MangaBakaError.message("MangaBaka’s \(query.shelf.label) selection is temporarily unavailable. Pull to refresh to try again.")
+            }
+        }
+        do {
+            let result = try decode(MangaBakaPage<MangaBakaSeries>.self, data)
+            if responseURL != url {
+                // A validated recovery should not repeat the failed request on
+                // every visit. Reuse the normal bounded public-cache lifetime.
+                cache[url] = MBCachedPayload(url: url, date: Date(), data: data); trimCache()
+            }
+            guard discovery else { return result }
+            var seen = Set<Int>()
+            return .init(selection: result.items.filter { query.includes($0, contentFilter: contentFilter) && seen.insert($0.id).inserted })
+        } catch { cache[url] = nil; cache[responseURL] = nil; trimCache(); throw error }
     }
     public func genres(refresh: Bool = false) async throws -> [MangaBakaGenre] {
         let bytes = try await publicData(api("/v1/genres"), refresh: refresh)
@@ -329,6 +356,18 @@ public actor MangaBakaClient {
             let seconds = min(86400, max(1, Int(response.value(forHTTPHeaderField: "Retry-After") ?? "60") ?? 60))
             blockedUntil = Date().addingTimeInterval(Double(seconds)); throw MangaBakaError.rateLimited(seconds)
         default: throw MangaBakaError.http(response.statusCode)
+        }
+    }
+}
+
+private extension MangaBakaQuery {
+    var discoveryPath: String? {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              format == nil, status == nil, !hasFacets else { return nil }
+        switch shelf {
+        case .rising: return "/v2/series/discover/rising"
+        case .hiddenGems: return "/v2/series/discover/hidden-gems"
+        default: return nil
         }
     }
 }

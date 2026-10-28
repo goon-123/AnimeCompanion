@@ -1,5 +1,14 @@
 # Anime Companion
 
+## MangaBaka discovery feed repair — version 0.32.2 / build 86
+
+Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.
+
+If a discovery request returns 404, retry the same feed, limit and content settings once using MangaBaka’s documented full response schema. Cache a successfully decoded recovery. If both responses are missing, show a feed-specific refresh message instead of saying that a manga entry is missing. Authentication, rate-limit failures and unrelated searches do not use this retry.
+
+Live HTTP inspection reproduced validation failures for the old limit=100 requests; both endpoints returned 20 titles successfully with the corrected limit, including the full-schema response. Four focused transport/contract regressions and one live app-client check cover the repaired requests. Hosted execution passed: five focused checks, zero failures, including the live app client for both discovery feeds. Universal iPhone/iPad Release compilation and unsigned IPA packaging passed at [workflow 40577219180](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180). [Download build 86 unsigned IPA](https://github.com/goon-123/AnimeCompanion/actions/runs/40577219180/artifacts/12768273069). App sources match packaging commit eec70d87dadcf1dd58364867615f1cb83b8b1cd8; the temporary workflow is removed from the PR. Device acceptance is left to the user.
+
+
 ## In-app anime links — version 0.32.1 / build 85
 
 MangaBaka series now show Related anime from the exact linked AniList manga/novel identity. Tap a title to open its native anime detail page, including episodes and watch actions, on the current navigation stack. Multiple linked seasons remain separate choices. The lookup only accepts anime nodes with Source/Adaptation relations and respects AniList adult-content settings. No linked entry or a failed lookup retains an in-app anime search prefilled with the written title; errors offer Retry. The Anime jump reaches these links above the existing chapter/volume coverage notes. Remove the external AniList website action introduced in build 84.

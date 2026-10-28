@@ -304,6 +304,11 @@ public struct MangaBakaPage<Item: Decodable & Sendable>: Decodable, Sendable {
     public let page: Int
     public let hasNext: Bool
     public let hasPagination: Bool
+    /// Public discovery rails are finite selections, even if a provider
+    /// accidentally attaches ordinary search pagination to their response.
+    init(selection: [Item]) {
+        items = selection; total = nil; page = 1; hasNext = false; hasPagination = false
+    }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: MBKey.self)
         if c.contains(.data) { items = try c.decode([Item].self, forKey: .data) }

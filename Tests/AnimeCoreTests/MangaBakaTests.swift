@@ -228,6 +228,80 @@ final class MangaBakaTests: XCTestCase {
         let release = MangaBakaClient.browseURL(.init(shelf: .newReleases), page: 1, limit: 24, includeAdult: false, now: Date(timeIntervalSince1970: 1_735_689_600))
         XCTAssertTrue(release.absoluteString.contains("published_start_date_lower=2024-01-02"))
     }
+    func testDiscoveryRequestsStayWithinThePublicSelectionContract() throws {
+        for shelf in [MangaBakaShelf.rising, .hiddenGems] {
+            for (requested, expected) in [(0, 1), (16, 16), (20, 20), (30, 20), (100, 20), (Int.max, 20)] {
+                let url = MangaBakaClient.browseURL(.init(shelf: shelf), page: 2, limit: requested, includeAdult: false)
+                let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+                XCTAssertEqual(query.first { $0.name == "limit" }?.value, String(expected))
+                XCTAssertNil(query.first { $0.name == "page" })
+                XCTAssertEqual(query.first { $0.name == "window_days" }?.value, shelf == .rising ? "7" : nil)
+            }
+            // Adding catalog facets uses ordinary search, which still accepts
+            // larger pages and must keep normal pagination.
+            let url = MangaBakaClient.browseURL(.init(shelf: shelf, format: .novel), page: 2, limit: 100, includeAdult: false)
+            XCTAssertEqual(url.path, "/v2/series/search")
+            let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            XCTAssertEqual(query.first { $0.name == "limit" }?.value, "100")
+            XCTAssertEqual(query.first { $0.name == "page" }?.value, "2")
+        }
+    }
+    func testDiscovery404RecoveryPreservesFiltersAndCachesOneFiniteSelection() async throws {
+        let hidden = #"{"id":82,"title":"Another story","content_rating":"erotica"}"#
+        for shelf in [MangaBakaShelf.rising, .hiddenGems] {
+            let transport = MBTestTransport([.json("{}", status: 404),
+                .json(page(record + "," + record + "," + hidden, next: "\"2\"", count: 200))])
+            let api = client(transport)
+            let query = MangaBakaQuery(shelf: shelf)
+            let filter = MangaBakaContentFilter(ratings: [.safe])
+            for _ in 0..<2 {
+                let selection = try await api.browse(query, limit: 100, contentFilter: filter)
+                XCTAssertEqual(selection.items.map(\.id), [81])
+                XCTAssertFalse(selection.hasNext); XCTAssertFalse(selection.hasPagination)
+                XCTAssertNil(selection.total)
+            }
+            let next = try await api.browse(query, page: 2, limit: 100, contentFilter: filter)
+            XCTAssertTrue(next.items.isEmpty); XCTAssertFalse(next.hasNext)
+            let requests = await transport.recorded()
+            XCTAssertEqual(requests.count, 2)
+            let original = try XCTUnwrap(requests.first?.url), alternate = try XCTUnwrap(requests.last?.url)
+            XCTAssertEqual(original.path, alternate.path)
+            let originalQuery = try XCTUnwrap(URLComponents(url: original, resolvingAgainstBaseURL: false)?.queryItems)
+            let alternateQuery = try XCTUnwrap(URLComponents(url: alternate, resolvingAgainstBaseURL: false)?.queryItems)
+            XCTAssertEqual(alternateQuery.filter { $0.name != "schema" }, originalQuery)
+            XCTAssertEqual(alternateQuery.first { $0.name == "schema" }?.value, "full")
+            XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil && $0.value(forHTTPHeaderField: "X-API-Key") == nil })
+        }
+    }
+    func testDiscovery404RemainsRetryableAndDoesNotBecomeAMissingSeries() async throws {
+        for shelf in [MangaBakaShelf.rising, .hiddenGems] {
+            let transport = MBTestTransport([.json("{}", status: 404), .json("{}", status: 404), .json(page(record))])
+            let api = client(transport), query = MangaBakaQuery(shelf: shelf)
+            do { _ = try await api.browse(query, includeAdult: false); XCTFail("An unavailable feed must offer retry") }
+            catch {
+                XCTAssertTrue(error.localizedDescription.contains(shelf.label))
+                XCTAssertTrue(error.localizedDescription.contains("refresh"))
+            }
+            let retried = try await api.browse(query, includeAdult: false, refresh: true)
+            XCTAssertEqual(retried.items.map(\.id), [81])
+            let requests = await transport.recorded(); XCTAssertEqual(requests.count, 3)
+        }
+    }
+    func testDiscoveryRecoveryDoesNotRetryAuthenticationRateLimitsOrSearch404s() async throws {
+        for status in [401, 429, 503] {
+            let transport = MBTestTransport([.json("{}", status: status)]), api = client(transport)
+            do { _ = try await api.browse(.init(shelf: .rising), includeAdult: false); XCTFail("Expected provider failure") }
+            catch {
+                let expected: MangaBakaError = status == 401 ? .unauthorized : status == 429 ? .rateLimited(60) : .http(status)
+                XCTAssertEqual(error as? MangaBakaError, expected)
+            }
+            let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+        }
+        let transport = MBTestTransport([.json("{}", status: 404)]), api = client(transport)
+        do { _ = try await api.browse(.init(shelf: .hiddenGems, text: "Paper"), includeAdult: false); XCTFail("Expected missing search") }
+        catch { XCTAssertEqual(error as? MangaBakaError, .http(404)) }
+        let requests = await transport.recorded(); XCTAssertEqual(requests.count, 1)
+    }
     func testPaginationDoesNotTrustRemoteNextURL() throws {
         let decoded = try JSONDecoder().decode(MangaBakaPage<MangaBakaSeries>.self, from: Data(page(record, next: "\"https://attacker.example/steal\"", count: 200, page: 3).utf8))
         XCTAssertTrue(decoded.hasNext); XCTAssertEqual(decoded.total, 200); XCTAssertEqual(decoded.page, 3)
