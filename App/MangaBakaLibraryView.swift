@@ -83,6 +83,7 @@ struct MangaBakaLibraryView: View {
                             if let series = entry.series {
                                 NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryTile(entry: entry, series: series) }
                                     .buttonStyle(.plain)
+                                    .contextMenu { MangaLibrarySourceMenu(series: series) }
                             }
                         }
                     }.accessibilityIdentifier("mangabaka-library-grid")
@@ -91,6 +92,7 @@ struct MangaBakaLibraryView: View {
                         if let series = entry.series {
                             NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryRow(entry: entry, series: series) }
                                 .buttonStyle(.plain)
+                                .contextMenu { MangaLibrarySourceMenu(series: series) }
                         }
                     }
                 }
@@ -137,6 +139,7 @@ struct MangaBakaLibraryRow: View {
             Text(series.displayTitle).font(.headline).lineLimit(3)
             Text(statusText).font(.caption).foregroundStyle(.secondary)
             Text(progressText).font(.subheadline.monospacedDigit())
+            MangaSourceLinkBadge(series: series)
             if let total = series.totalChapters, total > 0 {
                 ProgressView(value: min(max(0, entry.chapter ?? 0), total), total: total).tint(.mint)
             }

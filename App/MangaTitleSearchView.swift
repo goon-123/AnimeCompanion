@@ -7,12 +7,13 @@ struct MangaTitleSearchView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @AppStorage("manga.showMatureSources") private var showMature = false
     let titles: [String]
+    let linkingTo: MangaSourceLinkTarget?
     @State private var query: String
     @State private var language = "en"
     @State private var manage = false
     @FocusState private var editing: Bool
-    init(titles: [String]) {
-        self.titles = titles
+    init(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
+        self.titles = titles; self.linkingTo = linkingTo
         _query = State(initialValue: titles.first ?? "")
     }
     private var search: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -25,7 +26,7 @@ struct MangaTitleSearchView: View {
     var body: some View {
         List {
             Section {
-                Label(titles.isEmpty ? "Search manga and manhwa" : "Find the story behind the anime", systemImage: "books.vertical").font(.headline)
+                Label(linkingTo.map { "Link a source for " + $0.title } ?? (titles.isEmpty ? "Search manga and manhwa" : "Find a reading source"), systemImage: "books.vertical").font(.headline)
                 HStack(spacing: 8) {
                     TextField("Series title", text: $query).submitLabel(.search).autocorrectionDisabled()
                         .focused($editing).onSubmit { editing = false }
@@ -61,7 +62,7 @@ struct MangaTitleSearchView: View {
                     actions: { Button("Manage extensions") { manage = true }.buttonStyle(.borderedProminent) }
                 } else {
                     ForEach(sources) { source in
-                        NavigationLink { MangaSourceBrowseView(source: source, initialQuery: search) } label: {
+                        NavigationLink { MangaSourceBrowseView(source: source, initialQuery: search, linkingTo: linkingTo) } label: {
                             HStack(spacing: 12) {
                                 if let entry = extensions.installed(source.extensionID)?.descriptor { MangaExtensionIcon(entry: entry) }
                                 VStack(alignment: .leading, spacing: 4) {

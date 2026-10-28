@@ -193,16 +193,7 @@ struct MangaBakaDetailView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
         } else {
-            Button { navigation.openMangaSearch(titles: series.searchTitles) } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "book.closed").font(.title2)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Find a reading source").font(.headline)
-                        Text("Search your installed manga extensions").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(); Image(systemName: "arrow.right")
-                }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
-            }.buttonStyle(.plain)
+            MangaBakaSourceLinkSection(series: series)
         }
     }
     private var officialLinks: some View {

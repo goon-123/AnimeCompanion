@@ -11,6 +11,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var navigation = AppNavigationStore()
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
+    @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
@@ -20,6 +21,7 @@ struct AnimeCompanionApp: App {
                 .environmentObject(seanime)
                 .environmentObject(navigation)
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
+                .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
@@ -27,6 +29,7 @@ struct AnimeCompanionApp: App {
                 }
                 .preferredColorScheme(.dark).fontDesign(.rounded).task { if !artworkPreview { await store.restore() } }
                 .task { if !artworkPreview { await mangaBaka.restore() } }
+                .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
                     await store.exploreDubs.keepUpdated(using: store.dubs)
@@ -62,6 +65,14 @@ struct AnimeVisualsRoute: Hashable { let anime: Anime? }
 struct MangaSearchRoute: Hashable {
     let id = UUID()
     let titles: [String]
+    let linkingTo: MangaSourceLinkTarget?
+    init(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) { self.titles = titles; self.linkingTo = linkingTo }
+}
+struct LinkedMangaRoute: Hashable {
+    let id = UUID()
+    let link: MangaSourceLink
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 struct DiscoveryRoute: Hashable {
     let category: DiscoveryCategory
@@ -73,7 +84,7 @@ struct DiscoveryRoute: Hashable {
 }
 
 struct SupplementaryDestination: Identifiable {
-    enum Kind { case manga([String]), schedule, genre(String), library }
+    enum Kind { case manga([String], linkingTo: MangaSourceLinkTarget? = nil), linkedManga(MangaSourceLink), schedule, genre(String), library }
     let id = UUID()
     let kind: Kind
 }
@@ -162,14 +173,22 @@ final class AppNavigationStore: ObservableObject {
         openMangaSearch(titles: MangaSearchTitles.suggestions(for: anime))
     }
 
-    func openMangaSearch(titles: [String]) {
+    func openMangaSearch(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
         guard tabPreferences.visible.contains(.manga) else {
-            supplementary = .init(kind: .manga(titles)); return
+            supplementary = .init(kind: .manga(titles, linkingTo: linkingTo)); return
         }
         var path = NavigationPath()
-        path.append(MangaSearchRoute(titles: titles))
+        path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
         manga.path = path
         selectedTab = .manga
+    }
+    func openLinkedManga(_ link: MangaSourceLink) {
+        guard tabPreferences.visible.contains(.manga) else {
+            supplementary = .init(kind: .linkedManga(link)); return
+        }
+        var path = NavigationPath()
+        path.append(LinkedMangaRoute(link: link))
+        manga.path = path; selectedTab = .manga
     }
 }
 
@@ -236,7 +255,8 @@ struct AppTabs: View {
     }
     @ViewBuilder private func supplementary(_ kind: SupplementaryDestination.Kind) -> some View {
         switch kind {
-        case .manga(let titles): MangaTitleSearchView(titles: titles)
+        case .manga(let titles, let target): MangaTitleSearchView(titles: titles, linkingTo: target)
+        case .linkedManga(let link): MangaTitleDetailView(title: link.title, linkingTo: link.library, resumeOnOpen: true)
         case .schedule: ScheduleView()
         case .library: MediaLibraryView()
         case .genre(let genre): DiscoveryBrowseView(category: .trending, selection: .current(), titleOverride: genre, initialGenre: genre)
@@ -250,7 +270,10 @@ private struct MangaTabPane: View {
     var body: some View {
         NavigationStack(path: $state.path) {
             MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
-                MangaTitleSearchView(titles: route.titles).id(route.id)
+                MangaTitleSearchView(titles: route.titles, linkingTo: route.linkingTo).id(route.id)
+            }
+            .navigationDestination(for: LinkedMangaRoute.self) { route in
+                MangaTitleDetailView(title: route.link.title, linkingTo: route.link.library, resumeOnOpen: true).id(route.id)
             }
         }
     }
@@ -362,5 +385,3 @@ struct AnimeNavigation: ViewModifier {
     }
 }
 extension View { func animeNavigation() -> some View { modifier(AnimeNavigation()) } }
-
-
