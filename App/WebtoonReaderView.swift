@@ -49,13 +49,17 @@ final class WebtoonReaderModel: ObservableObject {
     }
     func position(page: Int, fraction: Double, complete: Bool) {
         guard !pages.isEmpty, pages.indices.contains(page) else { return }
-        currentPage = page
+        // Fractional progress stays local to the model. Publishing the same
+        // page on every scroll report redraws the entire reader unnecessarily.
+        if currentPage != page { currentPage = page }
         let point = MangaReadingPosition(chapterURL: chapter.url, chapterName: chapter.name, pageIndex: page,
             pageCount: pages.count, fraction: fraction, completed: complete)
         confirmed = point
         guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
-            do { try await Task.sleep(for: .milliseconds(600)); try Task.checkCancellation() } catch { return }
+            // Keep disk writes and library publications out of the scroll hot
+            // path. Chapter changes, backgrounding and closing still flush.
+            do { try await Task.sleep(for: .seconds(2)); try Task.checkCancellation() } catch { return }
             guard let self, let reading = self.reading, let latest = self.confirmed else { return }
             self.saveTask = nil
             await reading.progress(self.title, position: latest)
