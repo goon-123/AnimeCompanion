@@ -4,7 +4,7 @@ import SwiftUI
 struct SilverGlass<S: Shape>: ViewModifier {
     let shape: S
     func body(content: Content) -> some View {
-        content.background(Theme.surface, in: shape)
+        content.foregroundStyle(.primary).background(Theme.surface, in: shape)
             .overlay { shape.stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
     }
 }

@@ -2,11 +2,12 @@ import XCTest
 import UIKit
 
 final class ExperienceRedesignUITests: XCTestCase {
-    @MainActor private func launch(dark: Bool = false, largeText: Bool = false) -> XCUIApplication {
+    @MainActor private func launch(dark: Bool = false, largeText: Bool = false, extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-content-preferences", "--ui-phase2-preview", "--ui-customization-preview", "--ui-unified-preview", "--ui-redesign-preview"]
+        app.launchArguments += extra
         if dark { app.launchArguments.append("--ui-redesign-dark") }
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
@@ -88,6 +89,31 @@ final class ExperienceRedesignUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-customize"].waitForExistence(timeout: 15)); app.appTab("My Library").tap()
         XCTAssertTrue(app.buttons["library-saved-views"].waitForExistence(timeout: 15)); app.buttons["library-saved-views"].tap()
         XCTAssertTrue(app.buttons["Evening queue"].firstMatch.exists)
+    }
+    @MainActor func testSwitchingDestinationsKeepsSearchAndResults() {
+        let app = launch()
+        app.buttons["home-search"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("harbor\n")
+        XCTAssertTrue(app.buttons["explore-story-anilist:1"].waitForExistence(timeout: 15))
+        app.appTab("My Library").tap()
+        XCTAssertTrue(app.buttons["library-saved-views"].waitForExistence(timeout: 10))
+        app.appTab("Home").tap()
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        XCTAssertTrue((search.value as? String ?? "").contains("harbor"))
+        XCTAssertTrue(app.buttons["explore-story-anilist:1"].exists)
+        capture("Redesign-Retained-Search")
+    }
+    @MainActor func testSearchingLibraryDuringHomeSyncCompletesEveryPage() {
+        let app = launch(extra: ["--ui-library-controls-preview", "--ui-home-library-delay", "--ui-account-hidden-library"])
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "home-reading-sync").firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.appTab("My Library").exists)
+        app.buttons["Continue watching, see all"].tap()
+        let search = app.textFields["combined-library-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("Zinnia\n")
+        let lastPage = app.descendants(matching: .any).matching(identifier: "combined-title-mangabaka:807").firstMatch
+        XCTAssertTrue(lastPage.waitForExistence(timeout: 20), "The full library must finish without tapping Continue syncing after Home's first-page request")
+        capture("Redesign-Library-After-Home-Sync")
     }
     @MainActor func testLargeTextAndIPadLandscapeKeepPrimaryActionsAvailable() {
         let app = launch(dark: true, largeText: true)

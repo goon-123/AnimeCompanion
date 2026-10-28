@@ -220,7 +220,9 @@ struct AppTabs: View {
                 if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { hidden.insert(.library) }
                 if !ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") { hidden.insert(.home) }
                 UserDefaults.standard.removeObject(forKey: TrackingAccount.storageKey)
-                UserDefaults.standard.set((ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") ? AppTabPreferences() : AppTabPreferences(hidden: hidden)).saved, forKey: AppTabPreferences.storageKey)
+                var preferences = ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") ? AppTabPreferences() : AppTabPreferences(hidden: hidden)
+                if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { preferences.setVisible(.library, false) }
+                UserDefaults.standard.set(preferences.saved, forKey: AppTabPreferences.storageKey)
                 UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("--ui-customization-preview") ? "all" : "anime", forKey: "library.mediaSection")
                 UserDefaults.standard.set("anime", forKey: "app.mediaSection")
             } else if !LibraryCustomizationPreview.active && (MangaReaderPreview.active || ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview")) {
@@ -253,9 +255,9 @@ struct AppTabs: View {
     }
     @ViewBuilder private var navigationSurface: some View {
         if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
-        else { phoneTabs }
+        else { destinationTabs }
     }
-    private var phoneTabs: some View {
+    private var destinationTabs: some View {
         TabView(selection: $navigation.selectedTab) {
             ForEach(navigation.tabPreferences.visible) { tab in
                 pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
@@ -268,7 +270,10 @@ struct AppTabs: View {
                 if let value = $0 { navigation.open(value); sidebarColumn = .detail }
             })) {
                 Section("Your world") {
-                    ForEach(navigation.tabPreferences.visible) { tab in Label(tab.title, systemImage: tab.symbol).tag(tab) }
+                    ForEach(navigation.tabPreferences.visible) { tab in
+                        Label(tab.title, systemImage: tab.symbol).tag(tab)
+                            .accessibilityIdentifier("sidebar-tab-" + tab.rawValue)
+                    }
                 }
                 if !navigation.tabPreferences.hidden.isEmpty {
                     DisclosureGroup("More") {
@@ -285,8 +290,11 @@ struct AppTabs: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
                 .appSettingsSheet(isPresented: $sidebarSettings)
                 .accessibilityIdentifier("companion-sidebar")
-        } detail: { pane(navigation.selectedTab) }
-        .navigationSplitViewStyle(.balanced)
+        } detail: {
+            // Keep each destination's navigation/search state alive, with the
+            // sidebar owning navigation and the phone tab bar hidden.
+            destinationTabs.toolbar(.hidden, for: .tabBar)
+        }.navigationSplitViewStyle(.balanced)
     }
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {
         switch tab {

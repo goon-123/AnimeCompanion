@@ -1,5 +1,13 @@
 # Anime Companion
 
+## Experience redesign — version 0.34.0 / build 88
+
+A personal Home now brings watching, saved manga positions, tracked manga/novels and upcoming broadcasts together. New defaults focus on Home, Explore and My Library; explicitly saved navigation preferences remain intact. iPad gains a native sidebar while retaining full-width and browse/detail layouts.
+
+The redesign introduces semantic System/Light/Dark appearance, compact discovery and detail pages, media-scoped search, saved Library views, and searchable Sources & playback / Appearance & layout settings. Existing accounts, integrations, source configurations and progress use their original storage and service implementations.
+
+See the [full experience audit, workflow map, preservation matrix and validation notes](docs/EXPERIENCE_REDESIGN.md). Build and verification status is recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
+
 ## MangaBaka discovery feed repair — version 0.32.2 / build 86
 
 Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.

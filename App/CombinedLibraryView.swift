@@ -122,6 +122,16 @@ struct CombinedLibraryView: View {
     }
     private func loadReading(refresh: Bool = false) async {
         guard reading.connected else { return }
+        let connection = reading.connectionID
+        // Home may already own the first page. Finish that request before
+        // asking the shared store to complete pagination, without duplicating it.
+        if reading.loadingLibrary {
+            for await loading in reading.$loadingLibrary.values {
+                guard !Task.isCancelled, connection == reading.connectionID else { return }
+                if !loading { break }
+            }
+        }
+        guard !Task.isCancelled, reading.connected, connection == reading.connectionID else { return }
         await reading.loadCompleteLibrary(state: nil, refresh: refresh)
     }
 }

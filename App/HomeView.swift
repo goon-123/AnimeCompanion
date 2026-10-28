@@ -48,6 +48,9 @@ struct HomeView: View {
                     NoticeView(message: error) { Task { await anime.reloadLibrary() } }
                 }
                 if let error = reading.error { NoticeView(message: error) }
+                if books.loadingLibrary {
+                    ProgressView("Syncing reading library…").font(.caption).accessibilityIdentifier("home-reading-sync")
+                }
                 if let error = books.libraryError, books.connected {
                     NoticeView(message: error) { Task { await refreshBooks() } }
                 }

@@ -146,7 +146,7 @@ struct LibraryGuestView: View {
                 if AppConfiguration.clientID == nil { showSettings = true } else { Task { await store.connect() } }
             } label: {
                 if store.connecting { ProgressView() } else { Text("Connect AniList").frame(maxWidth: .infinity) }
-            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(.white).foregroundStyle(.black)
+            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(store.connecting).tint(Theme.accent).foregroundStyle(Theme.background)
             if let error = store.accountError { NoticeView(message: error) }
             Text("Browsing and news work without an account.").font(.caption).foregroundStyle(.secondary)
         }.padding(28).frame(maxWidth: 480).frame(maxWidth: .infinity, maxHeight: .infinity)

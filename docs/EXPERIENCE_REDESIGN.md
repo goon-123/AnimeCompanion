@@ -23,7 +23,7 @@ This is a source and interaction audit. Native screenshot review, compilation an
 | News | Existing personalization, saved stories, unread controls and original-article browsing were valuable | Keep the news experience and preferences; correct surface foregrounds for light appearance and expose News through the new navigation. |
 | Accounts/settings | Provider setup and personalization occupied many rows on the same settings page | Searchable Settings, a reusable Sources & playback directory, and Appearance & layout. Search can find individual services directly. Existing account screens, switching and secure storage are reused. |
 | Onboarding | The new optional, resumable setup wizard was already present | Keep its lifecycle, migration guard, skip options and provider steps. Harmonize colors and remove its forced dark appearance. |
-| iPad | Full-width and browse/detail split layouts existed; no app-wide sidebar | Add a native sidebar with adaptive content. Keep explicit full-width and legacy side-by-side preferences, with single-column behavior in compact windows. |
+| iPad | Full-width and browse/detail split layouts existed; no app-wide sidebar | Add a native sidebar with adaptive content and retained navigation/search state for each destination. Keep explicit full-width and legacy side-by-side preferences, with single-column behavior in compact windows. |
 | Visual language | Forced dark appearance, global rounded fonts, multiple palettes and glass controls | Native typography, semantic light/dark surfaces, a restrained violet accent, consistent panels and 44 pt controls. Artwork overlays retain their own legible contrast. |
 
 ## Design direction
@@ -77,7 +77,7 @@ No existing preference or progress file is reset in Release. No credential schem
 ## Performance and accessibility
 
 - Home reads the existing local library/reader state and synchronizes the connected reading library through its existing guarded client. It does not fetch discovery feeds. Lists are bounded for the dashboard and use lazy/adaptive containers.
-- Combined Library sorts once for each body evaluation, reusing the result for counts and rendering.
+- Combined Library sorts once for each body evaluation, reusing the result for counts and rendering. If Home is already syncing its first reading-library page, Library waits for that request before completing pagination, instead of starting a duplicate request or leaving a partial list.
 - Poster decode dimensions share bounded size buckets, increasing cache reuse during resizing and grid changes. The existing bitmap/byte budgets and memory-warning eviction remain.
 - Reading cards use the existing entry dictionary instead of scanning the complete account library for every poster.
 - Collapsed manga galleries and related sections defer their own requests until expanded. Existing response caches, request coalescing, cancellation and generation checks remain.

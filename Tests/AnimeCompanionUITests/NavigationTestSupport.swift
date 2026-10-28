@@ -29,8 +29,13 @@ extension XCUIApplication {
     /// iPad's adaptive tabs may be represented as a top bar or sidebar rather
     /// than the phone's bottom tab bar. Keep feature assertions in both modes.
     @MainActor func appTab(_ title: String) -> XCUIElement {
+        let ids = ["Home": "home", "Explore": "explore", "My Library": "library", "Manga": "manga", "Schedule": "schedule", "News": "news"]
+        if let id = ids[title] {
+            let sidebar = descendants(matching: .any).matching(identifier: "sidebar-tab-" + id).firstMatch
+            if sidebar.exists && sidebar.isHittable { return sidebar }
+        }
         let tab = tabBars.buttons[title].firstMatch
-        if tab.exists { return tab }
+        if tab.exists && tab.isHittable { return tab }
         let button = buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
         return button.exists ? button : staticTexts[title].firstMatch
     }

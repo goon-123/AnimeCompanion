@@ -146,7 +146,7 @@ struct NewsView: View {
                         .accessibilityIdentifier("news-open-visuals")
                     Button { navigation.openSchedule() } label: { Label("Schedules", systemImage: "calendar").frame(maxWidth: .infinity, minHeight: 44) }
                         .accessibilityIdentifier("news-open-schedule")
-                }.font(.subheadline.weight(.medium)).buttonStyle(.bordered).tint(.white)
+                }.font(.subheadline.weight(.medium)).buttonStyle(.bordered).tint(Theme.accent)
             }
         }
     }
