@@ -5,12 +5,11 @@ struct AnimeCover: View {
     let anime: Anime
     var width: CGFloat = 130
     var cornerRadius: CGFloat = 14
+    var identifierPrefix = "explore"
+    var badgeStyle: AnimePosterBadgeStyle = .compact
     var body: some View {
-        ArtworkImage(url: anime.coverURL, pointSize: width * 1.45) { image in image.resizable().scaledToFill() }
-        placeholder: { ZStack { Theme.surface; Image(systemName: "sparkles.tv").foregroundStyle(.secondary) } }
-            .frame(width: width, height: width * 1.45).clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .contentShape(Rectangle())
-            .accessibilityHidden(true)
+        AnimePoster(anime: anime, identifierPrefix: identifierPrefix, cornerRadius: cornerRadius, badgeStyle: badgeStyle)
+            .frame(width: width, height: width * 1.45)
     }
 }
 
@@ -38,16 +37,9 @@ struct AnimeCard: View {
       VStack(alignment: .leading, spacing: 4) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    AnimeCover(anime: anime, width: posterWidth)
-                    DiscoveryAiringDot(anime: anime, overArtwork: true).padding(8)
-                }
+                AnimeCover(anime: anime, width: posterWidth)
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
-                HStack(spacing: 5) {
-                    if let score = anime.averageScore { Label("\(score)%", systemImage: "star.fill").font(.caption) }
-                    Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.secondary)
-                }
-                DiscoveryIndicators(anime: anime)
+                DiscoveryLibraryBadge(anime: anime)
             }.frame(width: posterWidth).foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
@@ -146,7 +138,7 @@ struct ReleaseRow: View {
       VStack(alignment: .leading, spacing: 0) {
         AnimeLink(id: event.anime.id) {
             HStack(spacing: 12) {
-                AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48))
+                AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48), badgeStyle: .none)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(event.anime.displayTitle).font(sizeClass == .regular ? .headline : .subheadline.weight(.semibold)).foregroundStyle(.primary)
                     Label("\(event.kind.rawValue.uppercased()) · Episode \(event.episode)", systemImage: event.kind == .dub ? "mic" : "tv").font(.caption)

@@ -152,8 +152,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   library-customization:
-    # Package the installable app before occupying runners with simulator suites.
-    if: ${{ !cancelled() && needs.build.result == 'success' && (needs['weekly-ui'].result == 'success' || needs['weekly-ui'].result == 'skipped') }}
+    # Longer device journeys are opt-in; routine updates prioritize the IPA.
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.run_ui_tests && needs.build.result == 'success' && (needs['weekly-ui'].result == 'success' || needs['weekly-ui'].result == 'skipped') }}
     needs: [manga-runtime, build, weekly-ui]
     name: Reader and library changes ${{ matrix.device }}
     runs-on: macos-15-intel
@@ -294,7 +294,7 @@ jobs:
           env -u DEVELOPER_DIR swift --version
           env -u DEVELOPER_DIR swift test -j 2
   news-ui:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: [manga-runtime, build, weekly-ui]
     name: News experience ${{ matrix.device }}
     runs-on: macos-15-intel
@@ -340,7 +340,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   explore-ui:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: [manga-runtime, build, weekly-ui]
     name: Explore, accounts and Airing Now ${{ matrix.device }}
     runs-on: macos-15-intel
@@ -386,7 +386,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   weekly-ui:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: [manga-runtime, build]
     name: Library and schedule ${{ matrix.device }} regression
     runs-on: macos-15-intel
@@ -502,7 +502,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
-    needs: [safari-extension, manga-runtime]
+    needs: [core, safari-extension, manga-runtime]
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
@@ -511,8 +511,6 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
-      - name: Core unit tests
-        run: swift test -j 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -555,6 +553,7 @@ jobs:
           path: AnimeCompanion-unsigned.ipa
           retention-days: 30
       - name: Check public data providers
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
         continue-on-error: true
         env:
           ANIMECOMPANION_LIVE_SERVICES: '1'

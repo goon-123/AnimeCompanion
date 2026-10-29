@@ -17,7 +17,7 @@ final class ExploreUpgradeTests: XCTestCase {
         let id = String(details.identifier.dropFirst("featured-details-".count))
         XCTAssertTrue(app.staticTexts["featured-title-\(id)"].isHittable)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "featured-genres-\(id)").firstMatch.exists)
-        XCTAssertTrue(app.staticTexts["featured-dub-\(id)"].exists)
+        XCTAssertTrue(app.staticTexts["featured-library-\(id)"].exists)
         capture("Featured-Poster-Portrait")
         let poster = app.buttons["featured-poster-\(id)"]
         reveal(poster, in: app, upward: false)
@@ -73,7 +73,7 @@ final class ExploreUpgradeTests: XCTestCase {
         app.buttons["Done"].tap()
         let dub = app.staticTexts["explore-dub-1"]
         XCTAssertTrue(dub.waitForExistence(timeout: 40))
-        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Dub available"), object: dub)
+        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "English dub available"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
         XCTAssertTrue(app.buttons["discovery-entry-1"].exists)
         let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["discovery-entry-5"])
