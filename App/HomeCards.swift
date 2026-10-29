@@ -43,14 +43,15 @@ struct HomeContinueWatchingCard: View {
     private var episode: Int { PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil) }
 
     var body: some View {
-        AnimeLink(id: anime.id) {
-            HomeMediaCardLayout {
-                AnimeCover(anime: anime, width: 128, cornerRadius: 14, identifierPrefix: "home", badgeStyle: .none)
-            } content: { metadata }
-        }.buttonStyle(.plain).accessibilityIdentifier("home-anime-\(anime.id)")
-            .accessibilityHint("Open series details")
-            .companionPanel()
-            .overlay(alignment: .bottomTrailing) { continueAction.padding(.trailing, 16).padding(.bottom, 16) }
+        VStack(alignment: .trailing, spacing: 12) {
+            AnimeLink(id: anime.id) {
+                HomeMediaCardLayout {
+                    AnimeCover(anime: anime, width: 128, cornerRadius: 14, identifierPrefix: "home", badgeStyle: .none)
+                } content: { metadata }
+            }.buttonStyle(.plain).accessibilityIdentifier("home-anime-\(anime.id)")
+                .accessibilityHint("Open series details")
+            continueAction
+        }.companionPanel()
     }
 
     private var metadata: some View {
@@ -64,9 +65,6 @@ struct HomeContinueWatchingCard: View {
             } else { Color.clear.frame(height: 4).accessibilityHidden(true) }
             Text(anime.format == "MOVIE" ? "Movie" : "Episode \(episode)")
                 .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
-            // Reserve the independent action's hit area inside the metadata.
-            // It is overlaid outside the NavigationLink to avoid nested controls.
-            Color.clear.frame(height: 44).accessibilityHidden(true)
         }
     }
 

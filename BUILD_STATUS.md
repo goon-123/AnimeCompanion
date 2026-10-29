@@ -2,7 +2,7 @@
 
 Remove all anime poster badge overlays from Home. Keep the existing rounded panel style, with 128-point Continue Watching artwork, 112-point reading artwork and 88-point Up Next artwork. Watching cards fit the shelf's actual width up to 520 points; reading/upcoming cards use a roomier tablet grid and one column on compact panes or accessibility text sizes. A shared layout stacks artwork and metadata when necessary without imposing fixed card heights.
 
-Replace the full-width prominent watch button with a small trailing Continue pill, retaining a 44-point touch area and the existing playback sheet. Keep this action outside the details NavigationLink, with reserved metadata space to avoid overlapping content. Retain episode selection, watched progress, chapter/page/source details, saved reader resume, MangaBaka routes, release times, filters, deduplication and Home section preferences. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
+Replace the full-width prominent watch button with a small trailing Continue pill, retaining a 44-point touch area and the existing playback sheet. Keep this footer action outside the details NavigationLink so text and controls size independently. Retain episode selection, watched progress, chapter/page/source details, saved reader resume, MangaBaka routes, release times, filters, deduplication and Home section preferences. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
 
 Validation at source handoff: whitespace, project/workflow YAML and Safari resource/version checks pass locally. Hosted Release compilation and unsigned IPA packaging are pending; visual/device verification remains delegated to the user. No broad UI run is requested.
 
