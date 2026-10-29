@@ -27,6 +27,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let id: Int
     public let idMal: Int?
     public let title: AnimeTitle?
+    public let synonyms: [String]?
     public let coverImage: AnimeImage?
     public let bannerImage: String?
     public let description: String?
@@ -67,7 +68,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     }
     public init(id: Int, title: String) {
         self.id = id; self.title = AnimeTitle(english: title)
-        idMal = nil
+        idMal = nil; synonyms = nil
         coverImage = nil; bannerImage = nil; description = nil; episodes = nil
         duration = nil; format = nil; status = nil; season = nil; seasonYear = nil
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
@@ -79,7 +80,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     /// Related/adaptation results carry the same poster evidence as catalog
     /// cards without loading the complete detail page for every visible title.
     public init(related: RelatedAnime) {
-        id = related.id; idMal = related.idMal; title = related.title
+        id = related.id; idMal = related.idMal; title = related.title; synonyms = nil
         coverImage = related.coverImage; bannerImage = nil; description = nil
         episodes = related.episodes; duration = nil; format = nil; status = related.status
         season = nil; seasonYear = nil; averageScore = related.averageScore

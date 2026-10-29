@@ -42,6 +42,7 @@ struct AnimeDetailView: View {
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                             events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
                         AnimeUpdatesLinks(anime: anime)
+                        AnimeDiscussionsSection(anime: anime)
                         related(anime)
                         recommendations(anime)
                         characters(anime)
@@ -242,4 +243,3 @@ struct AnimeDetailView: View {
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
     }
 }
-

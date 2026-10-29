@@ -57,7 +57,7 @@ private struct ScheduledAiring: Decodable, Sendable { let airingAt: Int; let epi
 public enum AniListQueries {
     public static let card = """
     fragment AnimeCard on Media {
-      id idMal title { romaji english userPreferred }
+      id idMal title { romaji english userPreferred } synonyms
       coverImage { extraLarge large medium color } bannerImage
       episodes duration format status season seasonYear averageScore genres isAdult
       nextAiringEpisode { airingAt episode }
@@ -263,6 +263,68 @@ public actor AniListClient {
         guard let result = response.data else { throw ServiceError.invalidResponse }
         return result
     }
+    /// Public forum reads share the existing client's cache, request coalescing and rate-limit budget.
+    /// No token is sent and no account-scoped data is persisted by these queries.
+    public func communityThreads(mediaID: Int? = nil, search: String? = nil, page: Int = 1,
+                                 sort: CommunityThreadSort = .active, refresh: Bool = false) async throws -> CommunityThreadPage {
+        guard (1...200).contains(page), mediaID.map({ $0 > 0 }) ?? true else { throw ServiceError.invalidResponse }
+        let query = """
+        query CommunityThreads($media: Int, $category: Int, $search: String, $page: Int!, $sort: [ThreadSort]) {
+          Page(page: $page, perPage: 25) {
+            pageInfo { hasNextPage }
+            threads(mediaCategoryId: $media, categoryId: $category, search: $search, sort: $sort) {
+              id title replyCount repliedAt createdAt user { name }
+              mediaCategories { id type isAdult title { romaji english userPreferred } }
+            }
+          }
+        }
+        """
+        var variables: [String: QueryValue] = ["page": .int(page), "sort": .string(sort.aniListValue)]
+        if let mediaID { variables["media"] = .int(mediaID) } else { variables["category"] = .int(1) }
+        if let search, !search.isEmpty { variables["search"] = .string(String(search.prefix(150))) }
+        let result: AniListCommunityThreadResult = try await request(query, variables: variables, bypassCache: refresh)
+        return CommunityThreadPage(threads: (result.Page.threads ?? []).map(\.value), hasNextPage: result.Page.pageInfo?.hasNextPage == true && page < 200)
+    }
+
+    /// Small batches keep seasonal/library feeds to one request per visible page rather than one per card.
+    public func communityThreads(mediaIDs: [Int], page: Int = 1, sort: CommunityThreadSort = .active,
+                                 refresh: Bool = false) async throws -> CommunityThreadPage {
+        let ids = Array(Set(mediaIDs.filter { $0 > 0 })).sorted()
+        guard !ids.isEmpty, ids.count <= 8, (1...200).contains(page) else { throw ServiceError.invalidResponse }
+        let fields = "id title replyCount repliedAt createdAt user { name } mediaCategories { id type isAdult title { romaji english userPreferred } }"
+        let selections = ids.enumerated().map { index, id in
+            "s\(index): Page(page: $page, perPage: 10) { pageInfo { hasNextPage } threads(mediaCategoryId: \(id), sort: \(sort.aniListValue)) { \(fields) } }"
+        }.joined(separator: "\n")
+        let result: [String: AniListCommunityThreadResult.ThreadPage] = try await request("query CommunityShows($page: Int!) { \(selections) }", variables: ["page": .int(page)], bypassCache: refresh)
+        var seen = Set<String>()
+        let threads = result.values.flatMap { ($0.threads ?? []).map(\.value) }.filter { seen.insert($0.id).inserted }.sorted {
+            if sort == .comments, $0.commentCount != $1.commentCount { return ($0.commentCount ?? 0) > ($1.commentCount ?? 0) }
+            if sort == .newest { return $0.threadID > $1.threadID }
+            return ($0.activityAt ?? .distantPast) > ($1.activityAt ?? .distantPast)
+        }
+        return CommunityThreadPage(threads: threads, hasNextPage: result.values.contains { $0.pageInfo?.hasNextPage == true } && page < 200)
+    }
+
+    public func communityComments(threadID: Int, page: Int = 1, sort: CommunityCommentSort = .oldest,
+                                  refresh: Bool = false) async throws -> CommunityCommentPage {
+        guard threadID > 0, (1...200).contains(page) else { throw ServiceError.invalidResponse }
+        let query = """
+        query CommunityComments($id: Int!, $page: Int!, $sort: [ThreadCommentSort]) {
+          Thread(id: $id) { id title body(asHtml: false) mediaCategories { id type isAdult title { romaji english userPreferred } } }
+          Page(page: $page, perPage: 25) {
+            pageInfo { hasNextPage }
+            threadComments(threadId: $id, sort: $sort) {
+              id comment(asHtml: false) createdAt likeCount user { name } childComments
+            }
+          }
+        }
+        """
+        let result: AniListCommunityCommentResult = try await request(query, variables: ["id": .int(threadID), "page": .int(page), "sort": .string(sort.aniListValue)], bypassCache: refresh)
+        guard let thread = result.Thread else { throw ServiceError.message("This AniList discussion was removed or is unavailable.") }
+        return CommunityCommentPage(title: thread.title ?? "Discussion", body: thread.body,
+            comments: (result.Page.threadComments ?? []).map { $0.value() }, hasNextPage: result.Page.pageInfo?.hasNextPage == true && page < 200, media: thread.mediaCategories)
+    }
+
     public func explore(_ selection: SeasonSelection, refresh: Bool = false, includeAdult: Bool = false) async throws -> ExploreResponse {
         let next = selection.advanced(by: 1)
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue),
