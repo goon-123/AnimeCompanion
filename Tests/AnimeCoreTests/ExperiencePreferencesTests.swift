@@ -2,17 +2,23 @@ import XCTest
 @testable import AnimeCore
 
 final class ExperiencePreferencesTests: XCTestCase {
-    func testHomeSectionsRepairUnknownDuplicatesAndAllHiddenWithoutLosingOrder() {
+    func testHomeSectionsIntroduceWeekWithoutLosingExistingOrderOrHiddenChoices() {
         let repaired = HomePreferences(saved: #"{"order":["reading","reading","unknown"],"hidden":["watching","reading","airing","shortcuts","unknown"]}"#)
-        XCTAssertEqual(repaired.order, [.reading, .watching, .airing, .shortcuts])
-        XCTAssertEqual(repaired.visible, [.shortcuts])
+        XCTAssertEqual(repaired.order, [.weekly, .reading, .watching, .airing, .shortcuts])
+        XCTAssertEqual(repaired.visible, [.weekly])
         XCTAssertEqual(HomePreferences(saved: repaired.saved), repaired)
         XCTAssertEqual(HomePreferences(saved: "broken"), HomePreferences())
         var single = repaired
-        single.setVisible(.shortcuts, false)
-        XCTAssertEqual(single.visible, [.shortcuts])
+        single.setVisible(.weekly, false)
+        XCTAssertEqual(single.visible, [.weekly])
         single.setVisible(.reading, true)
-        XCTAssertEqual(single.visible, [.reading, .shortcuts])
+        XCTAssertEqual(single.visible, [.weekly, .reading])
+        let allHidden = HomePreferences(hidden: Set(HomeSection.allCases))
+        XCTAssertEqual(allHidden.visible, [.shortcuts])
+        var customized = HomePreferences(order: [.reading, .weekly], hidden: [.weekly])
+        customized.setVisible(.weekly, false)
+        XCTAssertEqual(HomePreferences(saved: customized.saved), customized)
+        XCTAssertFalse(HomePreferences(saved: customized.saved).visible.contains(.weekly))
     }
     func testExistingTabCustomizationPreservesVisibleOrderAndHidesNewHome() {
         let saved = #"{"order":["news","library","explore","manga","schedule"],"hidden":["manga","schedule"]}"#

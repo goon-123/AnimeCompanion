@@ -12,6 +12,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var playback = PlaybackStore()
     @StateObject private var seanime = SeanimeStore()
     @StateObject private var navigation = AppNavigationStore()
+    @StateObject private var weeklySchedule = WeeklyScheduleStore()
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
@@ -24,6 +25,7 @@ struct AnimeCompanionApp: App {
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .environmentObject(seanime)
                 .environmentObject(navigation)
+                .environmentObject(weeklySchedule)
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
                 .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
@@ -88,6 +90,11 @@ struct SupplementaryDestination: Identifiable {
     let kind: Kind
 }
 
+struct ScheduleDateRequest: Equatable {
+    let day: Date
+    let id = UUID()
+}
+
 @MainActor
 final class TabNavigationState: ObservableObject {
     @Published var path = NavigationPath()
@@ -105,6 +112,7 @@ final class AppNavigationStore: ObservableObject {
     @Published var selectedTab: AppTab = .home
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
+    @Published private(set) var scheduleDateRequest: ScheduleDateRequest?
     func open(_ tab: AppTab) {
         if tabPreferences.visible.contains(tab) { selectedTab = tab }
         else { supplementary = .init(kind: .tab(tab)) }
@@ -115,9 +123,15 @@ final class AppNavigationStore: ObservableObject {
         selectedTab = value.selection(for: selectedTab)
         tabPreferences = value
     }
-    func openSchedule() {
+    func openSchedule(on day: Date? = nil) {
+        scheduleDateRequest = day.map { ScheduleDateRequest(day: $0) }
+        schedule.path = NavigationPath(); schedule.detailPath = NavigationPath()
+        schedule.animeID = nil; schedule.column = .sidebar; schedule.visibility = .all
         if tabPreferences.visible.contains(.schedule) { selectedTab = .schedule }
         else { supplementary = .init(kind: .schedule) }
+    }
+    func finishScheduleRequest(_ request: ScheduleDateRequest) {
+        if scheduleDateRequest == request { scheduleDateRequest = nil }
     }
     @Published private(set) var tabletLayout = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
     let explore = TabNavigationState()
