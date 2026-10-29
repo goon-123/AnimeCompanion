@@ -63,8 +63,10 @@ private struct FeaturedAnimePanel: View {
                 LinearGradient(stops: [.init(color: .clear, location: 0.30), .init(color: background.color.opacity(0.15), location: 0.46),
                     .init(color: background.color.opacity(0.80), location: 0.73), .init(color: .black, location: 1)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
+                AnimePosterBadges(anime: anime, identifierPrefix: "featured")
+                    .padding(.top, topInset).padding(.bottom, 10)
                 information.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
-                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)
+                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.trailing, 64).padding(.bottom, 18)
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
             .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
@@ -83,19 +85,15 @@ private struct FeaturedAnimePanel: View {
     }
     private var information: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(anime.displayTitle).font(.system(.title, design: .rounded, weight: .bold))
-                    .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
-                    .accessibilityIdentifier("featured-title-\(anime.id)")
-                DiscoveryAiringDot(anime: anime, identifierPrefix: "featured").padding(.top, 12)
-            }
+            Text(anime.displayTitle).font(.system(.title, design: .rounded, weight: .bold))
+                .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
+                .accessibilityIdentifier("featured-title-\(anime.id)")
             HStack(spacing: 12) {
-                if let score = anime.averageScore { Label("\(Double(score) / 10, specifier: "%.1f")", systemImage: "star.fill").foregroundStyle(.yellow) }
                 if let year = anime.seasonYear { Text(String(year)) }
                 Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " "))
             }.font(.caption.weight(.semibold))
             AnimeGenres(anime: anime).accessibilityIdentifier("featured-genres-\(anime.id)")
-            DiscoveryIndicators(anime: anime, identifierPrefix: "featured")
+            DiscoveryLibraryBadge(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) { watchAction; detailsAction; libraryAction }

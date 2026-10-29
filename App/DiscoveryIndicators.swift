@@ -100,23 +100,15 @@ final class ExploreDubStore: ObservableObject {
     }
 }
 
-struct DiscoveryIndicators: View {
+/// List status stays live with the shared AniList store. Ratings and English
+/// availability belong to AnimePoster, keeping discovery metadata to one row.
+struct DiscoveryLibraryBadge: View {
     @EnvironmentObject private var store: AppStore
-    @EnvironmentObject private var dubs: ExploreDubStore
     let anime: Anime
     var identifierPrefix = "explore"
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 6) {
-                libraryBadge
-                dubBadge
-            }.fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: .leading, spacing: 5) {
-                libraryBadge
-                dubBadge
-            }
-        }.font(.caption2.weight(.medium))
+        libraryBadge.font(.caption2.weight(.medium))
     }
     @ViewBuilder private var libraryBadge: some View {
         if store.isSignedIn {
@@ -126,10 +118,6 @@ struct DiscoveryIndicators: View {
             }.foregroundStyle(libraryColor).padding(.horizontal, 7).padding(.vertical, 4)
                 .background(libraryColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
         }
-    }
-    private var dubBadge: some View {
-        DiscoveryDubBadge(progress: dubs.progress(for: anime))
-            .accessibilityIdentifier("\(identifierPrefix)-dub-\(anime.id)")
     }
     private var libraryLabel: String {
         if let entry = store.entry(for: anime.id) { return entry.status?.label ?? "In library" }
@@ -157,11 +145,13 @@ struct DiscoveryAiringDot: View {
     let anime: Anime
     var overArtwork = false
     var identifierPrefix = "explore"
+    var symbolSize: CGFloat = 9
+    var artworkPadding: CGFloat = 5
 
     var body: some View {
         if anime.isCurrentlyAiring {
-            Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(.green)
-                .padding(overArtwork ? 5 : 2)
+            Image(systemName: "circle.fill").font(.system(size: symbolSize)).foregroundStyle(.green)
+                .padding(overArtwork ? artworkPadding : 2)
                 .background {
                     if overArtwork { Circle().fill(.black.opacity(0.65)) }
                 }
@@ -171,26 +161,12 @@ struct DiscoveryAiringDot: View {
     }
 }
 
-struct DiscoveryDubBadge: View {
-    let progress: LibraryDubProgress?
-    private var color: Color { (progress?.discoveryStatus.tone ?? .neutral).color }
-
-    var body: some View {
-        Label(progress?.discoveryStatus.label ?? "Checking dub…", systemImage: "mic.fill")
-            .font(.caption2.weight(.semibold)).foregroundStyle(color)
-            .padding(.horizontal, 7).padding(.vertical, 4)
-            .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityHint("English dub availability. Episode counts and schedules are in anime details.")
-    }
-}
-
 struct DiscoveryDataNote: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Green dot: currently airing. Dub badges show English availability; amber means estimated or unconfirmed, yellow means announced. Open details for episode counts and dates.")
+            Text("Green dot: currently airing. DUB on a poster means English audio is available. Star badges show AniList ratings out of 10. Open details for dub announcements, episode counts and dates.")
             if dubs.unavailable {
                 Text(dubs.notice ?? "Some dub information is temporarily unavailable.")
                 Button("Retry dub information") { Task { await dubs.load(using: store.dubs, refresh: true) } }.disabled(dubs.loading)

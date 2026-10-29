@@ -1,3 +1,13 @@
+## Unified anime poster cards — version 0.37.0 / build 93
+
+Use one reusable AnimePoster and shared badge overlay for anime listings. Match the Library reference: currently-airing dot at top left, available English DUB above a 10-point AniList rating at bottom right, dark translucent rounded backgrounds, and responsive sizing down to agenda thumbnails. Keep artwork inside the existing full-height row/grid bounds. Preserve navigation, independent genre taps, Library context menus, progress tracks and original-broadcast catch-up/countdowns.
+
+Classic and unified Explore, search/season catalogs, related/recommended titles, adaptations from MangaBaka, combined libraries, Home, Airing Now, schedules and playback headers now share the artwork treatment. Discovery metadata keeps the title, current AniList list status and optional genres; remove duplicate rating/dub rows and list synopsis/format clutter. Detailed metadata, dub announcements and counts remain available in series details. Related/adaptation responses include the optional rating, broadcast and MAL-ID fields needed by the same existing dub store; posters make no new metadata requests. Missing evidence never creates a DUB or airing badge. Keep manga/novel posters and their routes unchanged.
+
+Per the user's request, all long native UI/simulator suites require an explicit workflow dispatch with run_ui_tests enabled. Retain the normal Core check and universal Release compile/IPA packaging; remove the duplicate macOS Core run and make the extra build-job live-provider sweep opt-in. Existing UI expectations use the available-dub accessibility label and no longer require a DUB on an arbitrary title with unknown availability.
+
+Validation at source handoff: local whitespace, YAML and Safari bundle/version checks passed. No local Xcode/Swift toolchain is available. Hosted compilation and IPA packaging are pending; native visual/device checking is intentionally left to the user. Manual checks: docs/POSTER_CARD_MANUAL_CHECKS.md.
+
 ## Balanced list artwork and Today highlighting — version 0.36.1 / build 92
 
 Raise the phone list-cover default to 128 points in My Library and Explore. Migrate the former 76/90-point defaults once while retaining other custom widths and narrow-window constraints. Both lists now use the same aspect-fill artwork renderer and fill the complete card height, including the genre area. Library ratings, DUB badges, broadcast catch-up/countdowns, card taps and independent genre actions remain intact.

@@ -79,7 +79,7 @@ struct AnimeDetailHero: View {
         Button { if let url = anime.coverURL { expand(url) } } label: {
             AnimeCover(anime: anime, width: posterWidth, cornerRadius: 12)
                 .overlay { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.16), lineWidth: 1) }
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: .topTrailing) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption2)
                         .foregroundStyle(.white)
                         .padding(7).background(.black.opacity(0.70), in: Circle()).padding(6)
@@ -179,8 +179,13 @@ struct RelatedAnimeCard: View {
     }
     private var card: some View {
         VStack(alignment: .leading, spacing: 7) {
-            ArtworkImage(url: anime.coverURL, pointSize: sizeClass == .regular ? 210 : 145) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
-                .frame(width: sizeClass == .regular ? 145 : 100, height: sizeClass == .regular ? 210 : 145).clipShape(RoundedRectangle(cornerRadius: 7))
+            if anime.type == "MANGA" {
+                ArtworkImage(url: anime.coverURL, pointSize: sizeClass == .regular ? 210 : 145) { image in image.resizable().scaledToFill() } placeholder: { Theme.surface }
+                    .frame(width: sizeClass == .regular ? 145 : 100, height: sizeClass == .regular ? 210 : 145).clipShape(RoundedRectangle(cornerRadius: 7))
+            } else {
+                AnimeCover(anime: Anime(related: anime), width: sizeClass == .regular ? 145 : 100,
+                    cornerRadius: 7, identifierPrefix: "related")
+            }
             if let caption { Text(caption.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption2).foregroundStyle(Theme.highlight).lineLimit(1) }
             Text(anime.displayTitle).font(.caption.weight(.semibold)).lineLimit(2, reservesSpace: true).foregroundStyle(.primary)
         }.frame(width: sizeClass == .regular ? 145 : 100, alignment: .leading)

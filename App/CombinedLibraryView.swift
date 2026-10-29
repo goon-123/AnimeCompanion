@@ -156,9 +156,11 @@ private struct CombinedLibraryCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     GeometryReader { geometry in cover(width: geometry.size.width) }
                         .aspectRatio(1 / 1.45, contentMode: .fit)
-                        .overlay(alignment: .topLeading) { LibraryFormatBadge(title: format).padding(7) }
+                        .overlay(alignment: .topLeading) {
+                            if case .reading = item { LibraryFormatBadge(title: format).padding(7) }
+                        }
                     Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
-                    Text(status).font(.caption).foregroundStyle(.secondary)
+                    Text(format + " · " + status).font(.caption).foregroundStyle(.secondary)
                     Text(progress).font(.caption.monospacedDigit()).lineLimit(2)
                     sourceBadge
                 }
@@ -182,7 +184,7 @@ private struct CombinedLibraryCard: View {
     }
     @ViewBuilder private func cover(width: CGFloat) -> some View {
         switch item {
-        case .anime(let entry): if let media = entry.media { AnimeCover(anime: media, width: width, cornerRadius: 14) }
+        case .anime(let entry): if let media = entry.media { AnimeCover(anime: media, width: width, cornerRadius: 14, identifierPrefix: "library") }
         case .reading(let entry): if let series = entry.series { MangaBakaCover(series: series, width: width) }
         }
     }

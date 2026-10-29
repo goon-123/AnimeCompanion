@@ -103,10 +103,16 @@ public enum AniListQueries {
         rankings { id rank type context year season allTime }
         studios(isMain: true) { nodes { id name } }
         characters(perPage: 12, sort: ROLE) { nodes { id name { full } image { medium } } }
-        relations { edges { relationType node { id type isAdult genres title { romaji english userPreferred } coverImage { large } } } }
+        relations { edges { relationType node {
+          id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
+          title { romaji english userPreferred } coverImage { extraLarge large medium }
+        } } }
         staff(perPage: 12) { edges { id role node { id name { full } image { large medium } } } }
         recommendations(perPage: 12, sort: RATING_DESC) {
-          nodes { id mediaRecommendation { id type isAdult genres title { romaji english userPreferred } coverImage { large } } }
+          nodes { id mediaRecommendation {
+            id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
+            title { romaji english userPreferred } coverImage { extraLarge large medium }
+          } }
         }
         reviews(perPage: 3, sort: RATING_DESC) { nodes { id summary score siteUrl } }
         externalLinks { id site url isDisabled }
@@ -119,7 +125,8 @@ public enum AniListQueries {
       Media(id: $id, type: MANGA) {
         id type
         relations { edges { relationType node {
-          id type isAdult genres title { romaji english userPreferred } coverImage { large }
+          id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
+          title { romaji english userPreferred } coverImage { extraLarge large medium }
         } } }
       }
     }

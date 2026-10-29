@@ -31,7 +31,7 @@ struct LibraryAnimeRow: View {
                         // Artwork measures the completed metadata layout, so it fills
                         // long titles, genre space and Dynamic Type rows edge to edge.
                         .overlay(alignment: .leading) {
-                            LibraryPoster(anime: anime, dub: dub, compact: true).frame(width: coverWidth)
+                            AnimePoster(anime: anime, dub: dub, identifierPrefix: "library", cornerRadius: 0).frame(width: coverWidth)
                         }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
             AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
@@ -54,7 +54,7 @@ struct LibraryAnimeTile: View {
       VStack(alignment: .leading, spacing: 0) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 0) {
-                LibraryPoster(anime: anime, dub: dub).aspectRatio(1 / 1.45, contentMode: .fit)
+                AnimePoster(anime: anime, dub: dub, identifierPrefix: "library", cornerRadius: 0).aspectRatio(1 / 1.45, contentMode: .fit)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold))
                         .lineLimit(textSize.isAccessibilitySize ? 4 : 2, reservesSpace: true)
@@ -72,32 +72,6 @@ struct LibraryAnimeTile: View {
             .overlay { RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .modifier(LibraryEntryActions(entry: entry, anime: anime))
-    }
-}
-
-/// The same badge positions work on narrow row covers and large grid posters:
-/// airing at the top, DUB above the rating at the bottom, with no overlap.
-private struct LibraryPoster: View {
-    let anime: Anime
-    let dub: LibraryDubProgress?
-    var compact = false
-    var body: some View {
-        AnimeRowArtwork(anime: anime, identifierPrefix: "library")
-                .overlay(alignment: .topLeading) {
-                    DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(compact ? 6 : 8)
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        if dub?.hasAvailableDub == true {
-                            Text("DUB").font(.system(size: 10, weight: .heavy)).tracking(0.8)
-                                .foregroundStyle(Color.mint).padding(.horizontal, 7).padding(.vertical, 5)
-                                .background(.black.opacity(0.80), in: RoundedRectangle(cornerRadius: 6))
-                                .accessibilityLabel("English dub available")
-                                .accessibilityIdentifier("library-dub-\(anime.id)")
-                        }
-                        LibraryRatingLabel(anime: anime, overArtwork: true, compact: compact)
-                    }.padding(compact ? 6 : 8)
-                }
     }
 }
 
@@ -121,28 +95,6 @@ private struct LibraryEntryProgress: View {
                 }.frame(height: 3).accessibilityHidden(true)
             }
             LibraryNextEpisodeLabel(entry: entry, anime: anime)
-        }
-    }
-}
-
-private struct LibraryRatingLabel: View {
-    let anime: Anime
-    var overArtwork = false
-    var compact = false
-    var body: some View {
-        if let score = anime.averageScore {
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill").foregroundStyle(overArtwork ? Color.yellow : Theme.highlight)
-                Text("\(Double(score) / 10, specifier: "%.1f")")
-                    .foregroundStyle(overArtwork ? Color.white : Theme.highlight)
-            }.font(overArtwork ? .system(size: compact ? 10 : 12, weight: .semibold) : .caption.weight(.semibold)).monospacedDigit().fixedSize()
-                .padding(.horizontal, overArtwork ? (compact ? 5 : 7) : 0).padding(.vertical, overArtwork ? 5 : 0)
-                .background {
-                    if overArtwork { RoundedRectangle(cornerRadius: 7).fill(.black.opacity(0.78)) }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text("AniList rating \(Double(score) / 10, specifier: "%.1f") out of 10"))
-                .accessibilityIdentifier("library-rating-\(anime.id)")
         }
     }
 }
