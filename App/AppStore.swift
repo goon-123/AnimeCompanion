@@ -6,6 +6,7 @@ import AnimeCore
 @MainActor
 final class AppStore: ObservableObject {
     let aniList: AniListClient
+    let communityMAL = MALCommunityClient()
     let exploreCache: ExploreCache
     let visuals: AnimeVisualsClient
     let dubs = DubClient()

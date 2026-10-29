@@ -152,6 +152,11 @@ struct WatchAnimeView: View {
             if anime.format != "MOVIE" {
                 if initialized { episodeControls } else { ProgressView("Loading AniList progress…").font(.caption) }
             }
+            if initialized {
+                NavigationLink { SeriesDiscussionsView(anime: anime, requestedEpisode: episode) } label: {
+                    Label("Discuss Episode \(episode)", systemImage: "text.bubble").font(.caption.weight(.semibold)).frame(minHeight: 44)
+                }.accessibilityIdentifier("watch-discuss-episode")
+            }
             if let notice = store.libraryError { Text("Progress could not refresh. Choose the episode manually if needed. \(notice)").font(.caption).foregroundStyle(.orange) }
             if let saved = playback.saved(animeID: anime.id, episode: episode) {
                 if saved.finished { Label("Finished on this device", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.mint) }
@@ -334,4 +339,3 @@ struct SourceInformationView: View {
         }
     }
 }
-
