@@ -1,8 +1,8 @@
 import SwiftUI
 import AnimeCore
 
-/// Medium covers and compact metadata keep Home readable. Narrow panes and
-/// accessibility text can stack without imposing a fixed card height.
+/// Medium covers and wrapping metadata keep normal Home cards horizontal.
+/// Accessibility text stacks without imposing a fixed card height.
 struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let artwork: Artwork
@@ -17,12 +17,9 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
             if textSize.isAccessibilitySize {
                 stacked
             } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 12) {
-                        artwork
-                        content.frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
-                    }
-                    stacked
+                HStack(alignment: .center, spacing: 12) {
+                    artwork
+                    content.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.primary).contentShape(Rectangle())
