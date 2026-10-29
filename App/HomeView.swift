@@ -8,6 +8,8 @@ struct HomeView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var sourceLinks: MangaSourceLinkStore
     @EnvironmentObject private var extensions: MangaExtensionStore
+    @EnvironmentObject private var weeklySchedule: WeeklyScheduleStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
     @AppStorage(HomePreferences.storageKey) private var sections = ""
@@ -61,6 +63,7 @@ struct HomeView: View {
                 }
                 ForEach(preferences.visible) { section in
                     switch section {
+                    case .weekly: AiringThisWeekView()
                     case .watching: if anime.isSignedIn || anime.loadingLibrary { watchSection }
                     case .reading: if !recent.isEmpty || !trackedBooks.isEmpty { readingSection }
                     case .airing: if !upcoming.isEmpty { airingSection }
@@ -86,7 +89,8 @@ struct HomeView: View {
             .refreshable {
                 async let shows: Void = refreshAnime()
                 async let titles: Void = refreshBooks()
-                _ = await (shows, titles)
+                async let week: Void = refreshWeek()
+                _ = await (shows, titles, week)
             }
             .appSettingsSheet(isPresented: $settings)
             .sheet(isPresented: $customize) {
@@ -98,6 +102,12 @@ struct HomeView: View {
             .accessibilityIdentifier("home-dashboard")
     }
     private func refreshAnime() async { if anime.isSignedIn { await anime.reloadLibrary() } }
+    private func refreshWeek() async {
+        guard anime.isSignedIn, preferences.visible.contains(.weekly) else { return }
+        async let original: Void = weeklySchedule.load(in: ScheduleWeek(containing: ScheduleClock.now, firstWeekday: 1).window, using: anime.aniList, refresh: true)
+        async let dubbed: Void = dubs.load(using: anime.dubs, refresh: true)
+        _ = await (original, dubbed)
+    }
     private func refreshBooks() async { if books.connected { await books.loadLibrary(state: nil, refresh: true) } }
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
