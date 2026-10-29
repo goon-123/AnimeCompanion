@@ -10,18 +10,15 @@ struct AnimeDetailView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var playback: PlaybackStore
+    @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     let mediaID: Int
     @State private var anime: Anime?
     @State private var loading = false
     @State private var error: String?
-    @State private var synopsisExpanded = false
     @State private var showSettings = false
+    @State private var editing = false
     @State private var playbackRequest: DetailPlaybackRequest?
-    @State private var episodesExpanded = false
-    @State private var moreExpanded = false
-    @State private var scheduleExpanded = false
-    @State private var episodeLimit = 24
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
 
@@ -37,34 +34,37 @@ struct AnimeDetailView: View {
                 if let anime, store.isVisible(anime) {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
                     VStack(alignment: .leading, spacing: 20) {
-                        watchButton(anime)
-                        FindMangaButton(anime: anime)
-                        AnimeUpdatesLinks(anime: anime)
+                        AnimeEpisodeOverview(anime: anime, entry: store.entry(for: anime.id), dub: dubs.progress(for: anime))
                         progress(anime)
                         synopsis(anime)
-                        DetailDisclosure("Airing & English dubs", identifier: "detail-airing-disclosure", isExpanded: $scheduleExpanded) {
-                            if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
-                            AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
-                                events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
-                        }.companionPanel()
-                        episodes(anime)
+                        metadata(anime)
+                        if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
+                        AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
+                            events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
+                        AnimeUpdatesLinks(anime: anime)
                         related(anime)
                         recommendations(anime)
-                        DetailDisclosure("More information", identifier: "detail-more-information", isExpanded: $moreExpanded) {
-                            VStack(alignment: .leading, spacing: 20) {
-                                metadata(anime)
-                                characters(anime)
-                                staff(anime)
-                                trailer(anime)
-                                reviews(anime)
-                                externalLinks(anime)
-                                Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
-                            }.padding(.top, 14)
-                        }
-                    }.padding(.horizontal, 16).padding(.bottom, 24).readableContent(width: 940)
+                        characters(anime)
+                        staff(anime)
+                        trailer(anime)
+                        reviews(anime)
+                        externalLinks(anime)
+                        Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
+                    }.padding(.horizontal, 16).padding(.bottom, 90).readableContent(width: 940)
                 }
             }
         }.accessibilityIdentifier("anime-detail-scroll").background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
+            .overlay(alignment: .bottomTrailing) {
+                if let anime, store.isVisible(anime) {
+                    AnimeDetailActions(resumeLabel: resumeLabel(anime),
+                        canWatch: anime.status != "NOT_YET_RELEASED" && !(store.isSignedIn && store.loadingLibrary),
+                        canEdit: !store.loadingLibrary && !store.savingMedia.contains(anime.id),
+                        edit: { if store.isSignedIn { editing = true } else { showSettings = true } },
+                        resume: { playbackRequest = DetailPlaybackRequest(episode: nil) },
+                        findManga: { navigation.openMangaSearch(for: anime) })
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
@@ -72,74 +72,23 @@ struct AnimeDetailView: View {
             }
             .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }.refreshable { await load(refresh: true) }
             .appSettingsSheet(isPresented: $showSettings)
+            .sheet(isPresented: $editing) {
+                if let anime { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
+            }
             .sheet(item: $playbackRequest) { request in
                 if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
             }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
     }
-    private func watchButton(_ anime: Anime) -> some View {
+    private func resumeLabel(_ anime: Anime) -> String {
         let entry = store.entry(for: anime.id)
         let episode = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: playback.resumeEpisode(animeID: anime.id))
         let finished = anime.episodes.map { $0 > 0 && (entry?.progressValue ?? 0) >= $0 } ?? false
-        let label = anime.format == "MOVIE" ? "Watch movie" : (finished ? "Replay episode \(episode)" : ((entry?.progressValue ?? 0) > 0 ? "Resume episode \(episode)" : "Watch episode \(episode)"))
-        return Button { playbackRequest = DetailPlaybackRequest(episode: nil) } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "play.fill").font(.title3)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(label).font(.headline).accessibilityIdentifier("detail-resume-episode")
-                    Text("Watch in VidHub").font(.caption).opacity(0.65)
-                }
-                Spacer()
-                Image(systemName: "arrow.up.right").font(.subheadline.bold())
-            }.padding(16).foregroundStyle(Theme.background).background(Theme.accent, in: RoundedRectangle(cornerRadius: 16))
-        }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED" || (store.isSignedIn && store.loadingLibrary))
-            .accessibilityIdentifier("watch-in-vidhub")
-    }
-    private func episodes(_ anime: Anime) -> some View {
-        let entry = store.entry(for: anime.id)
-        let next = PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)
-        let listed = AnimeEpisodeCatalog.episodes(anime: anime, visibleLimit: episodeLimit)
-        let released = LibraryAiringProgress(anime: anime, watched: entry?.progressValue ?? 0)?.released
-        return DetailCard(title: "Episodes") {
-            Text(anime.format == "MOVIE" ? "Movie" : (anime.episodes.flatMap { $0 > 0 ? $0 : nil }.map { "\($0) episodes planned" } ?? "Episode total not announced"))
-                .font(.caption).foregroundStyle(.secondary)
-            DetailDisclosure("Choose an episode", identifier: "detail-episodes-disclosure", isExpanded: $episodesExpanded) {
-                if listed.isEmpty {
-                    Text("No episode list is supplied by the metadata source. Choose an episode number in Watch in VidHub.")
-                        .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(listed, id: \.self) { episode in
-                            let watched = episode <= (entry?.progressValue ?? 0)
-                            let upcoming = anime.status == "NOT_YET_RELEASED" || (released.map { episode > $0 } ?? false)
-                            Button { playbackRequest = DetailPlaybackRequest(episode: episode) } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: watched ? "checkmark.circle.fill" : (upcoming ? "clock" : "play.circle"))
-                                        .foregroundStyle(watched ? Color.green : Color.secondary)
-                                    Text(anime.format == "MOVIE" ? "Watch movie" : "Episode \(episode)").font(.subheadline.weight(.medium))
-                                    Spacer()
-                                    Text(watched ? "Watched" : (upcoming ? "Upcoming" : (episode == next ? "Next unwatched" : "Find sources")))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }.frame(minHeight: 48).contentShape(Rectangle())
-                            }.buttonStyle(.plain).disabled(upcoming).accessibilityIdentifier("detail-episode-\(episode)")
-                            Divider()
-                        }
-                    }
-                    if let total = anime.episodes, listed.count < min(100_000, total) {
-                        Button("Show next \(min(24, total - listed.count)) episodes") { episodeLimit = min(100_000, episodeLimit + 24) }
-                            .font(.subheadline).frame(minHeight: 44).accessibilityIdentifier("detail-more-episodes")
-                    }
-                }
-                Text("Episode listings do not confirm stream or English audio availability. Choose an episode to check sources; tracking changes only with your watched-progress controls.")
-                    .font(.caption2).foregroundStyle(.secondary).padding(.top, 8)
-            }
-        }
+        return anime.format == "MOVIE" ? "Watch movie" : (finished ? "Replay episode \(episode)" : ((entry?.progressValue ?? 0) > 0 ? "Resume episode \(episode)" : "Watch episode \(episode)"))
     }
     private func synopsis(_ anime: Anime) -> some View {
         DetailCard(title: "Synopsis") {
-            Text(anime.synopsis).font(.subheadline).foregroundStyle(.secondary).lineLimit(synopsisExpanded ? nil : 4)
-            Button(synopsisExpanded ? "Show less" : "Read more") { synopsisExpanded.toggle() }.font(.caption.bold())
-                .accessibilityIdentifier("expand-synopsis")
+            Text(anime.synopsis).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
     private func metadata(_ anime: Anime) -> some View {
@@ -164,10 +113,6 @@ struct AnimeDetailView: View {
     private func progress(_ anime: Anime) -> some View {
         DetailCard(title: "Your progress") {
             if store.isSignedIn {
-                if let entry = store.entry(for: anime.id), let status = LibraryAiringProgress(anime: anime, watched: entry.progressValue,
-                    source: store.airingProgressSource, dub: dubs.progress(for: anime), nextDub: dubs.nextDub(for: anime.id)) {
-                    LibraryAiringStatus(status: status, animeID: anime.id)
-                }
                 ProgressControl(anime: anime)
             }
             else { Button("Connect AniList") { showSettings = true }.buttonStyle(.bordered) }
@@ -295,24 +240,6 @@ struct AnimeDetailView: View {
             anime = media
             await dubs.load(using: store.dubs, refresh: refresh)
         } catch is CancellationError {} catch { if requestID == attempt { self.error = error.localizedDescription } }
-    }
-}
-
-struct FindMangaButton: View {
-    @EnvironmentObject private var navigation: AppNavigationStore
-    let anime: Anime
-    var body: some View {
-        Button { navigation.openMangaSearch(for: anime) } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "book.closed").font(.title3)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Find manga or manhwa").font(.subheadline.weight(.semibold))
-                    Text("Search your installed manga sources").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.right").font(.subheadline)
-            }.padding(16).foregroundStyle(MangaStyle.accent).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-        }.buttonStyle(.plain).accessibilityIdentifier("detail-find-manga")
     }
 }
 

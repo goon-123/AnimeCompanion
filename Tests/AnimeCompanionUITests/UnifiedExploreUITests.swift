@@ -18,7 +18,7 @@ final class UnifiedExploreUITests: XCTestCase {
             XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 15))
         }
         tap(app.buttons["related-anime-5"], app)
-        XCTAssertTrue(app.buttons["watch-in-vidhub"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
     }
     @MainActor func testUnlinkedAdaptationOffersMangaBakaSearch() {
@@ -109,13 +109,13 @@ final class UnifiedExploreUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["unified-explore-posterGrid"].waitForExistence(timeout: 10))
         capture("Unified-Mixed-Poster-Grid", app)
         app.appTab("Schedule").tap()
-        let layout = app.segmentedControls["schedule-airing-layout"]
-        XCTAssertTrue(layout.waitForExistence(timeout: 15)); layout.buttons["Grid"].tap()
+        let layout = app.buttons["schedule-airing-layout"]
+        app.chooseAiringLayout("Grid")
         let behind = app.staticTexts["library-airing-status-990101"]
         app.revealInContent(behind)
         XCTAssertEqual(behind.label, "2 episodes behind")
-        XCTAssertTrue(app.buttons["library-watch-990101"].exists)
-        XCTAssertTrue(app.buttons["library-next-990101"].exists)
+        XCTAssertFalse(app.buttons["library-watch-990101"].exists)
+        XCTAssertFalse(app.buttons["library-next-990101"].exists)
         capture("Schedule-Airing-Poster-Grid", app)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
@@ -129,8 +129,8 @@ final class UnifiedExploreUITests: XCTestCase {
         app.terminate(); app.launchArguments.removeAll { $0 == "--ui-reset-content-preferences" }; app.launch()
         XCTAssertTrue(app.scrollViews["unified-explore-posterGrid"].waitForExistence(timeout: 20))
         app.appTab("Schedule").tap()
-        XCTAssertTrue(layout.waitForExistence(timeout: 15)); XCTAssertTrue(layout.buttons["Grid"].isSelected)
-        layout.buttons["List"].tap()
+        XCTAssertTrue(layout.waitForExistence(timeout: 15)); XCTAssertEqual(layout.value as? String, "Grid")
+        app.chooseAiringLayout("List")
         app.revealInContent(behind); XCTAssertEqual(behind.label, "2 episodes behind")
         app.appTab("Explore").tap()
         app.contentSurface.swipeDown()

@@ -31,6 +31,7 @@ final class PlaybackUITests: XCTestCase {
         XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 20)); app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45)); entry.tap()
+        app.openAnimeActions()
         let watch = app.buttons["watch-in-vidhub"]
         XCTAssertTrue(watch.waitForExistence(timeout: 35))
         for _ in 0..<8 where !watch.isHittable { app.contentSurface.swipeUp() }
@@ -40,6 +41,6 @@ final class PlaybackUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Set up add-on & VidHub"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "VidHub-Episode-Picker"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["watch-in-vidhub"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 10))
     }
 }

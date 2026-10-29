@@ -152,7 +152,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   library-customization:
-    needs: manga-runtime
+    # Package the installable app before occupying runners with simulator suites.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs['weekly-ui'].result == 'success' || needs['weekly-ui'].result == 'skipped') }}
+    needs: [manga-runtime, build, weekly-ui]
     name: Reader and library changes ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -293,7 +295,7 @@ jobs:
           env -u DEVELOPER_DIR swift test -j 2
   news-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
-    needs: manga-runtime
+    needs: [manga-runtime, build, weekly-ui]
     name: News experience ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -339,7 +341,7 @@ jobs:
           retention-days: 30
   explore-ui:
     if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
-    needs: manga-runtime
+    needs: [manga-runtime, build, weekly-ui]
     name: Explore, accounts and Airing Now ${{ matrix.device }}
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -384,11 +386,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   weekly-ui:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
-    needs: playback-fixes
-    name: Weekly schedule ${{ matrix.device }} regression
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_ui_tests) }}
+    needs: [manga-runtime, build]
+    name: Library and schedule ${{ matrix.device }} regression
     runs-on: macos-15-intel
-    timeout-minutes: 15
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -419,10 +421,24 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-      - name: Check today positioning and manual week browsing
+      - name: Check poster width, full-height artwork and the complete Today section
         run: |
           sudo mdutil -a -i off || true
-          bash scripts/check-simulator.sh ${{ matrix.device }} weekly
+          bash scripts/check-simulator.sh ${{ matrix.device }} presentation
+      - name: Upload focused poster and Today screenshots immediately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-presentation-${{ matrix.device }}
+          path: |
+            build/presentation-${{ matrix.device }}-screenshots
+            build/Presentation-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Check clean library cards, catch-up, playback menus and calendar browsing
+        run: |
+          sudo mdutil -a -i off || true
+          bash scripts/check-simulator.sh ${{ matrix.device }} schedule
       - name: Upload weekly screenshots and results
         if: always()
         uses: actions/upload-artifact@v4

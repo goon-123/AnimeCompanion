@@ -38,6 +38,16 @@ final class ExploreDubStore: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
             snapshot = DubSnapshot(upcoming: [], history: [])
             index = DubIndex(dubbed: [1, 5], partial: [])
+            if ProcessInfo.processInfo.arguments.contains("--ui-library-detail-preview") {
+                let records: [[String: Any]] = [1, 990101].map {
+                    ["id": $0, "episode": ["aired": 15, "airedAt": Int(Date().addingTimeInterval(-3600).timeIntervalSince1970)]]
+                }
+                if let data = try? JSONSerialization.data(withJSONObject: records),
+                   let history = try? JSONDecoder().decode([RawDubFeedItem].self, from: data) {
+                    snapshot = DubSnapshot(upcoming: [], history: history)
+                }
+                index = DubIndex(dubbed: [], partial: [1, 990101])
+            }
             loaded = true; unavailable = false; notice = nil; revision += 1
             return
         }

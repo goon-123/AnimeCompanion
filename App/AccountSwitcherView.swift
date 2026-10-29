@@ -18,15 +18,19 @@ struct AccountSwitcherButton: View {
     var body: some View {
         Button { presented = true } label: {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "person.crop.circle").font(.title2)
-                    .frame(width: 44, height: 44).silverGlass(in: Circle())
+                // The navigation bar supplies its own button surface on iOS 26.
+                // A second framed circle here produced the overlapping rings.
+                Image(systemName: "person.crop.circle.fill").font(.system(size: 28))
+                    .foregroundStyle(.primary).frame(width: 44, height: 44)
                 if let active {
-                    Text(active == .aniList ? "A" : "M").font(.system(size: 10, weight: .heavy))
-                        .foregroundStyle(.white).frame(width: 17, height: 17)
+                    Text(active == .aniList ? "A" : "M").font(.system(size: 8, weight: .heavy))
+                        .foregroundStyle(.white).frame(width: 14, height: 14)
                         .background(active == .aniList ? Color.blue : Color.teal, in: Circle())
+                        .overlay { Circle().stroke(Theme.surface, lineWidth: 1.5) }
+                        .padding(.trailing, 4).padding(.bottom, 4)
                         .accessibilityHidden(true)
                 }
-            }
+            }.frame(width: 44, height: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel("Switch account")
             .accessibilityValue(active.map { $0.title + " · " + name($0) } ?? "No account connected")
             .accessibilityIdentifier("account-switcher")

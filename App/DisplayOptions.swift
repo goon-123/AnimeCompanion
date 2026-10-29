@@ -21,7 +21,19 @@ struct PosterPreferences: DynamicProperty {
     init(_ scope: DisplayScope) {
         self.scope = scope
         let pad = UIDevice.current.userInterfaceIdiom == .pad
-        _listWidth = AppStorage(wrappedValue: pad ? 140 : (scope == .library ? 76 : 90), "\(scope.rawValue).poster.list")
+        let listKey = "\(scope.rawValue).poster.list"
+        let listDefault = PosterLayout.defaultListWidth(isTablet: pad)
+        let migrationKey = listKey + ".fullHeight.v1"
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: migrationKey) {
+            let legacyDefault: Double = pad ? 140 : (scope == .library ? 76 : 90)
+            // Upgrade the old thumbnail default once; retain other custom sizes.
+            if let saved = defaults.object(forKey: listKey) as? NSNumber, saved.doubleValue == legacyDefault {
+                defaults.set(listDefault, forKey: listKey)
+            }
+            defaults.set(true, forKey: migrationKey)
+        }
+        _listWidth = AppStorage(wrappedValue: listDefault, listKey)
         _gridWidth = AppStorage(wrappedValue: pad ? 360 : 280, "\(scope.rawValue).poster.grid")
         _shelfWidth = AppStorage(wrappedValue: pad ? 230 : 150, "\(scope.rawValue).poster.shelf")
         _featuredHeight = AppStorage(wrappedValue: pad ? 700 : 620, "\(scope.rawValue).poster.featured")
@@ -39,7 +51,7 @@ struct PosterPreferences: DynamicProperty {
     }
     func reset() {
         let pad = UIDevice.current.userInterfaceIdiom == .pad
-        listWidth = pad ? 140 : (scope == .library ? 76 : 90)
+        listWidth = PosterLayout.defaultListWidth(isTablet: pad)
         gridWidth = pad ? 360 : 280; shelfWidth = pad ? 230 : 150
         columns = pad ? 4 : 2
         featuredHeight = pad ? 700 : 620

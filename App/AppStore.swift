@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import UIKit
 import AnimeCore
 
 @MainActor
@@ -83,6 +84,17 @@ final class AppStore: ObservableObject {
             ? AnimeVisualsClient(transport: VisualGalleryPreviewTransport(), directory: nil, minimumRequestInterval: 0)
             : AnimeVisualsClient()
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
+                UserDefaults.standard.set("list", forKey: "library.layout")
+                UserDefaults.standard.set(2, forKey: "library.columns")
+                UserDefaults.standard.set("Last updated", forKey: "library.sort")
+                // Exercise upgrading the old thumbnail defaults in native layout tests.
+                let pad = UIDevice.current.userInterfaceIdiom == .pad
+                for (scope, legacy) in [("library", pad ? 140 : 76), ("explore", pad ? 140 : 90)] {
+                    UserDefaults.standard.set(legacy, forKey: "\(scope).poster.list")
+                    UserDefaults.standard.removeObject(forKey: "\(scope).poster.list.fullHeight.v1")
+                }
+            }
             UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
             UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
             includeAdult = false; automaticallyComplete = true
@@ -105,7 +117,7 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(TorrentSort.seeders.rawValue, forKey: "playback.torrentSort")
             UserDefaults.standard.set(TorBoxWebDAVSort.newest.rawValue, forKey: "torbox.files.sort")
         }
-        if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") {
+        if phaseTwoPreview && !ProcessInfo.processInfo.arguments.contains("--ui-phase2-keep-display") && !ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
             for key in ["library.layout", "library.sort", "discovery.layout", "explore.poster.fillScreen", "explore.poster.balanced"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
@@ -130,6 +142,7 @@ final class AppStore: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
             if AccountSwitcherPreview.active && !AccountSwitcherPreview.aniListConnected { return }
+            if ProcessInfo.processInfo.arguments.contains("--ui-library-detail-dub-preference") { airingProgressSource = .dub }
             isSignedIn = true
             do {
                 entries = try PhaseTwoPreviewTransport.library(); savedAt = Date()

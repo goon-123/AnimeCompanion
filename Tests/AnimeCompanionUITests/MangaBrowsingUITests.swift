@@ -84,6 +84,7 @@ final class MangaBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["manga-title-0"].waitForExistence(timeout: 15))
     }
     @MainActor private func openMangaShortcut(_ app: XCUIApplication, expected: String) {
+        app.openAnimeActions()
         let action = app.buttons["detail-find-manga"]
         app.revealInContent(action); action.tap()
         let field = app.textFields["manga-search-title"]

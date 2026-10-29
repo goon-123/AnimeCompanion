@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore ]]; then
-  echo "Expected full, focused, weekly, fixes, streams, layout, reader, visuals, customization, news or explore test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != schedule && "$test_scope" != presentation && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore ]]; then
+  echo "Expected full, focused, weekly, schedule, presentation, fixes, streams, layout, reader, visuals, customization, news or explore test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -23,7 +23,7 @@ if [[ "$test_scope" == focused ]]; then
   result_path="build/Focused-${device_family}.xcresult"
   screenshot_path="build/focused-${device_family}-screenshots"
 fi
-if [[ "$test_scope" == weekly ]]; then
+if [[ "$test_scope" == weekly || "$test_scope" == schedule || "$test_scope" == presentation ]]; then
   result_path="build/Weekly-${device_family}.xcresult"
   screenshot_path="build/weekly-${device_family}-screenshots"
 fi
@@ -139,7 +139,7 @@ done
 # Permit one retry for a cold hosted simulator's first-launch timeout.
 # Both attempts stay in xcresult; repeated failures still fail the job.
 test_arguments=(-only-testing:AnimeCompanionUITests/WeeklyScheduleUITests)
-if [[ "$test_scope" != weekly ]]; then
+if [[ "$test_scope" != weekly && "$test_scope" != schedule ]]; then
 test_arguments=(-only-testing:AnimeCompanionUITests/ImmersivePlaybackTests
   -only-testing:AnimeCompanionUITests/MetadataTrackingUITests
   -only-testing:AnimeCompanionUITests/AiringProgressUITests
@@ -155,6 +155,19 @@ test_arguments+=(-only-testing:AnimeCompanionUITests/AddonDirectoryUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/SeanimeTorBoxUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/StreamPickerUITests)
 test_arguments+=(-only-testing:AnimeCompanionUITests/TabletPresentationUITests)
+fi
+if [[ "$test_scope" == presentation ]]; then
+  result_path="build/Presentation-${device_family}.xcresult"
+  screenshot_path="build/presentation-${device_family}-screenshots"
+  test_arguments=(-only-testing:AnimeCompanionUITests/AgendaPosterPresentationUITests)
+fi
+if [[ "$test_scope" == schedule ]]; then
+  test_arguments+=(
+    -only-testing:AnimeCompanionUITests/LibraryPresentationUITests
+    -only-testing:AnimeCompanionUITests/LibraryDetailImprovementsUITests
+    -only-testing:AnimeCompanionUITests/LibraryScheduleRedesignUITests
+    -only-testing:AnimeCompanionUITests/AiringProgressUITests
+  )
 fi
 if [[ "$test_scope" == full ]]; then
   test_arguments+=("-only-testing:AnimeCompanionUITests/$test_class"

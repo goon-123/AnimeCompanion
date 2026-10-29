@@ -301,13 +301,14 @@ struct DiscoveryBrowseView: View {
 }
 
 struct DiscoveryAnimeRow: View {
+    @Environment(\.dynamicTypeSize) private var textSize
+    @ScaledMetric(relativeTo: .caption) private var genreHeight: CGFloat = 44
     let anime: Anime
-    var posterWidth: CGFloat = 90
+    var posterWidth: CGFloat = 128
+    private var coverWidth: CGFloat { textSize.isAccessibilitySize ? min(posterWidth, 100) : posterWidth }
     var body: some View {
-      VStack(alignment: .leading, spacing: 0) {
+      ZStack(alignment: .bottomTrailing) {
         AnimeLink(id: anime.id) {
-            HStack(alignment: .top, spacing: 12) {
-                AnimeCover(anime: anime, width: posterWidth, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .top, spacing: 8) {
                         Text(anime.displayTitle).font(.headline).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
@@ -316,12 +317,19 @@ struct DiscoveryAnimeRow: View {
                     Text(metadata).font(.caption).foregroundStyle(.secondary)
                     DiscoveryIndicators(anime: anime)
                     Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.foregroundStyle(.primary).contentShape(Rectangle())
+                    if !(anime.genres ?? []).isEmpty { Color.clear.frame(height: genreHeight) }
+                }.foregroundStyle(.primary).padding(14)
+                    .frame(maxWidth: .infinity, minHeight: coverWidth * 1.45, alignment: .topLeading)
+                    .padding(.leading, coverWidth)
+                    .overlay(alignment: .leading) {
+                        AnimeRowArtwork(anime: anime, identifierPrefix: "discovery").frame(width: coverWidth)
+                    }.contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
-            .padding(.leading, posterWidth + 12)
-      }.padding(9).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.leading, coverWidth + 14).padding(.trailing, 14).padding(.bottom, 14)
+      }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
     }
     private var metadata: String {
         let format = ["TV": "TV show", "TV_SHORT": "TV short", "MOVIE": "Movie", "OVA": "OVA", "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"]

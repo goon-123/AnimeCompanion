@@ -13,6 +13,16 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         if id == 1, ProcessInfo.processInfo.arguments.contains("--ui-news-series-preview") {
             result["title"] = ["english": "Moonlit Relay Season 3", "romaji": "Tsukikage Relay 3rd Season"]
         }
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
+            if id == 1 {
+                result["title"] = ["english": "The Archivist Who Woke Up in Another World Finds a New Beginning With the Courageous Companions of the Glass Harbor"]
+            } else if id == 990101 {
+                result["title"] = ["english": "A Lantern Across the Sea"]
+            } else if id == 990105 {
+                result["title"] = ["english": "Uncharted Letters"]
+                result.removeValue(forKey: "episodes")
+            }
+        }
         if (990101...990105).contains(id) {
             result["status"] = "RELEASING"
             if id != 990105 {
@@ -22,7 +32,12 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         }
         if id == 5 { result["format"] = "MOVIE"; result["episodes"] = 1 }
         if id == 990106 { result["status"] = "NOT_YET_RELEASED" }
-        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") || LibraryCustomizationPreview.active {
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-detail-preview"), [1, 990101].contains(id) {
+            result["status"] = "RELEASING"
+            result["episodes"] = 26
+            result["nextAiringEpisode"] = ["episode": 18, "airingAt": Int(Date().addingTimeInterval(18 * 3600).timeIntervalSince1970)]
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") || LibraryCustomizationPreview.active || ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
             result["coverImage"] = ["extraLarge": "https://catalog-preview.invalid/poster/\(id).png", "color": "#243B59"]
             result["bannerImage"] = "https://catalog-preview.invalid/banner/\(id).png"
         }
@@ -32,6 +47,9 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         var items = [(1, 8, "CURRENT"), (5, 1, "COMPLETED"), (990101, 4, "CURRENT"),
                      (990102, 6, "CURRENT"), (990104, 0, "CURRENT"), (990105, 2, "CURRENT"), (990106, 0, "PLANNING")]
         if UnifiedExplorePreview.active { items.append((990103, 3, "CURRENT")) }
+        if ProcessInfo.processInfo.arguments.contains("--ui-library-detail-preview") {
+            items = [(1, 16, "CURRENT"), (990101, 17, "CURRENT"), (990105, 2, "CURRENT")]
+        }
         let records: [[String: Any]] = items.map { id, progress, status in
             ["id": id, "mediaId": id, "status": status, "progress": progress,
              "updatedAt": id == 1 ? 2_000 : 1_000, "media": media(id)]

@@ -58,6 +58,7 @@ final class ImmersivePlaybackTests: XCTestCase {
         app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         XCTAssertTrue(entry.waitForExistence(timeout: 60)); entry.tap()
+        app.openAnimeActions()
         let watch = app.buttons["watch-in-vidhub"]
         XCTAssertTrue(watch.waitForExistence(timeout: 45))
         for _ in 0..<8 where !watch.isHittable { app.contentSurface.swipeUp() }

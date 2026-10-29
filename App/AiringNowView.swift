@@ -34,18 +34,18 @@ struct AiringNowView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
                 if store.isSignedIn {
                     summary
                     if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                     if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                     if store.airingProgressSource == .dub && dubs.loading { ProgressView("Checking English dub releases…").frame(maxWidth: .infinity) }
-                    LazyVStack(spacing: 14) {
+                    LazyVStack(spacing: 20) {
                         ForEach(AiringWatchlistGroup.allCases) { group in
                             let grouped = visible.filter { AiringWatchlistGroup(state: $0.status.state) == group }
                             if !grouped.isEmpty {
-                                VStack(alignment: .leading, spacing: 14) {
+                                VStack(alignment: .leading, spacing: 10) {
                                     HStack {
                                         Text(group.title).font(.headline)
                                         Spacer()
@@ -77,7 +77,7 @@ struct AiringNowView: View {
                                 (store.airingProgressSource == .dub ? "No ongoing English dub schedule is listed for your watching list. Try Original broadcast or browse the weekly schedule." : "Add a currently airing title to your watching list to see its progress and next release here.")))
                     }
                     if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-                    Text("Times in \(TimeZone.current.identifier). Catch-up compares your watched progress with released episodes. Unknown counts stay neutral.")
+                    Text("Times in \(TimeZone.current.identifier). Progress uses released episodes; unconfirmed counts stay neutral.")
                         .font(.caption2).foregroundStyle(.secondary)
                     if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption2).foregroundStyle(.secondary) }
                 } else {
@@ -109,46 +109,50 @@ struct AiringNowView: View {
             .onChange(of: store.airingProgressSource) { _, _ in behindOnly = false }
     }
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("YOUR WATCHING LIST").font(.caption2.weight(.bold)).tracking(1.5).foregroundStyle(.secondary)
-            Text("Airing Now").font(.largeTitle.bold()).accessibilityIdentifier("schedule-airing-title")
-            Text("Catch up. See what's next. Keep watching.").font(.subheadline).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Airing Now").font(.title2.bold()).accessibilityIdentifier("schedule-airing-title")
+            Text(now.formatted(.dateTime.weekday(.wide).month(.wide).day())).font(.subheadline).foregroundStyle(.secondary)
         }
     }
     private var summary: some View {
         let behind = items.filter { $0.status.state == .behind }.count
         let caught = items.filter { $0.status.state == .caughtUp }.count
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("\(items.count) airing").font(.headline)
-                Spacer()
                 Menu {
                     Picker("Compare watched progress with", selection: $store.airingProgressSource) {
                         ForEach(AiringProgressSource.allCases) { Text($0.label).tag($0) }
                     }
-                } label: { Label(store.airingProgressSource.label, systemImage: "antenna.radiowaves.left.and.right").font(.caption) }
+                } label: {
+                    Label(store.airingProgressSource == .broadcast ? "Japanese · Sub" : "English · Dub", systemImage: "chevron.down")
+                        .font(.subheadline.weight(.medium)).frame(minHeight: 44)
+                }
                     .accessibilityIdentifier("schedule-airing-source")
-            }
-            HStack {
-                Text("View").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Picker("Airing Now layout", selection: $layout) {
-                    Label("List", systemImage: "list.bullet").tag("list")
-                    Label("Grid", systemImage: "square.grid.2x2").tag("grid")
-                }.pickerStyle(.segmented).frame(maxWidth: 220).accessibilityIdentifier("schedule-airing-layout")
+                Text("\(items.count) airing").font(.caption).foregroundStyle(.secondary)
+                Menu {
+                    Picker("Airing Now layout", selection: $layout) {
+                        Label("List", systemImage: "list.bullet").tag("list")
+                        Label("Grid", systemImage: "square.grid.2x2").tag("grid")
+                    }
+                } label: {
+                    Image(systemName: layout == "grid" ? "square.grid.2x2" : "list.bullet")
+                        .frame(minWidth: 44, minHeight: 44)
+                }.accessibilityLabel("Airing Now layout").accessibilityValue(layout == "grid" ? "Grid" : "List")
+                    .accessibilityIdentifier("schedule-airing-layout")
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { behindFilter(behind); caughtUpLabel(caught) }
                 VStack(alignment: .leading, spacing: 8) { behindFilter(behind); caughtUpLabel(caught) }
             }
             if behindOnly { Text("Showing behind titles. Tap the yellow count to show all.").font(.caption2).foregroundStyle(.secondary) }
-        }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        }
     }
     private func behindFilter(_ count: Int) -> some View {
         Button { behindOnly.toggle() } label: {
             Label("\(count) behind", systemImage: "clock.badge.exclamationmark").font(.subheadline.bold())
-                .foregroundStyle(.yellow).padding(.horizontal, 12).frame(minHeight: 44)
-                .background(Color.yellow.opacity(behindOnly ? 0.20 : 0.08), in: Capsule())
+                .foregroundStyle(Theme.highlight).padding(.horizontal, 12).frame(minHeight: 44)
+                .background(Theme.highlight.opacity(behindOnly ? 0.18 : 0.08), in: Capsule())
         }.buttonStyle(.plain).accessibilityIdentifier("schedule-behind-filter")
             .accessibilityValue(behindOnly ? "Behind only" : "All airing titles")
     }
@@ -169,43 +173,63 @@ private struct AiringWatchlistGridCard: View {
                         .aspectRatio(1 / 1.45, contentMode: .fit)
                         .overlay(alignment: .topTrailing) { DiscoveryAiringDot(anime: anime, overArtwork: true, identifierPrefix: "library").padding(8) }
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3, reservesSpace: true)
-                    Text(status.source.label).font(.caption2).foregroundStyle(.secondary)
                 }.foregroundStyle(.primary).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-            LibraryAiringStatus(status: status, animeID: anime.id, compact: true)
-            LibraryEntryActions(entry: entry, anime: anime, horizontal: true).frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(10).frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
-            .overlay { RoundedRectangle(cornerRadius: 16).stroke(status.state.color.opacity(0.25), lineWidth: 1) }
+            AiringReleaseProgress(status: status, animeID: anime.id)
+        }.frame(maxWidth: .infinity, alignment: .topLeading)
+            .modifier(LibraryEntryActions(entry: entry, anime: anime))
     }
 }
 
-/// One release/progress block per title, rather than repeating the generic
-/// Library row's watched, next, dub, rating and schedule information.
+/// A compact agenda row. Playback and tracking live in its context menu, leaving
+/// one catch-up indicator and one next-release line visible per title.
 private struct AiringWatchlistCard: View {
     let entry: LibraryEntry
     let anime: Anime
     let status: LibraryAiringProgress
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
+            AnimeLink(id: anime.id) { AnimeCover(anime: anime, width: 62, cornerRadius: 9) }
+                .buttonStyle(.plain).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
                 AnimeLink(id: anime.id) {
-                    HStack(alignment: .top, spacing: 12) {
-                        AnimeCover(anime: anime, width: 58, cornerRadius: 7)
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(anime.displayTitle).font(.headline).lineLimit(3)
-                                DiscoveryAiringDot(anime: anime, identifierPrefix: "library")
-                            }
-                            Text(status.source.label).font(.caption).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3)
+                        DiscoveryAiringDot(anime: anime, identifierPrefix: "library")
+                        Spacer(minLength: 0)
                     }.foregroundStyle(.primary).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("library-entry-\(anime.id)")
-                LibraryAiringStatus(status: status, animeID: anime.id, compact: true)
-                AnimeGenres(anime: anime).accessibilityIdentifier("library-genres-\(anime.id)")
+                AiringReleaseProgress(status: status, animeID: anime.id)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+            .modifier(LibraryEntryActions(entry: entry, anime: anime))
+    }
+}
+
+private struct AiringReleaseProgress: View {
+    let status: LibraryAiringProgress
+    let animeID: Int
+    private var color: Color { status.state == .behind ? Theme.highlight : status.state.color }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: status.state.symbol).accessibilityHidden(true)
+                Text(status.label).accessibilityIdentifier("library-airing-status-\(animeID)")
+            }.font(.caption.weight(.semibold)).foregroundStyle(color)
+            Text("Watched Ep \(status.watched)" + (status.released.map { " · Aired Ep \($0)" } ?? ""))
+                .font(.caption2).foregroundStyle(.secondary)
+                .accessibilityIdentifier("library-airing-progress-\(animeID)")
+            if let released = status.released, released > 0 {
+                ProgressView(value: Double(min(status.watched, released)), total: Double(released))
+                    .tint(color).accessibilityLabel("\(status.watched) watched, \(released) aired")
             }
-            LibraryEntryActions(entry: entry, anime: anime)
-        }.padding(12).background(Theme.surface.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
-            .overlay { RoundedRectangle(cornerRadius: 14).stroke(status.state.color.opacity(0.25), lineWidth: 1) }
+            if let next = status.nextEpisode, let date = status.nextDate {
+                Text("Next \(status.source.shortLabel)\(status.estimatedDate ? " estimate" : "") · Ep \(next) · \(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("library-airing-next-\(animeID)")
+            } else {
+                Text("Next \(status.source.shortLabel) time not announced").font(.caption2).foregroundStyle(.secondary)
+            }
+        }.fixedSize(horizontal: false, vertical: true)
     }
 }

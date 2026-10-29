@@ -1,3 +1,33 @@
+## Balanced list artwork and Today highlighting — version 0.36.1 / build 92
+
+Raise the phone list-cover default to 128 points in My Library and Explore. Migrate the former 76/90-point defaults once while retaining other custom widths and narrow-window constraints. Both lists now use the same aspect-fill artwork renderer and fill the complete card height, including the genre area. Library ratings, DUB badges, broadcast catch-up/countdowns, card taps and independent genre actions remain intact.
+
+Highlight the entire actual Today section in the weekly agenda: header, all release cards, row spacing and empty-state row share a tint and a continuous accent rail. The styling follows the current local day independently of calendar selection and remains visible after its header scrolls offscreen.
+
+Focused iPhone/iPad regressions cover wide, full-height artwork, badge separation, poster taps, iPad rotation, long Today sections in both appearances and empty-day highlights. Focused screenshots upload before the existing broader regression suites. Current hosted build and test results are recorded on PR #65.
+
+## Library and anime details — version 0.36.0 / build 91
+
+Library list and grid now share poster-embedded AniList ratings and a compact DUB badge for available English audio. List artwork fills the entire card height using aspect fill. Next-unwatched text retains the next original-broadcast countdown in both yellow (behind) and green (caught up); dub counts and the saved schedule-source preference cannot make broadcast catch-up green early. Missing or expired broadcast evidence stays neutral.
+
+Anime details hide the tab dock and provide a scroll-independent right-side actions button for Edit Entry, Resume Episode and Find Manga / Manhwa. Outside taps and accessibility Escape dismiss the menu. Existing tracking, playback episode selection, source search and native back navigation are retained. A compact Aired / Dubbed / Watched row replaces the episode list; unknown values stay unknown and estimated dub totals retain their marker. Synopsis, metadata and additional information are visible without the former outer disclosures.
+
+Validation: local diff, shell and JSON checks passed. Five core regressions and native iPhone/iPad UI journeys cover broadcast-vs-dub catch-up, countdowns, badge positioning, the overview, menu dismissal, editor/player navigation and swipe-back. Hosted compilation, packaging and simulator execution are pending for this commit.
+
+## My Library presentation — version 0.35.1 / build 90
+
+Rebuild anime Library grid cards as unified rounded poster/metadata panels, with ratings on artwork, aligned two-line titles, watched totals, a slim bounded progress track, next-episode text, dub counts and independent scrollable genre buttons. Compact list rows align metadata and genres beside the saved-size cover. Preserve saved layout, density, poster sizing, all sorting/status filters, native detail links and long-press playback/tracking actions. Combine layout/count/sort controls and adapt their arrangement at accessibility text sizes.
+
+Remove the account button's custom circular surface beneath the native navigation-bar surface and inset its service badge inside a fixed 44-point hit target, addressing the overlapping rings and clipped badge beside My Library. Keep both accounts and account switching intact.
+
+Native presentation journeys cover long titles in both appearances/layouts, detail navigation, saved grid selection, header/account hit targets, iPad rotation, accessibility text and unknown episode totals. Owned artwork/metadata fixtures are Debug-only. Local checks and hosted Release/native verification are pending at this checkpoint.
+
+## Library and calendar — version 0.35.0 / build 89
+
+Removed the visible play/+1/ellipsis stack from Library rows, posters and Airing Now. Native context menus retain playback, progress, tracking and list moves. Rebuilt Airing Now as compact neutral rows and Weekly Schedule as a seven-day date strip with selected-day highlighting, release dots and a time-led agenda. Today positioning, free full-week browsing, account-independent weekly access, saved filters and source certainty rules are retained.
+
+Local whitespace, shell syntax and YAML parsing checks pass. The PR runs the existing Core and universal Release IPA jobs plus focused iPhone/iPad checks for context actions, correct playback episode, clean list/grid artwork, catch-up states, date selection, late loading, empty filters, appearance and week browsing. Native compilation and execution are pending at this checkpoint.
+
 ## MangaBaka discovery feed repair — version 0.32.2 / build 86
 
 Rising in libraries and Hidden gems now request at most 20 titles, matching the discovery API contract. Ordinary catalog searches retain their normal paging limits. Discovery selections have no next page; duplicate or disallowed titles are filtered without replacing the provider’s ordering. Rising explicitly uses the last seven days.

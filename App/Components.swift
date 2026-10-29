@@ -14,6 +14,23 @@ struct AnimeCover: View {
     }
 }
 
+/// Shares one aspect-fill implementation between Library and Explore list rows.
+/// The containing row supplies both dimensions, including the full card height.
+struct AnimeRowArtwork: View {
+    let anime: Anime
+    let identifierPrefix: String
+    var body: some View {
+        GeometryReader { geometry in
+            ArtworkImage(url: anime.coverURL, pointSize: max(geometry.size.width, geometry.size.height)) {
+                image in image.resizable().scaledToFill()
+            } placeholder: { Theme.surface }
+                .frame(width: geometry.size.width, height: geometry.size.height).clipped().contentShape(Rectangle())
+                .accessibilityElement(children: .ignore).accessibilityLabel("Cover art")
+                .accessibilityIdentifier("\(identifierPrefix)-poster-art-\(anime.id)")
+        }
+    }
+}
+
 struct AnimeCard: View {
     let anime: Anime
     var posterWidth: CGFloat = 150

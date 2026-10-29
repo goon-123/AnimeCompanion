@@ -115,8 +115,7 @@ final class StreamPickerUITests: XCTestCase {
             + (resetPreferences ? ["--ui-reset-content-preferences"] : []) + extra
         app.launch()
         let library = app.appTab("My Library"); XCTAssertTrue(library.waitForExistence(timeout: 20)); library.tap()
-        let watch = app.buttons["library-watch-1"]
-        XCTAssertTrue(watch.waitForExistence(timeout: 45)); app.revealInContent(watch); watch.tap()
+        app.watchLibraryEntry(1)
         XCTAssertTrue(app.navigationBars["Find streams"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["playback-english-availability"].waitForExistence(timeout: 15))
         return app

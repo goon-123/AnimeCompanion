@@ -1,6 +1,27 @@
 import XCTest
 
 extension XCUIApplication {
+    @MainActor func openAnimeActions() {
+        let actions = buttons["detail-actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 45))
+        if actions.value as? String != "Expanded" { actions.tap() }
+        XCTAssertTrue(buttons["watch-in-vidhub"].waitForExistence(timeout: 10))
+    }
+    @MainActor func openLibraryActions(_ mediaID: Int) {
+        let entry = buttons["library-entry-\(mediaID)"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 45)); revealInContent(entry)
+        entry.press(forDuration: 1.1)
+        XCTAssertTrue(buttons["library-watch-\(mediaID)"].waitForExistence(timeout: 10))
+    }
+    @MainActor func watchLibraryEntry(_ mediaID: Int) {
+        openLibraryActions(mediaID)
+        buttons["library-watch-\(mediaID)"].tap()
+    }
+    @MainActor func chooseAiringLayout(_ title: String) {
+        let options = buttons["schedule-airing-layout"]
+        XCTAssertTrue(options.waitForExistence(timeout: 15)); revealInContent(options, upward: false)
+        options.tap(); buttons[title].firstMatch.tap()
+    }
     /// Explore keeps only a floating search control; advanced options live in
     /// its native context menu. Browse pages retain their normal toolbar actions.
     @MainActor func openExploreControl(_ id: String) {

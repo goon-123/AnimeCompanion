@@ -14,7 +14,7 @@ struct ArtworkBitmap: @unchecked Sendable {
 actor ArtworkPipeline {
     static let shared: ArtworkPipeline = {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") || LibraryCustomizationPreview.active {
+        if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") || LibraryCustomizationPreview.active || ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
             return ArtworkPipeline(data: ArtworkDataClient(transport: CatalogArtworkPreviewTransport()))
         }
         #endif
