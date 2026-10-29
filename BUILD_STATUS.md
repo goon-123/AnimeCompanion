@@ -1,3 +1,11 @@
+## Larger Home cards and compact Continue action — version 0.37.2 / build 95
+
+Remove all anime poster badge overlays from Home. Keep the existing rounded panel style, with 128-point Continue Watching artwork, 112-point reading artwork and 88-point Up Next artwork. Watching cards fit the shelf's actual width up to 520 points; reading/upcoming cards use a roomier tablet grid and one column on compact panes or accessibility text sizes. A shared layout stacks artwork and metadata when necessary without imposing fixed card heights.
+
+Replace the full-width prominent watch button with a small trailing Continue pill, retaining a 44-point touch area and the existing playback sheet. Keep this action outside the details NavigationLink, with reserved metadata space to avoid overlapping content. Retain episode selection, watched progress, chapter/page/source details, saved reader resume, MangaBaka routes, release times, filters, deduplication and Home section preferences. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
+
+Validation at source handoff: whitespace, project/workflow YAML and Safari resource/version checks pass locally. Hosted Release compilation and unsigned IPA packaging are pending; visual/device verification remains delegated to the user. No broad UI run is requested.
+
 ## Compact badges and larger series artwork — version 0.37.1 / build 94
 
 Refine build 93 from user feedback: keep My Library grid badge metrics unchanged, reduce rating/DUB fonts and padding in other listing contexts, and suppress all poster overlays in daily/weekly Schedule, Airing Now List/Grid and the small Home airing preview. Retain schedule time/source/catch-up text. Enlarge Related / You May Also Like posters to 160 points on phone and 200 on tablet with subheadline titles. Enlarge the main anime hero poster to 136/184 points, its banner to 280/360 points and its title; stack header content at accessibility text sizes or when the horizontal layout cannot fit. Preserve card and genre destinations, Library context menus and current broadcast progress semantics.

@@ -8,12 +8,17 @@ struct HomeView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var sourceLinks: MangaSourceLinkStore
     @EnvironmentObject private var extensions: MangaExtensionStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var textSize
     @AppStorage(HomePreferences.storageKey) private var sections = ""
     @AppStorage("manga.showMatureSources") private var matureSources = false
     @State private var customize = false
     @State private var settings = false
     @State private var watching: Anime?
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
+    private var cardColumns: [GridItem] {
+        [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 350) : .flexible(), spacing: 16, alignment: .top)]
+    }
     private var shows: [LibraryEntry] {
         Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(8))
     }
@@ -122,38 +127,17 @@ struct HomeView: View {
                 empty("Your watching list starts here.", detail: "Add an anime from Explore, or connect AniList.", symbol: "play.rectangle")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 14) {
+                    LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(shows) { entry in
-                            if let value = entry.media { watchCard(value, entry: entry) }
+                            if let value = entry.media {
+                                HomeContinueWatchingCard(anime: value, entry: entry) { watching = value }
+                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(520, width * 0.97) }
+                            }
                         }
                     }.padding(.vertical, 1)
                 }
             }
         }
-    }
-    private func watchCard(_ value: Anime, entry: LibraryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            AnimeLink(id: value.id) {
-                HStack(alignment: .top, spacing: 12) {
-                    AnimeCover(anime: value, width: 66, cornerRadius: 10)
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(value.displayTitle).font(.headline).lineLimit(2)
-                        Text("Episode \(entry.progressValue)" + (value.episodes.map { " of \($0)" } ?? " watched"))
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        if let total = value.episodes, total > 0 {
-                            ProgressView(value: min(1, Double(entry.progressValue) / Double(total))).tint(Theme.accent)
-                                .accessibilityLabel("Watched progress")
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }.foregroundStyle(.primary).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            let episode = PlaybackEpisodeSelection.initial(anime: value, entry: entry, resumeEpisode: nil)
-            Button { watching = value } label: {
-                Label(value.format == "MOVIE" ? "Watch movie" : "Continue · Episode \(episode)", systemImage: "play.fill")
-                    .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(.borderedProminent).foregroundStyle(Theme.background).disabled(value.status == "NOT_YET_RELEASED")
-                .accessibilityIdentifier("home-watch-\(value.id)")
-        }.frame(width: 275).companionPanel()
     }
     private var readingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -161,35 +145,16 @@ struct HomeView: View {
             if recent.isEmpty && trackedBooks.isEmpty {
                 empty("Your next chapter is waiting.", detail: "Read from a source to see your saved place here.", symbol: "book")
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 270), spacing: 14)], spacing: 14) {
+                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 16) {
                     ForEach(recent) { record in
                         NavigationLink { MangaTitleDetailView(title: record.title, resumeOnOpen: true) } label: {
-                            HStack(spacing: 12) {
-                                MangaCover(title: record.title, width: 52).frame(width: 52, height: 76).clipShape(RoundedRectangle(cornerRadius: 8))
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(record.title.manga.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                                    if let url = record.lastChapterURL, let position = record.position(for: url) {
-                                        Text(position.chapterName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                        Text("Page \(position.pageIndex + 1) of \(position.pageCount)").font(.caption2.monospacedDigit()).foregroundStyle(Theme.accent)
-                                    }
-                                    Text(record.title.source.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                            }.foregroundStyle(.primary).companionPanel(padding: 12).contentShape(Rectangle())
+                            HomeContinueReadingCard(record: record)
                         }.buttonStyle(.plain).accessibilityIdentifier("home-read-" + record.id)
                     }
                     ForEach(trackedBooks) { entry in
                         if let series = entry.series {
                             NavigationLink(value: MangaBakaSeriesRoute(series: series)) {
-                                HStack(spacing: 12) {
-                                    MangaBakaCover(series: series, width: 52)
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(series.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
-                                        Text("Chapter " + (entry.chapter ?? 0).formatted()).font(.caption.monospacedDigit()).foregroundStyle(Theme.accent)
-                                        Text(series.formatLabel + " · MangaBaka").font(.caption2).foregroundStyle(.secondary)
-                                    }.frame(maxWidth: .infinity, alignment: .leading)
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                                }.foregroundStyle(.primary).companionPanel(padding: 12).contentShape(Rectangle())
+                                HomeTrackedReadingCard(entry: entry, series: series)
                             }.buttonStyle(.plain).accessibilityIdentifier("home-reading-library-\(entry.id)")
                         }
                     }
@@ -203,25 +168,15 @@ struct HomeView: View {
             if upcoming.isEmpty {
                 empty("See what’s airing.", detail: "Upcoming original broadcasts from your watching list will appear here.", symbol: "calendar")
             } else {
-                VStack(spacing: 0) {
+                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 16) {
                     ForEach(upcoming) { value in
                         if let next = value.nextAiringEpisode {
                             AnimeLink(id: value.id) {
-                                HStack(spacing: 12) {
-                                    AnimeCover(anime: value, width: 40, cornerRadius: 7, badgeStyle: .none)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(value.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
-                                        Text("Episode \(next.episode) · Original broadcast").font(.caption2).foregroundStyle(.secondary)
-                                        Text(next.date, format: .dateTime.weekday(.abbreviated).hour().minute()).font(.caption).foregroundStyle(Theme.accent)
-                                    }
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                                }.foregroundStyle(.primary).padding(.vertical, 10).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
-                            if value.id != upcoming.last?.id { Divider() }
+                                HomeUpNextCard(anime: value, episode: next)
+                            }.buttonStyle(.plain).accessibilityIdentifier("home-up-next-\(value.id)")
                         }
                     }
-                }.companionPanel(padding: 14)
+                }
             }
         }
     }
