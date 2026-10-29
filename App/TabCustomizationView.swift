@@ -12,16 +12,16 @@ struct TabCustomizationView: View {
                         Spacer()
                         Toggle(tab.title, isOn: Binding(get: { !preferences.hidden.contains(tab) }, set: { preferences.setVisible(tab, $0) }))
                             .labelsHidden().fixedSize()
-                            .disabled(preferences.visible.count == 1 && !preferences.hidden.contains(tab))
+                            .disabled(tab == .home)
                             .accessibilityLabel(tab.title)
                             .accessibilityIdentifier("tab-visible-" + tab.rawValue)
                     }.accessibilityElement(children: .contain)
                 }.onMove { from, to in preferences.order.move(fromOffsets: from, toOffset: to) }
             } header: { Text("Main destinations") }
-            footer: { Text("Drag to reorder your main destinations. Other sections stay available from Home and Explore tools. Keep at least one visible. Your library, sources and progress stay saved. Changes apply when Settings closes.") }
+            footer: { Text("Home brings together your calendar, Airing Now and News, so it stays available. Drag to reorder the other destinations or hide them. Changes apply when Settings closes.") }
             Section {
                 Button("Show all tabs") { preferences = .init(order: preferences.order, hidden: []) }
-                Button("Reset tab order") { preferences.order = AppTab.allCases }
+                Button("Reset tab order") { preferences.order = AppTab.navigationTabs }
             }
         }.environment(\.editMode, .constant(.active))
             .navigationTitle("Navigation").navigationBarTitleDisplayMode(.inline)

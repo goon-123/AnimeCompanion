@@ -8,6 +8,7 @@ private enum WeeklyScheduleMode: String, CaseIterable { case continuous, day }
 private struct ScheduleScrollRequest: Equatable { let day: Date; var token = UUID() }
 
 struct ScheduleView: View {
+    var landing: ScheduleHomeRoute? = nil
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
@@ -20,6 +21,7 @@ struct ScheduleView: View {
     @State private var now = ScheduleClock.now
     @State private var scrollRequest: ScheduleScrollRequest?
     @State private var selectedDay: Date?
+    @State private var appliedLanding: UUID?
     @ScaledMetric(relativeTo: .subheadline) private var weekdayHeight: CGFloat = 74
     @AppStorage("schedule.releaseType") private var filterValue = ScheduleFilter.all.rawValue
     @AppStorage("schedule.libraryOnly") private var libraryOnly = false
@@ -72,11 +74,11 @@ struct ScheduleView: View {
                 }
             }
             .appSettingsSheet(isPresented: $showSettings)
-            .onChange(of: navigation.scheduleDateRequest, initial: true) { _, request in
-                guard let request else { return }
-                mode = .weekly
+            .onChange(of: landing, initial: true) { _, request in
+                guard let request, appliedLanding != request.id else { return }
+                appliedLanding = request.id
+                mode = request.page == .weekly ? .weekly : .airing
                 selectDate(request.day)
-                navigation.finishScheduleRequest(request)
             }
             .onChange(of: mode) { _, mode in if mode == .weekly { refreshToday() } }
             .onChange(of: scenePhase) { _, phase in if phase == .active { refreshToday() } }

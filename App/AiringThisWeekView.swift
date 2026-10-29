@@ -35,7 +35,13 @@ struct AiringThisWeekView: View {
         let weeklyEvents = events
         let ids = trackedIDs
         VStack(alignment: .leading, spacing: 12) {
-            CompanionSectionHeading(title: "Airing this week")
+            HStack {
+                CompanionSectionHeading(title: "Airing this week")
+                Button { navigation.openSchedule() } label: {
+                    Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
+                }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    .accessibilityLabel("Open full calendar").accessibilityIdentifier("home-week-calendar")
+            }
             HStack(alignment: .top, spacing: 6) {
                 ForEach(week.days, id: \.self) { day in
                     let titles = ScheduleDayReleases(on: day, events: weeklyEvents, now: now).trackedAnime(ids: ids)
@@ -53,7 +59,7 @@ struct AiringThisWeekView: View {
                     Text("Weekly schedule unavailable · Retry").font(.caption2).foregroundStyle(.secondary)
                 }.accessibilityHint(error)
             }
-        }.accessibilityIdentifier("home-airing-week")
+        }.companionPanel(padding: 14).accessibilityIdentifier("home-airing-week")
             .task(id: refreshKey) {
                 guard scenePhase == .active, navigation.selectedTab == .home else { return }
                 while !Task.isCancelled {
@@ -82,7 +88,7 @@ struct AiringThisWeekView: View {
                                 .frame(width: geometry.size.width, height: geometry.size.height).clipped()
                         }.clipShape(RoundedRectangle(cornerRadius: 9))
                     } else {
-                        RoundedRectangle(cornerRadius: 9).fill(Theme.surface.opacity(0.45))
+                        RoundedRectangle(cornerRadius: 9).fill(Theme.background)
                         RoundedRectangle(cornerRadius: 9)
                             .strokeBorder(isToday ? Theme.accent : Color.secondary.opacity(0.3), style: StrokeStyle(lineWidth: isToday ? 1.5 : 1, dash: [4, 4]))
                         if isToday { Image(systemName: "plus").font(.headline).foregroundStyle(Theme.accent) }
