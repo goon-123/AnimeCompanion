@@ -66,7 +66,7 @@ final class ExperienceRedesignUITests: XCTestCase {
         capture("Redesign-Home-Dark")
         tap(app.buttons["home-open-schedule"], in: app)
         XCTAssertTrue(app.segmentedControls["schedule-mode"].waitForExistence(timeout: 15))
-        app.navigationBars.buttons["Close"].firstMatch.tap()
+        app.navigationBars.buttons["Home"].firstMatch.tap()
         tap(app.buttons["home-sources"], in: app)
         XCTAssertTrue(app.buttons["playback-settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["seanime-settings"].exists)

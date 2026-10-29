@@ -11,6 +11,7 @@ struct NewsView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     var anime: Anime? = nil
+    var initialCollection: NewsCollection = .latest
     @AppStorage("news.readingHistory") private var historyJSON = ""
     @AppStorage("news.reader.v1") private var readerJSON = ""
     @AppStorage("news.preferences.v1") private var preferencesJSON = ""
@@ -30,6 +31,7 @@ struct NewsView: View {
     @State private var history = NewsReadingHistory()
     @State private var reader = NewsReaderState()
     @State private var preferences = NewsPreferences()
+    @State private var appliedCollection = false
     private var library: [NewsLibraryTitle] {
         let anime = store.visibleEntries.filter { $0.status != .dropped }.compactMap(\.media).map(NewsLibraryTitle.init(anime:))
         let written = mangaBaka.library.filter { $0.state != "dropped" }.compactMap(\.series)
@@ -64,6 +66,7 @@ struct NewsView: View {
         .toolbar { toolbar }
         .appSettingsSheet(isPresented: $appSettings)
         .task {
+            if !appliedCollection { query.collection = initialCollection; appliedCollection = true }
             history = decode(historyJSON) ?? NewsReadingHistory()
             reader = decode(readerJSON) ?? NewsReaderState()
             preferences = decode(preferencesJSON) ?? NewsPreferences()

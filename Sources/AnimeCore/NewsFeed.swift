@@ -45,7 +45,7 @@ public enum NewsTopic: String, CaseIterable, Codable, Sendable {
     }
 }
 
-public enum NewsCollection: String, CaseIterable, Sendable {
+public enum NewsCollection: String, CaseIterable, Hashable, Sendable {
     case latest, forYou, saved, history
     public var label: String {
         switch self { case .latest: return "Latest"; case .forYou: return "For You"; case .saved: return "Saved"; case .history: return "History" }

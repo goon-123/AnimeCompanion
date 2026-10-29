@@ -99,7 +99,7 @@ struct AiringNowView: View {
             }
             .task { await dubs.load(using: store.dubs) }
             .task(id: "\(scenePhase)-\(navigation.selectedTab)") {
-                guard scenePhase == .active, navigation.selectedTab == .schedule else { return }
+                guard scenePhase == .active, navigation.selectedTab == .home || navigation.selectedTab == .schedule else { return }
                 while !Task.isCancelled {
                     now = Date()
                     await store.refreshLibraryIfNeeded(now: now)

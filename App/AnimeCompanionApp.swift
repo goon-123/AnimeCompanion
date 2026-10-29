@@ -90,9 +90,15 @@ struct SupplementaryDestination: Identifiable {
     let kind: Kind
 }
 
-struct ScheduleDateRequest: Equatable {
+enum ScheduleLanding: String, Hashable { case airing, weekly }
+struct ScheduleHomeRoute: Hashable {
     let day: Date
     let id = UUID()
+    var page: ScheduleLanding = .weekly
+}
+enum HomeDestination: Hashable {
+    case schedule(ScheduleHomeRoute)
+    case news(NewsCollection)
 }
 
 @MainActor
@@ -112,8 +118,9 @@ final class AppNavigationStore: ObservableObject {
     @Published var selectedTab: AppTab = .home
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
-    @Published private(set) var scheduleDateRequest: ScheduleDateRequest?
     func open(_ tab: AppTab) {
+        if tab == .schedule { openSchedule(); return }
+        if tab == .news { openNews(); return }
         if tabPreferences.visible.contains(tab) { selectedTab = tab }
         else { supplementary = .init(kind: .tab(tab)) }
     }
@@ -123,15 +130,18 @@ final class AppNavigationStore: ObservableObject {
         selectedTab = value.selection(for: selectedTab)
         tabPreferences = value
     }
-    func openSchedule(on day: Date? = nil) {
-        scheduleDateRequest = day.map { ScheduleDateRequest(day: $0) }
-        schedule.path = NavigationPath(); schedule.detailPath = NavigationPath()
-        schedule.animeID = nil; schedule.column = .sidebar; schedule.visibility = .all
-        if tabPreferences.visible.contains(.schedule) { selectedTab = .schedule }
-        else { supplementary = .init(kind: .schedule) }
+    func openSchedule(on day: Date? = nil, page: ScheduleLanding = .weekly) {
+        openHomeDestination(.schedule(ScheduleHomeRoute(day: day ?? ScheduleClock.now, page: page)))
     }
-    func finishScheduleRequest(_ request: ScheduleDateRequest) {
-        if scheduleDateRequest == request { scheduleDateRequest = nil }
+    func openNews(_ collection: NewsCollection = .latest) { openHomeDestination(.news(collection)) }
+    private func openHomeDestination(_ destination: HomeDestination) {
+        // Explicit feature links get a normal Back path within Home. Calls
+        // from another tab start fresh instead of reviving an unrelated detail.
+        if selectedTab != .home || supplementary != nil { home.path = NavigationPath() }
+        supplementary = nil
+        home.animeID = nil; home.detailPath = NavigationPath()
+        home.path.append(destination)
+        selectedTab = .home
     }
     @Published private(set) var tabletLayout = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
     let explore = TabNavigationState()
