@@ -1,3 +1,9 @@
+## Balanced Home cards — version 0.37.3 / build 96
+
+Use medium 80/72/64-point artwork for watching, reading and upcoming cards, 12-point panel padding, tighter metadata spacing and two-line titles. Watching cards use 90% of the shelf up to 400 points, leaving the next card visible; tablet grids use a 270-point minimum. Remove the extra watch footer and place the compact Continue pill beside the episode label, with a vertical fit fallback. Artwork and title remain separate details links from the playback action, avoiding nested buttons and overlay sizing dependencies. Retain the 44-point action touch area, accessibility stacking, clear Home posters, saved resume, progress, routes and section preferences.
+
+Validation at source handoff: whitespace, project/workflow YAML and Safari resource/version checks pass. Hosted Release compilation and unsigned IPA packaging are pending; native visual checks are delegated to the user. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
+
 ## Larger Home cards and compact Continue action — version 0.37.2 / build 95
 
 Remove all anime poster badge overlays from Home. Keep the existing rounded panel style, with 128-point Continue Watching artwork, 112-point reading artwork and 88-point Up Next artwork. Watching cards fit the shelf's actual width up to 520 points; reading/upcoming cards use a roomier tablet grid and one column on compact panes or accessibility text sizes. A shared layout stacks artwork and metadata when necessary without imposing fixed card heights.

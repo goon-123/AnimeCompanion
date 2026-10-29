@@ -17,7 +17,7 @@ struct HomeView: View {
     @State private var watching: Anime?
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
     private var cardColumns: [GridItem] {
-        [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 350) : .flexible(), spacing: 16, alignment: .top)]
+        [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 270) : .flexible(), spacing: 12, alignment: .top)]
     }
     private var shows: [LibraryEntry] {
         Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(8))
@@ -127,11 +127,11 @@ struct HomeView: View {
                 empty("Your watching list starts here.", detail: "Add an anime from Explore, or connect AniList.", symbol: "play.rectangle")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 16) {
+                    LazyHStack(alignment: .top, spacing: 12) {
                         ForEach(shows) { entry in
                             if let value = entry.media {
                                 HomeContinueWatchingCard(anime: value, entry: entry) { watching = value }
-                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(520, width * 0.97) }
+                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(400, width * 0.90) }
                             }
                         }
                     }.padding(.vertical, 1)
@@ -145,7 +145,7 @@ struct HomeView: View {
             if recent.isEmpty && trackedBooks.isEmpty {
                 empty("Your next chapter is waiting.", detail: "Read from a source to see your saved place here.", symbol: "book")
             } else {
-                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 16) {
+                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 12) {
                     ForEach(recent) { record in
                         NavigationLink { MangaTitleDetailView(title: record.title, resumeOnOpen: true) } label: {
                             HomeContinueReadingCard(record: record)
@@ -168,7 +168,7 @@ struct HomeView: View {
             if upcoming.isEmpty {
                 empty("See what’s airing.", detail: "Upcoming original broadcasts from your watching list will appear here.", symbol: "calendar")
             } else {
-                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 16) {
+                LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 12) {
                     ForEach(upcoming) { value in
                         if let next = value.nextAiringEpisode {
                             AnimeLink(id: value.id) {

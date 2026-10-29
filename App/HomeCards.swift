@@ -1,7 +1,7 @@
 import SwiftUI
 import AnimeCore
 
-/// Keep Home's rounded panels and give artwork more room. Narrow panes and
+/// Medium covers and compact metadata keep Home readable. Narrow panes and
 /// accessibility text can stack without imposing a fixed card height.
 struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
     @Environment(\.dynamicTypeSize) private var textSize
@@ -18,7 +18,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
                 stacked
             } else {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .center, spacing: 12) {
                         artwork
                         content.frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
                     }
@@ -29,7 +29,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
     }
 
     private var stacked: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             artwork
             content.frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -43,36 +43,47 @@ struct HomeContinueWatchingCard: View {
     private var episode: Int { PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil) }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 12) {
+        HomeMediaCardLayout {
             AnimeLink(id: anime.id) {
-                HomeMediaCardLayout {
-                    AnimeCover(anime: anime, width: 128, cornerRadius: 14, identifierPrefix: "home", badgeStyle: .none)
-                } content: { metadata }
-            }.buttonStyle(.plain).accessibilityIdentifier("home-anime-\(anime.id)")
-                .accessibilityHint("Open series details")
-            continueAction
-        }.companionPanel()
+                AnimeCover(anime: anime, width: 80, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
+            }.buttonStyle(.plain).accessibilityHidden(true)
+        } content: { metadata }
+            .companionPanel(padding: 12)
     }
 
     private var metadata: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(anime.displayTitle).font(.headline).lineLimit(3, reservesSpace: true)
-            Text("Watched \(entry.progressValue)" + (anime.episodes.map { " / \($0)" } ?? " episodes"))
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            AnimeLink(id: anime.id) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
+                    Text("Watched \(entry.progressValue)" + (anime.episodes.map { " / \($0)" } ?? " episodes"))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("home-anime-\(anime.id)")
+                .accessibilityHint("Open series details")
             if let total = anime.episodes, total > 0 {
                 ProgressView(value: min(1, max(0, Double(entry.progressValue) / Double(total))))
                     .tint(Theme.accent).accessibilityLabel("Watched progress")
             } else { Color.clear.frame(height: 4).accessibilityHidden(true) }
-            Text(anime.format == "MOVIE" ? "Movie" : "Episode \(episode)")
-                .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+            // Resume remains outside both detail links and sizes naturally
+            // with the text; no oversized footer or overlapping hit areas.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { episodeLabel; Spacer(minLength: 0); continueAction }
+                VStack(alignment: .leading, spacing: 4) { episodeLabel; continueAction }
+            }
         }
+    }
+
+    private var episodeLabel: some View {
+        Text(anime.format == "MOVIE" ? "Movie" : "Ep \(episode)")
+            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).fixedSize()
     }
 
     private var continueAction: some View {
         Button(action: resume) {
             Label(anime.format == "MOVIE" ? "Watch movie" : "Continue", systemImage: "play.fill")
                 .font(.caption.weight(.semibold)).imageScale(.small)
-                .padding(.horizontal, 12).padding(.vertical, 8)
+                .padding(.horizontal, 10).padding(.vertical, 6)
                 .foregroundStyle(Theme.accent)
                 .background(Theme.accent.opacity(0.13), in: Capsule())
                 .overlay { Capsule().stroke(Theme.accent.opacity(0.18), lineWidth: 1) }
@@ -90,11 +101,11 @@ struct HomeContinueReadingCard: View {
 
     var body: some View {
         HomeMediaCardLayout {
-            MangaCover(title: record.title, width: 112).frame(width: 112, height: 112 * 1.45)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+            MangaCover(title: record.title, width: 72).frame(width: 72, height: 72 * 1.45)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         } content: {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(record.title.manga.title).font(.headline).lineLimit(3)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(record.title.manga.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                 if let position {
                     Text(position.chapterName).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     if position.pageCount > 0 {
@@ -108,7 +119,7 @@ struct HomeContinueReadingCard: View {
                     Image(systemName: "chevron.right").accessibilityHidden(true)
                 }.font(.caption).foregroundStyle(.secondary)
             }
-        }.companionPanel()
+        }.companionPanel(padding: 12)
     }
 }
 
@@ -118,20 +129,19 @@ struct HomeTrackedReadingCard: View {
 
     var body: some View {
         HomeMediaCardLayout {
-            MangaBakaCover(series: series, width: 112)
+            MangaBakaCover(series: series, width: 72)
         } content: {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(series.displayTitle).font(.headline).lineLimit(3)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(series.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text("Chapter " + (entry.chapter ?? 0).formatted())
                     .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.accent)
-                Text(series.formatLabel).font(.caption).foregroundStyle(.secondary)
                 HStack {
-                    Text("MangaBaka")
+                    Text(series.formatLabel + " · MangaBaka").lineLimit(1)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right").accessibilityHidden(true)
                 }.font(.caption).foregroundStyle(.secondary)
             }
-        }.companionPanel()
+        }.companionPanel(padding: 12)
     }
 }
 
@@ -141,10 +151,10 @@ struct HomeUpNextCard: View {
 
     var body: some View {
         HomeMediaCardLayout {
-            AnimeCover(anime: anime, width: 88, cornerRadius: 14, identifierPrefix: "home", badgeStyle: .none)
+            AnimeCover(anime: anime, width: 64, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
         } content: {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(anime.displayTitle).font(.headline).lineLimit(3)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text("Episode \(episode.episode) · Original broadcast").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Text(episode.date, format: .dateTime.weekday(.abbreviated).hour().minute())
@@ -153,6 +163,6 @@ struct HomeUpNextCard: View {
                     Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
                 }.font(.caption)
             }
-        }.companionPanel()
+        }.companionPanel(padding: 12)
     }
 }
