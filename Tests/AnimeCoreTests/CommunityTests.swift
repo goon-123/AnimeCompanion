@@ -92,7 +92,8 @@ final class CommunityTests: XCTestCase {
         let anime = Anime(id: 42, title: "Show Season 2")
         let url = CommunityBrowserLinks.reddit(filter: .episodes, anime: anime, episode: 1)
         XCTAssertEqual(url.host, "www.reddit.com")
-        XCTAssertEqual(url.path, "/r/anime/search/")
+        // Foundation's URL.path drops a trailing slash on Linux but preserves it on Darwin.
+        XCTAssertTrue(["/r/anime/search", "/r/anime/search/"].contains(url.path))
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value ?? ""
         XCTAssertTrue(query.contains("Show Season 2")); XCTAssertTrue(query.contains("Episode 1"))
         XCTAssertFalse(url.path.contains(".json"))
