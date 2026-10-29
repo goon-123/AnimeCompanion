@@ -6,8 +6,9 @@ struct AnimeCover: View {
     var width: CGFloat = 130
     var cornerRadius: CGFloat = 14
     var identifierPrefix = "explore"
+    var badgeStyle: AnimePosterBadgeStyle = .compact
     var body: some View {
-        AnimePoster(anime: anime, identifierPrefix: identifierPrefix, cornerRadius: cornerRadius)
+        AnimePoster(anime: anime, identifierPrefix: identifierPrefix, cornerRadius: cornerRadius, badgeStyle: badgeStyle)
             .frame(width: width, height: width * 1.45)
     }
 }
@@ -137,7 +138,7 @@ struct ReleaseRow: View {
       VStack(alignment: .leading, spacing: 0) {
         AnimeLink(id: event.anime.id) {
             HStack(spacing: 12) {
-                AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48))
+                AnimeCover(anime: event.anime, width: posterWidth ?? (sizeClass == .regular ? 76 : 48), badgeStyle: .none)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(event.anime.displayTitle).font(sizeClass == .regular ? .headline : .subheadline.weight(.semibold)).foregroundStyle(.primary)
                     Label("\(event.kind.rawValue.uppercased()) · Episode \(event.episode)", systemImage: event.kind == .dub ? "mic" : "tv").font(.caption)

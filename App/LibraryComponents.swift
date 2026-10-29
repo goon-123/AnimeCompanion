@@ -54,7 +54,7 @@ struct LibraryAnimeTile: View {
       VStack(alignment: .leading, spacing: 0) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 0) {
-                AnimePoster(anime: anime, dub: dub, identifierPrefix: "library", cornerRadius: 0).aspectRatio(1 / 1.45, contentMode: .fit)
+                AnimePoster(anime: anime, dub: dub, identifierPrefix: "library", cornerRadius: 0, badgeStyle: .standard).aspectRatio(1 / 1.45, contentMode: .fit)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold))
                         .lineLimit(textSize.isAccessibilitySize ? 4 : 2, reservesSpace: true)

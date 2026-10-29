@@ -169,7 +169,7 @@ private struct AiringWatchlistGridCard: View {
         VStack(alignment: .leading, spacing: 10) {
             AnimeLink(id: anime.id) {
                 VStack(alignment: .leading, spacing: 9) {
-                    AnimePoster(anime: anime, identifierPrefix: "library", cornerRadius: 12)
+                    AnimePoster(anime: anime, identifierPrefix: "library", cornerRadius: 12, badgeStyle: .none)
                         .aspectRatio(1 / 1.45, contentMode: .fit)
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3, reservesSpace: true)
                 }.foregroundStyle(.primary).contentShape(Rectangle())
@@ -188,7 +188,7 @@ private struct AiringWatchlistCard: View {
     let status: LibraryAiringProgress
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            AnimeLink(id: anime.id) { AnimeCover(anime: anime, width: 62, cornerRadius: 9, identifierPrefix: "library") }
+            AnimeLink(id: anime.id) { AnimeCover(anime: anime, width: 62, cornerRadius: 9, identifierPrefix: "library", badgeStyle: .none) }
                 .buttonStyle(.plain).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 AnimeLink(id: anime.id) {

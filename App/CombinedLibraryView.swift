@@ -184,7 +184,7 @@ private struct CombinedLibraryCard: View {
     }
     @ViewBuilder private func cover(width: CGFloat) -> some View {
         switch item {
-        case .anime(let entry): if let media = entry.media { AnimeCover(anime: media, width: width, cornerRadius: 14, identifierPrefix: "library") }
+        case .anime(let entry): if let media = entry.media { AnimeCover(anime: media, width: width, cornerRadius: 14, identifierPrefix: "library", badgeStyle: grid ? .standard : .compact) }
         case .reading(let entry): if let series = entry.series { MangaBakaCover(series: series, width: width) }
         }
     }

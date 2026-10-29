@@ -208,7 +208,7 @@ struct HomeView: View {
                         if let next = value.nextAiringEpisode {
                             AnimeLink(id: value.id) {
                                 HStack(spacing: 12) {
-                                    AnimeCover(anime: value, width: 40, cornerRadius: 7)
+                                    AnimeCover(anime: value, width: 40, cornerRadius: 7, badgeStyle: .none)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(value.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
                                         Text("Episode \(next.episode) · Original broadcast").font(.caption2).foregroundStyle(.secondary)

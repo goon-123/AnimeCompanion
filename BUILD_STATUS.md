@@ -1,3 +1,9 @@
+## Compact badges and larger series artwork — version 0.37.1 / build 94
+
+Refine build 93 from user feedback: keep My Library grid badge metrics unchanged, reduce rating/DUB fonts and padding in other listing contexts, and suppress all poster overlays in daily/weekly Schedule, Airing Now List/Grid and the small Home airing preview. Retain schedule time/source/catch-up text. Enlarge Related / You May Also Like posters to 160 points on phone and 200 on tablet with subheadline titles. Enlarge the main anime hero poster to 136/184 points, its banner to 280/360 points and its title; stack header content at accessibility text sizes or when the horizontal layout cannot fit. Preserve card and genre destinations, Library context menus and current broadcast progress semantics.
+
+Validation at source handoff: diff whitespace, workflow/project YAML and Safari resource/version checks passed locally. The hosted iPhone/iPad Release compile and unsigned IPA are pending; native visual/device checking remains delegated to the user. Updated manual checks: docs/POSTER_CARD_MANUAL_CHECKS.md. No new broad UI runs are requested.
+
 ## Unified anime poster cards — version 0.37.0 / build 93
 
 Use one reusable AnimePoster and shared badge overlay for anime listings. Match the Library reference: currently-airing dot at top left, available English DUB above a 10-point AniList rating at bottom right, dark translucent rounded backgrounds, and responsive sizing down to agenda thumbnails. Keep artwork inside the existing full-height row/grid bounds. Preserve navigation, independent genre taps, Library context menus, progress tracks and original-broadcast catch-up/countdowns.
