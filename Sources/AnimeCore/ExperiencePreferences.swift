@@ -20,12 +20,13 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     case greeting, search, featureLinks, welcome, syncStatus
     case weekly, news, community, watching, reading, airing, shortcuts
     case today, catchUp, libraryStats, planned, randomPick, savedNews
+    case seasonSpotlight, nextEpisode, watchlistBanners
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .greeting: return "Greeting & date"
         case .search: return "Search"
-        case .featureLinks: return "Calendar, Airing Now & News"
+        case .featureLinks: return "Quick access"
         case .welcome: return "Welcome & setup"
         case .syncStatus: return "Library sync status"
         case .weekly: return "Airing this week"
@@ -41,6 +42,9 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .planned: return "Plan to watch"
         case .randomPick: return "Pick something for me"
         case .savedNews: return "Saved stories"
+        case .seasonSpotlight: return "Seasonal spotlight"
+        case .nextEpisode: return "Next episode countdown"
+        case .watchlistBanners: return "From your watchlist"
         }
     }
     public var symbol: String {
@@ -56,6 +60,9 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .planned: return "bookmark"
         case .randomPick: return "shuffle"
         case .savedNews: return "bookmark.square"
+        case .seasonSpotlight: return "sparkles.rectangle.stack"
+        case .nextEpisode: return "timer"
+        case .watchlistBanners: return "rectangle.stack"
         case .watching: return "play.circle"; case .reading: return "book"
         case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .community: return "bubble.left.and.bubble.right"; case .shortcuts: return "square.grid.2x2" }
     }
@@ -63,7 +70,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .greeting: return "Today's date and your Home greeting."
         case .search: return "Jump into anime, manga and novel search."
-        case .featureLinks: return "Quick access to your calendar, catch-up view and news."
+        case .featureLinks: return "Three shortcuts you can replace, swap or hide individually."
         case .welcome: return "Account setup when no library is connected."
         case .syncStatus: return "Library loading, sync errors and retry actions."
         case .weekly: return "Seven days of releases from your library."
@@ -79,10 +86,54 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .planned: return "Titles saved to your AniList plan-to-watch list."
         case .randomPick: return "Shuffle your released plan-to-watch titles for an idea."
         case .savedNews: return "Return to articles you bookmarked in News."
+        case .seasonSpotlight: return "Wide artwork banners for this season's popular anime."
+        case .nextEpisode: return "A live countdown and artwork for your next original broadcast."
+        case .watchlistBanners: return "A cinematic shelf of the shows you're currently watching."
         }
     }
-    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews]
-    public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews].contains(self) }
+    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners]
+    public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews, .seasonSpotlight, .watchlistBanners].contains(self) }
+}
+
+public enum HomeShortcut: String, CaseIterable, Identifiable, Sendable {
+    case calendar, airing, news, community, library, explore, reading, savedNews
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .calendar: return "Calendar"
+        case .airing: return "Airing Now"
+        case .news: return "News"
+        case .community: return "Community"
+        case .library: return "My Library"
+        case .explore: return "Explore"
+        case .reading: return "Reading"
+        case .savedNews: return "Saved stories"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .calendar: return "calendar"
+        case .airing: return "play.rectangle"
+        case .news: return "newspaper"
+        case .community: return "bubble.left.and.bubble.right"
+        case .library: return "books.vertical"
+        case .explore: return "safari"
+        case .reading: return "book"
+        case .savedNews: return "bookmark"
+        }
+    }
+    public var detail: String {
+        switch self {
+        case .calendar: return "Your week"
+        case .airing: return "Catch up"
+        case .news: return "Your briefing"
+        case .community: return "Join the conversation"
+        case .library: return "Your collection"
+        case .explore: return "Find a new favorite"
+        case .reading: return "Sources & chapters"
+        case .savedNews: return "Read later"
+        }
+    }
 }
 
 public enum HomeWidgetSize: String, CaseIterable, Codable, Identifiable, Sendable {
@@ -98,18 +149,25 @@ public struct HomePreferences: Equatable, Sendable {
     public var order: [HomeSection]
     public private(set) var hidden: Set<HomeSection>
     private var sizes: [HomeSection: HomeWidgetSize]
+    public private(set) var shortcuts: [HomeShortcut?]
     private struct Stored: Codable {
         var version: Int?
         let order: [String]
         let hidden: [String]
         var sizes: [String: String]?
+        var shortcuts: [String]?
     }
     public init(order: [HomeSection] = HomeSection.allCases, hidden: Set<HomeSection> = HomeSection.optionalWidgets,
-                sizes: [HomeSection: HomeWidgetSize] = [:]) {
+                sizes: [HomeSection: HomeWidgetSize] = [:], shortcuts: [HomeShortcut?] = [.calendar, .airing, .news]) {
         var seen = Set<HomeSection>()
         self.order = (order + HomeSection.allCases).filter { seen.insert($0).inserted }
         self.hidden = hidden.union(HomeSection.optionalWidgets.subtracting(order))
         self.sizes = sizes.filter { $0.key.supportsItemLimit }
+        var used = Set<HomeShortcut>()
+        self.shortcuts = (Array(shortcuts.prefix(3)) + Array(repeating: nil, count: max(0, 3 - shortcuts.count))).map {
+            guard let value = $0, used.insert(value).inserted else { return nil }
+            return value
+        }
     }
     public init(saved: String?) {
         guard let data = saved?.data(using: .utf8), let value = try? JSONDecoder().decode(Stored.self, from: data) else {
@@ -127,13 +185,20 @@ public struct HomePreferences: Equatable, Sendable {
         let sizes = (value.sizes ?? [:]).reduce(into: [HomeSection: HomeWidgetSize]()) { result, pair in
             if let section = HomeSection(rawValue: pair.key), let size = HomeWidgetSize(rawValue: pair.value) { result[section] = size }
         }
-        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes)
+        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes,
+                  shortcuts: value.shortcuts.map { $0.map(HomeShortcut.init(rawValue:)) } ?? [.calendar, .airing, .news])
     }
     public var visible: [HomeSection] { order.filter { !hidden.contains($0) } }
     public mutating func setVisible(_ section: HomeSection, _ shown: Bool) {
         if shown { hidden.remove(section) } else { hidden.insert(section) }
     }
     public mutating func setAllVisible(_ shown: Bool) { hidden = shown ? [] : Set(HomeSection.allCases) }
+    /// Selecting an existing shortcut swaps its slot, preserving both destinations.
+    public mutating func setShortcut(_ shortcut: HomeShortcut?, at index: Int) {
+        guard shortcuts.indices.contains(index) else { return }
+        if let shortcut, let other = shortcuts.firstIndex(of: shortcut), other != index { shortcuts[other] = shortcuts[index] }
+        shortcuts[index] = shortcut
+    }
     public func size(for section: HomeSection) -> HomeWidgetSize { sizes[section] ?? .standard }
     public mutating func setSize(_ size: HomeWidgetSize, for section: HomeSection) {
         guard section.supportsItemLimit else { return }
@@ -151,10 +216,10 @@ public struct HomePreferences: Equatable, Sendable {
         order.insert(section, at: order.firstIndex(of: target)! + 1)
     }
     public var saved: String {
-        let value = Self(order: order, hidden: hidden, sizes: sizes)
+        let value = Self(order: order, hidden: hidden, sizes: sizes, shortcuts: shortcuts)
         let storedSizes = Dictionary(uniqueKeysWithValues: value.sizes.map { ($0.key.rawValue, $0.value.rawValue) })
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
-        return String(data: try! encoder.encode(Stored(version: 2, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes)), encoding: .utf8)!
+        return String(data: try! encoder.encode(Stored(version: 3, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes, shortcuts: value.shortcuts.map { $0?.rawValue ?? "" })), encoding: .utf8)!
     }
 }
 

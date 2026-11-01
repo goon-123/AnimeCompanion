@@ -1,5 +1,6 @@
 import SwiftUI
 import AnimeCore
+import WebKit
 
 struct CommunityThreadReader: View {
     @EnvironmentObject private var store: AppStore
@@ -31,10 +32,13 @@ struct CommunityThreadReader: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
+                if thread.seriesName != nil || anime != nil {
+                    CommunitySeriesContext(thread: thread, anime: anime, episode: episode)
+                }
                 if spoilerGate {
                     VStack(alignment: .leading, spacing: 14) {
                         Label(episode.map { "Episode \($0) discussion" } ?? "Episode discussion", systemImage: "eye.slash").font(.title3.bold())
-                        Text("This episode is beyond your marked-watched progress, or its numbering is unverified. Titles, opening posts and comments stay hidden until you choose to read.").font(.subheadline).foregroundStyle(.secondary)
+                        Text("This episode is beyond your marked-watched progress, or its numbering is unverified. Plot previews, episode subtitles and comments stay hidden until you choose to read.").font(.subheadline).foregroundStyle(.secondary)
                         Button("Read anyway") { spoilersAllowed = true }.buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("community-reveal-unwatched")
                     }.companionPanel()
@@ -94,7 +98,7 @@ struct CommunityThreadReader: View {
         guard canLoad, reset || !loading else { return }
         let current = UUID(); attempt = current
         let requestedPage = reset ? 1 : page + 1
-        if reset { comments = []; opening = nil; hasMore = false; page = 1 }
+        if reset { hasMore = false; page = 1 }
         loading = true; error = nil
         defer { if attempt == current { loading = false } }
         do {
@@ -115,8 +119,9 @@ struct CommunityThreadReader: View {
             if !store.includeAdult && (result.media ?? []).contains(where: { $0.isAdult == true }) {
                 throw ServiceError.message("This discussion is hidden by your content preferences.")
             }
-            var ids = Set(comments.map(\.id))
-            comments += result.comments.filter { ids.insert($0.id).inserted }
+            var ids = Set(reset ? [] : comments.map(\.id))
+            let incoming = result.comments.filter { ids.insert($0.id).inserted }
+            comments = reset ? incoming : comments + incoming
             opening = result.body; page = requestedPage; hasMore = result.hasNextPage
         } catch is CancellationError {} catch { if attempt == current { self.error = error.localizedDescription } }
     }
@@ -175,11 +180,14 @@ struct CommunityTextView: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(pieces.enumerated()), id: \.offset) { index, piece in
                 switch piece {
-                case .text(let text): Text(text).font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                case .text(let text):
+                    Text((try? AttributedString(markdown: text)) ?? AttributedString(text))
+                        .font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                case .image(let url, let alt): CommunityInlineImage(url: url, alt: alt)
                 case .spoiler(let text):
                     if revealed.contains(index) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(text).font(.subheadline).textSelection(.enabled)
+                            AnyView(CommunityTextView(text))
                             Button("Hide spoiler") { revealed.remove(index) }.font(.caption)
                         }.padding(10).background(Theme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
                     } else {
@@ -191,6 +199,80 @@ struct CommunityTextView: View {
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct CommunitySeriesContext: View {
+    let thread: CommunityThread
+    var anime: Anime?
+    var episode: Int?
+    var body: some View {
+        HStack(spacing: 12) {
+            CommunityThreadArtwork(url: anime?.coverURL ?? thread.media.first?.coverURL)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(anime?.displayTitle ?? thread.seriesName ?? "Anime discussion").font(.headline)
+                if let episode { Text("Episode \(episode)").font(.subheadline).foregroundStyle(Theme.accent) }
+                Text(thread.source.title).font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.companionPanel(padding: 12)
+    }
+}
+
+struct CommunityThreadArtwork: View {
+    let url: URL?
+    var body: some View {
+        ArtworkImage(url: url, pointSize: 64) { $0.resizable().scaledToFill() } placeholder: {
+            ZStack {
+                LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.secondarySurface], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.accent)
+            }
+        }.frame(width: 56, height: 78).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
+    }
+}
+
+struct CommunityInlineImage: View {
+    let url: URL
+    let alt: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if url.pathExtension.lowercased() == "svg" {
+                CommunitySVGImage(url: url).frame(height: 180).accessibilityLabel(alt)
+            } else {
+                ArtworkPhaseView(url: url, pointSize: 860) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: 420).accessibilityLabel(alt)
+                    } else if phase.error != nil {
+                        Label("Image unavailable", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 70)
+                    } else {
+                        ProgressView("Loading image…").font(.caption).frame(maxWidth: .infinity, minHeight: 70)
+                    }
+                }
+            }
+            CommunityWebButton(title: "Open image", url: url)
+        }.clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// SVGs are image-only documents, isolated from account cookies and with scripts disabled.
+private struct CommunitySVGImage: UIViewRepresentable {
+    let url: URL
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.isOpaque = false; view.backgroundColor = .clear
+        view.scrollView.isScrollEnabled = false; view.scrollView.backgroundColor = .clear
+        return view
+    }
+    func updateUIView(_ view: WKWebView, context: Context) {
+        guard view.accessibilityIdentifier != url.absoluteString else { return }
+        view.accessibilityIdentifier = url.absoluteString
+        let escaped = url.absoluteString.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "<", with: "&lt;")
+        view.loadHTMLString("""
+        <html><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;height:100%;background:transparent}img{width:100%;height:100%;object-fit:contain}</style></head><body><img src="\(escaped)"></body></html>
+        """, baseURL: nil)
     }
 }
 

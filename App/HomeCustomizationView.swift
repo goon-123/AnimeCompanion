@@ -18,6 +18,10 @@ struct HomeCustomizationView: View {
                             Label(section.title, systemImage: section.symbol).font(.subheadline.weight(.semibold))
                         }.accessibilityIdentifier("home-visible-" + section.rawValue)
                         Text(section.detail).font(.caption).foregroundStyle(.secondary)
+                        if section == .featureLinks {
+                            NavigationLink("Customize the three shortcuts") { HomeShortcutCustomizationView() }
+                                .font(.caption).accessibilityIdentifier("home-manage-shortcuts")
+                        }
                         if section.supportsItemLimit && !preferences.hidden.contains(section) {
                             Picker("Preview items", selection: Binding(get: { preferences.size(for: section) }, set: { size in
                                 update { $0.setSize(size, for: section) }
@@ -38,7 +42,7 @@ struct HomeCustomizationView: View {
             .navigationTitle("Customize Home").navigationBarTitleDisplayMode(.inline)
             .confirmationDialog("Restore the default Home layout?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Restore layout") { saved = HomePreferences().saved }
-            } message: { Text("This resets widget order, visibility and preview sizes.") }
+            } message: { Text("This resets widget order, visibility, preview sizes and quick-access shortcuts.") }
     }
     private func update(_ change: (inout HomePreferences) -> Void) { var value = preferences; change(&value); saved = value.saved }
 }
@@ -80,5 +84,32 @@ struct HomeWidgetPicker: View {
         }.searchable(text: $query, prompt: "Find a widget")
             .navigationTitle("Add widgets").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+    }
+}
+
+struct HomeShortcutCustomizationView: View {
+    @AppStorage(HomePreferences.storageKey) private var saved = ""
+    private var preferences: HomePreferences { HomePreferences(saved: saved) }
+    var body: some View {
+        Form {
+            Section {
+                ForEach(0..<3, id: \.self) { index in
+                    Picker("Slot \(index + 1)", selection: Binding<HomeShortcut?>(get: { preferences.shortcuts[index] }, set: { shortcut in
+                        var value = preferences; value.setShortcut(shortcut, at: index); saved = value.saved
+                    })) {
+                        Text("Hidden").tag(Optional<HomeShortcut>.none)
+                        ForEach(HomeShortcut.allCases) { item in Label(item.title, systemImage: item.symbol).tag(Optional(item)) }
+                    }.accessibilityIdentifier("home-shortcut-slot-\(index)")
+                }
+            } header: { Text("Quick access") }
+            footer: { Text("Replace any section instantly. Choosing a shortcut already in another slot swaps them. Hidden slots stay hidden after relaunch.") }
+            Section {
+                Button("Restore Calendar, Airing Now & News") {
+                    var value = preferences
+                    for (index, shortcut) in [HomeShortcut.calendar, .airing, .news].enumerated() { value.setShortcut(shortcut, at: index) }
+                    saved = value.saved
+                }
+            }
+        }.navigationTitle("Customize shortcuts").navigationBarTitleDisplayMode(.inline)
     }
 }

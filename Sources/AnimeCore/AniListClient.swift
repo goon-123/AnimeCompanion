@@ -273,8 +273,8 @@ public actor AniListClient {
           Page(page: $page, perPage: 25) {
             pageInfo { hasNextPage }
             threads(mediaCategoryId: $media, categoryId: $category, search: $search, sort: $sort) {
-              id title replyCount repliedAt createdAt user { name }
-              mediaCategories { id type isAdult title { romaji english userPreferred } }
+              id title body(asHtml: true) replyCount repliedAt createdAt user { name }
+              mediaCategories { id type isAdult title { romaji english userPreferred } coverImage { large medium } bannerImage }
             }
           }
         }
@@ -291,7 +291,7 @@ public actor AniListClient {
                                  refresh: Bool = false) async throws -> CommunityThreadPage {
         let ids = Array(Set(mediaIDs.filter { $0 > 0 })).sorted()
         guard !ids.isEmpty, ids.count <= 8, (1...200).contains(page) else { throw ServiceError.invalidResponse }
-        let fields = "id title replyCount repliedAt createdAt user { name } mediaCategories { id type isAdult title { romaji english userPreferred } }"
+        let fields = "id title body(asHtml: true) replyCount repliedAt createdAt user { name } mediaCategories { id type isAdult title { romaji english userPreferred } coverImage { large medium } bannerImage }"
         let selections = ids.enumerated().map { index, id in
             "s\(index): Page(page: $page, perPage: 10) { pageInfo { hasNextPage } threads(mediaCategoryId: \(id), sort: \(sort.aniListValue)) { \(fields) } }"
         }.joined(separator: "\n")
@@ -310,11 +310,11 @@ public actor AniListClient {
         guard threadID > 0, (1...200).contains(page) else { throw ServiceError.invalidResponse }
         let query = """
         query CommunityComments($id: Int!, $page: Int!, $sort: [ThreadCommentSort]) {
-          Thread(id: $id) { id title body(asHtml: false) mediaCategories { id type isAdult title { romaji english userPreferred } } }
+          Thread(id: $id) { id title body(asHtml: true) mediaCategories { id type isAdult title { romaji english userPreferred } coverImage { large medium } bannerImage } }
           Page(page: $page, perPage: 25) {
             pageInfo { hasNextPage }
             threadComments(threadId: $id, sort: $sort) {
-              id comment(asHtml: false) createdAt likeCount user { name } childComments
+              id comment(asHtml: true) createdAt likeCount user { name } childComments
             }
           }
         }

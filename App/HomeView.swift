@@ -165,6 +165,8 @@ struct HomeView: View {
         case .catchUp, .libraryStats, .planned, .randomPick:
             HomeLibraryWidget(section: section, limit: preferences.size(for: section).itemLimit)
         case .savedNews: HomeSavedStoriesWidget(limit: preferences.size(for: .savedNews).itemLimit)
+        case .seasonSpotlight, .nextEpisode, .watchlistBanners:
+            HomeBannerWidget(section: section, limit: preferences.size(for: section).itemLimit, refreshID: newsRefreshID)
         }
     }
     private var editorBar: some View {

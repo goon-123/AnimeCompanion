@@ -1,26 +1,79 @@
 import SwiftUI
 import AnimeCore
 
-/// Optional quick links. Home's toolbar also opens these destinations when
-/// both this row and the corresponding preview widgets are hidden.
+/// Each saved slot is independent of the widget's position and visibility.
 struct HomeFeatureShortcuts: View {
     @EnvironmentObject private var navigation: AppNavigationStore
+    @AppStorage(HomePreferences.storageKey) private var saved = ""
+    @State private var customizing = false
+    private var preferences: HomePreferences { HomePreferences(saved: saved) }
     var body: some View {
-        HStack(spacing: 10) {
-            tile("Calendar", detail: "Your week", symbol: "calendar", id: "schedule") { navigation.openSchedule() }
-            tile("Airing Now", detail: "Catch up", symbol: "play.rectangle", id: "airing") { navigation.openSchedule(page: .airing) }
-            tile("News", detail: "Your briefing", symbol: "newspaper", id: "news") { navigation.openNews() }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Quick access").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Button("Customize", systemImage: "slider.horizontal.3") { customizing = true }
+                    .font(.caption).frame(minHeight: 44).accessibilityIdentifier("home-edit-shortcuts")
+            }
+            if preferences.shortcuts.allSatisfy({ $0 == nil }) {
+                Button("Choose shortcuts", systemImage: "plus.circle") { customizing = true }
+                    .frame(maxWidth: .infinity, minHeight: 64).companionPanel(padding: 12)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { tiles }
+                    VStack(spacing: 10) { tiles }
+                }
+            }
+        }.sheet(isPresented: $customizing) {
+            AppNavigationStack {
+                HomeShortcutCustomizationView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
+            }
         }
     }
-    private func tile(_ title: String, detail: String, symbol: String, id: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 5) {
-                Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.primary)
-                Text(detail).font(.caption2).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                .companionPanel(padding: 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier("home-open-" + id)
+    @ViewBuilder private var tiles: some View {
+        ForEach(0..<3, id: \.self) { index in
+            if let shortcut = preferences.shortcuts[index] {
+                Group {
+                    if shortcut == .community {
+                        NavigationLink { CommunityFeedView() } label: { tile(shortcut) }
+                    } else {
+                        Button { open(shortcut) } label: { tile(shortcut) }
+                    }
+                }.buttonStyle(.plain).accessibilityIdentifier("home-open-" + (shortcut == .calendar ? "schedule" : shortcut.rawValue))
+                    .contextMenu {
+                        Menu("Replace shortcut") {
+                            ForEach(HomeShortcut.allCases) { item in
+                                Button(item.title, systemImage: item.symbol) { replace(item, at: index) }
+                            }
+                        }
+                        Button("Hide shortcut", systemImage: "minus.circle") { replace(nil, at: index) }
+                        Button("Customize shortcuts", systemImage: "slider.horizontal.3") { customizing = true }
+                    }
+            }
+        }
+    }
+    private func tile(_ value: HomeShortcut) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Image(systemName: value.symbol).font(.title3).foregroundStyle(Theme.accent).accessibilityHidden(true)
+            Text(value.title).font(.caption.weight(.semibold)).foregroundStyle(.primary)
+            Text(value.detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+        }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .companionPanel(padding: 12).contentShape(Rectangle())
+    }
+    private func replace(_ shortcut: HomeShortcut?, at index: Int) {
+        var value = preferences; value.setShortcut(shortcut, at: index); saved = value.saved
+    }
+    private func open(_ shortcut: HomeShortcut) {
+        switch shortcut {
+        case .calendar: navigation.openSchedule()
+        case .airing: navigation.openSchedule(page: .airing)
+        case .news: navigation.openNews()
+        case .library: navigation.open(.library)
+        case .explore: navigation.open(.explore)
+        case .reading: navigation.open(.manga)
+        case .savedNews: navigation.openNews(.saved)
+        case .community: break // Uses the normal navigation stack above.
+        }
     }
 }
 

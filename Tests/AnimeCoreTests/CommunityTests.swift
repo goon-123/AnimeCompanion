@@ -50,6 +50,47 @@ final class CommunityTests: XCTestCase {
         }
         XCTAssertTrue(CommunityText.segments("Before ~!unclosed secret").allSatisfy { if case .spoiler = $0 { return true }; return false })
     }
+    func testHiddenEpisodePreviewKeepsSeriesIdentityAndNumber() {
+        let item = thread("[Spoilers] Show Season 2 Episode 5 - A huge plot spoiler")
+        XCTAssertEqual(item.previewTitle(progress: [:]), "Show Season 2 · Episode 5 discussion")
+        XCTAssertTrue(item.hidesPreview(progress: [:]))
+        XCTAssertFalse(item.hidesPreview(progress: [42: 5]))
+        XCTAssertEqual(thread("[Spoilers] Overgeard - Episode 5 Discussion", ids: []).seriesName, "Overgeard")
+    }
+    func testDiscussionImagesPreserveOrderAcrossHTMLMarkdownAndAniListSyntax() {
+        let raw = #"<p>Before</p><img src="https://cdn.example/a.svg" alt="Logo"><p>Middle</p>img80%(https://cdn.example/b.png) ![Poster](https://cdn.example/c.jpg) After"#
+        let pieces = CommunityText.segments(raw)
+        let urls = pieces.compactMap { piece -> URL? in if case .image(let url, _) = piece { return url }; return nil }
+        XCTAssertEqual(urls.map(\.lastPathComponent), ["a.svg", "b.png", "c.jpg"])
+        XCTAssertEqual(pieces.first, .text("Before"))
+        XCTAssertEqual(pieces.last, .text("After"))
+        XCTAssertFalse(CommunityText.preview(raw).contains("img80"))
+        XCTAssertEqual(CommunityText.previewImage(raw)?.lastPathComponent, "a.svg")
+    }
+    func testSpoilerImagesAreNotExtractedUntilRevealedAndUnsafeURLsAreRejected() {
+        let pieces = CommunityText.segments("Before ~!img150(https://cdn.example/secret.png)!~ after")
+        XCTAssertFalse(pieces.contains { if case .image = $0 { return true }; return false })
+        XCTAssertNil(CommunityText.previewImage("<span class='spoiler'><img src='https://cdn.example/secret.png'></span>"))
+        XCTAssertFalse(CommunityText.preview("Before ~!secret!~ after").contains("secret"))
+        let hidden = pieces.compactMap { piece -> String? in if case .spoiler(let text) = piece { return text }; return nil }.joined()
+        XCTAssertTrue(CommunityText.segments(hidden).contains { if case .image = $0 { return true }; return false })
+        XCTAssertNil(CommunityText.imageURL("javascript:alert(1)"))
+        XCTAssertNil(CommunityText.imageURL("https://user:password@example.com/image.png"))
+        XCTAssertNil(CommunityText.imageURL("file:///tmp/image.png"))
+    }
+    func testThreadListRequestsImagesAndRenderedPreviewsWithoutExtraMediaCalls() async throws {
+        let payload = #"{"data":{"Page":{"pageInfo":{"hasNextPage":false},"threads":[{"id":123,"title":"Show Episode 5","body":"<p>Opening preview</p>","mediaCategories":[{"id":42,"type":"ANIME","title":{"english":"Show"},"coverImage":{"large":"https://cdn.example/poster.jpg"},"bannerImage":"https://cdn.example/banner.jpg"}]}]}}}"#
+        let transport = CommunityTransport(payload)
+        let page = try await AniListClient(transport: transport, minimumRequestInterval: 0).communityThreads()
+        XCTAssertEqual(page.threads.first?.media.first?.coverURL?.lastPathComponent, "poster.jpg")
+        XCTAssertEqual(page.threads.first?.body, "<p>Opening preview</p>")
+        let captured = await transport.lastRequest()
+        let request = try XCTUnwrap(captured)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        let query = body["query"] as? String ?? ""
+        XCTAssertTrue(query.contains("coverImage"))
+        XCTAssertTrue(query.contains("body(asHtml: true)"))
+    }
     func testAniListCommentsDecodeRawJSONRepliesAndUsePublicRead() async throws {
         let payload = #"{"data":{"Thread":{"id":100,"title":"Show Episode 1","body":"opening","mediaCategories":[]},"Page":{"pageInfo":{"hasNextPage":true},"threadComments":[{"id":1,"comment":"root","user":{"name":"Root"},"createdAt":1700000000,"likeCount":2,"childComments":[{"id":2,"comment":"<span class='spoiler'>secret</span>","user":{"name":"Reply"},"childComments":[{"id":3,"comment":"nested","user":null,"childComments":null}]}]}]}}}"#
         let transport = CommunityTransport(payload)

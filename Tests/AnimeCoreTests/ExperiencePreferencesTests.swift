@@ -58,6 +58,35 @@ final class ExperiencePreferencesTests: XCTestCase {
         XCTAssertEqual(value.size(for: .greeting), .standard)
         XCTAssertEqual(HomePreferences(saved: value.saved), value)
     }
+    func testShortcutSlotsSwapHideAndRoundTripWithoutChangingLayout() {
+        var value = HomePreferences()
+        let order = value.order
+        value.setShortcut(.community, at: 1)
+        XCTAssertEqual(value.shortcuts, [.calendar, .community, .news])
+        value.setShortcut(.news, at: 0)
+        XCTAssertEqual(value.shortcuts, [.news, .community, .calendar])
+        value.setShortcut(nil, at: 2)
+        value.setVisible(.featureLinks, false)
+        let reopened = HomePreferences(saved: value.saved)
+        XCTAssertEqual(reopened.shortcuts, [.news, .community, nil])
+        XCTAssertEqual(reopened.order, order)
+        XCTAssertTrue(reopened.hidden.contains(.featureLinks))
+        XCTAssertEqual(reopened, value)
+        value.setShortcut(.reading, at: 99)
+        XCTAssertEqual(value, reopened)
+        for index in 0..<3 { value.setShortcut(nil, at: index) }
+        XCTAssertEqual(HomePreferences(saved: value.saved).shortcuts, [nil, nil, nil])
+    }
+    func testShortcutMigrationPreservesOldLayoutAndNewBannersStartHidden() {
+        let value = HomePreferences(saved: #"{"version":2,"order":["reading","featureLinks"],"hidden":["reading"],"sizes":{"reading":"compact"}}"#)
+        XCTAssertEqual(value.shortcuts, [.calendar, .airing, .news])
+        XCTAssertEqual(Array(value.order.prefix(2)), [.reading, .featureLinks])
+        XCTAssertTrue(value.hidden.isSuperset(of: [.seasonSpotlight, .nextEpisode, .watchlistBanners]))
+        XCTAssertEqual(value.size(for: .reading), .compact)
+        let unknown = HomePreferences(saved: #"{"version":3,"order":[],"hidden":[],"shortcuts":["community","community","retired","library"]}"#)
+        XCTAssertEqual(unknown.shortcuts, [.community, nil, nil])
+        XCTAssertEqual(HomePreferences(saved: unknown.saved), unknown)
+    }
     func testExistingTabCustomizationMovesScheduleAndNewsIntoVisibleHome() {
         let saved = #"{"order":["news","library","explore","manga","schedule"],"hidden":["manga","schedule"]}"#
         let value = AppTabPreferences(saved: saved)

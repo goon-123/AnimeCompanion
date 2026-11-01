@@ -23,6 +23,7 @@ struct CommunityFeedView: View {
     @State private var pagesByGroup: [Int: Int] = [:]
     @State private var hasMore = false
     @State private var attempt = UUID()
+    @State private var loadedScope = ""
     init(initialFilter: CommunityFilter = .general) { _filter = State(initialValue: initialFilter) }
     private var myShows: [Anime] {
         var seen = Set<Int>()
@@ -33,6 +34,7 @@ struct CommunityFeedView: View {
     private var scoped: Bool { filter == .season || filter == .myShows }
     private var selectedAnime: Anime? { shows.first { $0.id == selectedShow } }
     private var visibleThreads: [CommunityThread] {
+        guard loadedScope == scopeKey else { return [] }
         let values = threads.filter { thread in
             if !store.includeAdult && thread.media.contains(where: { $0.isAdult == true }) { return false }
             if filter == .general { return !thread.mentionsEpisode }
@@ -47,16 +49,19 @@ struct CommunityFeedView: View {
         }
     }
     private var progress: [Int: Int] { Dictionary(store.entries.map { ($0.mediaId, $0.progressValue) }, uniquingKeysWith: max) }
-    private var loadKey: String {
-        "\(source)-\(filter)-\(sort)-\(selectedShow)-\(shows.map(\.id))-\(store.includeAdult)-\(store.viewer?.id ?? 0)-\(revision)"
+    private var scopeKey: String {
+        "\(source)-\(filter)-\(sort)-\(selectedShow)-\(store.includeAdult)-\(store.viewer?.id ?? 0)-\(revision)"
     }
+    private var loadKey: String { scopeKey + (scoped ? "-\(shows.map(\.id))" : "") }
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("The conversation continues.").font(.title2.bold())
                     Text("Seasonal anime, your shows and the latest episode reactions.").font(.subheadline).foregroundStyle(.secondary)
                 }
+                .id("community-top")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(CommunityFilter.allCases) { item in
@@ -94,7 +99,9 @@ struct CommunityFeedView: View {
                 if filter == .season && (seasonal.isEmpty || showsAdult != store.includeAdult) { await loadShows(replace: true) }
             }
             .refreshable { await load(reset: true, refresh: true) }
+            .onChange(of: scopeKey) { _, _ in proxy.scrollTo("community-top", anchor: .top) }
             .accessibilityIdentifier("community-feed")
+        }
     }
     private var showPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -108,7 +115,7 @@ struct CommunityFeedView: View {
                 else if moreSeasonal { Button("Load more seasonal shows") { Task { await loadShows() } }.font(.caption).frame(minHeight: 44) }
             }
             if let showsError { NoticeView(message: showsError) { Task { await loadShows() } } }
-        }.companionPanel(padding: 12)
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 12)
     }
     private var nativeFeed: some View {
         LazyVStack(alignment: .leading, spacing: 12) {
@@ -127,7 +134,8 @@ struct CommunityFeedView: View {
                 NavigationLink {
                     CommunityThreadReader(thread: thread, anime: selectedAnime, confirmIdentity: source == .myAnimeList && selectedAnime != nil)
                 } label: {
-                    CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress, mediaID: selectedAnime?.id))
+                    CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress, mediaID: selectedAnime?.id),
+                        hiddenPreview: thread.hidesPreview(progress: progress, mediaID: selectedAnime?.id), anime: selectedAnime)
                 }.buttonStyle(.plain)
             }
             if loading { ProgressView("Loading discussions…").frame(maxWidth: .infinity).padding() }
@@ -145,14 +153,15 @@ struct CommunityFeedView: View {
         let current = UUID(); showsAttempt = current
         let requestedAdult = store.includeAdult
         if showsAdult != requestedAdult { seasonal = []; seasonPage = 0; moreSeasonal = true; showsAdult = requestedAdult }
-        let requestedPage = seasonPage + 1
+        let requestedPage = replace ? 1 : seasonPage + 1
         loadingShows = true; showsError = nil
         defer { if showsAttempt == current { loadingShows = false } }
         do {
             let result = try await store.aniList.seasonal(.current(), page: requestedPage, includeAdult: requestedAdult)
             try Task.checkCancellation(); guard showsAttempt == current, store.includeAdult == requestedAdult else { return }
-            var ids = Set(seasonal.map(\.id))
-            seasonal += (result.media ?? []).filter { ids.insert($0.id).inserted }
+            var ids = Set(replace ? [] : seasonal.map(\.id))
+            let incoming = (result.media ?? []).filter { ids.insert($0.id).inserted }
+            seasonal = replace ? incoming : seasonal + incoming
             seasonPage = requestedPage; moreSeasonal = result.pageInfo?.hasNextPage == true
         } catch is CancellationError {} catch { if showsAttempt == current { showsError = error.localizedDescription } }
     }
@@ -160,7 +169,8 @@ struct CommunityFeedView: View {
         guard reset || !loading else { return }
         let current = UUID(); attempt = current
         if reset {
-            threads = []; page = 0; hasMore = false; pagesByGroup = [:]
+            if loadedScope != scopeKey { threads = [] }
+            loadedScope = scopeKey; page = 0; hasMore = false; pagesByGroup = [:]
             pendingGroups = Array(0..<((shows.count + 7) / 8))
         }
         loading = false; error = nil
@@ -183,8 +193,9 @@ struct CommunityFeedView: View {
                 result = try await store.communityMAL.topics(clientID: CommunityConfiguration.malClientID ?? "", query: query, page: requestedPage, refresh: refresh)
             }
             try Task.checkCancellation(); guard attempt == current, source == wantedSource else { return }
-            var seen = Set(threads.map(\.id))
-            threads += result.threads.filter { seen.insert($0.id).inserted }
+            var seen = Set(reset ? [] : threads.map(\.id))
+            let incoming = result.threads.filter { seen.insert($0.id).inserted }
+            threads = reset ? incoming : threads + incoming
             page = requestedPage; hasMore = result.hasNextPage
             if !batch.isEmpty {
                 pagesByGroup[requestedGroup] = requestedPage
@@ -199,11 +210,30 @@ struct CommunityFeedView: View {
 struct CommunityThreadRow: View {
     let thread: CommunityThread
     let title: String
+    var hiddenPreview = false
+    var anime: Anime? = nil
+    private var imageURL: URL? {
+        anime?.coverURL ?? thread.media.first?.coverURL ?? (!thread.mentionsEpisode ? CommunityText.previewImage(thread.body ?? "") : nil)
+    }
+    private var snippet: String { hiddenPreview ? "" : CommunityText.preview(thread.body ?? "") }
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(3).multilineTextAlignment(.leading)
-            CommunityThreadMetadata(thread: thread)
-        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 14).contentShape(Rectangle())
+        HStack(alignment: .top, spacing: 12) {
+            CommunityThreadArtwork(url: imageURL)
+            VStack(alignment: .leading, spacing: 7) {
+                if !thread.mentionsEpisode, let name = anime?.displayTitle ?? thread.seriesName {
+                    Text(name).font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(2)
+                }
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+                if hiddenPreview {
+                    Label("Plot preview hidden · Tap to read", systemImage: "eye.slash")
+                        .font(.caption2).foregroundStyle(.secondary)
+                } else if !snippet.isEmpty && snippet != "[No text]" {
+                    Text(snippet).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+                CommunityThreadMetadata(thread: thread)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+            .companionPanel(padding: 14).contentShape(Rectangle())
     }
 }
 
@@ -235,10 +265,8 @@ struct HomeCommunityWidget: View {
             }
             ForEach(previews) { thread in
                 NavigationLink { CommunityThreadReader(thread: thread) } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(thread.previewTitle(progress: progress)).font(.subheadline.weight(.medium)).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
-                        CommunityThreadMetadata(thread: thread)
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 3).contentShape(Rectangle())
+                    CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress),
+                        hiddenPreview: thread.hidesPreview(progress: progress))
                 }.buttonStyle(.plain)
             }
             if loading && previews.isEmpty { ProgressView("Loading conversations…").font(.caption) }

@@ -35,7 +35,14 @@ public struct CommunityMedia: Decodable, Hashable, Sendable {
     public let type: String?
     public let title: AnimeTitle?
     public let isAdult: Bool?
+    public let coverImage: AnimeImage?
+    public let bannerImage: String?
     public var name: String { title?.english ?? title?.romaji ?? title?.userPreferred ?? "Anime #\(id)" }
+    public var coverURL: URL? { CommunityText.imageURL(coverImage?.large ?? coverImage?.medium ?? coverImage?.extraLarge ?? "") }
+    public init(id: Int, type: String?, title: AnimeTitle?, isAdult: Bool?, coverImage: AnimeImage? = nil, bannerImage: String? = nil) {
+        self.id = id; self.type = type; self.title = title; self.isAdult = isAdult
+        self.coverImage = coverImage; self.bannerImage = bannerImage
+    }
 }
 
 public struct CommunityThread: Identifiable, Hashable, Sendable {
@@ -47,21 +54,33 @@ public struct CommunityThread: Identifiable, Hashable, Sendable {
     public let commentCount: Int?
     public let media: [CommunityMedia]
     public let url: URL
+    public let body: String?
     public var id: String { "\(source.rawValue)-\(threadID)" }
     public var episode: Int? { CommunityEpisodeTitle.parse(title)?.episode }
     public var mentionsEpisode: Bool { CommunityEpisodeTitle.mentionsEpisode(title) }
-    public init(source: CommunitySource, threadID: Int, title: String, author: String?, activityAt: Date?, commentCount: Int?, media: [CommunityMedia] = [], url: URL) {
+    public init(source: CommunitySource, threadID: Int, title: String, author: String?, activityAt: Date?, commentCount: Int?, media: [CommunityMedia] = [], url: URL, body: String? = nil) {
         self.source = source; self.threadID = threadID; self.title = title; self.author = author
-        self.activityAt = activityAt; self.commentCount = commentCount; self.media = media; self.url = url
+        self.activityAt = activityAt; self.commentCount = commentCount; self.media = media; self.url = url; self.body = body
     }
-    /// A topic title itself can spoil an episode. Never use it as a preview for unknown/unwatched progress.
-    public func previewTitle(progress: [Int: Int], mappedEpisode: Int? = nil, mediaID: Int? = nil) -> String {
-        guard mentionsEpisode else { return title }
+    /// The series identity is public context; episode subtitles and plot previews are protected separately.
+    public var seriesName: String? {
+        if !media.isEmpty { return media.prefix(2).map(\.name).joined(separator: " · ") }
+        guard let prefix = CommunityEpisodeTitle.parse(title)?.titlePrefix else { return nil }
+        let name = prefix.replacingOccurrences(of: #"(?i)\[(?:spoilers?|discussion)\]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "-–—:|·")))
+        return name.isEmpty ? nil : name
+    }
+    public func hidesPreview(progress: [Int: Int], mappedEpisode: Int? = nil, mediaID: Int? = nil) -> Bool {
+        guard mentionsEpisode else { return false }
         let number = mappedEpisode ?? episode
         let ids = mediaID.map { [$0] } ?? media.filter { $0.type == "ANIME" }.map(\.id)
         let watched = number.map { n in !ids.isEmpty && ids.allSatisfy { (progress[$0] ?? 0) >= n } } ?? false
-        if watched { return title }
-        return number.map { "Episode \($0) discussion · Preview hidden" } ?? "Episode discussion · Preview hidden"
+        return !watched
+    }
+    public func previewTitle(progress: [Int: Int], mappedEpisode: Int? = nil, mediaID: Int? = nil) -> String {
+        guard hidesPreview(progress: progress, mappedEpisode: mappedEpisode, mediaID: mediaID) else { return title }
+        let label = (mappedEpisode ?? episode).map { "Episode \($0) discussion" } ?? "Episode discussion"
+        return seriesName.map { "\($0) · \(label)" } ?? label
     }
 }
 
@@ -184,7 +203,7 @@ struct AniListCommunityThread: Decodable, Sendable {
     var value: CommunityThread {
         CommunityThread(source: .aniList, threadID: id, title: title ?? "Untitled discussion", author: user?.name,
             activityAt: (repliedAt ?? createdAt).map { Date(timeIntervalSince1970: Double($0)) }, commentCount: replyCount,
-            media: mediaCategories ?? [], url: URL(string: "https://anilist.co/forum/thread/\(id)")!)
+            media: mediaCategories ?? [], url: URL(string: "https://anilist.co/forum/thread/\(id)")!, body: body)
     }
 }
 
