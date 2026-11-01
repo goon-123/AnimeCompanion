@@ -17,12 +17,13 @@ public enum ArtworkDecodeSize {
 }
 
 public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
-    case weekly, news, watching, reading, airing, shortcuts
+    case weekly, news, community, watching, reading, airing, shortcuts
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .weekly: return "Airing this week"
         case .news: return "Headlines"
+        case .community: return "Community"
         case .watching: return "Continue watching"
         case .reading: return "Continue reading"
         case .airing: return "Up next"
@@ -31,7 +32,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     }
     public var symbol: String {
         switch self { case .watching: return "play.circle"; case .reading: return "book"
-        case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .shortcuts: return "square.grid.2x2" }
+        case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .community: return "bubble.left.and.bubble.right"; case .shortcuts: return "square.grid.2x2" }
     }
 }
 
@@ -46,6 +47,7 @@ public struct HomePreferences: Equatable, Sendable {
         // Introduce the new widget near the top without reordering saved sections.
         var upgraded = order.contains(.weekly) ? order : [.weekly] + order
         if !upgraded.contains(.news) { upgraded.insert(.news, at: (upgraded.firstIndex(of: .weekly) ?? 0) + 1) }
+        if !upgraded.contains(.community) { upgraded.insert(.community, at: (upgraded.firstIndex(of: .news) ?? 0) + 1) }
         self.order = (upgraded + HomeSection.allCases).filter { seen.insert($0).inserted }
         self.hidden = hidden
         if self.order.allSatisfy(hidden.contains) { self.hidden.remove(.shortcuts) }

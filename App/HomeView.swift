@@ -67,6 +67,7 @@ struct HomeView: View {
                     switch section {
                     case .weekly: AiringThisWeekView()
                     case .news: HomeNewsSection(refreshID: newsRefreshID)
+                    case .community: HomeCommunityWidget(refreshID: newsRefreshID)
                     case .watching: if anime.isSignedIn || anime.loadingLibrary { watchSection }
                     case .reading: if !recent.isEmpty || !trackedBooks.isEmpty { readingSection }
                     case .airing: if !upcoming.isEmpty { airingSection }
@@ -204,6 +205,7 @@ struct HomeView: View {
             CompanionSectionHeading(title: HomeSection.shortcuts.title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 quickLink("Reading sources", detail: "Extensions & history", symbol: "book.closed", tab: .manga)
+                NavigationLink { CommunityFeedView() } label: { shortcutLabel("Community", detail: "Conversations & episodes", symbol: "bubble.left.and.bubble.right") }
                 NavigationLink { SourcesSettingsView() } label: { shortcutLabel("Sources & playback", detail: "Manage your connections", symbol: "puzzlepiece.extension") }.accessibilityIdentifier("home-sources")
                 NavigationLink { MangaBakaRecommendationsView().mangaBakaNavigation() } label: { shortcutLabel("For your next read", detail: "MangaBaka recommendations", symbol: "sparkles") }
                 Button { settings = true } label: { shortcutLabel("Settings", detail: "Accounts & preferences", symbol: "gearshape") }

@@ -56,6 +56,11 @@ struct SettingsDirectoryView: View {
                 }
             }
             Section("Preferences") {
+                if matches("Community discussions Reddit MyAnimeList AniList comments sources") {
+                    NavigationLink { CommunitySourcesView() } label: {
+                        SettingsCategoryLabel(title: "Community sources", detail: "Discussions, readers & access", symbol: "bubble.left.and.bubble.right", tint: Theme.accent)
+                    }.accessibilityIdentifier("settings-community")
+                }
                 if matches("Content browsing explicit adult ratings filters privacy") {
                     NavigationLink { BrowsingSettingsView() } label: {
                         SettingsCategoryLabel(title: "Content preferences", detail: "Ratings, explicit content & filtering", symbol: "line.3.horizontal.decrease.circle", tint: .orange)

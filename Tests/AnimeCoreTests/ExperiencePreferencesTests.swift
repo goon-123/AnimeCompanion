@@ -2,18 +2,19 @@ import XCTest
 @testable import AnimeCore
 
 final class ExperiencePreferencesTests: XCTestCase {
-    func testHomeSectionsIntroduceWeekAndNewsWithoutLosingExistingOrderOrHiddenChoices() {
+    func testHomeSectionsIntroduceWeekNewsAndCommunityWithoutLosingExistingOrderOrHiddenChoices() {
         let repaired = HomePreferences(saved: #"{"order":["reading","reading","unknown"],"hidden":["watching","reading","airing","shortcuts","unknown"]}"#)
-        XCTAssertEqual(repaired.order, [.weekly, .news, .reading, .watching, .airing, .shortcuts])
-        XCTAssertEqual(repaired.visible, [.weekly, .news])
+        XCTAssertEqual(repaired.order, [.weekly, .news, .community, .reading, .watching, .airing, .shortcuts])
+        XCTAssertEqual(repaired.visible, [.weekly, .news, .community])
         XCTAssertEqual(HomePreferences(saved: repaired.saved), repaired)
         XCTAssertEqual(HomePreferences(saved: "broken"), HomePreferences())
         var single = repaired
         single.setVisible(.weekly, false)
         single.setVisible(.news, false)
-        XCTAssertEqual(single.visible, [.news])
+        single.setVisible(.community, false)
+        XCTAssertEqual(single.visible, [.community])
         single.setVisible(.reading, true)
-        XCTAssertEqual(single.visible, [.news, .reading])
+        XCTAssertEqual(single.visible, [.community, .reading])
         let allHidden = HomePreferences(hidden: Set(HomeSection.allCases))
         XCTAssertEqual(allHidden.visible, [.shortcuts])
         var customized = HomePreferences(order: [.reading, .weekly], hidden: [.weekly])
@@ -35,7 +36,7 @@ final class ExperiencePreferencesTests: XCTestCase {
         XCTAssertEqual(legacy.visible, [.explore, .home, .library, .manga])
         XCTAssertFalse(legacy.saved.contains("schedule")); XCTAssertFalse(legacy.saved.contains("news"))
         let upgraded = HomePreferences(saved: #"{"order":["watching","reading","weekly","airing","shortcuts"],"hidden":["reading","weekly"]}"#)
-        XCTAssertEqual(upgraded.order, [.watching, .reading, .weekly, .news, .airing, .shortcuts])
+        XCTAssertEqual(upgraded.order, [.watching, .reading, .weekly, .news, .community, .airing, .shortcuts])
         XCTAssertTrue(upgraded.hidden.contains(.reading)); XCTAssertTrue(upgraded.hidden.contains(.weekly))
         var hiddenNews = upgraded; hiddenNews.setVisible(.news, false)
         XCTAssertFalse(HomePreferences(saved: hiddenNews.saved).visible.contains(.news))
