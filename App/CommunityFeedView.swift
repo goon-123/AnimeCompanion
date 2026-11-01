@@ -138,7 +138,7 @@ struct CommunityFeedView: View {
                         hiddenPreview: thread.hidesPreview(progress: progress, mediaID: selectedAnime?.id), anime: selectedAnime)
                 }.buttonStyle(.plain)
             }
-            if loading { ProgressView("Loading discussions…").frame(maxWidth: .infinity).padding() }
+            if loading && (visibleThreads.isEmpty || page > 0) { ProgressView("Loading discussions…").frame(maxWidth: .infinity).padding() }
             else if visibleThreads.isEmpty && error == nil {
                 Text("No matching discussions on this page. Try another source, choose a show, or search more threads.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
             }

@@ -47,8 +47,11 @@ public actor AniListLibraryCache {
             try encrypted.write(to: file(credential), options: .atomic)
             #endif
             // AniList has one active account; keep this private snapshot bounded.
+            // Directory enumeration may return relative/base URLs on Apple platforms.
+            // Compare sibling filenames so URL representation cannot delete the file just written.
+            let currentName = file(credential).lastPathComponent
             for old in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                where old.pathExtension == "bin" && old != file(credential) { try? FileManager.default.removeItem(at: old) }
+                where old.pathExtension == "bin" && old.lastPathComponent != currentName { try? FileManager.default.removeItem(at: old) }
             return true
         } catch { return false }
     }

@@ -35,5 +35,19 @@ final class AniListLibraryCacheTests: XCTestCase {
         await cache.save(.init(viewer: viewer, entries: []), credential: "token")
         let empty = await cache.load(credential: "token"); XCTAssertEqual(empty?.entries.count, 0)
     }
+    func testCredentialReplacementKeepsNewSnapshotAndOldSignOutCannotClearIt() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let first = try JSONDecoder().decode(Viewer.self, from: Data(#"{"id":77,"name":"First viewer"}"#.utf8))
+        let second = try JSONDecoder().decode(Viewer.self, from: Data(#"{"id":88,"name":"Second viewer"}"#.utf8))
+        let cache = AniListLibraryCache(directory: folder)
+        await cache.save(.init(viewer: first, entries: []), credential: "first-token")
+        await cache.save(.init(viewer: second, entries: []), credential: "second-token")
+        await cache.clear(credential: "first-token")
+        let restored = await cache.load(credential: "second-token")
+        XCTAssertEqual(restored?.viewer.id, 88)
+        let old = await cache.load(credential: "first-token"); XCTAssertNil(old)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).count, 1)
+    }
 }
 #endif
