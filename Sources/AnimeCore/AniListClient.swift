@@ -338,6 +338,25 @@ public actor AniListClient {
         let result: PageResponse = try await request(AniListQueries.seasonal, variables: vars)
         return result.Page
     }
+
+    /// One small public lineup powers countdown art, premieres and returning favorites.
+    public func homeSeason(_ selection: SeasonSelection, includeAdult: Bool = false, refresh: Bool = false) async throws -> MediaPage {
+        let query = """
+        query HomeSeason($season: MediaSeason!, $year: Int!, $isAdult: Boolean) {
+          Page(page: 1, perPage: 50) {
+            pageInfo { hasNextPage }
+            media(type: ANIME, season: $season, seasonYear: $year, isAdult: $isAdult, sort: POPULARITY_DESC) {
+              ...AnimeCard startDate { year month day }
+              relations { edges { relationType node { id type isAdult title { romaji english userPreferred } } } }
+            }
+          }
+        }
+        """ + AniListQueries.card
+        var variables: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year)]
+        if !includeAdult { variables["isAdult"] = .bool(false) }
+        let result: PageResponse = try await request(query, variables: variables, bypassCache: refresh)
+        return result.Page
+    }
     public func search(_ text: String, page: Int = 1, includeAdult: Bool = false, refresh: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["search": .string(text), "page": .int(page)]
         if !includeAdult { vars["isAdult"] = .bool(false) }

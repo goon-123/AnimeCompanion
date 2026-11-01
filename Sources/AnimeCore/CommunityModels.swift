@@ -1,6 +1,6 @@
 import Foundation
 
-public enum CommunitySource: String, CaseIterable, Identifiable, Sendable {
+public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendable {
     case reddit, aniList, myAnimeList
     public var id: String { rawValue }
     public var title: String {
@@ -30,7 +30,7 @@ public enum CommunityCommentSort: String, CaseIterable, Identifiable, Sendable {
     public var aniListValue: String { self == .oldest ? "ID" : "ID_DESC" }
 }
 
-public struct CommunityMedia: Decodable, Hashable, Sendable {
+public struct CommunityMedia: Codable, Hashable, Sendable {
     public let id: Int
     public let type: String?
     public let title: AnimeTitle?
@@ -45,7 +45,7 @@ public struct CommunityMedia: Decodable, Hashable, Sendable {
     }
 }
 
-public struct CommunityThread: Identifiable, Hashable, Sendable {
+public struct CommunityThread: Identifiable, Hashable, Codable, Sendable {
     public let source: CommunitySource
     public let threadID: Int
     public let title: String
@@ -96,7 +96,7 @@ public struct CommunityComment: Identifiable, Hashable, Sendable {
     }
 }
 
-public struct CommunityThreadPage: Sendable {
+public struct CommunityThreadPage: Codable, Sendable {
     public let threads: [CommunityThread]
     public let hasNextPage: Bool
     public init(threads: [CommunityThread], hasNextPage: Bool) { self.threads = threads; self.hasNextPage = hasNextPage }

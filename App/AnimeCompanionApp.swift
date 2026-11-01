@@ -38,6 +38,7 @@ struct AnimeCompanionApp: App {
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
+                    await store.refreshLibraryIfNeeded()
                     await store.exploreDubs.keepUpdated(using: store.dubs)
                 }
         }
@@ -265,6 +266,7 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }
         }.onChange(of: navigation.selectedTab) { _, tab in
+            Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
             }

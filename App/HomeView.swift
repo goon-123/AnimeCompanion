@@ -21,6 +21,9 @@ struct HomeView: View {
     @State private var settings = false
     @State private var watching: Anime?
     @State private var newsRefreshID = 0
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appeared = false
+    @State private var homeVisitID = 0
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
     private var cardColumns: [GridItem] {
         [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 270) : .flexible(), spacing: 12, alignment: .top)]
@@ -109,6 +112,14 @@ struct HomeView: View {
                 case .news(let collection): NewsView(initialCollection: collection).environment(\.animeSplitPresentation, false)
                 }
             }
+            .onAppear {
+                if appeared { homeVisitID += 1 }
+                appeared = true
+                Task { await anime.refreshLibraryIfNeeded() }
+            }
+            .onChange(of: scenePhase) { previous, current in
+                if current == .active && previous != .active { homeVisitID += 1 }
+            }
             .task {
                 await reading.load(); await sourceLinks.load()
                 if !reading.state.records.isEmpty { await extensions.load() }
@@ -156,7 +167,7 @@ struct HomeView: View {
         case .syncStatus: syncStatus
         case .weekly: AiringThisWeekView()
         case .news: HomeNewsSection(refreshID: newsRefreshID)
-        case .community: HomeCommunityWidget(refreshID: newsRefreshID)
+        case .community: HomeCommunityWidget(refreshID: newsRefreshID, activationID: homeVisitID)
         case .watching: watchSection
         case .reading: readingSection
         case .airing: airingSection
@@ -165,8 +176,10 @@ struct HomeView: View {
         case .catchUp, .libraryStats, .planned, .randomPick:
             HomeLibraryWidget(section: section, limit: preferences.size(for: section).itemLimit)
         case .savedNews: HomeSavedStoriesWidget(limit: preferences.size(for: .savedNews).itemLimit)
+        case .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame:
+            HomeSeasonWidget(section: section, limit: preferences.size(for: section).itemLimit, refreshID: newsRefreshID, activationID: homeVisitID)
         case .seasonSpotlight, .nextEpisode, .watchlistBanners:
-            HomeBannerWidget(section: section, limit: preferences.size(for: section).itemLimit, refreshID: newsRefreshID)
+            HomeBannerWidget(section: section, limit: preferences.size(for: section).itemLimit, refreshID: newsRefreshID, activationID: homeVisitID)
         }
     }
     private var editorBar: some View {

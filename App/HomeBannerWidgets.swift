@@ -7,6 +7,8 @@ struct HomeBannerWidget: View {
     let section: HomeSection
     let limit: Int
     let refreshID: Int
+    var activationID = 0
+    @State private var appliedRefreshID = 0
     @State private var seasonal: [Anime] = []
     @State private var loading = false
     @State private var error: String?
@@ -51,14 +53,17 @@ struct HomeBannerWidget: View {
                     NoticeView(message: error) { retry += 1 }
                 }
             }
-        }.task(id: "\(section)-\(store.includeAdult)-\(refreshID)-\(retry)") {
+        }.task(id: "\(section)-\(store.includeAdult)-\(refreshID)-\(activationID)-\(retry)") {
             guard section == .seasonSpotlight else { return }
             let current = UUID(); attempt = current; loading = true; error = nil
             defer { if attempt == current { loading = false } }
+            if let saved = await store.homeCatalog.cached(.current(), includeAdult: store.includeAdult), attempt == current, !Task.isCancelled {
+                seasonal = saved.value
+            }
             do {
-                let result = try await store.aniList.seasonal(.current(), page: 1, includeAdult: store.includeAdult)
+                let result = try await store.homeCatalog.season(.current(), includeAdult: store.includeAdult, refresh: refreshID != appliedRefreshID || retry > 0)
                 try Task.checkCancellation(); guard attempt == current else { return }
-                seasonal = result.media ?? []
+                seasonal = result.value; appliedRefreshID = refreshID
             } catch is CancellationError {} catch { if attempt == current { self.error = error.localizedDescription } }
         }
     }
@@ -80,7 +85,7 @@ struct HomeBannerWidget: View {
     }
 }
 
-private struct HomeAnimeBanner: View {
+struct HomeAnimeBanner: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let anime: Anime
     let caption: String

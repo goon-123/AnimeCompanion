@@ -531,6 +531,8 @@ jobs:
         with:
           name: AnimeCompanion-manga-fixtures
           path: Tests/MangaRuntimeTests/Fixtures
+      - name: Verify encrypted AniList startup snapshots on Apple platforms
+        run: env -u DEVELOPER_DIR swift test -j 2 --filter AniListLibraryCacheTests
       - name: Generate Xcode project
         run: |
           brew install xcodegen

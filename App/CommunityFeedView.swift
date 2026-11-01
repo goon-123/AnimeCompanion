@@ -183,9 +183,14 @@ struct CommunityFeedView: View {
         let requestedPage = batch.isEmpty ? page + 1 : (pagesByGroup[requestedGroup] ?? 0) + 1
         loading = true
         defer { if attempt == current { loading = false } }
+        let usesHomeFeed = source == .aniList && !scoped && filter == .general && sort == .active && requestedPage == 1
+        if reset && usesHomeFeed, let cached = await store.homeCommunity.cached(), attempt == current, !Task.isCancelled {
+            threads = cached.value.threads; hasMore = cached.value.hasNextPage
+        }
         do {
             let result: CommunityThreadPage
-            if source == .aniList {
+            if usesHomeFeed { result = try await store.homeCommunity.feed(refresh: refresh).value }
+            else if source == .aniList {
                 if !batch.isEmpty { result = try await store.aniList.communityThreads(mediaIDs: batch, page: requestedPage, sort: sort, refresh: refresh) }
                 else { result = try await store.aniList.communityThreads(mediaID: selectedAnime?.id, search: filter == .episodes ? "Episode" : nil, page: requestedPage, sort: sort, refresh: refresh) }
             } else {
@@ -240,6 +245,8 @@ struct CommunityThreadRow: View {
 struct HomeCommunityWidget: View {
     @EnvironmentObject private var store: AppStore
     let refreshID: Int
+    var activationID = 0
+    @State private var appliedRefreshID = 0
     @State private var threads: [CommunityThread] = []
     @State private var loading = false
     @State private var failed = false
@@ -280,13 +287,17 @@ struct HomeCommunityWidget: View {
         }.companionPanel().overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: 2).fill(Theme.accent.opacity(0.55)).frame(width: 52, height: 3)
         }.accessibilityIdentifier("home-community-widget")
-            .task(id: "\(refreshID)-\(store.includeAdult)") {
+            .task(id: "\(refreshID)-\(activationID)-\(store.includeAdult)") {
                 let current = UUID(); attempt = current
                 loading = true; failed = false
                 defer { if attempt == current { loading = false } }
+                if let cached = await store.homeCommunity.cached(), attempt == current, !Task.isCancelled {
+                    threads = cached.value.threads
+                }
                 do {
-                    let result = try await store.aniList.communityThreads(refresh: refreshID > 0)
-                    try Task.checkCancellation(); guard attempt == current else { return }; threads = result.threads
+                    let result = try await store.homeCommunity.feed(refresh: refreshID != appliedRefreshID)
+                    try Task.checkCancellation(); guard attempt == current else { return }
+                    threads = result.value.threads; appliedRefreshID = refreshID
                 } catch is CancellationError {} catch { if attempt == current { failed = true } }
             }
     }

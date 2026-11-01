@@ -21,6 +21,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     case weekly, news, community, watching, reading, airing, shortcuts
     case today, catchUp, libraryStats, planned, randomPick, savedNews
     case seasonSpotlight, nextEpisode, watchlistBanners
+    case seasonCountdown, nextSeason, returningSeries, tonightPick, hallOfFame
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -45,6 +46,11 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .seasonSpotlight: return "Seasonal spotlight"
         case .nextEpisode: return "Next episode countdown"
         case .watchlistBanners: return "From your watchlist"
+        case .seasonCountdown: return "Next season countdown"
+        case .nextSeason: return "Next season premieres"
+        case .returningSeries: return "Returning favorites"
+        case .tonightPick: return "Tonight’s pick"
+        case .hallOfFame: return "Your hall of fame"
         }
     }
     public var symbol: String {
@@ -63,6 +69,11 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .seasonSpotlight: return "sparkles.rectangle.stack"
         case .nextEpisode: return "timer"
         case .watchlistBanners: return "rectangle.stack"
+        case .seasonCountdown: return "calendar.badge.clock"
+        case .nextSeason: return "sunrise.fill"
+        case .returningSeries: return "arrow.clockwise"
+        case .tonightPick: return "moon.stars.fill"
+        case .hallOfFame: return "trophy.fill"
         case .watching: return "play.circle"; case .reading: return "book"
         case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .community: return "bubble.left.and.bubble.right"; case .shortcuts: return "square.grid.2x2" }
     }
@@ -89,10 +100,15 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .seasonSpotlight: return "Wide artwork banners for this season's popular anime."
         case .nextEpisode: return "A live countdown and artwork for your next original broadcast."
         case .watchlistBanners: return "A cinematic shelf of the shows you're currently watching."
+        case .seasonCountdown: return "A cinematic countdown to the next anime season, with a live clock and lineup artwork."
+        case .nextSeason: return "Discover next season’s popular premieres and their announced dates."
+        case .returningSeries: return "Next-season sequels connected to your library, plus premieres you already saved."
+        case .tonightPick: return "An artwork-led daily pick from released episodes and your plan-to-watch list."
+        case .hallOfFame: return "Celebrate completed anime, ranked by your own AniList scores."
         }
     }
-    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners]
-    public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews, .seasonSpotlight, .watchlistBanners].contains(self) }
+    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame]
+    public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews, .seasonSpotlight, .watchlistBanners, .nextSeason, .returningSeries, .hallOfFame].contains(self) }
 }
 
 public enum HomeShortcut: String, CaseIterable, Identifiable, Sendable {
