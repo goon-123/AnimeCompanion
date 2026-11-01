@@ -32,6 +32,7 @@ struct ScheduleReleaseRow: View {
                 .background(isToday ? Theme.accent.opacity(0.10) : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
+            .episodeDiscussionActions(anime: event.anime, episode: event.episode)
             .accessibilityValue(isToday ? "Today" : "")
             .accessibilityIdentifier("release-entry-\(event.anime.id)-\(event.kind.rawValue)-\(event.episode)")
     }
@@ -77,7 +78,8 @@ struct ScheduleReleaseGridCard: View {
                 Text("Ep \(event.episode) · \(event.kind.rawValue.uppercased())").font(.caption2).foregroundStyle(.secondary)
                 ScheduleReleaseNotice(event: event)
             }.frame(maxWidth: .infinity, alignment: .topLeading).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier("release-grid-\(event.id)")
+        }.buttonStyle(.plain).episodeDiscussionActions(anime: event.anime, episode: event.episode)
+            .accessibilityIdentifier("release-grid-\(event.id)")
     }
 }
 

@@ -50,6 +50,21 @@ extension XCUIApplication {
     /// iPad's adaptive tabs may be represented as a top bar or sidebar rather
     /// than the phone's bottom tab bar. Keep feature assertions in both modes.
     @MainActor func appTab(_ title: String) -> XCUIElement {
+        // Legacy feature journeys now enter through Home's permanent links.
+        // Schedule journeys start at Airing Now and can still choose Weekly.
+        if title == "Schedule" || title == "News" {
+            let home = appTab("Home")
+            if home.waitForExistence(timeout: 10) { home.tap() }
+            let action = buttons[title == "Schedule" ? "home-open-airing" : "home-open-news"]
+            for _ in 0..<8 {
+                if action.exists && action.isHittable { return action }
+                let back = navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["Home", "Back", "Anime News", "Headlines", "Schedule"])).firstMatch
+                if back.exists && back.isHittable { back.tap() }
+                else if scrollViews["home-dashboard"].exists { scrollViews["home-dashboard"].swipeDown() }
+                else { break }
+            }
+            return action
+        }
         let ids = ["Home": "home", "Explore": "explore", "My Library": "library", "Manga": "manga", "Schedule": "schedule", "News": "news"]
         if let id = ids[title] {
             let sidebar = descendants(matching: .any).matching(identifier: "sidebar-tab-" + id).firstMatch
