@@ -221,10 +221,16 @@ struct CommunitySeriesContext: View {
 struct CommunityThreadArtwork: View {
     let url: URL?
     var body: some View {
-        ArtworkImage(url: url, pointSize: 64) { $0.resizable().scaledToFill() } placeholder: {
-            ZStack {
-                LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.secondarySurface], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.accent)
+        Group {
+            if let url, url.pathExtension.lowercased() == "svg" {
+                CommunitySVGImage(url: url)
+            } else {
+                ArtworkImage(url: url, pointSize: 64) { $0.resizable().scaledToFill() } placeholder: {
+                    ZStack {
+                        LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.secondarySurface], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.accent)
+                    }
+                }
             }
         }.frame(width: 56, height: 78).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
     }

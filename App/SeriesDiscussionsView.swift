@@ -112,7 +112,8 @@ struct SeriesDiscussionsView: View {
                         NavigationLink {
                             CommunityThreadReader(thread: thread, anime: anime, localEpisode: episode, confirmIdentity: source == .myAnimeList)
                         } label: {
-                            CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress, mappedEpisode: episode, mediaID: anime.id))
+                            CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress, mappedEpisode: episode, mediaID: anime.id),
+                                hiddenPreview: thread.hidesPreview(progress: progress, mappedEpisode: episode, mediaID: anime.id), anime: anime)
                         }.buttonStyle(.plain)
                     }
                     if loading { ProgressView("Finding discussions…").frame(maxWidth: .infinity).padding() }

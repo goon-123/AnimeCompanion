@@ -1,4 +1,4 @@
-# Integrated Community — 0.40.0 (99)
+# Integrated Community — updated for 0.42.0 (101)
 
 Built on `codex/home-schedule-news-hub` / PR #68, preserving the combined Home, Calendar and News work. No new server, social account, scraping proxy, or synthetic discussion data.
 
@@ -31,9 +31,11 @@ Related GitHub projects researched: [TheEnigmaBlade/holo](https://github.com/The
 - AniList episode matches require exactly one anime category with the current media ID and one explicit matching episode number. Different seasons, missing IDs, ranges, specials and ambiguous numbering are not silently substituted. Title/episode identity is checked again before displaying newly fetched comments.
 - MAL topic searches do not return an authoritative anime association. English/Romaji/preferred names and synonyms are offered, full season/cour names are retained, and episode results require an exact normalized title prefix plus episode number. Reading additionally requires an explicit identity confirmation. Unmatched general search results remain visibly unverified.
 - Community numbering can be adjusted explicitly per provider and series. The saved offset and mapped episode are displayed; there is no inferred season/cour offset. Reddit search results are always browser searches, never advertised as exact verified matches.
-- No body previews appear in feeds. Unwatched/unknown episode titles are replaced with neutral labels; opening posts and comments are gated before any comment request. Provider website previews follow that website’s spoiler behavior, which is stated before browser entry. Native spoilers support AniList, BBCode, HTML spoiler containers and Reddit-style delimiters; malformed delimiters hide the whole comment.
+- Cards include series artwork and available body previews. The series name and episode number remain visible for unwatched/unknown episodes; plot-bearing titles and body previews stay hidden, and comment requests remain gated. The native reader renders HTML, Markdown and AniList image blocks, including SVGs and images in revealed spoilers. Provider website previews follow that website’s spoiler behavior, which is stated before browser entry. Native spoilers support AniList, BBCode, HTML spoiler containers and Reddit-style delimiters; malformed delimiters hide the whole comment.
 
 MAL uses an ephemeral URL session and bounded five-minute memory cache. Its credential stays in Keychain; only layout choices and explicit numbering offsets are saved by the new UI. Pagination URLs from MAL are not followed: requests reconstruct the next offset on the official API host. Loading, 401/403/404/429, removed threads, empty results, cancellation and source/episode changes have explicit handling.
+
+Current Home/Community regression checklist: [HOME_COMMUNITY_MANUAL_CHECKS.md](HOME_COMMUNITY_MANUAL_CHECKS.md).
 
 ## Short device checklist
 

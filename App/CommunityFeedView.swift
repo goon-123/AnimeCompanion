@@ -55,52 +55,52 @@ struct CommunityFeedView: View {
     private var loadKey: String { scopeKey + (scoped ? "-\(shows.map(\.id))" : "") }
     var body: some View {
         ScrollViewReader { proxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("The conversation continues.").font(.title2.bold())
-                    Text("Seasonal anime, your shows and the latest episode reactions.").font(.subheadline).foregroundStyle(.secondary)
-                }
-                .id("community-top")
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(CommunityFilter.allCases) { item in
-                            CompanionFilterChip(title: item.title, selected: filter == item) { filter = item; selectedShow = 0 }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("The conversation continues.").font(.title2.bold())
+                        Text("Seasonal anime, your shows and the latest episode reactions.").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .id("community-top")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(CommunityFilter.allCases) { item in
+                                CompanionFilterChip(title: item.title, selected: filter == item) { filter = item; selectedShow = 0 }
+                            }
                         }
                     }
-                }
-                Picker("Community source", selection: $source) { ForEach(CommunitySource.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu)
-                    .accessibilityIdentifier("community-source-switcher")
-                if scoped { showPicker }
-                if source == .reddit {
-                    if scoped && selectedAnime == nil {
-                        Text("Choose a show above to search r/anime for its conversations.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
+                    Picker("Community source", selection: $source) { ForEach(CommunitySource.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu)
+                        .accessibilityIdentifier("community-source-switcher")
+                    if scoped { showPicker }
+                    if source == .reddit {
+                        if scoped && selectedAnime == nil {
+                            Text("Choose a show above to search r/anime for its conversations.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
+                        } else {
+                            CommunityBrowserPanel(source: .reddit, url: CommunityBrowserLinks.reddit(filter: filter, anime: selectedAnime))
+                        }
+                        Text("Reddit uses its official pages. Switch to AniList for the native comment reader.").font(.caption).foregroundStyle(.secondary)
+                    } else if source == .myAnimeList && CommunityConfiguration.malClientID == nil {
+                        CommunityBrowserPanel(source: .myAnimeList, url: CommunityBrowserLinks.myAnimeList(anime: selectedAnime))
+                        NavigationLink("Configure Community sources") { CommunitySourcesView() }.font(.subheadline)
+                    } else if scoped && shows.isEmpty {
+                        if loadingShows { ProgressView("Loading this season…") }
+                        else { Text(filter == .myShows ? "Connect AniList and add shows to your library to see their discussions." : "No seasonal shows are available yet.").font(.subheadline).foregroundStyle(.secondary).companionPanel() }
+                    } else if scoped && source == .myAnimeList && selectedAnime == nil {
+                        Text("Choose a show to find its MyAnimeList discussions. Topic searches are checked by title and need your confirmation.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
                     } else {
-                        CommunityBrowserPanel(source: .reddit, url: CommunityBrowserLinks.reddit(filter: filter, anime: selectedAnime))
+                        nativeFeed
                     }
-                    Text("Reddit uses its official pages. Switch to AniList for the native comment reader.").font(.caption).foregroundStyle(.secondary)
-                } else if source == .myAnimeList && CommunityConfiguration.malClientID == nil {
-                    CommunityBrowserPanel(source: .myAnimeList, url: CommunityBrowserLinks.myAnimeList(anime: selectedAnime))
-                    NavigationLink("Configure Community sources") { CommunitySourcesView() }.font(.subheadline)
-                } else if scoped && shows.isEmpty {
-                    if loadingShows { ProgressView("Loading this season…") }
-                    else { Text(filter == .myShows ? "Connect AniList and add shows to your library to see their discussions." : "No seasonal shows are available yet.").font(.subheadline).foregroundStyle(.secondary).companionPanel() }
-                } else if scoped && source == .myAnimeList && selectedAnime == nil {
-                    Text("Choose a show to find its MyAnimeList discussions. Topic searches are checked by title and need your confirmation.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
-                } else {
-                    nativeFeed
+                }.padding(16).frame(maxWidth: 940, alignment: .leading).frame(maxWidth: .infinity)
+            }.background(Theme.background).navigationTitle("Community").navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .tabBar)
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { CommunitySourcesView() } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Community sources") } }
+                .task(id: loadKey) { await load(reset: true) }
+                .task(id: "\(filter)-\(store.includeAdult)") {
+                    if filter == .season && (seasonal.isEmpty || showsAdult != store.includeAdult) { await loadShows(replace: true) }
                 }
-            }.padding(16).frame(maxWidth: 940, alignment: .leading).frame(maxWidth: .infinity)
-        }.background(Theme.background).navigationTitle("Community").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { CommunitySourcesView() } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Community sources") } }
-            .task(id: loadKey) { await load(reset: true) }
-            .task(id: "\(filter)-\(store.includeAdult)") {
-                if filter == .season && (seasonal.isEmpty || showsAdult != store.includeAdult) { await loadShows(replace: true) }
-            }
-            .refreshable { await load(reset: true, refresh: true) }
-            .onChange(of: scopeKey) { _, _ in proxy.scrollTo("community-top", anchor: .top) }
-            .accessibilityIdentifier("community-feed")
+                .refreshable { await load(reset: true, refresh: true) }
+                .onChange(of: scopeKey) { _, _ in proxy.scrollTo("community-top", anchor: .top) }
+                .accessibilityIdentifier("community-feed")
         }
     }
     private var showPicker: some View {
@@ -210,7 +210,7 @@ struct CommunityFeedView: View {
 struct CommunityThreadRow: View {
     let thread: CommunityThread
     let title: String
-    var hiddenPreview = false
+    let hiddenPreview: Bool
     var anime: Anime? = nil
     private var imageURL: URL? {
         anime?.coverURL ?? thread.media.first?.coverURL ?? (!thread.mentionsEpisode ? CommunityText.previewImage(thread.body ?? "") : nil)
