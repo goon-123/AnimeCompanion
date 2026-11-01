@@ -15,6 +15,9 @@ struct HomeView: View {
     @AppStorage(HomePreferences.storageKey) private var sections = ""
     @AppStorage("manga.showMatureSources") private var matureSources = false
     @State private var customize = false
+    @State private var pickingWidgets = false
+    @State private var editing = false
+    @State private var dragging: HomeSection?
     @State private var settings = false
     @State private var watching: Anime?
     @State private var newsRefreshID = 0
@@ -23,7 +26,7 @@ struct HomeView: View {
         [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 270) : .flexible(), spacing: 12, alignment: .top)]
     }
     private var shows: [LibraryEntry] {
-        Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(8))
+        Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(preferences.size(for: .watching).itemLimit))
     }
     private var recent: [MangaReadingRecord] {
         guard !extensions.loading else { return [] }
@@ -31,7 +34,7 @@ struct HomeView: View {
             let mature = record.title.source.adult || extensions.installed(record.title.source.extensionID)?.descriptor.adult == true
             return record.lastReadAt != nil && (matureSources || !mature)
         }
-            .sorted { ($0.lastReadAt ?? .distantPast) > ($1.lastReadAt ?? .distantPast) }.prefix(6))
+            .sorted { ($0.lastReadAt ?? .distantPast) > ($1.lastReadAt ?? .distantPast) }.prefix(preferences.size(for: .reading).itemLimit))
     }
     private var trackedBooks: [MangaBakaLibraryEntry] {
         let resumed = Set(recent.map { $0.title.id })
@@ -40,49 +43,64 @@ struct HomeView: View {
                   series.isVisible(contentFilter: anime.mangaBakaContent) else { return false }
             if let target = books.sourceLinkTarget(for: series), let link = sourceLinks.link(for: target), resumed.contains(link.title.id) { return false }
             return true
-        }.prefix(6))
+        }.prefix(max(0, preferences.size(for: .reading).itemLimit - recent.count)))
     }
     private var upcoming: [Anime] {
         Array(anime.watching.compactMap(\.media).filter { ($0.nextAiringEpisode?.date ?? .distantPast) > .now }
-            .sorted { ($0.nextAiringEpisode?.date ?? .distantFuture) < ($1.nextAiringEpisode?.date ?? .distantFuture) }.prefix(4))
+            .sorted { ($0.nextAiringEpisode?.date ?? .distantFuture) < ($1.nextAiringEpisode?.date ?? .distantFuture) }.prefix(preferences.size(for: .airing).itemLimit))
     }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                header
-                CompanionSearchLink().accessibilityIdentifier("home-search")
-                HomeFeatureShortcuts()
-                if !anime.isSignedIn && !books.connected && recent.isEmpty { welcome }
-                if let error = anime.libraryError, anime.isSignedIn {
-                    NoticeView(message: error) { Task { await anime.reloadLibrary() } }
-                }
-                if let error = reading.error { NoticeView(message: error) }
-                if books.loadingLibrary {
-                    ProgressView("Syncing reading library…").font(.caption).accessibilityIdentifier("home-reading-sync")
-                }
-                if let error = books.libraryError, books.connected {
-                    NoticeView(message: error) { Task { await refreshBooks() } }
-                }
+                if editing { editorBar }
                 ForEach(preferences.visible) { section in
-                    switch section {
-                    case .weekly: AiringThisWeekView()
-                    case .news: HomeNewsSection(refreshID: newsRefreshID)
-                    case .community: HomeCommunityWidget(refreshID: newsRefreshID)
-                    case .watching: if anime.isSignedIn || anime.loadingLibrary { watchSection }
-                    case .reading: if !recent.isEmpty || !trackedBooks.isEmpty { readingSection }
-                    case .airing: if !upcoming.isEmpty { airingSection }
-                    case .shortcuts: shortcuts
+                    if shouldDisplay(section) {
+                        HomeWidgetFrame(section: section, saved: $sections, editing: $editing, dragging: $dragging) {
+                            widget(section)
+                        }.id(section)
                     }
+                }
+                if preferences.visible.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "rectangle.stack.badge.plus").font(.largeTitle).foregroundStyle(Theme.accent)
+                        Text("A fresh start.").font(.headline)
+                        Text("Add only what you want on Home.").font(.subheadline).foregroundStyle(.secondary)
+                        Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }
+                            .buttonStyle(.borderedProminent).accessibilityIdentifier("home-empty-add")
+                    }.frame(maxWidth: .infinity).padding(.vertical, 44).accessibilityIdentifier("home-empty-layout")
                 }
             }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { customize = true } label: { Image(systemName: "slider.horizontal.3") }
-                        .accessibilityLabel("Customize Home").accessibilityIdentifier("home-customize")
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if editing {
+                        Button { pickingWidgets = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add widgets").accessibilityIdentifier("home-add-widgets")
+                    }
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) { editing.toggle(); dragging = nil }
+                    } label: {
+                        if editing { Text("Done").fontWeight(.semibold) }
+                        else { Image(systemName: "slider.horizontal.3") }
+                    }.accessibilityLabel(editing ? "Finish editing Home" : "Customize Home").accessibilityIdentifier("home-customize")
+                    Menu {
+                        Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }
+                        Button("Manage widgets", systemImage: "slider.horizontal.3") { customize = true }
+                        Divider()
+                        Button("Search", systemImage: "magnifyingglass") { navigation.openSearch() }
+                        Button("Calendar", systemImage: "calendar") { navigation.openSchedule() }
+                        Button("Airing Now", systemImage: "play.rectangle") { navigation.openSchedule(page: .airing) }
+                        Button("News", systemImage: "newspaper") { navigation.openNews() }
+                        NavigationLink { CommunityFeedView() } label: { Label("Community", systemImage: "bubble.left.and.bubble.right") }
+                        Button("My Library", systemImage: "books.vertical") { navigation.open(.library) }
+                        NavigationLink { SourcesSettingsView() } label: { Label("Sources & playback", systemImage: "puzzlepiece.extension") }
+                        Button("Settings", systemImage: "gearshape") { settings = true }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .accessibilityLabel("Home actions").accessibilityIdentifier("home-actions")
                 }
             }
+            .onDrop(of: [HomeWidgetDrag.type], delegate: HomeWidgetDropDelegate(target: nil, saved: $sections, dragging: $dragging, enabled: editing))
             .animeNavigation().mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation() }
             .navigationDestination(for: HomeDestination.self) { destination in
@@ -109,17 +127,79 @@ struct HomeView: View {
                     HomeCustomizationView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customize = false } } }
                 }
             }
+            .sheet(isPresented: $pickingWidgets) { AppNavigationStack { HomeWidgetPicker() } }
             .sheet(item: $watching) { WatchAnimeView(anime: $0) }
             .accessibilityIdentifier("home-dashboard")
     }
     private func refreshAnime() async { if anime.isSignedIn { await anime.reloadLibrary() } }
     private func refreshWeek() async {
-        guard anime.isSignedIn, preferences.visible.contains(.weekly) else { return }
+        guard anime.isSignedIn, (preferences.visible.contains(.weekly) || preferences.visible.contains(.today)) else { return }
         async let original: Void = weeklySchedule.load(in: ScheduleWeek(containing: ScheduleClock.now, firstWeekday: 1).window, using: anime.aniList, refresh: true)
         async let dubbed: Void = dubs.load(using: anime.dubs, refresh: true)
         _ = await (original, dubbed)
     }
     private func refreshBooks() async { if books.connected { await books.loadLibrary(state: nil, refresh: true) } }
+    private func shouldDisplay(_ section: HomeSection) -> Bool {
+        if editing { return true }
+        if section == .welcome { return !anime.isSignedIn && !books.connected && recent.isEmpty }
+        if section == .syncStatus { return anime.loadingLibrary || books.loadingLibrary || anime.libraryError != nil || books.libraryError != nil || reading.error != nil }
+        return true
+    }
+    @ViewBuilder private func widget(_ section: HomeSection) -> some View {
+        switch section {
+        case .greeting: header
+        case .search: CompanionSearchLink().accessibilityIdentifier("home-search")
+        case .featureLinks: HomeFeatureShortcuts()
+        case .welcome:
+            if !anime.isSignedIn && !books.connected && recent.isEmpty { welcome }
+            else { empty("Welcome & setup", detail: "This widget appears when no library is connected.", symbol: "sparkles") }
+        case .syncStatus: syncStatus
+        case .weekly: AiringThisWeekView()
+        case .news: HomeNewsSection(refreshID: newsRefreshID)
+        case .community: HomeCommunityWidget(refreshID: newsRefreshID)
+        case .watching: watchSection
+        case .reading: readingSection
+        case .airing: airingSection
+        case .shortcuts: shortcuts
+        case .today: HomeTodayWidget(limit: preferences.size(for: .today).itemLimit, refreshID: newsRefreshID)
+        case .catchUp, .libraryStats, .planned, .randomPick:
+            HomeLibraryWidget(section: section, limit: preferences.size(for: section).itemLimit)
+        case .savedNews: HomeSavedStoriesWidget(limit: preferences.size(for: .savedNews).itemLimit)
+        }
+    }
+    private var editorBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Make Home yours").font(.headline)
+            Text("Drag a handle to rearrange. Use − to hide a widget, or its menu to move it and change preview items.")
+                .font(.caption).foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) { editorActions }
+                VStack(alignment: .leading, spacing: 4) { editorActions }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 14).accessibilityIdentifier("home-editor")
+    }
+    @ViewBuilder private var editorActions: some View {
+        Button("Add widgets", systemImage: "plus") { pickingWidgets = true }
+        Button("Manage widgets", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("home-manage-widgets")
+    }
+    private var syncStatus: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if anime.loadingLibrary { ProgressView("Syncing AniList…").font(.caption) }
+            if let error = anime.libraryError, anime.isSignedIn {
+                NoticeView(message: error) { Task { await anime.reloadLibrary() } }
+            }
+            if let error = reading.error { NoticeView(message: error) }
+            if books.loadingLibrary {
+                ProgressView("Syncing reading library…").font(.caption).accessibilityIdentifier("home-reading-sync")
+            }
+            if let error = books.libraryError, books.connected {
+                NoticeView(message: error) { Task { await refreshBooks() } }
+            }
+            if editing && !anime.loadingLibrary && !books.loadingLibrary && anime.libraryError == nil && books.libraryError == nil && reading.error == nil {
+                empty("Library sync status", detail: "Loading and retry messages appear here when needed.", symbol: "arrow.triangle.2.circlepath")
+            }
+        }
+    }
     private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(Date.now, format: .dateTime.weekday(.wide).month(.abbreviated).day())
@@ -240,26 +320,5 @@ struct HomeView: View {
                 Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
         }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).companionPanel(padding: 12).contentShape(Rectangle())
-    }
-}
-
-struct HomeCustomizationView: View {
-    @AppStorage(HomePreferences.storageKey) private var saved = ""
-    private var preferences: HomePreferences { HomePreferences(saved: saved) }
-    var body: some View {
-        List {
-            Section {
-                ForEach(preferences.order) { section in
-                    Toggle(isOn: Binding(get: { !preferences.hidden.contains(section) }, set: { shown in
-                        var value = preferences; value.setVisible(section, shown); saved = value.saved
-                    })) { Label(section.title, systemImage: section.symbol) }
-                        .disabled(preferences.visible.count == 1 && !preferences.hidden.contains(section))
-                        .accessibilityIdentifier("home-visible-" + section.rawValue)
-                }.onMove { offsets, destination in
-                    var value = preferences; value.order.move(fromOffsets: offsets, toOffset: destination); saved = value.saved
-                }
-            } header: { Text("Make it yours") } footer: { Text("Drag to reorder sections. Hidden sections keep their data. Home uses your existing library and saved reading positions.") }
-            Section { Button("Restore Home layout") { saved = HomePreferences().saved } }
-        }.environment(\.editMode, .constant(.active)).navigationTitle("Customize Home").navigationBarTitleDisplayMode(.inline)
     }
 }

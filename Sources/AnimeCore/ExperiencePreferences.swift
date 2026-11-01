@@ -17,10 +17,17 @@ public enum ArtworkDecodeSize {
 }
 
 public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
+    case greeting, search, featureLinks, welcome, syncStatus
     case weekly, news, community, watching, reading, airing, shortcuts
+    case today, catchUp, libraryStats, planned, randomPick, savedNews
     public var id: String { rawValue }
     public var title: String {
         switch self {
+        case .greeting: return "Greeting & date"
+        case .search: return "Search"
+        case .featureLinks: return "Calendar, Airing Now & News"
+        case .welcome: return "Welcome & setup"
+        case .syncStatus: return "Library sync status"
         case .weekly: return "Airing this week"
         case .news: return "Headlines"
         case .community: return "Community"
@@ -28,43 +35,126 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .reading: return "Continue reading"
         case .airing: return "Up next"
         case .shortcuts: return "Your companion"
+        case .today: return "Airing today"
+        case .catchUp: return "Catch up"
+        case .libraryStats: return "Library snapshot"
+        case .planned: return "Plan to watch"
+        case .randomPick: return "Pick something for me"
+        case .savedNews: return "Saved stories"
         }
     }
     public var symbol: String {
-        switch self { case .watching: return "play.circle"; case .reading: return "book"
+        switch self {
+        case .greeting: return "sun.max"
+        case .search: return "magnifyingglass"
+        case .featureLinks: return "square.grid.2x2"
+        case .welcome: return "sparkles"
+        case .syncStatus: return "arrow.triangle.2.circlepath"
+        case .today: return "calendar.badge.clock"
+        case .catchUp: return "play.rectangle.on.rectangle"
+        case .libraryStats: return "chart.bar"
+        case .planned: return "bookmark"
+        case .randomPick: return "shuffle"
+        case .savedNews: return "bookmark.square"
+        case .watching: return "play.circle"; case .reading: return "book"
         case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .community: return "bubble.left.and.bubble.right"; case .shortcuts: return "square.grid.2x2" }
     }
+    public var detail: String {
+        switch self {
+        case .greeting: return "Today's date and your Home greeting."
+        case .search: return "Jump into anime, manga and novel search."
+        case .featureLinks: return "Quick access to your calendar, catch-up view and news."
+        case .welcome: return "Account setup when no library is connected."
+        case .syncStatus: return "Library loading, sync errors and retry actions."
+        case .weekly: return "Seven days of releases from your library."
+        case .news: return "Latest headlines from your selected publishers."
+        case .community: return "Anime conversations and episode discussions."
+        case .watching: return "Resume anime from your watching list."
+        case .reading: return "Your saved chapters, pages and reading library."
+        case .airing: return "Your next original broadcasts in time order."
+        case .shortcuts: return "Reading sources, recommendations and settings."
+        case .today: return "Today's original and English dub releases for your shows."
+        case .catchUp: return "Confirmed aired episodes you still have to watch."
+        case .libraryStats: return "A quick look at your anime and reading libraries."
+        case .planned: return "Titles saved to your AniList plan-to-watch list."
+        case .randomPick: return "Shuffle your released plan-to-watch titles for an idea."
+        case .savedNews: return "Return to articles you bookmarked in News."
+        }
+    }
+    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews]
+    public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews].contains(self) }
 }
 
-/// A new preference namespace leaves every existing layout and account untouched.
+public enum HomeWidgetSize: String, CaseIterable, Codable, Identifiable, Sendable {
+    case compact, standard, expanded
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
+    public var itemLimit: Int { switch self { case .compact: return 3; case .standard: return 6; case .expanded: return 10 } }
+}
+
+/// All content is optional. Toolbar controls remain available even on an empty Home.
 public struct HomePreferences: Equatable, Sendable {
     public static let storageKey = "home.sections.v1"
     public var order: [HomeSection]
     public private(set) var hidden: Set<HomeSection>
-    private struct Stored: Codable { let order: [String]; let hidden: [String] }
-    public init(order: [HomeSection] = HomeSection.allCases, hidden: Set<HomeSection> = []) {
+    private var sizes: [HomeSection: HomeWidgetSize]
+    private struct Stored: Codable {
+        var version: Int?
+        let order: [String]
+        let hidden: [String]
+        var sizes: [String: String]?
+    }
+    public init(order: [HomeSection] = HomeSection.allCases, hidden: Set<HomeSection> = HomeSection.optionalWidgets,
+                sizes: [HomeSection: HomeWidgetSize] = [:]) {
         var seen = Set<HomeSection>()
-        // Introduce the new widget near the top without reordering saved sections.
-        var upgraded = order.contains(.weekly) ? order : [.weekly] + order
-        if !upgraded.contains(.news) { upgraded.insert(.news, at: (upgraded.firstIndex(of: .weekly) ?? 0) + 1) }
-        if !upgraded.contains(.community) { upgraded.insert(.community, at: (upgraded.firstIndex(of: .news) ?? 0) + 1) }
-        self.order = (upgraded + HomeSection.allCases).filter { seen.insert($0).inserted }
-        self.hidden = hidden
-        if self.order.allSatisfy(hidden.contains) { self.hidden.remove(.shortcuts) }
+        self.order = (order + HomeSection.allCases).filter { seen.insert($0).inserted }
+        self.hidden = hidden.union(HomeSection.optionalWidgets.subtracting(order))
+        self.sizes = sizes.filter { $0.key.supportsItemLimit }
     }
     public init(saved: String?) {
         guard let data = saved?.data(using: .utf8), let value = try? JSONDecoder().decode(Stored.self, from: data) else {
             self.init(); return
         }
-        self.init(order: value.order.compactMap(HomeSection.init(rawValue:)), hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))))
+        var order = value.order.compactMap(HomeSection.init(rawValue:))
+        if value.version == nil {
+            // Preserve the old editable order and visibility. Previously fixed
+            // content becomes editable in its original position on this upgrade.
+            if !order.contains(.weekly) { order.insert(.weekly, at: 0) }
+            if !order.contains(.news) { order.insert(.news, at: (order.firstIndex(of: .weekly) ?? 0) + 1) }
+            if !order.contains(.community) { order.insert(.community, at: (order.firstIndex(of: .news) ?? 0) + 1) }
+            order = [.greeting, .search, .featureLinks, .welcome, .syncStatus] + order
+        }
+        let sizes = (value.sizes ?? [:]).reduce(into: [HomeSection: HomeWidgetSize]()) { result, pair in
+            if let section = HomeSection(rawValue: pair.key), let size = HomeWidgetSize(rawValue: pair.value) { result[section] = size }
+        }
+        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes)
     }
     public var visible: [HomeSection] { order.filter { !hidden.contains($0) } }
     public mutating func setVisible(_ section: HomeSection, _ shown: Bool) {
-        if shown { hidden.remove(section) } else if visible.count > 1 { hidden.insert(section) }
+        if shown { hidden.remove(section) } else { hidden.insert(section) }
+    }
+    public mutating func setAllVisible(_ shown: Bool) { hidden = shown ? [] : Set(HomeSection.allCases) }
+    public func size(for section: HomeSection) -> HomeWidgetSize { sizes[section] ?? .standard }
+    public mutating func setSize(_ size: HomeWidgetSize, for section: HomeSection) {
+        guard section.supportsItemLimit else { return }
+        sizes[section] = size
+    }
+    /// Move relative to visible neighbors without disturbing hidden widget order.
+    public mutating func move(_ section: HomeSection, before target: HomeSection) {
+        guard section != target, order.contains(section), order.contains(target) else { return }
+        order.removeAll { $0 == section }
+        order.insert(section, at: order.firstIndex(of: target)!)
+    }
+    public mutating func move(_ section: HomeSection, after target: HomeSection) {
+        guard section != target, order.contains(section), order.contains(target) else { return }
+        order.removeAll { $0 == section }
+        order.insert(section, at: order.firstIndex(of: target)! + 1)
     }
     public var saved: String {
-        let value = Self(order: order, hidden: hidden)
-        return String(data: try! JSONEncoder().encode(Stored(order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue))), encoding: .utf8)!
+        let value = Self(order: order, hidden: hidden, sizes: sizes)
+        let storedSizes = Dictionary(uniqueKeysWithValues: value.sizes.map { ($0.key.rawValue, $0.value.rawValue) })
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        return String(data: try! encoder.encode(Stored(version: 2, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes)), encoding: .utf8)!
     }
 }
 

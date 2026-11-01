@@ -1,8 +1,8 @@
 import SwiftUI
 import AnimeCore
 
-/// Permanent access keeps every Home feature reachable even if its preview
-/// widget is hidden in Customize Home.
+/// Optional quick links. Home's toolbar also opens these destinations when
+/// both this row and the corresponding preview widgets are hidden.
 struct HomeFeatureShortcuts: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     var body: some View {

@@ -18,7 +18,7 @@ struct TabCustomizationView: View {
                     }.accessibilityElement(children: .contain)
                 }.onMove { from, to in preferences.order.move(fromOffsets: from, toOffset: to) }
             } header: { Text("Main destinations") }
-            footer: { Text("Home brings together your calendar, Airing Now and News, so it stays available. Drag to reorder the other destinations or hide them. Changes apply when Settings closes.") }
+            footer: { Text("Home brings together your calendar, Airing Now and News. Its toolbar keeps these destinations available even when all Home widgets are hidden. Drag to reorder the other destinations or hide them. Changes apply when Settings closes.") }
             Section {
                 Button("Show all tabs") { preferences = .init(order: preferences.order, hidden: []) }
                 Button("Reset tab order") { preferences.order = AppTab.navigationTabs }

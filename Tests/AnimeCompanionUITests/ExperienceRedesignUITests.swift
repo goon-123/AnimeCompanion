@@ -53,7 +53,9 @@ final class ExperienceRedesignUITests: XCTestCase {
     @MainActor func testHomeSectionsPersistAndHiddenScheduleRemainsReachable() {
         let app = launch(dark: true)
         app.buttons["home-customize"].tap()
+        app.buttons["home-manage-widgets"].tap()
         let toggle = app.switches["home-visible-reading"]
+        app.revealInContent(toggle)
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
         let previous = toggle.value as? String
         (toggle.descendants(matching: .switch).allElementsBoundByIndex.last ?? toggle).tap()
@@ -61,8 +63,12 @@ final class ExperienceRedesignUITests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
         app.terminate(); app.launchArguments.removeAll { $0 == "--ui-reset-content-preferences" }; app.launch()
         XCTAssertTrue(app.buttons["home-customize"].waitForExistence(timeout: 15)); app.buttons["home-customize"].tap()
+        app.buttons["home-manage-widgets"].tap()
+        app.revealInContent(app.switches["home-visible-reading"])
         XCTAssertNotEqual(app.switches["home-visible-reading"].value as? String, previous)
-        app.buttons["Restore Home layout"].tap(); app.buttons["Done"].firstMatch.tap()
+        tap(app.buttons["Restore Home layout"], in: app)
+        app.buttons["Restore layout"].tap(); app.buttons["Done"].firstMatch.tap()
+        app.buttons["home-customize"].tap()
         capture("Redesign-Home-Dark")
         tap(app.buttons["home-open-schedule"], in: app)
         XCTAssertTrue(app.segmentedControls["schedule-mode"].waitForExistence(timeout: 15))
