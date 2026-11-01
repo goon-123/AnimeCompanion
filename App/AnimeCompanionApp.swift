@@ -224,6 +224,7 @@ final class AppNavigationStore: ObservableObject {
 }
 
 struct AppTabs: View {
+    @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
