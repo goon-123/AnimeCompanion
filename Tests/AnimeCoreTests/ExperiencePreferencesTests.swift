@@ -2,25 +2,44 @@ import XCTest
 @testable import AnimeCore
 
 final class ExperiencePreferencesTests: XCTestCase {
-    func testHomeSectionsRepairUnknownDuplicatesAndAllHiddenWithoutLosingOrder() {
+    func testHomeSectionsIntroduceWeekNewsAndCommunityWithoutLosingExistingOrderOrHiddenChoices() {
         let repaired = HomePreferences(saved: #"{"order":["reading","reading","unknown"],"hidden":["watching","reading","airing","shortcuts","unknown"]}"#)
-        XCTAssertEqual(repaired.order, [.reading, .watching, .airing, .shortcuts])
-        XCTAssertEqual(repaired.visible, [.shortcuts])
+        XCTAssertEqual(repaired.order, [.weekly, .news, .community, .reading, .watching, .airing, .shortcuts])
+        XCTAssertEqual(repaired.visible, [.weekly, .news, .community])
         XCTAssertEqual(HomePreferences(saved: repaired.saved), repaired)
         XCTAssertEqual(HomePreferences(saved: "broken"), HomePreferences())
         var single = repaired
-        single.setVisible(.shortcuts, false)
-        XCTAssertEqual(single.visible, [.shortcuts])
+        single.setVisible(.weekly, false)
+        single.setVisible(.news, false)
+        single.setVisible(.community, false)
+        XCTAssertEqual(single.visible, [.community])
         single.setVisible(.reading, true)
-        XCTAssertEqual(single.visible, [.reading, .shortcuts])
+        XCTAssertEqual(single.visible, [.community, .reading])
+        let allHidden = HomePreferences(hidden: Set(HomeSection.allCases))
+        XCTAssertEqual(allHidden.visible, [.shortcuts])
+        var customized = HomePreferences(order: [.reading, .weekly], hidden: [.weekly])
+        customized.setVisible(.weekly, false)
+        XCTAssertEqual(HomePreferences(saved: customized.saved), customized)
+        XCTAssertFalse(HomePreferences(saved: customized.saved).visible.contains(.weekly))
     }
-    func testExistingTabCustomizationPreservesVisibleOrderAndHidesNewHome() {
+    func testExistingTabCustomizationMovesScheduleAndNewsIntoVisibleHome() {
         let saved = #"{"order":["news","library","explore","manga","schedule"],"hidden":["manga","schedule"]}"#
         let value = AppTabPreferences(saved: saved)
-        XCTAssertEqual(value.visible, [.news, .library, .explore])
-        XCTAssertTrue(value.hidden.contains(.home))
+        XCTAssertEqual(value.visible, [.home, .library, .explore])
+        XCTAssertFalse(value.hidden.contains(.home))
+        XCTAssertFalse(value.order.contains(.news)); XCTAssertFalse(value.order.contains(.schedule))
         XCTAssertEqual(AppTabPreferences(saved: value.saved), value)
         XCTAssertEqual(AppTabPreferences().visible, [.home, .explore, .library])
+    }
+    func testPreviouslyHiddenHomeAndAllTabsVisibleUpgradeToOneHub() {
+        let legacy = AppTabPreferences(saved: #"{"order":["explore","schedule","news","home","library","manga"],"hidden":["home"]}"#)
+        XCTAssertEqual(legacy.visible, [.explore, .home, .library, .manga])
+        XCTAssertFalse(legacy.saved.contains("schedule")); XCTAssertFalse(legacy.saved.contains("news"))
+        let upgraded = HomePreferences(saved: #"{"order":["watching","reading","weekly","airing","shortcuts"],"hidden":["reading","weekly"]}"#)
+        XCTAssertEqual(upgraded.order, [.watching, .reading, .weekly, .news, .community, .airing, .shortcuts])
+        XCTAssertTrue(upgraded.hidden.contains(.reading)); XCTAssertTrue(upgraded.hidden.contains(.weekly))
+        var hiddenNews = upgraded; hiddenNews.setVisible(.news, false)
+        XCTAssertFalse(HomePreferences(saved: hiddenNews.saved).visible.contains(.news))
     }
     func testSavedViewsRoundTripAndRetainIndependentFilters() {
         var values = LibraryViewPresets()

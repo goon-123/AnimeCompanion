@@ -6,6 +6,7 @@ import AnimeCore
 @MainActor
 final class AppStore: ObservableObject {
     let aniList: AniListClient
+    let communityMAL = MALCommunityClient()
     let exploreCache: ExploreCache
     let visuals: AnimeVisualsClient
     let dubs = DubClient()
@@ -113,6 +114,9 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(AiringProgressSource.broadcast.rawValue, forKey: "library.airingProgressSource")
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")
             UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
+            UserDefaults.standard.set("continuous", forKey: "schedule.weekly.mode")
+            UserDefaults.standard.set("Airing Now", forKey: "schedule.page")
+            UserDefaults.standard.set("list", forKey: "schedule.weekly.layout")
             UserDefaults.standard.set(StreamAudioFilter.all.rawValue, forKey: "playback.audioFilter")
             UserDefaults.standard.set(TorrentSort.seeders.rawValue, forKey: "playback.torrentSort")
             UserDefaults.standard.set(TorBoxWebDAVSort.newest.rawValue, forKey: "torbox.files.sort")

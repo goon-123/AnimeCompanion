@@ -8,6 +8,8 @@ struct HomeView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @EnvironmentObject private var sourceLinks: MangaSourceLinkStore
     @EnvironmentObject private var extensions: MangaExtensionStore
+    @EnvironmentObject private var weeklySchedule: WeeklyScheduleStore
+    @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
     @AppStorage(HomePreferences.storageKey) private var sections = ""
@@ -15,6 +17,7 @@ struct HomeView: View {
     @State private var customize = false
     @State private var settings = false
     @State private var watching: Anime?
+    @State private var newsRefreshID = 0
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
     private var cardColumns: [GridItem] {
         [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 270) : .flexible(), spacing: 12, alignment: .top)]
@@ -45,9 +48,10 @@ struct HomeView: View {
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
+            LazyVStack(alignment: .leading, spacing: 22) {
                 header
                 CompanionSearchLink().accessibilityIdentifier("home-search")
+                HomeFeatureShortcuts()
                 if !anime.isSignedIn && !books.connected && recent.isEmpty { welcome }
                 if let error = anime.libraryError, anime.isSignedIn {
                     NoticeView(message: error) { Task { await anime.reloadLibrary() } }
@@ -61,6 +65,9 @@ struct HomeView: View {
                 }
                 ForEach(preferences.visible) { section in
                     switch section {
+                    case .weekly: AiringThisWeekView()
+                    case .news: HomeNewsSection(refreshID: newsRefreshID)
+                    case .community: HomeCommunityWidget(refreshID: newsRefreshID)
                     case .watching: if anime.isSignedIn || anime.loadingLibrary { watchSection }
                     case .reading: if !recent.isEmpty || !trackedBooks.isEmpty { readingSection }
                     case .airing: if !upcoming.isEmpty { airingSection }
@@ -78,15 +85,23 @@ struct HomeView: View {
             }
             .animeNavigation().mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation() }
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .schedule(let route): ScheduleView(landing: route).environment(\.animeSplitPresentation, false)
+                case .news(let collection): NewsView(initialCollection: collection).environment(\.animeSplitPresentation, false)
+                }
+            }
             .task {
                 await reading.load(); await sourceLinks.load()
                 if !reading.state.records.isEmpty { await extensions.load() }
             }
             .task(id: "\(books.connected)-\(books.connectionID)-\(books.revision)") { if books.connected { await books.loadLibrary(state: nil) } }
             .refreshable {
+                newsRefreshID += 1
                 async let shows: Void = refreshAnime()
                 async let titles: Void = refreshBooks()
-                _ = await (shows, titles)
+                async let week: Void = refreshWeek()
+                _ = await (shows, titles, week)
             }
             .appSettingsSheet(isPresented: $settings)
             .sheet(isPresented: $customize) {
@@ -98,14 +113,19 @@ struct HomeView: View {
             .accessibilityIdentifier("home-dashboard")
     }
     private func refreshAnime() async { if anime.isSignedIn { await anime.reloadLibrary() } }
+    private func refreshWeek() async {
+        guard anime.isSignedIn, preferences.visible.contains(.weekly) else { return }
+        async let original: Void = weeklySchedule.load(in: ScheduleWeek(containing: ScheduleClock.now, firstWeekday: 1).window, using: anime.aniList, refresh: true)
+        async let dubbed: Void = dubs.load(using: anime.dubs, refresh: true)
+        _ = await (original, dubbed)
+    }
     private func refreshBooks() async { if books.connected { await books.loadLibrary(state: nil, refresh: true) } }
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(Date.now, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                 .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
-            Text("A little time for your world.").font(.largeTitle.weight(.bold)).tracking(-0.7)
+            Text("Your daily companion.").font(.title2.weight(.bold)).tracking(-0.4)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Pick up a story. Find your next favorite.").font(.subheadline).foregroundStyle(.secondary)
         }
     }
     private var welcome: some View {
@@ -185,8 +205,7 @@ struct HomeView: View {
             CompanionSectionHeading(title: HomeSection.shortcuts.title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 quickLink("Reading sources", detail: "Extensions & history", symbol: "book.closed", tab: .manga)
-                quickLink("Release calendar", detail: "Original & English dub", symbol: "calendar", tab: .schedule)
-                quickLink("News", detail: "Headlines & your stories", symbol: "newspaper", tab: .news)
+                NavigationLink { CommunityFeedView() } label: { shortcutLabel("Community", detail: "Conversations & episodes", symbol: "bubble.left.and.bubble.right") }
                 NavigationLink { SourcesSettingsView() } label: { shortcutLabel("Sources & playback", detail: "Manage your connections", symbol: "puzzlepiece.extension") }.accessibilityIdentifier("home-sources")
                 NavigationLink { MangaBakaRecommendationsView().mangaBakaNavigation() } label: { shortcutLabel("For your next read", detail: "MangaBaka recommendations", symbol: "sparkles") }
                 Button { settings = true } label: { shortcutLabel("Settings", detail: "Accounts & preferences", symbol: "gearshape") }
@@ -214,11 +233,13 @@ struct HomeView: View {
             .accessibilityIdentifier("home-open-" + tab.rawValue)
     }
     private func shortcutLabel(_ title: String, detail: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        HStack(spacing: 10) {
             Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent)
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-        }.frame(maxWidth: .infinity, minHeight: 100, alignment: .leading).companionPanel(padding: 14).contentShape(Rectangle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.primary)
+                Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
+        }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).companionPanel(padding: 12).contentShape(Rectangle())
     }
 }
 
