@@ -123,7 +123,7 @@ final class AppSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 35))
         let dub = app.staticTexts["explore-dub-1"]
         XCTAssertTrue(dub.exists)
-        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Dub available"), object: dub)
+        let known = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "English dub available"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [known], timeout: 35), .completed)
         XCTAssertEqual(app.staticTexts["explore-library-1"].label, "Watching")
         XCTAssertTrue(app.staticTexts["explore-library-5"].waitForExistence(timeout: 20))
@@ -135,7 +135,7 @@ final class AppSmokeTests: XCTestCase {
         app.buttons["discovery-layout"].tap()
         app.buttons["Grid"].tap()
         XCTAssertTrue(app.staticTexts["explore-dub-1"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["explore-dub-1"].label, "Dub available")
+        XCTAssertEqual(app.staticTexts["explore-dub-1"].label, "English dub available")
         XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
         XCTAssertFalse(app.descendants(matching: .any)["explore-airing-5"].exists)
         XCTAssertFalse(app.staticTexts["explore-next-sub-5"].exists)

@@ -24,9 +24,7 @@ struct MangaBakaAnimeSection: View {
             ForEach(visible) { anime in
                 NavigationLink(value: MangaBakaAnimeRoute(id: anime.id)) {
                     HStack(spacing: 14) {
-                        ArtworkImage(url: anime.coverURL, pointSize: 56) { $0.resizable().scaledToFill() }
-                            placeholder: { Theme.surface }
-                            .frame(width: 56, height: 80).clipped().clipShape(RoundedRectangle(cornerRadius: 8))
+                        AnimeCover(anime: Anime(related: anime), width: 56, cornerRadius: 8, identifierPrefix: "adaptation")
                         VStack(alignment: .leading, spacing: 5) {
                             Text(anime.displayTitle).font(.headline).foregroundStyle(.primary)
                             Text("Open anime").font(.caption).foregroundStyle(.mint)

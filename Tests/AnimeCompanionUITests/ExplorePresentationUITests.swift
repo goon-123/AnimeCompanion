@@ -49,7 +49,7 @@ final class ExplorePresentationUITests: XCTestCase {
         search.tap(); search.typeText("Cowboy\n")
         XCTAssertTrue(app.buttons["discovery-entry-1"].waitForExistence(timeout: 40))
         let dub = app.staticTexts["explore-dub-1"]
-        let available = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Dub available"), object: dub)
+        let available = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "English dub available"), object: dub)
         XCTAssertEqual(XCTWaiter.wait(for: [available], timeout: 35), .completed)
         XCTAssertEqual(app.staticTexts["explore-library-1"].label, "Watching")
         XCTAssertEqual(app.staticTexts["explore-library-5"].label, "Completed")
@@ -75,7 +75,7 @@ final class ExplorePresentationUITests: XCTestCase {
         let id = String(dot.identifier.dropFirst("explore-airing-".count))
         XCTAssertEqual(dot.label, "Currently airing")
         XCTAssertEqual(app.staticTexts["explore-library-\(id)"].label, "Not on list")
-        XCTAssertTrue(app.staticTexts["explore-dub-\(id)"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["explore-rating-\(id)"].exists)
         assertNoEpisodeSchedules(in: app)
         capture("Explore-Simple-Airing-List")
 
@@ -84,7 +84,7 @@ final class ExplorePresentationUITests: XCTestCase {
         app.buttons["discovery-columns"].tap(); app.buttons["discovery-column-option-2"].tap()
         let gridDot = app.descendants(matching: .any)["explore-airing-\(id)"]
         XCTAssertTrue(gridDot.waitForExistence(timeout: 15))
-        reveal(app.staticTexts["explore-dub-\(id)"], in: app)
+        reveal(gridDot, in: app)
         XCTAssertEqual(gridDot.label, "Currently airing")
         XCTAssertTrue(app.staticTexts["explore-library-\(id)"].exists)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "explore-genres-\(id)").firstMatch.exists)

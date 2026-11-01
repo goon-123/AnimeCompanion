@@ -1,3 +1,33 @@
+## Balanced Home cards — version 0.37.3 / build 96
+
+Use medium 80/72/64-point artwork for watching, reading and upcoming cards, 12-point panel padding, tighter metadata spacing and two-line titles. Watching cards use 90% of the shelf up to 400 points, leaving the next card visible; tablet grids use a 270-point minimum. Remove the extra watch footer and place the compact Continue pill beside the episode label, with a vertical fit fallback. Artwork and title remain separate details links from the playback action, avoiding nested buttons and overlay sizing dependencies. Retain the 44-point action touch area, accessibility stacking, clear Home posters, saved resume, progress, routes and section preferences.
+
+Validation at source handoff: whitespace, project/workflow YAML and Safari resource/version checks pass. Hosted Release compilation and unsigned IPA packaging are pending; native visual checks are delegated to the user. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
+
+## Larger Home cards and compact Continue action — version 0.37.2 / build 95
+
+Remove all anime poster badge overlays from Home. Keep the existing rounded panel style, with 128-point Continue Watching artwork, 112-point reading artwork and 88-point Up Next artwork. Watching cards fit the shelf's actual width up to 520 points; reading/upcoming cards use a roomier tablet grid and one column on compact panes or accessibility text sizes. A shared layout stacks artwork and metadata when necessary without imposing fixed card heights.
+
+Replace the full-width prominent watch button with a small trailing Continue pill, retaining a 44-point touch area and the existing playback sheet. Keep this footer action outside the details NavigationLink so text and controls size independently. Retain episode selection, watched progress, chapter/page/source details, saved reader resume, MangaBaka routes, release times, filters, deduplication and Home section preferences. Manual checks: docs/HOME_CARD_MANUAL_CHECKS.md.
+
+Validation at source handoff: whitespace, project/workflow YAML and Safari resource/version checks pass locally. Hosted Release compilation and unsigned IPA packaging are pending; visual/device verification remains delegated to the user. No broad UI run is requested.
+
+## Compact badges and larger series artwork — version 0.37.1 / build 94
+
+Refine build 93 from user feedback: keep My Library grid badge metrics unchanged, reduce rating/DUB fonts and padding in other listing contexts, and suppress all poster overlays in daily/weekly Schedule, Airing Now List/Grid and the small Home airing preview. Retain schedule time/source/catch-up text. Enlarge Related / You May Also Like posters to 160 points on phone and 200 on tablet with subheadline titles. Enlarge the main anime hero poster to 136/184 points, its banner to 280/360 points and its title; stack header content at accessibility text sizes or when the horizontal layout cannot fit. Preserve card and genre destinations, Library context menus and current broadcast progress semantics.
+
+Validation at source handoff: diff whitespace, workflow/project YAML and Safari resource/version checks passed locally. The hosted iPhone/iPad Release compile and unsigned IPA are pending; native visual/device checking remains delegated to the user. Updated manual checks: docs/POSTER_CARD_MANUAL_CHECKS.md. No new broad UI runs are requested.
+
+## Unified anime poster cards — version 0.37.0 / build 93
+
+Use one reusable AnimePoster and shared badge overlay for anime listings. Match the Library reference: currently-airing dot at top left, available English DUB above a 10-point AniList rating at bottom right, dark translucent rounded backgrounds, and responsive sizing down to agenda thumbnails. Keep artwork inside the existing full-height row/grid bounds. Preserve navigation, independent genre taps, Library context menus, progress tracks and original-broadcast catch-up/countdowns.
+
+Classic and unified Explore, search/season catalogs, related/recommended titles, adaptations from MangaBaka, combined libraries, Home, Airing Now, schedules and playback headers now share the artwork treatment. Discovery metadata keeps the title, current AniList list status and optional genres; remove duplicate rating/dub rows and list synopsis/format clutter. Detailed metadata, dub announcements and counts remain available in series details. Related/adaptation responses include the optional rating, broadcast and MAL-ID fields needed by the same existing dub store; posters make no new metadata requests. Missing evidence never creates a DUB or airing badge. Keep manga/novel posters and their routes unchanged.
+
+Per the user's request, all long native UI/simulator suites require an explicit workflow dispatch with run_ui_tests enabled. Retain the normal Core check and universal Release compile/IPA packaging; remove the duplicate macOS Core run and make the extra build-job live-provider sweep opt-in. Existing UI expectations use the available-dub accessibility label and no longer require a DUB on an arbitrary title with unknown availability.
+
+Validation at source handoff: local whitespace, YAML and Safari bundle/version checks passed. No local Xcode/Swift toolchain is available. Hosted compilation and IPA packaging are pending; native visual/device checking is intentionally left to the user. Manual checks: docs/POSTER_CARD_MANUAL_CHECKS.md.
+
 ## Balanced list artwork and Today highlighting — version 0.36.1 / build 92
 
 Raise the phone list-cover default to 128 points in My Library and Explore. Migrate the former 76/90-point defaults once while retaining other custom widths and narrow-window constraints. Both lists now use the same aspect-fill artwork renderer and fill the complete card height, including the genre area. Library ratings, DUB badges, broadcast catch-up/countdowns, card taps and independent genre actions remain intact.

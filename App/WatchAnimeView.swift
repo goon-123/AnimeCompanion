@@ -138,8 +138,8 @@ struct WatchAnimeView: View {
     private var episodeHeader: some View {
         StreamPickerCard {
             HStack(alignment: .top, spacing: 12) {
-                ArtworkImage(url: anime.coverURL, pointSize: 64) { image in image.resizable().scaledToFill() } placeholder: { Color.white.opacity(0.06) }
-                    .frame(width: 48, height: 68).clipShape(RoundedRectangle(cornerRadius: 8)).accessibilityHidden(true)
+                AnimeCover(anime: anime, width: 48, cornerRadius: 8, identifierPrefix: "playback")
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(anime.displayTitle).font(.headline).lineLimit(2).accessibilityIdentifier("stream-picker-title")
                     if let entry = store.entry(for: anime.id) {

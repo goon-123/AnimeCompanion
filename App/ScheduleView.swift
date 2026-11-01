@@ -359,7 +359,7 @@ private struct ScheduleReleaseRow: View {
     }
     private var release: some View {
         HStack(alignment: .top, spacing: 10) {
-            if !textSize.isAccessibilitySize { AnimeCover(anime: event.anime, width: 44, cornerRadius: 7) }
+            if !textSize.isAccessibilitySize { AnimeCover(anime: event.anime, width: 44, cornerRadius: 7, badgeStyle: .none) }
             VStack(alignment: .leading, spacing: 6) {
                 Text(event.anime.displayTitle).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(3)
                 Text("Episode \(event.episode) · \(event.kind == .dub ? "English dub" : "Japanese broadcast")")

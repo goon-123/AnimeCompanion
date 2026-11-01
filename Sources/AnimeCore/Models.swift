@@ -75,6 +75,19 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
         startDate = nil; endDate = nil; popularity = nil; favourites = nil; rankings = nil
         staff = nil; recommendations = nil; reviews = nil; externalLinks = nil
     }
+
+    /// Related/adaptation results carry the same poster evidence as catalog
+    /// cards without loading the complete detail page for every visible title.
+    public init(related: RelatedAnime) {
+        id = related.id; idMal = related.idMal; title = related.title
+        coverImage = related.coverImage; bannerImage = nil; description = nil
+        episodes = related.episodes; duration = nil; format = nil; status = related.status
+        season = nil; seasonYear = nil; averageScore = related.averageScore
+        genres = related.genres; isAdult = related.isAdult; nextAiringEpisode = related.nextAiringEpisode
+        airingSchedule = nil; studios = nil; characters = nil; relations = nil; trailer = nil
+        startDate = nil; endDate = nil; popularity = nil; favourites = nil; rankings = nil
+        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil
+    }
 }
 
 public struct AnimeTitle: Codable, Hashable, Sendable {
@@ -106,11 +119,16 @@ public struct CharacterImage: Codable, Hashable, Sendable { public let medium: S
 public struct CharacterConnection: Codable, Hashable, Sendable { public let nodes: [AnimeCharacter]? }
 public struct RelatedAnime: Codable, Hashable, Identifiable, Sendable {
     public let id: Int
+    public let idMal: Int?
     public let title: AnimeTitle?
     public let type: String?
     public let coverImage: AnimeImage?
     public let isAdult: Bool?
     public let genres: [String]?
+    public let episodes: Int?
+    public let status: String?
+    public let averageScore: Int?
+    public let nextAiringEpisode: AiringEpisode?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
     public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
 }

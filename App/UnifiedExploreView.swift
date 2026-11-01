@@ -320,7 +320,7 @@ struct ExploreStoryCard: View {
                 .overlay(alignment: .bottomLeading) { LibraryFormatBadge(title: item.format).padding(7) }
             Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
             switch item {
-            case .anime(let value): DiscoveryIndicators(anime: value)
+            case .anime(let value): DiscoveryLibraryBadge(anime: value)
             case .reading(let value):
                 HStack(spacing: 6) {
                     if let score = value.rating { Label(score.formatted(.number.precision(.fractionLength(0))) + "%", systemImage: "star.fill").foregroundStyle(Theme.highlight) }

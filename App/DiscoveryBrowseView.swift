@@ -310,19 +310,14 @@ struct DiscoveryAnimeRow: View {
       ZStack(alignment: .bottomTrailing) {
         AnimeLink(id: anime.id) {
                 VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(anime.displayTitle).font(.headline).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                        DiscoveryAiringDot(anime: anime)
-                    }
-                    Text(metadata).font(.caption).foregroundStyle(.secondary)
-                    DiscoveryIndicators(anime: anime)
-                    Text(anime.synopsis).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(anime.displayTitle).font(.headline).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+                    DiscoveryLibraryBadge(anime: anime)
                     if !(anime.genres ?? []).isEmpty { Color.clear.frame(height: genreHeight) }
                 }.foregroundStyle(.primary).padding(14)
                     .frame(maxWidth: .infinity, minHeight: coverWidth * 1.45, alignment: .topLeading)
                     .padding(.leading, coverWidth)
                     .overlay(alignment: .leading) {
-                        AnimeRowArtwork(anime: anime, identifierPrefix: "discovery").frame(width: coverWidth)
+                        AnimePoster(anime: anime, cornerRadius: 0, artworkIdentifierPrefix: "discovery").frame(width: coverWidth)
                     }.contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
         AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
@@ -330,13 +325,6 @@ struct DiscoveryAnimeRow: View {
       }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
-    }
-    private var metadata: String {
-        let format = ["TV": "TV show", "TV_SHORT": "TV short", "MOVIE": "Movie", "OVA": "OVA", "ONA": "ONA", "SPECIAL": "Special", "MUSIC": "Music"]
-        var parts = [anime.format.flatMap { format[$0] } ?? "Anime"]
-        if let episodes = anime.episodes { parts.append("\(episodes) \(episodes == 1 ? "episode" : "episodes")") }
-        if let score = anime.averageScore { parts.append(String(format: "%.1f ★", Double(score) / 10)) }
-        return parts.joined(separator: " · ")
     }
 }
 
@@ -347,15 +335,9 @@ struct DiscoveryAnimeTile: View {
       VStack(alignment: .leading, spacing: 4) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 7) {
-                GeometryReader { geometry in
-                    ZStack(alignment: .topTrailing) {
-                        AnimeCover(anime: anime, width: geometry.size.width, cornerRadius: 8)
-                        DiscoveryAiringDot(anime: anime, overArtwork: true).padding(8)
-                    }
-                }.aspectRatio(1 / 1.45, contentMode: .fit)
+                AnimePoster(anime: anime, cornerRadius: 8).aspectRatio(1 / 1.45, contentMode: .fit)
                 Text(anime.displayTitle).font(.subheadline.bold()).lineLimit(2, reservesSpace: true)
-                if let score = anime.averageScore { Text("AniList \(Double(score) / 10, specifier: "%.1f") ★").font(.caption).foregroundStyle(Theme.highlight) }
-                DiscoveryIndicators(anime: anime)
+                DiscoveryLibraryBadge(anime: anime)
             }.foregroundStyle(.primary).frame(maxWidth: posterWidth, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("discovery-entry-\(anime.id)")
