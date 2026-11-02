@@ -177,9 +177,9 @@ struct BroadcastCountdown: View {
 
 struct RelatedAnimeCard: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.seriesPosterWidth) private var posterWidth
     let anime: RelatedAnime
     var caption: String? = nil
-    private var posterWidth: CGFloat { sizeClass == .regular ? 200 : 160 }
     var body: some View {
       VStack(alignment: .leading, spacing: 3) {
         Group {

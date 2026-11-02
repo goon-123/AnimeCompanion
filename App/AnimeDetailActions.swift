@@ -1,32 +1,7 @@
 import SwiftUI
 import AnimeCore
 
-/// One tap opens editing. Secondary actions stay available on a long press.
-struct AnimeDetailActions: View {
-    let resumeLabel: String
-    let canWatch: Bool
-    let canEdit: Bool
-    let edit: () -> Void
-    let resume: () -> Void
-    let findManga: () -> Void
-    var body: some View {
-        Button(action: edit) {
-            Image(systemName: "pencil").font(.system(size: 23, weight: .semibold))
-                .frame(width: 56, height: 56).foregroundStyle(Theme.background).background(Theme.accent, in: Circle())
-                .shadow(color: .black.opacity(0.22), radius: 12, y: 5)
-        }.buttonStyle(.plain).disabled(!canEdit).padding(16)
-            .accessibilityLabel("Edit watchlist").accessibilityHint("Edit status, watched episodes, rating and notes")
-            .accessibilityIdentifier("detail-actions")
-            .contextMenu {
-                Button("Edit Entry", systemImage: "square.and.pencil", action: edit).disabled(!canEdit)
-                Button(resumeLabel, systemImage: "play.fill", action: resume).disabled(!canWatch)
-                Button("Read manga / novel", systemImage: "book.closed", action: findManga)
-            }
-    }
-}
-
-/// A pinned strip replaces the large progress panel, with the familiar +1 and
-/// server-confirmed feedback/undo shared by the existing library controls.
+/// An inline tracking card with server-confirmed progress and Undo.
 struct AnimeWatchlistStrip: View {
     @EnvironmentObject private var store: AppStore
     let anime: Anime

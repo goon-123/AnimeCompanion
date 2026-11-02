@@ -20,82 +20,144 @@ struct AnimeEpisodesSection: View {
     @State private var query = ""
     @State private var newest = false
     @State private var trackingError: String?
+    @State private var upcomingExpanded = false
+    @State private var upcomingLimit = 6
     private var trackingBusy: Bool { store.savingMedia.contains(anime.id) || (store.isSignedIn && (store.loadingLibrary || store.savedAt == nil)) }
     private var watched: Int { store.entry(for: anime.id)?.progressValue ?? 0 }
-    private var knownCount: Int { min(10_000, max(max(anime.episodes ?? 0, anime.releasedEpisodeCount() ?? 0), watched)) }
+    private var knownCount: Int { min(10_000, max(max(anime.episodes ?? 0, anime.releasedEpisodeCount() ?? 0), max(watched, anime.nextAiringEpisode?.episode ?? 0))) }
     private var available: [AnimeEpisodeMetadata] {
-        rows.isEmpty ? (knownCount > 0 ? (1...knownCount).map { AnimeEpisodeMetadata(number: $0) } : []) : rows
+        var values = rows.isEmpty ? (knownCount > 0 ? (1...knownCount).map { AnimeEpisodeMetadata(number: $0) } : []) : rows
+        if let next = anime.nextAiringEpisode, (1...10_000).contains(next.episode), next.date > Date(),
+           !values.contains(where: { $0.number == next.episode }) {
+            values.append(AnimeEpisodeMetadata(number: next.episode))
+        }
+        return values
     }
-    private var filtered: [AnimeEpisodeMetadata] {
-        let values = available.filter {
+    private func filtered(_ episodes: [AnimeEpisodeMetadata]) -> [AnimeEpisodeMetadata] {
+        let values = episodes.filter {
             (filter == "All" || (filter == "Watched" ? $0.number <= watched : $0.number > watched)) &&
             (query.isEmpty || ("\($0.number) " + ($0.title ?? "")).localizedCaseInsensitiveContains(query))
         }
         return newest ? Array(values.reversed()) : values
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Episodes").font(.title2.bold()).accessibilityAddTraits(.isHeader)
-                Text("\(max(anime.episodes ?? 0, max(knownCount, rows.count)))").font(.subheadline.weight(.bold).monospacedDigit())
-                    .padding(.horizontal, 12).padding(.vertical, 5).background(Theme.accent.opacity(0.12), in: Capsule())
-                Spacer()
-                Menu {
-                    Picker("Show episodes", selection: $filter) { ForEach(["All", "Unwatched", "Watched"], id: \.self) { Text($0).tag($0) } }
-                    Toggle("Newest first", isOn: $newest)
-                } label: { Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).frame(minWidth: 44, minHeight: 44) }
-                    .accessibilityLabel("Episode filters")
-            }
-            TextField("Search loaded episodes or titles", text: $query).textFieldStyle(.roundedBorder).autocorrectionDisabled()
-                .accessibilityIdentifier("anime-episode-search")
-            if loading && rows.isEmpty { ProgressView("Loading episode details…").font(.caption) }
-            if let error {
-                NoticeView(message: error) { Task { await load(reset: true, refresh: true) } }
-            }
-            if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("episode-tracking-error") }
-            Text("Watched progress follows AniList's episode total. Marking an episode also marks earlier episodes watched.")
-                .font(.caption2).foregroundStyle(.secondary)
-            if filtered.isEmpty && !loading {
-                Text(available.isEmpty ? "Episode details have not been announced. Find streams still lets you choose an episode." : "No episodes match these filters.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            LazyVStack(spacing: 12) {
-                ForEach(Array(filtered.prefix(displayLimit))) { episode in
-                    AnimeEpisodeCard(episode: episode, watched: episode.number <= watched, canPlay: canPlay(episode),
-                        canTrack: !trackingBusy && (episode.number <= watched || canPlay(episode)), signedIn: store.isSignedIn,
-                        play: { play(episode.number) }, track: { track(episode) })
-                }
-            }
-            if filtered.count > displayLimit {
-                Button("Show more episodes") { displayLimit += 24 }.frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
-            } else if more {
-                Button("Load more episode details") { Task { await load(reset: false) } }
-                    .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered).disabled(loading)
-            }
-            if let source {
-                HStack {
-                    Link("Episode metadata · " + source.source, destination: source.sourceURL)
-                    Spacer()
-                }.font(.caption2).foregroundStyle(.secondary)
-                if let notice = source.notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
-            }
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            episodeContent(now: context.date)
         }.accessibilityIdentifier("anime-episodes")
             .task(id: "\(anime.id)-\(refreshID)") { await load(reset: true, refresh: refreshID != appliedRefreshID) }
-            .onChange(of: filter) { _, _ in displayLimit = 12 }
-            .onChange(of: query) { _, _ in displayLimit = 12 }
+            .onChange(of: filter) { _, _ in resetLimits() }
+            .onChange(of: query) { _, _ in resetLimits() }
+            .onChange(of: upcomingExpanded) { _, expanded in if !expanded { upcomingLimit = 6 } }
     }
+    private func episodeContent(now: Date) -> some View {
+        let groups = AnimeEpisodeReleaseGroups(anime: anime, episodes: available, now: now)
+        let aired = filtered(groups.aired)
+        return VStack(alignment: .leading, spacing: 14) {
+            episodeHeader(now: now)
+            if groups.hasUpcoming && filter != "Watched" { upcomingDisclosure(groups) }
+            TextField("Search loaded episodes or titles", text: $query).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+                .accessibilityIdentifier("anime-episode-search")
+            feedback
+            if aired.isEmpty && !loading { emptyEpisodes(groups) }
+            LazyVStack(spacing: 12) {
+                ForEach(Array(aired.prefix(displayLimit))) { episode in episodeCard(episode, released: true) }
+            }
+            pagination(visibleCount: aired.count)
+            attribution
+        }
+    }
+    private func episodeHeader(now: Date) -> some View {
+        HStack {
+            Text("Episodes").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            if let count = anime.releasedEpisodeCount(at: now) {
+                Text("\(count) aired").font(.caption.weight(.semibold).monospacedDigit())
+                    .padding(.horizontal, 10).padding(.vertical, 5).background(Theme.accent.opacity(0.12), in: Capsule())
+            }
+            Spacer()
+            Menu {
+                Picker("Show episodes", selection: $filter) { ForEach(["All", "Unwatched", "Watched"], id: \.self) { Text($0).tag($0) } }
+                Toggle("Newest first", isOn: $newest)
+            } label: { Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).frame(minWidth: 44, minHeight: 44) }
+                .accessibilityLabel("Episode filters")
+        }
+    }
+    private var feedback: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if loading && rows.isEmpty { ProgressView("Loading episode details…").font(.caption) }
+            if let error { NoticeView(message: error) { Task { await load(reset: true, refresh: true) } } }
+            if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("episode-tracking-error") }
+            Text("Marking an episode watched also marks earlier episodes watched.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+    private func emptyEpisodes(_ groups: AnimeEpisodeReleaseGroups) -> some View {
+        Text(groups.aired.isEmpty
+             ? (groups.hasUpcoming ? "No released episodes are listed yet." : "Episode details have not been announced.")
+             : "No released episodes match these filters.")
+            .font(.subheadline).foregroundStyle(.secondary)
+    }
+    private func episodeCard(_ episode: AnimeEpisodeMetadata, released: Bool) -> some View {
+        AnimeEpisodeCard(episode: episode, watched: episode.number <= watched, canPlay: released,
+            canTrack: released && !trackingBusy, signedIn: store.isSignedIn,
+            play: { play(episode.number) }, track: { track(episode) })
+    }
+    private func upcomingDisclosure(_ groups: AnimeEpisodeReleaseGroups) -> some View {
+        DisclosureGroup(isExpanded: $upcomingExpanded) {
+            upcomingRows(groups)
+        } label: {
+            upcomingLabel(groups)
+        }.companionPanel(padding: 12).accessibilityIdentifier("episodes-upcoming")
+    }
+    private func upcomingLabel(_ groups: AnimeEpisodeReleaseGroups) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let next = groups.next {
+                Text("Next: Episode \(next.episode)").font(.subheadline.weight(.semibold))
+                Text("Airs \(next.date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if let next = groups.upcoming.first {
+                Text("Upcoming: Episode \(next.number)").font(.subheadline.weight(.semibold))
+                Text(next.dateLabel.map { "Airs \($0)" } ?? "Air date not announced")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Upcoming episodes").font(.subheadline.weight(.semibold))
+            }
+            Text(groups.unairedCount.map { "\($0) unaired · Expand for details" } ?? "Expand upcoming episode details")
+                .font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func upcomingRows(_ groups: AnimeEpisodeReleaseGroups) -> some View {
+        let episodes = filtered(groups.upcoming)
+        return LazyVStack(spacing: 12) {
+            if episodes.isEmpty { Text("More episode details have not been announced.").font(.caption).foregroundStyle(.secondary) }
+            ForEach(Array(episodes.prefix(upcomingLimit))) { episode in episodeCard(episode, released: false) }
+            if episodes.count > upcomingLimit {
+                Button("Show more upcoming episodes") { upcomingLimit += 24 }.frame(minHeight: 44)
+            }
+        }.padding(.top, 12)
+    }
+    @ViewBuilder private func pagination(visibleCount: Int) -> some View {
+        if visibleCount > displayLimit {
+            Button("Show more episodes") { displayLimit += 24 }.frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
+        } else if more {
+            Button("Load more episode details") { Task { await load(reset: false) } }
+                .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered).disabled(loading)
+        }
+    }
+    @ViewBuilder private var attribution: some View {
+        if let source {
+            Link("Episode metadata · " + source.source, destination: source.sourceURL).font(.caption2).foregroundStyle(.secondary)
+            if let notice = source.notice { Text(notice).font(.caption2).foregroundStyle(.secondary) }
+        }
+    }
+    private func resetLimits() { displayLimit = 12; upcomingLimit = 6 }
     private func track(_ episode: AnimeEpisodeMetadata) {
+        guard AnimeEpisodeReleaseGroups.isReleased(episode, anime: anime) else { return }
         guard store.isSignedIn && episode.number > watched else { edit(); return }
         trackingError = nil
         Task {
             do { try await store.markWatched(anime: anime, through: episode.number) }
             catch { trackingError = error.localizedDescription }
         }
-    }
-    private func canPlay(_ episode: AnimeEpisodeMetadata) -> Bool {
-        guard anime.status != "NOT_YET_RELEASED" else { return false }
-        if let aired = anime.releasedEpisodeCount() { return episode.number <= aired }
-        return !episode.isFuture()
     }
     @MainActor private func load(reset: Bool, refresh: Bool = false) async {
         guard !loading || reset else { return }

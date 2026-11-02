@@ -36,6 +36,7 @@ struct MangaTitleDetailView: View {
     @EnvironmentObject private var reading: MangaReadingStore
     @AppStorage("manga.showMatureSources") private var showMature = false
     @AppStorage("manga.chaptersNewestFirst") private var newestFirst = false
+    @AppStorage("series.layout.reader.v1") private var sectionOrder = ""
     let title: MangaTitleReference
     let linkingTo: MangaSourceLinkTarget?
     let resumeOnOpen: Bool
@@ -62,6 +63,14 @@ struct MangaTitleDetailView: View {
     private var availabilityKey: String { "\(extensions.loading)-\(sourceReady)-\(installed?.descriptor.sha256 ?? "")-\(showMature)" }
     private var current: MangaTitleReference { MangaTitleReference(source: source, manga: model.manga) }
     private var record: MangaReadingRecord? { reading.record(title.id) }
+    private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .reader, saved: sectionOrder) }
+    private var visibleSections: [SeriesDetailSection] {
+        layout.order.filter {
+            if $0 == .synopsis { return !model.manga.description.isEmpty }
+            if $0 == .genres { return !model.manga.genre.isEmpty }
+            return true
+        }
+    }
     private var shownChapters: [SourceMangaChapter] {
         let filtered = model.chapters.filter {
             (chapterQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(chapterQuery)) &&
@@ -75,6 +84,7 @@ struct MangaTitleDetailView: View {
             else if !sourceReady && !extensions.loading { unavailableSource }
             else { content }
         }.background(Theme.background).navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { SeriesLayoutButton(page: .reader) } }
             .task(id: availabilityKey) {
                 await extensions.load()
                 guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }
@@ -93,28 +103,43 @@ struct MangaTitleDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
-                if !model.manga.description.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(model.manga.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(expanded ? nil : 5)
-                        Button(expanded ? "Show less" : "Read more") { expanded.toggle() }.font(.caption.bold())
-                    }.padding(.horizontal, 20)
+                ForEach(visibleSections) { section in
+                    detailSection(section).id(section.rawValue)
                 }
-                if !model.manga.genre.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Array(Set(model.manga.genre.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })).sorted(), id: \.self) {
-                                Text($0).font(.caption).padding(.horizontal, 12).padding(.vertical, 8)
-                                    .overlay(Capsule().stroke(.white.opacity(0.20)))
-                            }
-                        }.padding(.horizontal, 20)
-                    }
-                }
-                readingAction.padding(.horizontal, 20)
-                MangaSourceLinkControl(title: current, requestedTarget: linkingTo).padding(.horizontal, 20)
-                chapterSection.padding(.horizontal, 20)
             }.padding(.bottom, 32)
         }.accessibilityIdentifier("manga-title-detail")
             .refreshable { await loadChapters(force: true) }
+    }
+    @ViewBuilder private func detailSection(_ section: SeriesDetailSection) -> some View {
+        switch section {
+        case .reading: readingAction.padding(.horizontal, 20)
+        case .synopsis: synopsis
+        case .genres: genres
+        case .sourceLink: MangaSourceLinkControl(title: current, requestedTarget: linkingTo).padding(.horizontal, 20)
+        case .chapters: chapterSection.padding(.horizontal, 20)
+        default: EmptyView()
+        }
+    }
+    @ViewBuilder private var synopsis: some View {
+        if !model.manga.description.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Synopsis").font(.title3.bold())
+                Text(model.manga.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(expanded ? nil : 5)
+                Button(expanded ? "Show less" : "Read more") { expanded.toggle() }.font(.caption.bold())
+            }.padding(.horizontal, 20)
+        }
+    }
+    @ViewBuilder private var genres: some View {
+        if !model.manga.genre.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(Set(model.manga.genre.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })).sorted(), id: \.self) {
+                        Text($0).font(.caption).padding(.horizontal, 12).padding(.vertical, 8)
+                            .overlay(Capsule().stroke(.white.opacity(0.20)))
+                    }
+                }.padding(.horizontal, 20)
+            }
+        }
     }
     private var header: some View {
         HStack(alignment: .top, spacing: 18) {

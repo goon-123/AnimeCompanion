@@ -12,6 +12,7 @@ struct AnimeDetailView: View {
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @AppStorage("series.layout.anime.v1") private var sectionOrder = ""
     let mediaID: Int
     @State private var anime: Anime?
     @State private var loading = false
@@ -23,15 +24,15 @@ struct AnimeDetailView: View {
     @State private var requestID = UUID()
     @State private var episodeRefreshID = 0
     @State private var episodeAppliedRefreshID = 0
-    @State private var readingAppliedRefreshID = 0
     @State private var selectedTab = SeriesTab.info
     @State private var synopsisExpanded = false
-    private enum SeriesTab: String, CaseIterable { case info = "Info", episodes = "Episodes", read = "Read" }
+    private enum SeriesTab: String, CaseIterable { case info = "Info", episodes = "Episodes" }
+    private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .anime, saved: sectionOrder) }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
                     if let error { NoticeView(message: error) { Task { await load() } }.padding(.horizontal) }
                     if let anime, !store.isVisible(anime) {
@@ -40,39 +41,18 @@ struct AnimeDetailView: View {
                     }
                     if let anime, store.isVisible(anime) {
                         AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
-                        Section {
-                            tabContent(anime).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 96).readableContent(width: 940)
-                                .id("series-tab-content")
-                        } header: {
-                            VStack(spacing: 8) {
-                                AnimeWatchlistStrip(anime: anime, resumeLabel: resumeLabel(anime), edit: editEntry,
-                                    play: { playbackRequest = DetailPlaybackRequest(episode: nil) })
-                                Picker("Series section", selection: $selectedTab) {
-                                    ForEach(SeriesTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                                }.pickerStyle(.segmented).accessibilityIdentifier("anime-detail-tabs")
-                            }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12).readableContent(width: 940)
-                                .frame(maxWidth: .infinity).background(Theme.background)
-                                .overlay(alignment: .bottom) { Divider() }
-                                .id("series-tab-header")
-                        }
+                        tabPicker
+                        tabContent(anime).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 24).readableContent(width: 940)
+                            .id("series-tab-content")
                     }
                 }
             }.accessibilityIdentifier("anime-detail-scroll")
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: selectedTab) { _, _ in proxy.scrollTo("series-tab-header", anchor: .top) }
-        }.background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
+        }.seriesPosterSizing().background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
-            .overlay(alignment: .bottomTrailing) {
-                if let anime, store.isVisible(anime) {
-                    AnimeDetailActions(resumeLabel: resumeLabel(anime),
-                        canWatch: anime.status != "NOT_YET_RELEASED" && !(store.isSignedIn && store.loadingLibrary),
-                        canEdit: !store.isSignedIn || (!store.loadingLibrary && !store.savingMedia.contains(anime.id)),
-                        edit: editEntry,
-                        resume: { playbackRequest = DetailPlaybackRequest(episode: nil) },
-                        findManga: { selectedTab = .read })
-                }
-            }
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { SeriesLayoutButton(page: .anime) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         if let anime, store.isVisible(anime) {
@@ -80,7 +60,7 @@ struct AnimeDetailView: View {
                                 .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityIdentifier("detail-edit-entry")
                             Button(resumeLabel(anime), systemImage: "play.fill") { playbackRequest = DetailPlaybackRequest(episode: nil) }
                                 .disabled(anime.status == "NOT_YET_RELEASED").accessibilityIdentifier("watch-in-vidhub")
-                            Button("Read manga / novel", systemImage: "book.closed") { selectedTab = .read }.accessibilityIdentifier("detail-find-manga")
+                            Button("Find manga / manhwa", systemImage: "book.closed") { navigation.openMangaSearch(for: anime) }.accessibilityIdentifier("detail-find-manga")
                         }
                         Button("Account and settings", systemImage: "person.crop.circle") { showSettings = true }
                     } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
@@ -99,32 +79,71 @@ struct AnimeDetailView: View {
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
     }
     private func editEntry() { if store.isSignedIn { editing = true } else { showSettings = true } }
+    private var tabPicker: some View {
+        Picker("Series section", selection: $selectedTab) {
+            ForEach(SeriesTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }.pickerStyle(.segmented).accessibilityIdentifier("anime-detail-tabs")
+            .padding(.horizontal, 16).padding(.vertical, 12).readableContent(width: 940)
+            .id("series-tab-header")
+    }
+    private func watchlist(_ anime: Anime) -> some View {
+        AnimeWatchlistStrip(anime: anime, resumeLabel: resumeLabel(anime), edit: editEntry,
+            play: { playbackRequest = DetailPlaybackRequest(episode: nil) })
+    }
     @ViewBuilder private func tabContent(_ anime: Anime) -> some View {
         switch selectedTab {
         case .info:
             LazyVStack(alignment: .leading, spacing: 18) {
-                synopsis(anime)
-                metadata(anime)
-                AnimeOriginalBroadcast(anime: anime)
-                related(anime)
-                characters(anime)
-                staff(anime)
-                recommendations(anime)
-                AnimeArtworkShelf(anime: anime, refreshID: episodeRefreshID)
-                trailer(anime)
-                AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
-                    events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
-                AnimeUpdatesLinks(anime: anime)
-                AnimeDiscussionsSection(anime: anime)
-                reviews(anime)
-                externalLinks(anime)
-                Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
+                ForEach(visibleSections(for: anime)) { section in
+                    infoSection(section, anime: anime).id(section.rawValue)
+                }
             }.accessibilityIdentifier("series-info-tab")
         case .episodes:
-            AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID, appliedRefreshID: $episodeAppliedRefreshID,
-                play: { playbackRequest = DetailPlaybackRequest(episode: $0) }, edit: editEntry)
-        case .read:
-            AnimeReadingSection(anime: anime, refreshID: episodeRefreshID, appliedRefreshID: $readingAppliedRefreshID)
+            VStack(alignment: .leading, spacing: 18) {
+                watchlist(anime)
+                AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID, appliedRefreshID: $episodeAppliedRefreshID,
+                    play: { playbackRequest = DetailPlaybackRequest(episode: $0) }, edit: editEntry)
+            }
+        }
+    }
+    private func visibleSections(for anime: Anime) -> [SeriesDetailSection] {
+        layout.order.filter { section in
+            switch section {
+            case .related:
+                return (anime.relations?.edges ?? []).contains { edge in
+                    edge.node.map { store.includeAdult || $0.isAdult != true } == true
+                }
+            case .recommendations:
+                return (anime.recommendations?.nodes ?? []).contains { entry in
+                    entry.mediaRecommendation.map { store.includeAdult || $0.isAdult != true } == true
+                }
+            case .trailer: return anime.trailer?.url != nil
+            default: return true
+            }
+        }
+    }
+    @ViewBuilder private func infoSection(_ section: SeriesDetailSection, anime: Anime) -> some View {
+        switch section {
+        case .watchlist: watchlist(anime)
+        case .synopsis: synopsis(anime)
+        case .information: metadata(anime)
+        case .broadcast: AnimeOriginalBroadcast(anime: anime)
+        case .related: VStack(alignment: .leading, spacing: 12) { related(anime) }
+        case .recommendations: VStack(alignment: .leading, spacing: 12) { recommendations(anime) }
+        case .artwork: AnimeArtworkShelf(anime: anime, refreshID: episodeRefreshID)
+        case .trailer: VStack(alignment: .leading, spacing: 12) { trailer(anime) }
+        case .dubSchedule:
+            AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
+                events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
+        case .news: AnimeUpdatesLinks(anime: anime)
+        case .discussions: AnimeDiscussionsSection(anime: anime)
+        case .reviews: reviews(anime)
+        case .links:
+            VStack(alignment: .leading, spacing: 12) {
+                externalLinks(anime)
+                Link("View on AniList", destination: URL(string: "https://anilist.co/anime/\(anime.id)")!).font(.caption)
+            }
+        default: EmptyView()
         }
     }
     private func resumeLabel(_ anime: Anime) -> String {
@@ -170,36 +189,6 @@ struct AnimeDetailView: View {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
                         if let media = edge.node, store.includeAdult || media.isAdult != true { RelatedAnimeCard(anime: media, caption: edge.relationType) }
-                    }
-                }
-            }
-        }
-    }
-    @ViewBuilder private func characters(_ anime: Anime) -> some View {
-        if let people = anime.characters?.nodes, !people.isEmpty {
-            sectionTitle("Characters")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(people) { person in
-                        Link(destination: URL(string: "https://anilist.co/character/\(person.id)")!) {
-                            DetailPersonCard(name: person.name?.full ?? "Character", imageURL: URL(string: person.image?.medium ?? ""))
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-    @ViewBuilder private func staff(_ anime: Anime) -> some View {
-        if let edges = anime.staff?.edges, !edges.isEmpty {
-            sectionTitle("Staff")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
-                        if let person = edge.node {
-                            Link(destination: URL(string: "https://anilist.co/staff/\(person.id)")!) {
-                                DetailPersonCard(name: person.name?.full ?? "Staff", imageURL: URL(string: person.image?.large ?? person.image?.medium ?? ""), role: edge.role)
-                            }.buttonStyle(.plain)
-                        }
                     }
                 }
             }
