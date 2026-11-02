@@ -117,11 +117,6 @@ struct WatchAnimeView: View {
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
-                .task(id: "\(initialized)-\(episode)-\(seanime.revision)-\(store.includeAdult)") {
-                    guard initialized else { return }
-                    torrents.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
-                    torrents.search()
-                }
                 .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
                 .sheet(isPresented: $options) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
@@ -132,7 +127,10 @@ struct WatchAnimeView: View {
                     searchTask?.cancel(); torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
-                .onChange(of: scenePhase) { _, phase in if phase != .active { torrents.stop() } }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background { torrents.pause() }
+                    else if phase == .active { torrents.resumeIfNeeded() }
+                }
         }.disabled(playback.openingPlayer)
     }
     private var episodeHeader: some View {
@@ -151,6 +149,11 @@ struct WatchAnimeView: View {
             }
             if anime.format != "MOVIE" {
                 if initialized { episodeControls } else { ProgressView("Loading AniList progress…").font(.caption) }
+            }
+            if initialized {
+                NavigationLink { SeriesDiscussionsView(anime: anime, requestedEpisode: episode) } label: {
+                    Label("Discuss Episode \(episode)", systemImage: "text.bubble").font(.caption.weight(.semibold)).frame(minHeight: 44)
+                }.accessibilityIdentifier("watch-discuss-episode")
             }
             if let notice = store.libraryError { Text("Progress could not refresh. Choose the episode manually if needed. \(notice)").font(.caption).foregroundStyle(.orange) }
             if let saved = playback.saved(animeID: anime.id, episode: episode) {
@@ -334,4 +337,3 @@ struct SourceInformationView: View {
         }
     }
 }
-

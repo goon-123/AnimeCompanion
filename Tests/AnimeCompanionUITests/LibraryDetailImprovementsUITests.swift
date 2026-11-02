@@ -32,6 +32,10 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         XCTAssertTrue(actions.waitForExistence(timeout: 15))
         XCTAssertFalse(app.tabBars.firstMatch.isHittable)
         XCTAssertFalse(app.buttons["detail-episodes-disclosure"].exists)
+        XCTAssertTrue(app.segmentedControls["anime-detail-tabs"].buttons["Info"].isSelected)
+        app.segmentedControls["anime-detail-tabs"].buttons["Episodes"].tap()
+        XCTAssertTrue(app.textFields["anime-episode-search"].waitForExistence(timeout: 10))
+        app.segmentedControls["anime-detail-tabs"].buttons["Info"].tap()
         let aired = app.descendants(matching: .any).matching(identifier: "detail-episodes-aired").firstMatch
         app.revealInContent(aired)
         XCTAssertEqual(aired.label, "Aired: 17/26")
@@ -47,17 +51,16 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["detail-edit-entry"].exists)
         XCTAssertTrue(app.buttons["detail-find-manga"].exists)
         capture("Detail-Actions-Expanded")
-        app.buttons["detail-actions-dismiss"].coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.15)).tap()
-        XCTAssertEqual(actions.value as? String, "Collapsed")
-        app.openAnimeActions(); app.buttons["detail-edit-entry"].tap()
+        app.dismissAnimeActions()
+        actions.tap() // The floating pencil opens editing directly.
+
         XCTAssertTrue(app.textFields["tracking-episode-input"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["tracking-episode-input"].value as? String, "16")
         app.buttons["Cancel"].tap()
         app.openAnimeActions(); app.buttons["watch-in-vidhub"].tap()
         XCTAssertTrue(app.textFields["playback-episode-number"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "17")
-        // The existing player still permits explicit episode selection after
-        // removing the redundant episode list from the detail page.
+        // Playback and the separate Episodes tab both retain explicit episode selection.
         app.enterPlaybackEpisode(2); app.buttons["playback-episode-go"].tap()
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "2")
         app.buttons["Done"].tap()
@@ -84,6 +87,9 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         let entry = app.buttons["library-entry-1"]
         app.revealInContent(entry); entry.tap()
         app.openAnimeActions(); app.buttons["detail-find-manga"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "series-read-tab").firstMatch.waitForExistence(timeout: 15))
+        let sourceSearch = app.buttons["anime-read-search-sources"]
+        app.revealInContent(sourceSearch); sourceSearch.tap()
         let search = app.textFields["manga-search-title"]
         XCTAssertTrue(search.waitForExistence(timeout: 15))
         XCTAssertTrue((search.value as? String)?.contains("The Archivist") == true)

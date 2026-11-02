@@ -5,11 +5,13 @@ import AnimeCore
 /// Accessibility text stacks without imposing a fixed card height.
 struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.homeVisuals) private var visuals
     let artwork: Artwork
     let content: Content
+    let spacing: CGFloat
 
-    init(@ViewBuilder artwork: () -> Artwork, @ViewBuilder content: () -> Content) {
-        self.artwork = artwork(); self.content = content()
+    init(spacing: CGFloat = 12, @ViewBuilder artwork: () -> Artwork, @ViewBuilder content: () -> Content) {
+        self.artwork = artwork(); self.content = content(); self.spacing = spacing
     }
 
     var body: some View {
@@ -17,7 +19,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
             if textSize.isAccessibilitySize {
                 stacked
             } else {
-                HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: visuals.value(spacing, max(spacing, 16))) {
                     artwork
                     content.frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -26,7 +28,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
     }
 
     private var stacked: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: visuals.value(12, 18)) {
             artwork
             content.frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -34,6 +36,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
 }
 
 struct HomeContinueWatchingCard: View {
+    @Environment(\.homeVisuals) private var visuals
     let anime: Anime
     let entry: LibraryEntry
     let resume: () -> Void
@@ -42,10 +45,10 @@ struct HomeContinueWatchingCard: View {
     var body: some View {
         HomeMediaCardLayout {
             AnimeLink(id: anime.id) {
-                AnimeCover(anime: anime, width: 80, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
+                AnimeCover(anime: anime, width: visuals.watchingCover, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
             }.buttonStyle(.plain).accessibilityHidden(true)
         } content: { metadata }
-            .companionPanel(padding: 12)
+            .companionPanel(padding: visuals.value(12, 16))
     }
 
     private var metadata: some View {
@@ -79,7 +82,7 @@ struct HomeContinueWatchingCard: View {
     private var continueAction: some View {
         Button(action: resume) {
             Label(anime.format == "MOVIE" ? "Watch movie" : "Continue", systemImage: "play.fill")
-                .font(.caption.weight(.semibold)).imageScale(.small)
+                .font(visuals.actionTextFont).imageScale(visuals.enlarged ? .medium : .small)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .foregroundStyle(Theme.accent)
                 .background(Theme.accent.opacity(0.13), in: Capsule())
@@ -93,73 +96,67 @@ struct HomeContinueWatchingCard: View {
 }
 
 struct HomeContinueReadingCard: View {
+    @Environment(\.homeVisuals) private var visuals
     let record: MangaReadingRecord
     private var position: MangaReadingPosition? { record.lastChapterURL.flatMap { record.position(for: $0) } }
 
     var body: some View {
-        HomeMediaCardLayout {
-            MangaCover(title: record.title, width: 72).frame(width: 72, height: 72 * 1.45)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+        HomeMediaCardLayout(spacing: 10) {
+            MangaCover(title: record.title, width: visuals.readingCover).frame(width: visuals.readingCover, height: visuals.readingCover * 1.45)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         } content: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(record.title.manga.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                 if let position {
-                    Text(position.chapterName).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    if position.pageCount > 0 {
-                        Text("Page \(position.pageIndex + 1) of \(position.pageCount)")
-                            .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.accent)
-                    }
+                    HStack(spacing: 6) {
+                        Text(position.chapterName).lineLimit(1).foregroundStyle(.secondary)
+                        if position.pageCount > 0 {
+                            Text("p. \(position.pageIndex + 1)/\(position.pageCount)")
+                                .monospacedDigit().foregroundStyle(Theme.accent).fixedSize().layoutPriority(1)
+                                .accessibilityLabel("Page \(position.pageIndex + 1) of \(position.pageCount)")
+                        }
+                    }.font(.caption)
                 }
-                HStack(spacing: 8) {
-                    Text(record.title.source.name).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").accessibilityHidden(true)
-                }.font(.caption).foregroundStyle(.secondary)
+                Text(record.title.source.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-        }.companionPanel(padding: 12)
+        }.companionPanel(padding: visuals.value(10, 14))
     }
 }
 
 struct HomeTrackedReadingCard: View {
+    @Environment(\.homeVisuals) private var visuals
     let entry: MangaBakaLibraryEntry
     let series: MangaBakaSeries
 
     var body: some View {
-        HomeMediaCardLayout {
-            MangaBakaCover(series: series, width: 72)
+        HomeMediaCardLayout(spacing: 10) {
+            MangaBakaCover(series: series, width: visuals.readingCover)
         } content: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(series.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
-                Text("Chapter " + (entry.chapter ?? 0).formatted())
+                Text("Ch. " + (entry.chapter ?? 0).formatted())
                     .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.accent)
-                HStack {
-                    Text(series.formatLabel + " · MangaBaka").lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").accessibilityHidden(true)
-                }.font(.caption).foregroundStyle(.secondary)
+                Text(series.formatLabel + " · MangaBaka").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-        }.companionPanel(padding: 12)
+        }.companionPanel(padding: visuals.value(10, 14))
     }
 }
 
 struct HomeUpNextCard: View {
+    @Environment(\.homeVisuals) private var visuals
     let anime: Anime
     let episode: AiringEpisode
 
     var body: some View {
-        HomeMediaCardLayout {
-            AnimeCover(anime: anime, width: 64, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
+        HomeMediaCardLayout(spacing: 10) {
+            AnimeCover(anime: anime, width: visuals.upcomingCover, cornerRadius: 8, identifierPrefix: "home", badgeStyle: .none)
         } content: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
-                Text("Episode \(episode.episode) · Original broadcast").font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    Text(episode.date, format: .dateTime.weekday(.abbreviated).hour().minute())
-                        .fontWeight(.semibold).foregroundStyle(Theme.accent)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
-                }.font(.caption)
+                Text("Ep \(episode.episode) · Original broadcast").font(.caption2).foregroundStyle(.secondary)
+                Text(episode.date, format: .dateTime.weekday(.abbreviated).hour().minute())
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
             }
-        }.companionPanel(padding: 12)
+        }.companionPanel(padding: visuals.value(10, 14))
     }
 }

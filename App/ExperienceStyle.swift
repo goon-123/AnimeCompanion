@@ -56,10 +56,11 @@ struct CompanionFilterChip: View {
 }
 
 struct CompanionSearchLink: View {
+    @Environment(\.homeVisuals) private var visuals
     var body: some View {
         NavigationLink(value: ExploreSearchRoute()) {
             HStack(spacing: 11) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Theme.accent)
+                Image(systemName: "magnifyingglass").font(visuals.enlarged ? .title2 : .subheadline).foregroundStyle(Theme.accent)
                 Text("Search anime, manga & novels").foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }.font(.subheadline).padding(.horizontal, 16).frame(minHeight: 52)

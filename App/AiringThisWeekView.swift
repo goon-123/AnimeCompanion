@@ -1,0 +1,146 @@
+import SwiftUI
+import UIKit
+import AnimeCore
+
+/// Home is independent of the Schedule screen's Sub/Dub and library filters.
+/// It shares original broadcasts and the existing dub snapshot, then intersects
+/// them with every visible status in the user's actual AniList library.
+struct AiringThisWeekView: View {
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var schedule: WeeklyScheduleStore
+    @EnvironmentObject private var dubs: ExploreDubStore
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.homeVisuals) private var visuals
+    @State private var now = ScheduleClock.now
+    @State private var chosenDay: HomeDaySelection?
+    private struct HomeDaySelection: Identifiable { let day: Date; let anime: [Anime]; var id: Date { day } }
+    private var week: ScheduleWeek { ScheduleWeek(containing: now, firstWeekday: 1) }
+    private var trackedIDs: Set<Int> { store.isSignedIn ? Set(store.visibleEntries.map(\.mediaId)) : [] }
+    private var events: [ReleaseEvent] {
+        let snapshot = schedule.snapshot(in: week.window)
+        var events = snapshot.events
+        let known = store.visibleEntries.compactMap(\.media).reduce(into: [Int: Anime]()) { $0[$1.id] = $1 }
+        events += dubs.snapshot?.events(knownMedia: known, now: now) ?? []
+        // Existing next-airing metadata supplies real upcoming dates while the
+        // full week loads or is unavailable. Never infer a weekly recurrence.
+        if snapshot.loadedAt == nil {
+            events += known.values.compactMap { anime in
+                guard let next = anime.nextAiringEpisode else { return nil }
+                return ReleaseEvent(anime: anime, episode: next.episode, kind: .sub, date: next.date, certainty: .broadcast)
+            }
+        }
+        return events.filter { store.isVisible($0.anime) }
+    }
+    private var refreshKey: String { "\(scenePhase)-\(navigation.selectedTab)-\(week.window.start)-\(!trackedIDs.isEmpty)" }
+
+    var body: some View {
+        let weeklyEvents = events
+        let ids = trackedIDs
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                CompanionSectionHeading(title: "Airing this week")
+                Button { navigation.openSchedule() } label: {
+                    Image(systemName: "arrow.up.right").font(visuals.actionIconFont).frame(width: 44, height: 44)
+                }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    .accessibilityLabel("Open full calendar").accessibilityIdentifier("home-week-calendar")
+            }
+            HStack(alignment: .top, spacing: visuals.value(6, 10)) {
+                ForEach(week.days, id: \.self) { day in
+                    let titles = ScheduleDayReleases(on: day, events: weeklyEvents, now: now).trackedAnime(ids: ids)
+                    Button { open(day, titles: titles) } label: {
+                        dayCell(day, titles: titles).frame(maxWidth: .infinity)
+                    }.buttonStyle(.plain)
+                        .accessibilityIdentifier("home-week-\(Calendar.current.component(.weekday, from: day))")
+                        .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + (Calendar.current.isDate(day, inSameDayAs: now) ? ", Today" : ""))
+                        .accessibilityValue(titles.isEmpty ? "No tracked releases" : titles.map(\.displayTitle).joined(separator: ", "))
+                        .accessibilityHint(titles.isEmpty ? "View this day's releases" : (titles.count > 1 ? "Choose an anime airing on this day" : "Open anime details"))
+                }
+            }
+            if let error = schedule.snapshot(in: week.window).error, !trackedIDs.isEmpty {
+                Button { Task { await refresh(force: true) } } label: {
+                    Text("Weekly schedule unavailable · Retry").font(.caption2).foregroundStyle(.secondary)
+                }.accessibilityHint(error)
+            }
+        }.companionPanel(padding: visuals.value(14, 18)).accessibilityIdentifier("home-airing-week")
+            .task(id: refreshKey) {
+                guard scenePhase == .active, navigation.selectedTab == .home else { return }
+                while !Task.isCancelled {
+                    now = ScheduleClock.now
+                    await refresh()
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                }
+            }
+            .sheet(item: $chosenDay) { selection in
+                AppNavigationStack {
+                    ScrollView {
+                        if selection.anime.isEmpty {
+                            ContentUnavailableView("No tracked anime airing", systemImage: "calendar", description: Text("Add an airing anime to your library to see it here."))
+                        }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .top)], alignment: .leading, spacing: 18) {
+                            ForEach(selection.anime) { anime in
+                                Button { chosenDay = nil; navigation.home.open(anime.id) } label: {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        AnimeCover(anime: anime, width: 140, cornerRadius: 12, identifierPrefix: "home-week-choice", badgeStyle: .none)
+                                        Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }.buttonStyle(.plain).accessibilityIdentifier("home-week-open-\(anime.id)")
+                            }
+                        }.padding(20)
+                    }.navigationTitle(selection.day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { chosenDay = nil } } }
+                }.presentationDetents([.medium, .large])
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in now = ScheduleClock.now }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in now = ScheduleClock.now }
+    }
+
+    private func dayCell(_ day: Date, titles: [Anime]) -> some View {
+        let isToday = Calendar.current.isDate(day, inSameDayAs: now)
+        return VStack(spacing: 8) {
+            Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                .font((visuals.enlarged ? Font.caption : .caption2).weight(isToday ? .bold : .medium)).lineLimit(1).minimumScaleFactor(0.7)
+                .foregroundStyle(isToday ? Theme.accent : Color.secondary)
+            Color.clear.aspectRatio(1 / 1.45, contentMode: .fit)
+                .overlay {
+                    if let anime = titles.first {
+                        GeometryReader { geometry in
+                            ArtworkImage(url: anime.coverURL, pointSize: geometry.size.height) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: { Theme.surface }
+                                .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                        }.clipShape(RoundedRectangle(cornerRadius: 9))
+                    } else {
+                        RoundedRectangle(cornerRadius: 9).fill(Theme.background)
+                        RoundedRectangle(cornerRadius: 9)
+                            .strokeBorder(isToday ? Theme.accent : Color.secondary.opacity(0.3), style: StrokeStyle(lineWidth: isToday ? 1.5 : 1, dash: [4, 4]))
+                        if isToday { Image(systemName: "plus").font(visuals.enlarged ? .title2 : .headline).foregroundStyle(Theme.accent) }
+                    }
+                }
+                .overlay {
+                    if isToday, !titles.isEmpty {
+                        RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.accent, lineWidth: 2)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if titles.count > 1 {
+                        Text("+\(titles.count - 1)").font(.system(size: visuals.value(9, 12), weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 3)
+                            .background(Color.black.opacity(0.8), in: Capsule()).padding(3)
+                    }
+                }
+        }.frame(maxWidth: visuals.weeklyPosterLimit).contentShape(Rectangle())
+    }
+    private func open(_ day: Date, titles: [Anime]) {
+        if let only = titles.first, titles.count == 1 { navigation.home.open(only.id) }
+        else if !titles.isEmpty { chosenDay = HomeDaySelection(day: day, anime: titles) }
+        else { chosenDay = HomeDaySelection(day: day, anime: []) }
+    }
+    private func refresh(force: Bool = false) async {
+        guard !trackedIDs.isEmpty else { return }
+        async let original: Void = schedule.load(in: week.window, using: store.aniList, refresh: force)
+        async let dubbed: Void = dubs.load(using: store.dubs, refresh: force)
+        _ = await (original, dubbed)
+    }
+}

@@ -153,8 +153,7 @@ final class AppSmokeTests: XCTestCase {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.appTab("Schedule").waitForExistence(timeout: 20))
         app.appTab("Schedule").tap()
-        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
+        XCTAssertFalse(app.segmentedControls["schedule-mode"].exists)
         let week = app.buttons["schedule-week"]
         XCTAssertTrue(week.waitForExistence(timeout: 15))
         let initial = week.value as? String
@@ -173,8 +172,7 @@ final class AppSmokeTests: XCTestCase {
         capture("Schedule-Dub-Filter")
         app.terminate(); app.launch()
         app.appTab("Schedule").tap()
-        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
+        XCTAssertFalse(app.segmentedControls["schedule-mode"].exists)
         XCTAssertTrue(app.segmentedControls["schedule-release-type"].buttons["Dub"].isSelected)
         app.segmentedControls["schedule-release-type"].buttons["All"].tap()
     }

@@ -59,8 +59,7 @@ final class LibraryScheduleRedesignUITests: XCTestCase {
         for appearance in ["dark", "light"] {
             let app = launch(extra: ["-appearance.scheme.v1", appearance])
             app.appTab("Schedule").tap()
-            app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
-            let today = app.buttons["schedule-jump-2026-10-28"]
+                let today = app.buttons["schedule-jump-2026-10-28"]
             XCTAssertTrue(today.waitForExistence(timeout: 15))
             XCTAssertTrue(today.isSelected)
             XCTAssertEqual(app.scrollViews["schedule-weekdays"].buttons.count, 7)

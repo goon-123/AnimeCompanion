@@ -4,103 +4,175 @@ import AnimeCore
 struct MangaExtensionsView: View {
     @EnvironmentObject private var store: MangaExtensionStore
     @AppStorage("manga.showMatureSources") private var showMature = false
+    private enum Mode: String, CaseIterable { case available = "Available", installed = "Installed", updates = "Updates" }
     @State private var repositoryLink = "https://keiyoushi.github.io"
     @State private var query = ""
     @State private var language = "en"
-    @State private var showInstalled = false
+    @State private var mode = Mode.available
     @State private var removingRepository = false
+    @State private var opened = false
+    @State private var updateTask: Task<Void, Never>?
     private var languages: [String] {
-        Array(Set((store.catalog?.extensions.flatMap(\.sources) ?? []).map(\.language))).filter { $0 != "all" }.sorted()
+        let sources = (store.catalog?.extensions.flatMap(\.sources) ?? []) + store.state.installations.flatMap { $0.descriptor.sources }
+        return Array(Set(sources.map(\.language) + ["en"])).filter { $0 != "all" }.sorted()
     }
-    private var available: [MangaExtensionDescriptor] {
-        (store.catalog?.extensions ?? []).filter { $0.matches(query: query, language: language, includeAdult: showMature) }
+    private var available: [MangaExtensionDescriptor] { (store.catalog?.extensions ?? []).filter(matches) }
+    private var installed: [MangaExtensionDescriptor] {
+        store.state.installations.map(\.descriptor).filter(matches).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
-    private var installed: [InstalledMangaExtension] {
-        store.state.installations.filter { $0.descriptor.matches(query: query, language: language, includeAdult: showMature) }
-            .sorted { $0.descriptor.name.localizedStandardCompare($1.descriptor.name) == .orderedAscending }
-    }
+    private var updates: [MangaExtensionDescriptor] { store.updates.filter(matches) }
+    private var rows: [MangaExtensionDescriptor] { switch mode { case .available: return available; case .installed: return installed; case .updates: return updates } }
+    private var updateable: [MangaExtensionDescriptor] { store.updates.filter { $0.supportsRuntime && $0.sha256 != nil && (showMature || !$0.adult) } }
+    private func matches(_ entry: MangaExtensionDescriptor) -> Bool { entry.matches(query: query, language: language, includeAdult: showMature) }
     var body: some View {
-        List {
-            Section {
-                Label("Runs on this device", systemImage: "iphone.gen3").foregroundStyle(.mint)
-                Text("Install manga and manhwa sources from Keiyoushi. Browse their covers and read vertically in the Manga tab.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Text("Source compatibility is experimental. Some extensions need additional runtime support.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Repository") {
-                if store.state.repositoryAdded {
-                    LabeledContent("Keiyoushi", value: "\(store.catalog?.extensions.count ?? 0) extensions")
-                    if let date = store.lastRefresh {
-                        LabeledContent("Last checked") { Text(date, style: .relative).font(.caption).foregroundStyle(.secondary) }
-                    }
-                    Button { Task { await store.refresh() } } label: {
-                        HStack { Label("Check for updates", systemImage: "arrow.clockwise"); if store.refreshing { Spacer(); ProgressView() } }
-                    }.disabled(store.busy).accessibilityIdentifier("manga-refresh")
-                } else {
-                    TextField("Repository link", text: $repositoryLink).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                        .accessibilityIdentifier("manga-repository-link")
-                    Button { Task { await store.refresh(link: repositoryLink) } } label: {
-                        HStack { Text("Add Keiyoushi repository"); if store.refreshing { Spacer(); ProgressView() } }
-                    }.disabled(store.busy || repositoryLink.isEmpty).accessibilityIdentifier("manga-add-repository")
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                header
+                repository
+                if store.loading { ProgressView("Loading extensions…").frame(maxWidth: .infinity) }
+                if let notice = store.notice { Label(notice, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(Theme.accent) }
+                if let error = store.error {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Extension action couldn't finish", systemImage: "exclamationmark.triangle").font(.headline)
+                        Text(error).font(.subheadline).textSelection(.enabled)
+                        HStack {
+                            Button("Retry") { Task { if store.unreadableState { await store.retryLoad() } else { await store.refresh(link: repositoryLink) } } }
+                                .disabled(store.refreshing || store.installing != nil || store.updatingAll)
+                            Spacer(); Button("Dismiss") { store.error = nil }
+                        }
+                    }.foregroundStyle(.orange).companionPanel()
                 }
-            }
-            if store.loading { Section { ProgressView("Loading extensions…") } }
-            if store.catalog != nil || !store.state.installations.isEmpty {
-                Section {
-                    Picker("Extensions", selection: $showInstalled) {
-                        Text("Available").tag(false)
-                        Text("Installed (\(store.state.installations.count))").tag(true)
-                    }.pickerStyle(.segmented).accessibilityIdentifier("manga-extension-list-mode")
-                    Picker("Language", selection: $language) {
-                        Text("All languages").tag("")
-                        ForEach(Array(Set(languages + ["en"])).sorted(), id: \.self) { code in
-                            Text(Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()).tag(code)
+                if store.catalog != nil || !store.state.installations.isEmpty {
+                    filters
+                    if store.updatingAll {
+                        HStack {
+                            ProgressView()
+                            Text(store.updateProgress).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Stop") { updateTask?.cancel() }
+                        }.companionPanel().accessibilityIdentifier("manga-update-progress")
+                    }
+                    HStack {
+                        Text(mode == .updates ? "Updates · \(updates.count)" : "\(mode.rawValue) · \(rows.count)").font(.title2.bold())
+                        Spacer()
+                        if mode != .available && !updateable.isEmpty && !store.updatingAll {
+                            Button("Update all (\(updateable.count))") { updateTask = Task { await store.updateAll(includeAdult: showMature) } }
+                                .buttonStyle(.borderedProminent).disabled(store.busy).accessibilityIdentifier("manga-update-all")
                         }
                     }
-                    Toggle("Show mature source collections", isOn: $showMature)
-                        .accessibilityIdentifier("manga-mature-sources")
-                } footer: { Text("English includes sources available in every language. Mature and mixed-content collections are hidden by default.") }
-                if showInstalled {
-                    Section("Installed on this device") {
-                        ForEach(installed) { entry in
-                            NavigationLink { MangaExtensionDetailView(store: store, descriptor: entry.descriptor) } label: {
-                                MangaExtensionLabel(entry: entry.descriptor, status: store.update(for: entry) != nil ? "Update available" : entry.enabled ? "Installed" : "Disabled")
-                            }
-                        }
-                        if installed.isEmpty { Text("No installed extensions match these filters.").foregroundStyle(.secondary) }
-                    }
-                } else {
-                    Section("\(available.count) available") {
-                        ForEach(available) { entry in
-                            NavigationLink { MangaExtensionDetailView(store: store, descriptor: entry) } label: {
-                                MangaExtensionLabel(entry: entry, status: store.installed(entry.id).map { store.update(for: $0) != nil ? "Update available" : "Installed" })
-                            }
-                        }
-                        if available.isEmpty { Text("No extensions match these filters.").foregroundStyle(.secondary) }
+                    ForEach(rows) { entry in extensionCard(entry) }
+                    if rows.isEmpty && !store.loading {
+                        ContentUnavailableView(mode == .updates && store.updates.isEmpty ? "You're up to date" : "No extensions match",
+                            systemImage: mode == .updates ? "checkmark.circle" : "magnifyingglass",
+                            description: Text(mode == .updates && store.updates.isEmpty ? "Check for updates to get the latest source packages." : "Try another name or language. Mature collections follow the switch above."))
+                        if !query.isEmpty || !language.isEmpty { Button("Clear search and language filters") { query = ""; language = "" } }
                     }
                 }
-            }
-        }.navigationTitle("Manga extensions").navigationBarTitleDisplayMode(.inline)
+            }.frame(maxWidth: 940, alignment: .leading).padding(18).frame(maxWidth: .infinity)
+        }.background(Theme.background).navigationTitle("Manga extensions").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Find a manga source")
-            .task { await store.load() }
+            .task {
+                await store.load()
+                if !opened {
+                    if !store.updates.isEmpty { mode = .updates }
+                    else if !store.state.installations.isEmpty { mode = .installed }
+                    opened = true
+                }
+            }
             .refreshable { if store.state.repositoryAdded { await store.refresh() } }
             .toolbar {
                 if store.state.repositoryAdded {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
+                            Button("Check for updates", systemImage: "arrow.clockwise") { Task { await store.refresh() } }.disabled(store.busy)
                             Link("Keiyoushi website", destination: URL(string: "https://keiyoushi.github.io")!)
                             Button("Remove repository", role: .destructive) { removingRepository = true }.disabled(store.busy)
-                        } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Repository options")
+                        } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }.accessibilityLabel("Repository options")
                     }
                 }
             }
             .confirmationDialog("Remove Keiyoushi repository?", isPresented: $removingRepository) {
                 Button("Remove repository", role: .destructive) { Task { await store.removeRepository() } }
             } message: { Text("Installed extensions stay on this device. Add the repository again to check for updates.") }
-            .alert("Manga extensions", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-                Button("OK") { store.error = nil }
-            } message: { Text(store.error ?? "") }
+            .onDisappear { updateTask?.cancel() }
+    }
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                Image(systemName: "books.vertical.fill").font(.system(size: 30)).foregroundStyle(Theme.accent)
+                    .frame(width: 64, height: 64).background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Your reading sources").font(.title.bold())
+                    Text("Discover, manage and update your manga extensions.").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 12) {
+                statistic("Installed", value: store.state.installations.count)
+                statistic("Updates", value: store.updates.count)
+                statistic("Available", value: store.catalog?.extensions.count ?? 0)
+            }
+        }
+    }
+    private func statistic(_ title: String, value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value.formatted()).font(.title2.bold().monospacedDigit()).foregroundStyle(Theme.accent)
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 14)
+    }
+    private var repository: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Keiyoushi", systemImage: "shippingbox.fill").font(.headline)
+                Spacer()
+                if store.refreshing { ProgressView() }
+                else if store.state.repositoryAdded { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent) }
+            }
+            if store.state.repositoryAdded {
+                if let date = store.lastRefresh { Text("Last checked " + date.formatted(.relative(presentation: .named))).font(.caption).foregroundStyle(.secondary) }
+                Button { Task { await store.refresh() } } label: {
+                    Label("Check for updates", systemImage: "arrow.clockwise").frame(maxWidth: .infinity, minHeight: 44)
+                }.buttonStyle(.bordered).disabled(store.busy).accessibilityIdentifier("manga-refresh")
+            } else {
+                Text("Add the repository to browse and install sources. No server is needed.").font(.subheadline).foregroundStyle(.secondary)
+                TextField("Repository link", text: $repositoryLink).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    .textFieldStyle(.roundedBorder).accessibilityIdentifier("manga-repository-link")
+                Button { Task { await store.refresh(link: repositoryLink) } } label: {
+                    Label("Add Keiyoushi repository", systemImage: "plus.circle").frame(maxWidth: .infinity, minHeight: 44)
+                }.buttonStyle(.borderedProminent).disabled(store.busy || repositoryLink.isEmpty).accessibilityIdentifier("manga-add-repository")
+            }
+        }.companionPanel()
+    }
+    private var filters: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Extensions", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                .pickerStyle(.segmented).accessibilityIdentifier("manga-extension-list-mode")
+            Picker("Language", selection: $language) {
+                Text("All languages").tag("")
+                ForEach(languages, id: \.self) { Text(Locale.current.localizedString(forLanguageCode: $0) ?? $0.uppercased()).tag($0) }
+            }
+            Toggle("Show mature source collections", isOn: $showMature).accessibilityIdentifier("manga-mature-sources")
+        }.companionPanel()
+    }
+    private func extensionCard(_ descriptor: MangaExtensionDescriptor) -> some View {
+        let installed = store.installed(descriptor.id)
+        let update = installed.flatMap { store.update(for: $0) }
+        return HStack(spacing: 12) {
+            NavigationLink { MangaExtensionDetailView(store: store, descriptor: descriptor) } label: {
+                MangaExtensionLabel(entry: descriptor, status: installed.map { update != nil ? "Update available" : ($0.enabled ? "Installed" : "Disabled") })
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.plain)
+            if store.installing == descriptor.id { ProgressView() }
+            else if let update {
+                Button("Update") { Task { await store.install(update) } }.buttonStyle(.borderedProminent)
+                    .disabled(store.busy || !update.supportsRuntime || update.sha256 == nil)
+                    .accessibilityIdentifier("manga-update-" + descriptor.id)
+            } else if installed == nil {
+                Button("Install") { Task { await store.install(descriptor) } }.buttonStyle(.bordered)
+                    .disabled(store.busy || !descriptor.supportsRuntime || descriptor.sha256 == nil)
+                    .accessibilityIdentifier("manga-install-" + descriptor.id)
+            } else {
+                Image(systemName: installed?.enabled == true ? "checkmark.circle.fill" : "pause.circle").foregroundStyle(Theme.accent)
+            }
+        }.companionPanel(padding: 14)
     }
 }
 
@@ -109,7 +181,7 @@ private struct MangaExtensionLabel: View {
     let status: String?
     var body: some View {
         HStack(spacing: 12) {
-            MangaExtensionIcon(entry: entry)
+            MangaExtensionIcon(entry: entry, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.name).foregroundStyle(.primary)
                 Text("\(entry.languages.prefix(4).map { $0 == "all" ? "Multilingual" : $0.uppercased() }.joined(separator: " · ")) · \(entry.versionName)")
@@ -141,7 +213,10 @@ private struct MangaExtensionDetailView: View {
                             .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }.padding(.vertical, 4)
-                LabeledContent("Version", value: entry.versionName)
+                LabeledContent(installation == nil ? "Version" : "Installed version", value: entry.versionName)
+                if let installed = installation, let update = store.update(for: installed) {
+                    LabeledContent("Available version", value: update.versionName).foregroundStyle(Theme.accent)
+                }
                 LabeledContent("Sources", value: "\(installation?.sources.count ?? entry.sources.count)")
                 if let installed = installation {
                     Label("Loaded on this device", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
@@ -156,6 +231,8 @@ private struct MangaExtensionDetailView: View {
                 else if entry.sha256 == nil { Text("Refresh the repository to retrieve this package’s checksum.") }
                 else { Text("Packages are verified before loading. Updates are installed only when you choose them.") }
             }
+            if let message = store.notice { Section { Text(message).foregroundStyle(Theme.accent) } }
+            if let error = store.error { Section { Text(error).font(.subheadline).foregroundStyle(.orange).textSelection(.enabled) } }
             if !canShow {
                 Section { Text("This collection is hidden by your mature-source preference.").foregroundStyle(.secondary) }
             } else if let installed = installation {
@@ -192,6 +269,10 @@ private struct MangaExtensionDetailView: View {
                 Section { Button("Remove extension", role: .destructive) { removing = true }.disabled(store.busy) }
             }
         }.navigationTitle(entry.name).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }
+                    .disabled(store.busy || !store.state.repositoryAdded).accessibilityLabel("Check for extension updates")
+            } }
             .onChange(of: installation?.descriptor.sha256, initial: true) {
                 if let installed = installation, !installed.sources.contains(where: { $0.language == sourceLanguage || $0.language == "all" }) { sourceLanguage = "" }
             }
@@ -202,7 +283,8 @@ private struct MangaExtensionDetailView: View {
     private func installButton(_ entry: MangaExtensionDescriptor, title: String) -> some View {
         Button { Task { await store.install(entry) } } label: {
             HStack { Text(title); if store.installing == entry.id { Spacer(); ProgressView() } }
-        }.disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || (!showMature && entry.adult))
+        }.buttonStyle(.borderedProminent).frame(minHeight: 44)
+            .disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || (!showMature && entry.adult))
             .accessibilityIdentifier("manga-install-extension")
     }
 }

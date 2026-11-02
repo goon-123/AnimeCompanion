@@ -44,8 +44,8 @@ struct AnimeDetailHero: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let anime: Anime
     let expand: (URL) -> Void
-    private var bannerHeight: CGFloat { sizeClass == .regular ? 360 : 280 }
-    private var posterWidth: CGFloat { sizeClass == .regular ? 184 : 136 }
+    private var bannerHeight: CGFloat { sizeClass == .regular ? 240 : 180 }
+    private var posterWidth: CGFloat { sizeClass == .regular ? 152 : 112 }
     private var artworkURL: URL? { anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL }
     private var accent: Color { (PosterAccent(hex: anime.coverImage?.color)?.backdrop ?? PosterAccent.fallback.backdrop).color }
 
@@ -54,10 +54,7 @@ struct AnimeDetailHero: View {
             if textSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 16) { poster; information }
             } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .bottom, spacing: 18) { poster; information }
-                    VStack(alignment: .leading, spacing: 16) { poster; information }
-                }
+                HStack(alignment: .bottom, spacing: 18) { poster.fixedSize(); information }
             }
             AnimeGenres(anime: anime).accessibilityIdentifier("detail-genres-\(anime.id)")
         }.padding(.horizontal, 18).padding(.top, bannerHeight - posterWidth * 0.72).padding(.bottom, 16)
@@ -99,7 +96,7 @@ struct AnimeDetailHero: View {
                 Text(statusLabel).font(.caption.weight(.semibold)).foregroundStyle(anime.isCurrentlyAiring ? Color.green : Color.secondary)
                     .accessibilityIdentifier("detail-release-status")
             }
-            Text(anime.displayTitle).font(sizeClass == .regular ? .largeTitle.bold() : .title.bold())
+            Text(anime.displayTitle).font(sizeClass == .regular ? .title.bold() : .title2.bold())
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail-title")
             Text([anime.season.map { $0.label + (anime.seasonYear.map { " \($0)" } ?? "") },
                   anime.format?.replacingOccurrences(of: "_", with: " ")].compactMap { $0 }.joined(separator: " · "))
@@ -125,43 +122,56 @@ struct AnimeDetailHero: View {
     }
 }
 
+/// A compact broadcast summary, distinct from the larger Home countdown widgets.
+struct AnimeOriginalBroadcast: View {
+    let anime: Anime
+    var body: some View {
+        Group {
+            if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode {
+                BroadcastCountdown(episode: next)
+            } else {
+                HStack(spacing: 12) {
+                    Image(systemName: "antenna.radiowaves.left.and.right").font(.title3).foregroundStyle(Theme.accent)
+                        .frame(width: 38, height: 38).background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Original broadcast").font(.subheadline.weight(.semibold))
+                        Text(anime.status == "FINISHED" ? "Broadcast finished" : "Next episode time not announced")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let start = anime.startDate?.label { Text("First release · " + start).font(.caption2).foregroundStyle(.secondary) }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.companionPanel(padding: 14)
+            }
+        }.accessibilityIdentifier("detail-original-broadcast")
+    }
+}
+
 struct BroadcastCountdown: View {
+    @Environment(\.dynamicTypeSize) private var textSize
     let episode: AiringEpisode
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Episode \(episode.episode)", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.headline).foregroundStyle(.green)
-                Spacer()
-                Text("ORIGINAL BROADCAST").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-            }
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let seconds = max(0, Int(episode.date.timeIntervalSince(context.date)))
-                if seconds > 0 {
-                    HStack(spacing: 8) {
-                        timePart(seconds / 86400, label: "Days")
-                        timePart(seconds % 86400 / 3600, label: "Hours")
-                        timePart(seconds % 3600 / 60, label: "Minutes")
-                        timePart(seconds % 60, label: "Seconds")
-                    }.accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("detail-countdown")
-                } else {
-                    Text("Scheduled broadcast time reached. Refresh to check the next episode.").font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            Text(episode.date, format: .dateTime.weekday(.wide).month(.abbreviated).day().hour().minute())
-                .font(.caption).foregroundStyle(.secondary)
-            Text("Original Japanese broadcast · Device local time").font(.caption2).foregroundStyle(.secondary)
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.green.opacity(0.055), in: RoundedRectangle(cornerRadius: 18))
-            .overlay { RoundedRectangle(cornerRadius: 18).stroke(Color.green.opacity(0.18), lineWidth: 1) }
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let seconds = max(0, Int(episode.date.timeIntervalSince(context.date)))
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "antenna.radiowaves.left.and.right").font(.title3).foregroundStyle(Theme.accent)
+                    .frame(width: 38, height: 38).background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Original broadcast").font(.subheadline.weight(.semibold))
+                    Text("Episode \(episode.episode) · " + episode.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if textSize.isAccessibilitySize { countdown(seconds) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if !textSize.isAccessibilitySize { countdown(seconds) }
+            }.companionPanel(padding: 14)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Original Japanese broadcast in device local time")
+        }
     }
-    private func timePart(_ number: Int, label: String) -> some View {
-        VStack(spacing: 5) {
-            Text(String(format: "%02d", number)).font(.title2.bold().monospacedDigit()).contentTransition(.numericText())
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
+    private func countdown(_ seconds: Int) -> some View {
+        let days = seconds / 86400, hours = seconds % 86400 / 3600, minutes = seconds % 3600 / 60
+        let label = seconds == 0 ? "Time reached" : (days > 0 ? "In \(days)d \(hours)h" : (hours > 0 ? "In \(hours)h \(minutes)m" : (minutes > 0 ? "In \(minutes)m" : "Under 1m")))
+        return Text(label).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10).padding(.vertical, 7).background(Theme.accent.opacity(0.1), in: Capsule())
+            .fixedSize().accessibilityIdentifier("detail-countdown")
     }
 }
 

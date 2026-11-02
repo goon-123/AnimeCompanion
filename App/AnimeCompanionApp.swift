@@ -12,6 +12,7 @@ struct AnimeCompanionApp: App {
     @StateObject private var playback = PlaybackStore()
     @StateObject private var seanime = SeanimeStore()
     @StateObject private var navigation = AppNavigationStore()
+    @StateObject private var weeklySchedule = WeeklyScheduleStore()
     @StateObject private var mangaExtensions = MangaExtensionStore()
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
@@ -24,6 +25,7 @@ struct AnimeCompanionApp: App {
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .environmentObject(seanime)
                 .environmentObject(navigation)
+                .environmentObject(weeklySchedule)
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
                 .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
@@ -36,6 +38,7 @@ struct AnimeCompanionApp: App {
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
+                    await store.refreshLibraryIfNeeded()
                     await store.exploreDubs.keepUpdated(using: store.dubs)
                 }
         }
@@ -88,6 +91,17 @@ struct SupplementaryDestination: Identifiable {
     let kind: Kind
 }
 
+enum ScheduleLanding: String, Hashable { case airing, weekly }
+struct ScheduleHomeRoute: Hashable {
+    let day: Date
+    let id = UUID()
+    var page: ScheduleLanding = .weekly
+}
+enum HomeDestination: Hashable {
+    case schedule(ScheduleHomeRoute)
+    case news(NewsCollection)
+}
+
 @MainActor
 final class TabNavigationState: ObservableObject {
     @Published var path = NavigationPath()
@@ -106,6 +120,8 @@ final class AppNavigationStore: ObservableObject {
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
     func open(_ tab: AppTab) {
+        if tab == .schedule { openSchedule(); return }
+        if tab == .news { openNews(); return }
         if tabPreferences.visible.contains(tab) { selectedTab = tab }
         else { supplementary = .init(kind: .tab(tab)) }
     }
@@ -115,9 +131,18 @@ final class AppNavigationStore: ObservableObject {
         selectedTab = value.selection(for: selectedTab)
         tabPreferences = value
     }
-    func openSchedule() {
-        if tabPreferences.visible.contains(.schedule) { selectedTab = .schedule }
-        else { supplementary = .init(kind: .schedule) }
+    func openSchedule(on day: Date? = nil, page: ScheduleLanding = .weekly) {
+        openHomeDestination(.schedule(ScheduleHomeRoute(day: day ?? ScheduleClock.now, page: page)))
+    }
+    func openNews(_ collection: NewsCollection = .latest) { openHomeDestination(.news(collection)) }
+    private func openHomeDestination(_ destination: HomeDestination) {
+        // Explicit feature links get a normal Back path within Home. Calls
+        // from another tab start fresh instead of reviving an unrelated detail.
+        if selectedTab != .home || supplementary != nil { home.path = NavigationPath() }
+        supplementary = nil
+        home.animeID = nil; home.detailPath = NavigationPath()
+        home.path.append(destination)
+        selectedTab = .home
     }
     @Published private(set) var tabletLayout = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
     let explore = TabNavigationState()
@@ -199,6 +224,7 @@ final class AppNavigationStore: ObservableObject {
 }
 
 struct AppTabs: View {
+    @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
@@ -241,6 +267,7 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }
         }.onChange(of: navigation.selectedTab) { _, tab in
+            Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
             }

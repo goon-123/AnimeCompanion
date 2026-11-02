@@ -14,7 +14,7 @@ final class MangaExtensionsUITests: XCTestCase {
         let row = app.buttons["settings-manga-extensions"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         app.revealInContent(row); row.tap()
-        XCTAssertTrue(app.staticTexts["Runs on this device"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Your reading sources"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["manga-add-repository"].exists)
         XCTAssertTrue(app.textFields["manga-repository-link"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())

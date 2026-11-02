@@ -17,7 +17,7 @@ final class PhaseTwoNavigationUITests: XCTestCase {
                 XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 10), .completed)
             }
             app.appTab("Schedule").tap()
-            let mode = app.segmentedControls["schedule-mode"]
+            let mode = app.buttons["schedule-week"]
             XCTAssertTrue(mode.waitForExistence(timeout: 10)); XCTAssertTrue(mode.isHittable)
             app.appTab("My Library").tap()
             XCTAssertTrue(app.textFields["library-search"].waitForExistence(timeout: 10))

@@ -22,10 +22,13 @@ final class SeanimeRunner: NSObject, ObservableObject, WKScriptMessageHandler, W
     init(client: SeanimeClient = SeanimeClient()) { self.client = client; super.init() }
 
     func search(_ installation: SeanimeInstallation, query: String, anime: Anime?, allowAdult: Bool) async throws -> [SeanimeTorrent] {
-        var media: [String: Any] = ["id": anime?.id ?? 0, "synonyms": [], "isAdult": anime?.isAdult ?? false,
+        var media: [String: Any] = ["id": anime?.id ?? 0, "synonyms": anime?.synonyms ?? [], "isAdult": anime?.isAdult ?? false,
             "romajiTitle": anime?.title?.romaji ?? query, "englishTitle": anime?.title?.english ?? query,
-            "format": anime?.format ?? "TV", "status": anime?.status ?? "FINISHED", "episodeCount": anime?.episodes ?? -1]
+            "format": anime?.format ?? "TV", "status": anime?.status ?? "NOT_YET_RELEASED", "episodeCount": anime?.episodes ?? -1, "absoluteSeasonOffset": 0]
         if let id = anime?.idMal { media["idMal"] = id }
+        if let date = anime?.startDate, let year = date.year {
+            var value = ["year": year]; if let month = date.month { value["month"] = month }; if let day = date.day { value["day"] = day }; media["startDate"] = value
+        }
         let data = try await run(installation, input: ["method": "search", "allowAdult": allowAdult,
             "options": ["query": query, "media": media]])
         struct Result: Decodable { let torrents: [SeanimeTorrent]; let warnings: Int? }
@@ -91,12 +94,12 @@ final class SeanimeRunner: NSObject, ObservableObject, WKScriptMessageHandler, W
             requestCount += 1
             requests.append(Task {
                 do {
-                    let result = try await client.fetch(url, hosts: hosts)
+                    let result = try await client.fetchResponse(url, hosts: hosts, headers: body["headers"] as? [String: String] ?? [:])
                     try Task.checkCancellation()
                     guard started == generation, continuation != nil else { return }
-                    receivedBytes += result.0.utf8.count
+                    receivedBytes += result.body.utf8.count
                     guard receivedBytes <= 12_000_000 else { throw SeanimeError.runtime }
-                    await reply(["kind": "response", "id": id, "text": result.0, "status": result.1], started: started)
+                    await reply(["kind": "response", "id": id, "text": result.body, "status": result.status, "headers": result.headers, "url": result.url], started: started)
                 } catch {
                     guard started == generation, continuation != nil else { return }
                     networkError = error

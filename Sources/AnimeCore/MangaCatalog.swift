@@ -6,6 +6,14 @@ public struct MangaExtensionCatalog: Codable, Sendable {
     public let signingKey: String
     public var extensions: [MangaExtensionDescriptor]
 
+    public func update(for installed: InstalledMangaExtension) -> MangaExtensionDescriptor? {
+        extensions.first { $0.id == installed.id && $0.versionCode > installed.descriptor.versionCode }
+    }
+    public func updates(for installed: [InstalledMangaExtension], includeAdult: Bool = true) -> [MangaExtensionDescriptor] {
+        installed.compactMap { update(for: $0) }.filter { includeAdult || !$0.adult }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     /// Keiyoushi's current index: gzip-compressed protobuf. Unknown protobuf
     /// fields are skipped so additive upstream schema changes remain readable.
     public static func decode(_ data: Data) throws -> Self {

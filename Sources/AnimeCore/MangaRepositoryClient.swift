@@ -10,13 +10,12 @@ public struct MangaRepositoryClient: Sendable {
         async let index = load(repository.indexURL, limit: 8_000_000)
         async let checksums = load(repository.checksumsURL, limit: 4_000_000)
         var catalog = try MangaExtensionCatalog.decode(await index)
-        let assets = try JSONDecoder().decode([String: ReleaseAssets].self, from: await checksums)
+        let inventory = try await checksums
+        guard let assets = try? JSONSerialization.jsonObject(with: inventory) as? [String: Any], assets.count <= 10_000,
+              assets.values.contains(where: { Self.checksum($0) != nil }) else { throw MangaExtensionError.invalidChecksums }
         for i in catalog.extensions.indices {
             let entry = catalog.extensions[i]
-            if let asset = assets[entry.packageName]?.apk, asset.name == entry.apkURL.lastPathComponent,
-               asset.sha256.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil {
-                catalog.extensions[i].sha256 = asset.sha256.lowercased()
-            }
+            catalog.extensions[i].sha256 = Self.checksum(assets[entry.packageName], filename: entry.apkURL.lastPathComponent)
         }
         return catalog
     }
@@ -33,8 +32,14 @@ public struct MangaRepositoryClient: Sendable {
         guard !data.isEmpty, data.count <= limit else { throw MangaExtensionError.oversized }
         return data
     }
-    private struct ReleaseAssets: Decodable {
-        let apk: Asset?
-        struct Asset: Decodable { let name: String; let sha256: String }
+    private static func checksum(_ value: Any?, filename: String? = nil) -> String? {
+        let raw: String?
+        if let digest = value as? String { raw = digest }
+        else if let entry = value as? [String: Any], let apk = entry["apk"] as? [String: Any],
+                let name = apk["name"] as? String, !name.isEmpty, filename == nil || name == filename {
+            raw = apk["sha256"] as? String
+        } else { raw = nil }
+        guard let raw, raw.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return nil }
+        return raw.lowercased()
     }
 }

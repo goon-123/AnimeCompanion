@@ -2,10 +2,12 @@ import Foundation
 
 public enum MangaExtensionError: LocalizedError, Equatable {
     case invalidSourceSettings
+    case invalidChecksums
     case invalidRepository, invalidCatalog, oversized, checksumUnavailable, checksumMismatch, packageMismatch, unsupportedAPI, sourceUnavailable, runtimeUnavailable, runtimeFailure
     public var errorDescription: String? {
         switch self {
         case .invalidSourceSettings: return "These source settings could not be saved. Check the values and try again."
+        case .invalidChecksums: return "Keiyoushi's package verification list could not be read. Check for updates again; installed extensions are unchanged."
         case .invalidRepository: return "Use the Keiyoushi website, GitHub repository, repo.json or index.pb link."
         case .invalidCatalog: return "Keiyoushi returned an unreadable extension catalog. Try refreshing it."
         case .oversized: return "This extension response exceeds the device’s size limit."

@@ -106,9 +106,7 @@ final class SeanimeStore: ObservableObject {
     func install(_ candidate: SeanimeInstallation) -> Bool {
         var updated = saved
         if let index = updated.installations.firstIndex(where: { $0.manifestURL == candidate.manifestURL }) {
-            let old = updated.installations[index]
-            updated.installations[index] = SeanimeInstallation(id: old.id, manifestURL: candidate.manifestURL, manifest: candidate.manifest,
-                source: candidate.source, preferences: candidate.preferences, allowedHosts: candidate.allowedHosts, adult: candidate.adult)
+            updated.installations[index] = updated.installations[index].replacingReviewedCode(with: candidate)
         } else { updated.installations.append(candidate) }
         return persist(updated)
     }
@@ -117,16 +115,21 @@ final class SeanimeStore: ObservableObject {
         guard let index = updated.installations.firstIndex(where: { $0.id == installation.id }) else { return false }
         updated.installations[index] = installation; return persist(updated)
     }
+    func setEnabled(_ id: UUID, enabled: Bool) {
+        guard var current = installations.first(where: { $0.id == id }) else { return }
+        current.enabled = enabled; _ = update(current)
+    }
     func remove(_ id: UUID) {
         var updated = saved; updated.installations.removeAll { $0.id == id }; _ = persist(updated)
     }
     private func persist(_ state: SeanimeSavedState, invalidateSearch: Bool = true) -> Bool {
         do {
             guard !loadFailed else { throw ServiceError.message("Saved Seanime settings must be readable before they can be changed. Unlock this device and reopen the app.") }
-            let data = try JSONEncoder().encode(state)
-            guard data.count <= 4_000_000, state.installations.count <= 12 else { throw ServiceError.message("This device’s extension storage limit was reached. Remove an unused extension before adding another.") }
+            var compact = state; compact.installations = state.installations.map(\.storageSnapshot)
+            let data = try JSONEncoder().encode(compact)
+            guard data.count <= 4_000_000, compact.installations.count <= 12 else { throw ServiceError.message("This device’s extension storage limit was reached. Remove an unused extension before adding another.") }
             if !preview { try SeanimeKeychain.save(data) }
-            saved = state; if invalidateSearch { revision = UUID() }; error = nil; return true
+            saved = compact; if invalidateSearch { revision = UUID() }; error = nil; return true
         } catch { self.error = error.localizedDescription; return false }
     }
 }

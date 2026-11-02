@@ -27,6 +27,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let id: Int
     public let idMal: Int?
     public let title: AnimeTitle?
+    public let synonyms: [String]?
     public let coverImage: AnimeImage?
     public let bannerImage: String?
     public let description: String?
@@ -55,8 +56,8 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let reviews: ReviewConnection?
     public let externalLinks: [AnimeExternalLink]?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
-    public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
-    public var synopsis: String { TextSanitizer.plain(description ?? "Synopsis not available.") }
+    public var coverURL: URL? { coverImage?.preferredURL }
+    public var synopsis: String { TextSanitizer.synopsis(description ?? "Synopsis not available.") }
     /// Already broadcast episodes, distinct from the season's planned episode total.
     public func releasedEpisodeCount(at now: Date = Date()) -> Int? {
         if status == "NOT_YET_RELEASED" { return 0 }
@@ -67,7 +68,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     }
     public init(id: Int, title: String) {
         self.id = id; self.title = AnimeTitle(english: title)
-        idMal = nil
+        idMal = nil; synonyms = nil
         coverImage = nil; bannerImage = nil; description = nil; episodes = nil
         duration = nil; format = nil; status = nil; season = nil; seasonYear = nil
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
@@ -79,7 +80,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     /// Related/adaptation results carry the same poster evidence as catalog
     /// cards without loading the complete detail page for every visible title.
     public init(related: RelatedAnime) {
-        id = related.id; idMal = related.idMal; title = related.title
+        id = related.id; idMal = related.idMal; title = related.title; synonyms = nil
         coverImage = related.coverImage; bannerImage = nil; description = nil
         episodes = related.episodes; duration = nil; format = nil; status = related.status
         season = nil; seasonYear = nil; averageScore = related.averageScore
@@ -101,6 +102,11 @@ public struct AnimeImage: Codable, Hashable, Sendable {
     public let extraLarge: String?
     public let large: String?
     public let medium: String?
+    public var preferredURL: URL? {
+        [extraLarge, large, medium].compactMap { $0 }
+            .compactMap { URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            .first { $0.scheme?.lowercased() == "https" && $0.host != nil }
+    }
 }
 public struct AiringEpisode: Codable, Hashable, Sendable {
     public let airingAt: Int
@@ -130,7 +136,7 @@ public struct RelatedAnime: Codable, Hashable, Identifiable, Sendable {
     public let averageScore: Int?
     public let nextAiringEpisode: AiringEpisode?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
-    public var coverURL: URL? { URL(string: coverImage?.extraLarge ?? coverImage?.large ?? coverImage?.medium ?? "") }
+    public var coverURL: URL? { coverImage?.preferredURL }
 }
 public struct RelationEdge: Codable, Hashable, Sendable { public let relationType: String?; public let node: RelatedAnime? }
 public struct RelationConnection: Codable, Hashable, Sendable { public let edges: [RelationEdge]? }
@@ -343,6 +349,17 @@ public struct NewsArticle: Identifiable, Hashable, Codable, Sendable {
 }
 
 public enum TextSanitizer {
+    /// Provider HTML often combines paragraph tags, repeated breaks and source
+    /// indentation. Keep one blank line per paragraph, without large empty gaps.
+    public static func synopsis(_ value: String) -> String {
+        let html = value.replacingOccurrences(of: "(?i)</(?:p|div)>|<br\\s*/?>", with: "\n", options: .regularExpression)
+        return plain(html).replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "[\\t \u{00a0}]+", with: " ", options: .regularExpression)
+            .components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: "\n")
+            .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     public static func plain(_ value: String) -> String {
         var result = value.replacingOccurrences(of: "(?i)<br\\s*/?>|</p>", with: "\n", options: .regularExpression)
         result = result.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)

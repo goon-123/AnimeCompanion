@@ -12,9 +12,6 @@ struct MangaBakaDetailView: View {
     @State private var signingIn = false
     @State private var expanding = false
     @State private var linksExpanded = false
-    @State private var informationExpanded = false
-    @State private var artworkExpanded = false
-    @State private var relatedExpanded = false
     @State private var refreshToken = 0
     @State private var preview: AnimeImagePreview?
     private var entry: MangaBakaLibraryEntry? { account.entries[series.id] }
@@ -28,30 +25,30 @@ struct MangaBakaDetailView: View {
             ScrollView {
                 if series.isVisible(contentFilter: preferences.mangaBakaContent) {
                     VStack(alignment: .leading, spacing: 26) {
-                        header(width: geometry.size.width).id("overview")
+                        header(width: min(geometry.size.width, 1000) - 40).padding(18).companionPanel(padding: 0).id("overview")
                         MangaBakaBadges(series: series)
-                        jumpLinks(proxy)
                         actions
-                        readingSource
+                        readingSource.id("reading")
+                        jumpLinks(proxy)
                         if let notice = account.notice { Text(notice).font(.subheadline).foregroundStyle(.mint) }
                         if let error { NoticeView(message: error) { Task { await reload(refresh: true) } } }
-                        story
-                        DetailDisclosure("Publication & ratings", identifier: "series-information", isExpanded: $informationExpanded) {
+                        story.id("story")
+                        DetailCard(title: "Artwork & covers") {
+                            MangaBakaCoverGallery(series: series, refreshToken: refreshToken)
+                        }.id("covers").accessibilityIdentifier("series-artwork")
+                        DetailCard(title: "Related & recommendations") {
+                            ForEach(MangaBakaRelatedKind.allCases, id: \.self) { kind in
+                                MangaBakaRelatedSection(series: series, kind: kind, refreshToken: refreshToken).id(kind.rawValue)
+                            }
+                        }.id("connections").accessibilityIdentifier("series-related")
+                        DetailCard(title: "Publication & ratings") {
                             metadata
                             sourceRatings
-                        }.companionPanel()
+                        }
                         MangaBakaAnimeSection(series: series, refreshToken: refreshToken).id("anime")
                         animeCoverage
                         MangaBakaSeriesTags(series: series).id("tags")
                         officialLinks
-                        DetailDisclosure("Artwork & covers", identifier: "series-artwork", isExpanded: $artworkExpanded) {
-                            MangaBakaCoverGallery(series: series, refreshToken: refreshToken)
-                        }.companionPanel().id("covers")
-                        DetailDisclosure("Related & recommendations", identifier: "series-related", isExpanded: $relatedExpanded) {
-                            ForEach(MangaBakaRelatedKind.allCases, id: \.self) { kind in
-                                MangaBakaRelatedSection(series: series, kind: kind, refreshToken: refreshToken).id(kind.rawValue)
-                            }
-                        }.companionPanel().id("connections")
                         MangaBakaAttribution(providers: series.providers)
                     }.padding(20).frame(maxWidth: 1000, alignment: .leading).frame(maxWidth: .infinity)
                 } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash") }
@@ -82,7 +79,7 @@ struct MangaBakaDetailView: View {
                 VStack(alignment: .leading, spacing: 16) { cover(width: 120); heading(centered: false) }
             } else {
                 HStack(alignment: .center, spacing: 18) {
-                    cover(width: width < 650 ? 104 : 156)
+                    cover(width: width < 650 ? 136 : 184)
                     heading(centered: false)
                 }
             }
@@ -106,7 +103,7 @@ struct MangaBakaDetailView: View {
     private func heading(centered: Bool) -> some View {
         VStack(alignment: centered ? .center : .leading, spacing: 12) {
             Text(series.formatLabel.uppercased()).font(.caption.bold()).tracking(1.2).foregroundStyle(.mint)
-            Text(series.displayTitle).font(.title3.bold()).textSelection(.enabled).accessibilityIdentifier("mangabaka-series-title")
+            Text(series.displayTitle).font(.title.bold()).textSelection(.enabled).accessibilityIdentifier("mangabaka-series-title")
             if let native = series.nativeTitle, !native.isEmpty, native != series.displayTitle {
                 Text(native).font(.subheadline).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
             }
@@ -121,6 +118,8 @@ struct MangaBakaDetailView: View {
     private func jumpLinks(_ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                jump("Story", id: "story", proxy: proxy)
+                jump("Read", id: "reading", proxy: proxy)
                 jump("Anime", id: "anime", proxy: proxy)
                 jump("Tags", id: "tags", proxy: proxy)
                 jump("Artwork", id: "covers", proxy: proxy)
@@ -130,8 +129,6 @@ struct MangaBakaDetailView: View {
     }
     private func jump(_ title: String, id: String, proxy: ScrollViewProxy) -> some View {
         Button {
-            if id == "covers" { artworkExpanded = true }
-            if id == "connections" { relatedExpanded = true }
             proxy.scrollTo(id, anchor: .top)
         } label: { Text(title).font(.caption.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44).background(Theme.surface, in: Capsule()) }
         .buttonStyle(.plain)

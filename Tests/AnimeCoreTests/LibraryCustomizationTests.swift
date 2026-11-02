@@ -5,24 +5,28 @@ final class LibraryCustomizationTests: XCTestCase {
     func testDefaultFocusesHomeExploreAndLibrary() {
         let value = AppTabPreferences()
         XCTAssertEqual(value.visible, [.home, .explore, .library])
-        XCTAssertEqual(value.hidden, [.manga, .schedule, .news]); XCTAssertEqual(value.selection(for: .manga), .home)
+        XCTAssertEqual(value.hidden, [.manga]); XCTAssertEqual(value.selection(for: .manga), .home)
+        XCTAssertFalse(value.order.contains(.schedule)); XCTAssertFalse(value.order.contains(.news))
     }
-    func testReorderHideAndRelaunchPreserveEveryTabAndSelectedFallback() {
+    func testReorderHideAndRelaunchPreserveRemainingTabsAndHomeFallback() {
         var value = AppTabPreferences(order: [.news, .manga, .library, .explore, .schedule], hidden: [])
         value.setVisible(.manga, false); value.setVisible(.library, false)
         let reopened = AppTabPreferences(saved: value.saved)
-        XCTAssertEqual(reopened, value); XCTAssertEqual(reopened.visible, [.news, .explore, .schedule, .home])
-        XCTAssertEqual(reopened.selection(for: .library), .news)
-        XCTAssertEqual(reopened.selection(for: .schedule), .schedule)
+        XCTAssertEqual(reopened, value); XCTAssertEqual(reopened.visible, [.home, .explore])
+        XCTAssertEqual(reopened.selection(for: .library), .home)
+        XCTAssertEqual(reopened.selection(for: .schedule), .home)
+        XCTAssertEqual(reopened.selection(for: .news), .home)
         value.setVisible(.manga, true)
-        XCTAssertEqual(value.visible, [.news, .manga, .explore, .schedule, .home])
+        XCTAssertEqual(value.visible, [.home, .manga, .explore])
     }
     func testLastTabCannotBeHiddenAndDamagedOrOlderPreferencesAreRepaired() {
         var value = AppTabPreferences(order: [.news], hidden: Set(AppTab.allCases.filter { $0 != .news }))
-        value.setVisible(.news, false); XCTAssertEqual(value.visible, [.news])
+        value.setVisible(.home, false); XCTAssertEqual(value.visible, [.home])
+        value.setVisible(.schedule, true); value.setVisible(.news, true)
+        XCTAssertEqual(value.visible, [.home])
         let old = AppTabPreferences(saved: #"{"order":["news","news","retired-tab"],"hidden":["manga","retired-tab"]}"#)
-        XCTAssertEqual(old.order, [.news, .home, .explore, .library, .manga, .schedule])
-        XCTAssertEqual(old.hidden, [.manga, .home])
+        XCTAssertEqual(old.order, [.home, .explore, .library, .manga])
+        XCTAssertEqual(old.hidden, [.manga])
         let hidden = AppTabPreferences(saved: #"{"order":[],"hidden":["explore","library","manga","schedule","news"]}"#)
         XCTAssertEqual(hidden.visible, [.home])
         XCTAssertEqual(AppTabPreferences(saved: "invalid"), AppTabPreferences())

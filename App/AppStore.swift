@@ -6,6 +6,8 @@ import AnimeCore
 @MainActor
 final class AppStore: ObservableObject {
     let aniList: AniListClient
+    let communityMAL = MALCommunityClient()
+    let episodeMetadata = AnimeEpisodesClient()
     let exploreCache: ExploreCache
     let visuals: AnimeVisualsClient
     let dubs = DubClient()
@@ -15,6 +17,14 @@ final class AppStore: ObservableObject {
     private var token: OAuthToken?
     private var generation = UUID()
     private var restored = false
+    let homeContentCache = HomeContentCache()
+    lazy var homeCatalog = HomeCatalogClient(api: aniList, cache: homeContentCache)
+    lazy var homeCommunity = HomeCommunityClient(api: aniList, cache: homeContentCache)
+    private let libraryCache = AniListLibraryCache()
+    private var libraryRevision = 0
+    private var reloadingLibrary = false
+    private var lastLibraryFetch: Date?
+    private var lastLibraryAttempt: Date?
     @Published var viewer: Viewer?
     @Published var entries: [LibraryEntry] = []
     @Published var isSignedIn = false
@@ -113,6 +123,9 @@ final class AppStore: ObservableObject {
             UserDefaults.standard.set(AiringProgressSource.broadcast.rawValue, forKey: "library.airingProgressSource")
             UserDefaults.standard.set("All", forKey: "schedule.releaseType")
             UserDefaults.standard.set(false, forKey: "schedule.libraryOnly")
+            UserDefaults.standard.set("continuous", forKey: "schedule.weekly.mode")
+            UserDefaults.standard.set("Airing Now", forKey: "schedule.page")
+            UserDefaults.standard.set("list", forKey: "schedule.weekly.layout")
             UserDefaults.standard.set(StreamAudioFilter.all.rawValue, forKey: "playback.audioFilter")
             UserDefaults.standard.set(TorrentSort.seeders.rawValue, forKey: "playback.torrentSort")
             UserDefaults.standard.set(TorBoxWebDAVSort.newest.rawValue, forKey: "torbox.files.sort")
@@ -163,8 +176,16 @@ final class AppStore: ObservableObject {
         do {
             guard let stored = try KeychainTokenStore.load() else { return }
             guard !stored.isExpired else { try KeychainTokenStore.delete(); accountError = "Your AniList connection expired. Please sign in again."; return }
-            token = stored; isSignedIn = true
-            await reloadLibrary()
+            token = stored
+            let attempt = generation
+            if let cached = await libraryCache.load(credential: stored.accessToken), generation == attempt {
+                viewer = cached.viewer; entries = cached.entries; savedAt = cached.savedAt; lastLibraryFetch = cached.fetchedAt
+            }
+            guard generation == attempt else { return }
+            isSignedIn = true
+            if lastLibraryFetch.map({ Date().timeIntervalSince($0) < 300 }) != true {
+                await reloadLibrary(silent: savedAt != nil)
+            }
         } catch { accountError = error.localizedDescription }
     }
     #if DEBUG
@@ -222,6 +243,9 @@ final class AppStore: ObservableObject {
             let profile = try await aniList.viewer(token: candidate.accessToken)
             guard generation == attempt else { return }
             try KeychainTokenStore.save(candidate)
+            generation = UUID(); libraryRevision += 1; reloadingLibrary = false
+            entries = []; savedAt = nil; lastLibraryFetch = nil; lastLibraryAttempt = nil
+            undoRecords = [:]; trackingMessages = [:]; lastTrackedAnime = nil
             token = candidate; viewer = profile; isSignedIn = true
             await reloadLibrary()
         } catch {
@@ -232,6 +256,8 @@ final class AppStore: ObservableObject {
     func disconnect() {
         do { try KeychainTokenStore.delete() }
         catch { accountError = error.localizedDescription; return }
+        if let old = token { Task { await libraryCache.clear(credential: old.accessToken) } }
+        libraryRevision += 1; reloadingLibrary = false; lastLibraryFetch = nil; lastLibraryAttempt = nil
         generation = UUID(); token = nil; viewer = nil; entries = []; isSignedIn = false
         savedAt = nil; libraryError = nil; savingMedia = []; loadingLibrary = false
         undoRecords = [:]; trackingMessages = [:]
@@ -241,17 +267,17 @@ final class AppStore: ObservableObject {
         guard let token, !token.isExpired else { throw ServiceError.unauthorized }
         return token
     }
-    func reloadLibrary(preserveUndo: Bool = false) async {
-        guard !loadingLibrary, savingMedia.isEmpty else { return }
-        let attempt = generation
-        loadingLibrary = true; libraryError = nil
-        defer { if generation == attempt { loadingLibrary = false } }
+    func reloadLibrary(preserveUndo: Bool = false, silent: Bool = false) async {
+        guard !reloadingLibrary, savingMedia.isEmpty else { return }
+        let attempt = generation; let revision = libraryRevision
+        reloadingLibrary = true; loadingLibrary = !silent; libraryError = nil; lastLibraryAttempt = Date()
+        defer { if generation == attempt { loadingLibrary = false; reloadingLibrary = false } }
         do {
             let token = try validToken()
             let profile: Viewer
             if let viewer { profile = viewer } else { profile = try await aniList.viewer(token: token.accessToken) }
             let collection = try await aniList.library(userId: profile.id, token: token.accessToken)
-            guard generation == attempt else { return }
+            guard generation == attempt, libraryRevision == revision, savingMedia.isEmpty else { return }
             viewer = profile
             entries = collection.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }
             if preserveUndo {
@@ -261,9 +287,11 @@ final class AppStore: ObservableObject {
             } else {
                 undoRecords = [:]; trackingMessages = [:]; lastTrackedAnime = nil
             }
-            savedAt = Date()
+            savedAt = Date(); lastLibraryFetch = savedAt
+            await persistLibrary()
         } catch {
-            guard generation == attempt else { return }
+            guard generation == attempt, libraryRevision == revision else { return }
+            if error is CancellationError { return }
             if (error as? ServiceError) == .unauthorized { disconnect(); accountError = error.localizedDescription }
             else { libraryError = error.localizedDescription }
         }
@@ -272,8 +300,9 @@ final class AppStore: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-library-preview") || ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { return }
         #endif
-        guard isSignedIn, let savedAt, now.timeIntervalSince(savedAt) >= 300 else { return }
-        await reloadLibrary(preserveUndo: true)
+        guard isSignedIn, lastLibraryFetch.map({ now.timeIntervalSince($0) >= 300 }) ?? true,
+              lastLibraryAttempt.map({ now.timeIntervalSince($0) >= 60 }) ?? true else { return }
+        await reloadLibrary(preserveUndo: true, silent: savedAt != nil)
     }
     /// UI updates only after the server confirms; failed writes preserve confirmed progress.
     func save(anime: Anime, progress: Int, status: LibraryStatus) async throws {
@@ -286,6 +315,12 @@ final class AppStore: ObservableObject {
         }
         try await save(anime: anime, edit: .next(entry: existing, total: anime.episodes, automaticallyComplete: automaticallyComplete))
     }
+    func markWatched(anime: Anime, through episode: Int) async throws {
+        let entry = entry(for: anime.id)
+        let edit = try TrackingEdit.watched(through: episode, entry: entry, total: anime.episodes, automaticallyComplete: automaticallyComplete)
+        guard edit.progress > (entry?.progressValue ?? 0) else { return }
+        try await save(anime: anime, edit: edit)
+    }
     func canUndo(_ mediaID: Int) -> Bool { undoRecords[mediaID] != nil }
     func save(anime: Anime, edit: TrackingEdit, rememberUndo: Bool = true) async throws {
         guard !savingMedia.contains(anime.id), !loadingLibrary else { throw ServiceError.message("AniList is syncing. Try again when it finishes.") }
@@ -294,6 +329,7 @@ final class AppStore: ObservableObject {
         let credential = try validToken()
         let existing = entry(for: anime.id)
         let attempt = generation
+        libraryRevision += 1
         savingMedia.insert(anime.id)
         defer { if generation == attempt { savingMedia.remove(anime.id) } }
         do {
@@ -307,6 +343,7 @@ final class AppStore: ObservableObject {
             } else { undoRecords.removeValue(forKey: anime.id) }
             trackingMessages[anime.id] = rememberUndo ? "Saved to AniList" : "Change undone in AniList"
             lastTrackedAnime = anime
+            await persistLibrary()
         } catch {
             if (error as? ServiceError) == .unauthorized, generation == attempt { disconnect(); accountError = error.localizedDescription }
             throw error
@@ -325,6 +362,7 @@ final class AppStore: ObservableObject {
     private func restoreTracking(anime: Anime, previous: LibraryEntry) async throws {
         guard !savingMedia.contains(anime.id), !loadingLibrary else { throw ServiceError.message("AniList is syncing. Try again when it finishes.") }
         let credential = try validToken(); let attempt = generation
+        libraryRevision += 1
         savingMedia.insert(anime.id)
         defer { if generation == attempt { savingMedia.remove(anime.id) } }
         let saved = try await aniList.save(mediaId: anime.id, entryId: entry(for: anime.id)?.id,
@@ -333,17 +371,25 @@ final class AppStore: ObservableObject {
         guard generation == attempt else { throw CancellationError() }
         entries.removeAll { $0.mediaId == anime.id }; entries.insert(saved, at: 0); savedAt = Date()
         undoRecords.removeValue(forKey: anime.id); trackingMessages[anime.id] = "Change undone in AniList"
+        await persistLibrary()
     }
     func remove(anime: Anime) async throws {
         guard !savingMedia.contains(anime.id), !loadingLibrary, let existing = entry(for: anime.id) else {
             throw ServiceError.message("Refresh your library before removing this entry.")
         }
         let credential = try validToken(); let attempt = generation
+        libraryRevision += 1
         savingMedia.insert(anime.id)
         defer { if generation == attempt { savingMedia.remove(anime.id) } }
         try await aniList.delete(entryId: existing.id, token: credential.accessToken)
         guard generation == attempt else { throw CancellationError() }
         entries.removeAll { $0.mediaId == anime.id }; savedAt = Date()
         undoRecords.removeValue(forKey: anime.id); trackingMessages[anime.id] = "Removed from AniList"
+        await persistLibrary()
+    }
+    private func persistLibrary() async {
+        guard let viewer, let token, let savedAt else { return }
+        let snapshot = AniListLibrarySnapshot(viewer: viewer, entries: entries, savedAt: savedAt, fetchedAt: lastLibraryFetch ?? savedAt)
+        await libraryCache.save(snapshot, credential: token.accessToken)
     }
 }

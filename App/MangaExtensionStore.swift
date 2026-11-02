@@ -9,6 +9,9 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     @Published private(set) var lastRefresh: Date?
     @Published private(set) var refreshing = false
     @Published private(set) var installing: String?
+    @Published private(set) var updatingAll = false
+    @Published private(set) var updateProgress = ""
+    @Published private(set) var notice: String?
     @Published private(set) var loading = true
     @Published private(set) var unreadableState = false
     @Published private var settingsVersions: [String: String] = [:]
@@ -30,10 +33,11 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
         #endif
         storage = MangaExtensionStorage(directory: directory)
     }
-    var busy: Bool { loading || refreshing || installing != nil || unreadableState || writingSettings }
+    var busy: Bool { loading || refreshing || installing != nil || updatingAll || unreadableState || writingSettings }
+    var updates: [MangaExtensionDescriptor] { catalog?.updates(for: state.installations) ?? [] }
     func installed(_ id: String) -> InstalledMangaExtension? { state.installations.first { $0.id == id } }
     func update(for entry: InstalledMangaExtension) -> MangaExtensionDescriptor? {
-        catalog?.extensions.first { $0.id == entry.id && $0.versionCode > entry.descriptor.versionCode }
+        catalog?.update(for: entry)
     }
     func load() async {
         guard !loaded else { return }; loaded = true
@@ -55,8 +59,8 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
         if state.repositoryAdded && !unreadableState && Date().timeIntervalSince(lastRefresh ?? .distantPast) > 6 * 3600 { await refresh() }
     }
     func refresh(link: String = "https://keiyoushi.github.io") async {
-        guard !refreshing, installing == nil, !unreadableState else { return }
-        refreshing = true; error = nil
+        guard !refreshing, installing == nil, !updatingAll, !unreadableState, !loading else { return }
+        refreshing = true; error = nil; notice = nil
         defer { refreshing = false }
         do {
             let repository = try MangaRepository(link)
@@ -65,20 +69,45 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
             let cached = CachedMangaCatalog(catalog: value)
             state = try await storage.saveCatalog(cached)
             catalog = value; lastRefresh = cached.fetchedAt
+            notice = updates.isEmpty ? "Extensions are up to date." : "\(updates.count) extension update(s) available."
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
     func install(_ entry: MangaExtensionDescriptor) async {
         guard !busy else { return }
-        installing = entry.id; error = nil
-        defer { installing = nil }
-        do {
-            let apk = try await client.package(entry)
-            try verify(apk, descriptor: entry)
-            let inspection = try await MangaRuntime.inspect(apk, modern: entry.modernAPI)
-            try Task.checkCancellation()
-            let installation = try InstalledMangaExtension(descriptor: entry, inspection: inspection, enabled: installed(entry.id)?.enabled ?? true)
-            state = try await storage.commit(installation, apk: apk)
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        error = nil; notice = nil
+        do { try await installPackage(entry); notice = "\(entry.name) is ready." }
+        catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+    private func installPackage(_ entry: MangaExtensionDescriptor) async throws {
+        installing = entry.id; defer { installing = nil }
+        let apk = try await client.package(entry)
+        try verify(apk, descriptor: entry)
+        let inspection = try await MangaRuntime.inspect(apk, modern: entry.modernAPI)
+        try Task.checkCancellation()
+        let installation = try InstalledMangaExtension(descriptor: entry, inspection: inspection, enabled: installed(entry.id)?.enabled ?? true)
+        state = try await storage.commit(installation, apk: apk)
+    }
+    func updateAll(includeAdult: Bool) async {
+        guard !busy else { return }
+        let pending = updates.filter { $0.supportsRuntime && $0.sha256 != nil && (includeAdult || !$0.adult) }
+        guard !pending.isEmpty else { return }
+        updatingAll = true; error = nil; notice = nil
+        defer { updatingAll = false; updateProgress = "" }
+        var complete = 0, failures: [String] = []
+        for (index, entry) in pending.enumerated() {
+            if Task.isCancelled { break }
+            updateProgress = "\(index + 1) of \(pending.count) · \(entry.name)"
+            do { try await installPackage(entry); complete += 1 }
+            catch is CancellationError { break }
+            catch { failures.append("\(entry.name): \(error.localizedDescription)") }
+        }
+        notice = "Updated \(complete) of \(pending.count) extensions." + (Task.isCancelled ? " Update stopped." : "")
+        if !failures.isEmpty { error = failures.joined(separator: "\n") }
+    }
+    func retryLoad() async {
+        guard !loading, !refreshing, installing == nil, !updatingAll else { return }
+        loaded = false; unreadableState = false; loading = true; error = nil
+        await load()
     }
     func setEnabled(_ id: String, _ enabled: Bool) async {
         guard !busy else { return }
