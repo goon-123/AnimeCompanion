@@ -143,7 +143,7 @@ final class PolishedDesignUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(watch.frame.minX, 0)
             XCTAssertLessThanOrEqual(watch.frame.maxX, app.frame.width)
             capture("Cinematic-Details-iPad-Landscape")
-            app.buttons["detail-actions"].tap()
+            app.dismissAnimeActions()
             XCUIDevice.shared.orientation = .portrait
         }
         reveal(cover, in: app, upward: false); cover.tap()
@@ -158,14 +158,13 @@ final class PolishedDesignUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["detail-release-status"].label, "Airing now")
         let countdown = app.descendants(matching: .any)["detail-countdown"]
         reveal(countdown, in: app)
-        XCTAssertTrue(countdown.label.contains("Days"))
-        XCTAssertTrue(countdown.label.contains("Seconds"))
+        XCTAssertTrue(countdown.label.hasPrefix("In "))
         XCTAssertLessThanOrEqual(countdown.frame.maxX, app.frame.width)
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-aired").firstMatch.label, "Aired: 8/26")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-watched").firstMatch.label, "Watched: 8")
         capture("Details-Airing-Countdown-And-Progress")
         app.returnToBrowsing()
-        app.appTab("Schedule").tap()
+        app.appTab("Airing Now").tap()
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable)
         let entry = app.buttons["library-entry-1"]
         reveal(entry, in: app); entry.tap()

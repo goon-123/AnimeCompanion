@@ -36,6 +36,22 @@ public struct TrackingEdit: Equatable, Sendable {
         }
         return Self(progress: progress, status: status, repeatCount: repeats)
     }
+    /// AniList stores cumulative progress. Marking a row watched means watched
+    /// through that episode; it never moves confirmed progress backwards.
+    public static func watched(through episode: Int, entry: LibraryEntry?, total: Int?, automaticallyComplete: Bool) throws -> Self {
+        guard (1...100_000).contains(episode), total.map({ $0 <= 0 || episode <= $0 }) ?? true else {
+            throw ServiceError.message("Choose an episode within this anime's episode total.")
+        }
+        let old = entry?.progressValue ?? 0
+        guard episode > old else { return Self(progress: old, status: entry?.status ?? .watching) }
+        var status: LibraryStatus = entry?.status == .rewatching ? .rewatching : .watching
+        var repeats: Int?
+        if automaticallyComplete, let total, total > 0, episode == total {
+            status = .completed
+            if entry?.status == .rewatching { repeats = min(9_999, max(0, entry?.repeatCount ?? 0)) + 1 }
+        }
+        return Self(progress: episode, status: status, repeatCount: repeats)
+    }
 }
 
 extension LibraryEntry {

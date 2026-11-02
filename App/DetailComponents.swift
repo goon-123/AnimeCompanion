@@ -44,8 +44,8 @@ struct AnimeDetailHero: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let anime: Anime
     let expand: (URL) -> Void
-    private var bannerHeight: CGFloat { sizeClass == .regular ? 360 : 280 }
-    private var posterWidth: CGFloat { sizeClass == .regular ? 184 : 136 }
+    private var bannerHeight: CGFloat { sizeClass == .regular ? 240 : 180 }
+    private var posterWidth: CGFloat { sizeClass == .regular ? 152 : 112 }
     private var artworkURL: URL? { anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL }
     private var accent: Color { (PosterAccent(hex: anime.coverImage?.color)?.backdrop ?? PosterAccent.fallback.backdrop).color }
 
@@ -96,7 +96,7 @@ struct AnimeDetailHero: View {
                 Text(statusLabel).font(.caption.weight(.semibold)).foregroundStyle(anime.isCurrentlyAiring ? Color.green : Color.secondary)
                     .accessibilityIdentifier("detail-release-status")
             }
-            Text(anime.displayTitle).font(sizeClass == .regular ? .largeTitle.bold() : .title.bold())
+            Text(anime.displayTitle).font(sizeClass == .regular ? .title.bold() : .title2.bold())
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail-title")
             Text([anime.season.map { $0.label + (anime.seasonYear.map { " \($0)" } ?? "") },
                   anime.format?.replacingOccurrences(of: "_", with: " ")].compactMap { $0 }.joined(separator: " · "))

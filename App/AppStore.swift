@@ -315,6 +315,12 @@ final class AppStore: ObservableObject {
         }
         try await save(anime: anime, edit: .next(entry: existing, total: anime.episodes, automaticallyComplete: automaticallyComplete))
     }
+    func markWatched(anime: Anime, through episode: Int) async throws {
+        let entry = entry(for: anime.id)
+        let edit = try TrackingEdit.watched(through: episode, entry: entry, total: anime.episodes, automaticallyComplete: automaticallyComplete)
+        guard edit.progress > (entry?.progressValue ?? 0) else { return }
+        try await save(anime: anime, edit: edit)
+    }
     func canUndo(_ mediaID: Int) -> Bool { undoRecords[mediaID] != nil }
     func save(anime: Anime, edit: TrackingEdit, rememberUndo: Bool = true) async throws {
         guard !savingMedia.contains(anime.id), !loadingLibrary else { throw ServiceError.message("AniList is syncing. Try again when it finishes.") }
