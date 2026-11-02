@@ -11,7 +11,7 @@ public enum MangaExtensionError: LocalizedError, Equatable {
         case .invalidRepository: return "Use the Keiyoushi website, GitHub repository, repo.json or index.pb link."
         case .invalidCatalog: return "Keiyoushi returned an unreadable extension catalog. Try refreshing it."
         case .oversized: return "This extension response exceeds the device’s size limit."
-        case .checksumUnavailable: return "A matching package checksum is unavailable. Refresh the catalog before installing."
+        case .checksumUnavailable: return "GitHub has no matching SHA-256 for this release file. Try the update again later; your installed extension is unchanged."
         case .checksumMismatch: return "The downloaded package did not match its published checksum. Refresh the catalog and try again."
         case .packageMismatch: return "The package identity or version did not match this extension. The previous version is unchanged."
         case .unsupportedAPI: return "This extension needs a different version of the source runtime."

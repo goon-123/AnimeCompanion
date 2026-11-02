@@ -22,7 +22,7 @@ struct MangaExtensionsView: View {
     }
     private var updates: [MangaExtensionDescriptor] { store.updates.filter(matches) }
     private var rows: [MangaExtensionDescriptor] { switch mode { case .available: return available; case .installed: return installed; case .updates: return updates } }
-    private var updateable: [MangaExtensionDescriptor] { store.updates.filter { $0.supportsRuntime && $0.sha256 != nil && (showMature || !$0.adult) } }
+    private var updateable: [MangaExtensionDescriptor] { store.updates.filter { $0.supportsRuntime && (showMature || !$0.adult) } }
     private func matches(_ entry: MangaExtensionDescriptor) -> Bool { entry.matches(query: query, language: language, includeAdult: showMature) }
     var body: some View {
         ScrollView {
@@ -163,11 +163,11 @@ struct MangaExtensionsView: View {
             if store.installing == descriptor.id { ProgressView() }
             else if let update {
                 Button("Update") { Task { await store.install(update) } }.buttonStyle(.borderedProminent)
-                    .disabled(store.busy || !update.supportsRuntime || update.sha256 == nil)
+                    .disabled(store.busy || !update.supportsRuntime)
                     .accessibilityIdentifier("manga-update-" + descriptor.id)
             } else if installed == nil {
                 Button("Install") { Task { await store.install(descriptor) } }.buttonStyle(.bordered)
-                    .disabled(store.busy || !descriptor.supportsRuntime || descriptor.sha256 == nil)
+                    .disabled(store.busy || !descriptor.supportsRuntime)
                     .accessibilityIdentifier("manga-install-" + descriptor.id)
             } else {
                 Image(systemName: installed?.enabled == true ? "checkmark.circle.fill" : "pause.circle").foregroundStyle(Theme.accent)
@@ -228,7 +228,6 @@ private struct MangaExtensionDetailView: View {
                 } else { installButton(entry, title: "Install extension") }
             } footer: {
                 if !entry.supportsRuntime { Text("This source’s extension format needs a newer runtime.") }
-                else if entry.sha256 == nil { Text("Refresh the repository to retrieve this package’s checksum.") }
                 else { Text("Packages are verified before loading. Updates are installed only when you choose them.") }
             }
             if let message = store.notice { Section { Text(message).foregroundStyle(Theme.accent) } }
@@ -284,7 +283,7 @@ private struct MangaExtensionDetailView: View {
         Button { Task { await store.install(entry) } } label: {
             HStack { Text(title); if store.installing == entry.id { Spacer(); ProgressView() } }
         }.buttonStyle(.borderedProminent).frame(minHeight: 44)
-            .disabled(store.busy || !entry.supportsRuntime || entry.sha256 == nil || (!showMature && entry.adult))
+            .disabled(store.busy || !entry.supportsRuntime || (!showMature && entry.adult))
             .accessibilityIdentifier("manga-install-extension")
     }
 }
