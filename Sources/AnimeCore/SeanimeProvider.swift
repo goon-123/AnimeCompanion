@@ -46,8 +46,25 @@ public struct SeanimeManifest: Codable, Sendable {
     public let userConfig: SeanimeUserConfig?
     public let semverConstraint: String?
     public var adultHint: Bool {
-        let text = [id, name, description ?? ""].joined(separator: " ").lowercased()
-        return ["sukebei", "hentai", "nsfw", "18+"].contains { text.contains($0) }
+        // Descriptions can say "excludes NSFW" or list both categories. Do not
+        // turn that mention into an adult-only classification of the provider.
+        let identity = [id, name].joined(separator: " ").lowercased()
+        return ["sukebei", "hentai", "nsfw", "18+"].contains { identity.contains($0) }
+    }
+}
+
+/// Settings and search use the same eligibility policy. An enabled provider may
+/// be restricted by the content setting; it must never be described as disabled.
+public struct SeanimeProviderAvailability: Sendable {
+    public let installed: [SeanimeInstallation]
+    public let enabled: [SeanimeInstallation]
+    public let restricted: [SeanimeInstallation]
+    public let searchable: [SeanimeInstallation]
+    public init(_ installations: [SeanimeInstallation], allowAdult: Bool) {
+        installed = installations
+        enabled = installations.filter(\.enabled)
+        restricted = enabled.filter { $0.adult && !allowAdult }
+        searchable = enabled.filter { allowAdult || !$0.adult }
     }
 }
 public struct SeanimeInstallation: Codable, Identifiable, Sendable {

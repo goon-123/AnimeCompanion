@@ -4,6 +4,7 @@ import AnimeCore
 
 struct SeanimeSettingsView: View {
     @EnvironmentObject private var seanime: SeanimeStore
+    @EnvironmentObject private var app: AppStore
     @State private var manifestURL = ""
     @State private var candidate: SeanimeInstallation?
     @State private var busy = false
@@ -109,7 +110,7 @@ struct SeanimeSettingsView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(installation.manifest.name).font(.headline)
                     Text("v\(installation.manifest.version) · \(installation.manifest.language)").font(.caption).foregroundStyle(.secondary)
-                    Text(installation.needsConfiguration ? "Setup needed" : (installation.enabled ? "Enabled" : "Disabled"))
+                    Text(installation.enabled && installation.adult && !app.includeAdult ? "Enabled · hidden by content setting" : (installation.needsConfiguration ? "Setup needed" : (installation.enabled ? "Enabled" : "Disabled")))
                         .font(.caption.weight(.semibold)).foregroundStyle(installation.needsConfiguration ? .orange : Theme.accent)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Toggle("Enable \(installation.manifest.name)", isOn: Binding(get: {
@@ -239,16 +240,11 @@ struct SeanimeSearchView: View {
     var preferredProvider: UUID? = nil
     var body: some View {
         ScrollView {
-            SeanimeSourcesSections(search: search, anime: anime, episode: episode)
+            SeanimeSourcesSections(search: search, anime: anime, episode: episode, preferredProvider: preferredProvider)
                 .frame(maxWidth: 780).padding(16).padding(.bottom, 16).frame(maxWidth: .infinity)
         }.background(Theme.background).accessibilityIdentifier("stream-picker-scroll")
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
-            .task(id: "\(seanime.revision)-\(store.includeAdult)") {
-                search.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
-                if let preferredProvider { search.selectProvider(preferredProvider) }
-                else if anime != nil { search.search() }
-            }
             .onChange(of: scenePhase) { _, phase in
                     if phase == .background { search.pause() }
                     else if phase == .active { search.resumeIfNeeded() }
@@ -260,12 +256,17 @@ struct SeanimeSearchView: View {
 /// Sections share their parent's lifecycle; scrolling a row offscreen must not
 /// cancel another provider or restart the whole search.
 struct SeanimeSourcesSections: View {
+    @EnvironmentObject private var seanime: SeanimeStore
+    @EnvironmentObject private var store: AppStore
     @ObservedObject var search: SeanimeSearchModel
     var anime: Anime? = nil
     var episode: Int = 1
     var restart = false
     var resultFilter = ""
     var showsAudioControls = true
+    var preferredProvider: UUID? = nil
+    private var availability: SeanimeProviderAvailability { SeanimeProviderAvailability(seanime.installations, allowAdult: store.includeAdult) }
+    private var configurationKey: String { "\(seanime.revision)-\(store.includeAdult)-\(anime?.id ?? 0)-\(episode)-\(preferredProvider?.uuidString ?? "all")" }
     @AppStorage("playback.audioFilter") private var audioValue = StreamAudioFilter.all.rawValue
     @AppStorage("playback.torrentSort") private var sortValue = TorrentSort.seeders.rawValue
     @State private var editingSearch = false
@@ -290,7 +291,20 @@ struct SeanimeSourcesSections: View {
             }
             if search.providers.isEmpty {
                 StreamPickerCard {
-                    Text("No torrent providers enabled").font(.subheadline.weight(.semibold))
+                    if !search.configured || !availability.searchable.isEmpty {
+                        ProgressView("Preparing torrent providers…")
+                        Button("Reload providers") { synchronizeProviders(force: true) }
+                    } else if !availability.restricted.isEmpty {
+                        Label("Enabled providers are hidden", systemImage: "eye.slash").font(.subheadline.weight(.semibold))
+                        Text("\(availability.restricted.count) enabled provider(s) are marked Adult. Review that provider's content setting in Configure, or enable Show adult anime in Settings.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        ForEach(availability.restricted) { provider in
+                            NavigationLink("Configure " + provider.manifest.name) { SeanimeConfigurationView(installation: provider) }
+                        }
+                    } else {
+                        Text(availability.installed.isEmpty ? "No torrent providers installed" : "All torrent providers are disabled").font(.subheadline.weight(.semibold))
+                    }
+                    if let message = seanime.error { Text(message).font(.caption).foregroundStyle(.orange) }
                     NavigationLink("Manage Seanime extensions") { SeanimeSettingsView() }
                 }
             } else {
@@ -334,7 +348,8 @@ struct SeanimeSourcesSections: View {
                     }
                 }
             }
-        }.sheet(item: $releaseInfo) { choice in
+        }.onChange(of: configurationKey, initial: true) { _, _ in synchronizeProviders() }
+            .sheet(item: $releaseInfo) { choice in
             AppNavigationStack {
                 Form {
                     Section(choice.provider.manifest.name) {
@@ -348,8 +363,17 @@ struct SeanimeSourcesSections: View {
             }
         }
     }
+    private func synchronizeProviders(force: Bool = false) {
+        search.synchronize(store: seanime, anime: anime, allowAdult: store.includeAdult, context: String(episode), preferredProvider: preferredProvider, force: force)
+    }
     private var providerStatus: some View {
         StreamPickerCard {
+            Text("\(availability.enabled.count) enabled · \(availability.searchable.count) available for search")
+                .font(.caption).foregroundStyle(.secondary)
+            if !availability.restricted.isEmpty {
+                Text("\(availability.restricted.count) provider(s) hidden by the adult-content setting").font(.caption).foregroundStyle(.secondary)
+                NavigationLink("Review provider settings") { SeanimeSettingsView() }
+            }
             if search.providers.count > 1 {
                 Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
                     Text("All enabled providers").tag(Optional<UUID>.none)

@@ -45,6 +45,7 @@ final class SeanimeSearchModel: ObservableObject {
     @Published private(set) var warnings: [UUID: String] = [:]
     @Published private(set) var remaining = 0
     @Published private(set) var searched = false
+    @Published private(set) var configured = false
     var loading: Bool { remaining > 0 }
     var errors: [String] {
         providers.compactMap { provider in
@@ -61,13 +62,24 @@ final class SeanimeSearchModel: ObservableObject {
     private var lookupID = UUID()
     private var interrupted: Set<UUID> = []
     private var interruptedQuery: String?
+    private var configurationKey: String?
+
+    func synchronize(store: SeanimeStore, anime: Anime?, allowAdult: Bool, context: String, preferredProvider: UUID? = nil, force: Bool = false) {
+        let key = "\(store.revision)-\(anime?.id ?? 0)-\(allowAdult)-\(context)-\(preferredProvider?.uuidString ?? "all")"
+        guard force || key != configurationKey else { return }
+        configure(store: store, anime: anime, allowAdult: allowAdult)
+        configurationKey = key
+        if let preferredProvider, providers.contains(where: { $0.id == preferredProvider }) { providerID = preferredProvider }
+        if anime != nil { search() }
+    }
 
     func configure(store: SeanimeStore, anime: Anime?, allowAdult: Bool) {
         stop(); results = []; states = [:]; warnings = [:]; selected = nil; searched = false
         if self.anime?.id != anime?.id || query.isEmpty { query = anime?.title?.romaji ?? anime?.displayTitle ?? "" }
         self.anime = anime; self.allowAdult = allowAdult; client = store.client
-        providers = store.installations.filter { $0.enabled && (allowAdult || !$0.adult) }
+        providers = SeanimeProviderAvailability(store.installations, allowAdult: allowAdult).searchable
         if !providers.contains(where: { $0.id == providerID }) { providerID = nil }
+        configured = true
     }
     func selectProvider(_ id: UUID?) { providerID = id; search() }
     func stop() {

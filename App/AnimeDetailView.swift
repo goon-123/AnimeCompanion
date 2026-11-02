@@ -35,8 +35,11 @@ struct AnimeDetailView: View {
                 }
                 if let anime, store.isVisible(anime) {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
-                    VStack(alignment: .leading, spacing: 24) {
+                    LazyVStack(alignment: .leading, spacing: 20) {
                         seriesNavigation(proxy)
+                        synopsis(anime).id("series-story")
+                        metadata(anime).id("series-information")
+                        AnimeOriginalBroadcast(anime: anime).id("series-broadcast")
                         DetailCard(title: "Your watchlist") {
                             AnimeEpisodeOverview(anime: anime, entry: store.entry(for: anime.id), dub: dubs.progress(for: anime))
                             if store.isSignedIn { ProgressControl(anime: anime) }
@@ -48,9 +51,6 @@ struct AnimeDetailView: View {
                         AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID) { number in
                             playbackRequest = DetailPlaybackRequest(episode: number)
                         }.id("series-episodes")
-                        synopsis(anime).id("series-story")
-                        metadata(anime)
-                        if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                             events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
                         AnimeUpdatesLinks(anime: anime)
@@ -98,8 +98,10 @@ struct AnimeDetailView: View {
     private func seriesNavigation(_ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                jump("Episodes", symbol: "play.rectangle", anchor: "series-episodes", proxy: proxy)
                 jump("Story", symbol: "text.alignleft", anchor: "series-story", proxy: proxy)
+                jump("Information", symbol: "info.circle", anchor: "series-information", proxy: proxy)
+                jump("Broadcast", symbol: "antenna.radiowaves.left.and.right", anchor: "series-broadcast", proxy: proxy)
+                jump("Episodes", symbol: "play.rectangle", anchor: "series-episodes", proxy: proxy)
                 jump("Artwork", symbol: "photo.on.rectangle", anchor: "series-artwork", proxy: proxy)
                 jump("Related", symbol: "rectangle.stack", anchor: "series-related", proxy: proxy)
                 jump("Discussions", symbol: "bubble.left.and.bubble.right", anchor: "series-discussions", proxy: proxy)

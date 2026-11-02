@@ -32,6 +32,24 @@ final class SeanimeCompatibilityTests: XCTestCase {
         XCTAssertEqual(roundtrip.id, old.id); XCTAssertEqual(roundtrip.source, "new reviewed code")
         XCTAssertEqual(roundtrip.preferences["feed"], "configured")
     }
+    func testProviderAvailabilityDistinguishesEnabledRestrictedAndDisabled() throws {
+        let manifest = try JSONDecoder().decode(SeanimeManifest.self, from: Data(#"{"id":"owned-safe","name":"Owned safe provider","version":"1","type":"anime-torrent-provider","language":"typescript","description":"Excludes NSFW content"}"#.utf8))
+        XCTAssertFalse(manifest.adultHint)
+        var safe = SeanimeInstallation(manifestURL: URL(string: "https://provider.example/safe")!, manifest: manifest, source: "class Provider {}",
+            preferences: [:], allowedHosts: ["provider.example"], adult: false)
+        let restricted = SeanimeInstallation(manifestURL: URL(string: "https://provider.example/adult")!, manifest: manifest, source: "class Provider {}",
+            preferences: [:], allowedHosts: ["provider.example"], adult: true)
+        var off = safe; off.enabled = false
+        let value = SeanimeProviderAvailability([safe, restricted, off], allowAdult: false)
+        XCTAssertEqual(value.installed.count, 3); XCTAssertEqual(value.enabled.count, 2)
+        XCTAssertEqual(value.searchable.map(\.id), [safe.id]); XCTAssertEqual(value.restricted.map(\.id), [restricted.id])
+        XCTAssertEqual(SeanimeProviderAvailability([safe, restricted], allowAdult: true).searchable.count, 2)
+        safe.enabled = false
+        let toggled = SeanimeProviderAvailability([safe, restricted], allowAdult: false)
+        XCTAssertTrue(toggled.searchable.isEmpty); XCTAssertEqual(toggled.enabled.count, 1); XCTAssertEqual(toggled.restricted.count, 1)
+        let knownAdult = try JSONDecoder().decode(SeanimeManifest.self, from: Data(#"{"id":"owned-sukebei","name":"Sukebei fixture","version":"1","type":"anime-torrent-provider","language":"typescript"}"#.utf8))
+        XCTAssertTrue(knownAdult.adultHint)
+    }
     func testWidgetDesignsMigrateIndependentlyFromCountsVisibilityAndShortcuts() {
         var value = HomePreferences(saved: #"{"version":3,"order":["nextEpisode","reading"],"hidden":["reading"],"shortcuts":["community","airing",""]}"#)
         XCTAssertEqual(value.layout(for: .nextEpisode), .banner)

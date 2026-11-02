@@ -117,11 +117,6 @@ struct WatchAnimeView: View {
                     }
                 }
                 .task(id: initializationKey) { initializeEpisode() }
-                .task(id: "\(initialized)-\(episode)-\(seanime.revision)-\(store.includeAdult)") {
-                    guard initialized else { return }
-                    torrents.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
-                    torrents.search()
-                }
                 .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
                 .sheet(isPresented: $options) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }

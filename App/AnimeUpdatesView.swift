@@ -34,13 +34,9 @@ private struct AnimeReleaseInfoView: View {
             VStack(alignment: .leading, spacing: 20) {
                 if store.isVisible(anime) {
                 Text(anime.displayTitle).font(.title2.bold())
-                DetailCard(title: "Original broadcast") {
-                    if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
-                    else { Text(anime.status == "FINISHED" ? "Broadcast finished" : "Next episode time not announced").font(.subheadline) }
-                    if let start = anime.startDate?.label { Text("First release · \(start)").font(.caption).foregroundStyle(.secondary) }
-                    Text("AniList broadcast times use your device timezone and do not confirm regional streaming availability.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                AnimeOriginalBroadcast(anime: anime)
+                Text("AniList broadcast times use your device timezone and do not confirm regional streaming availability.")
+                    .font(.caption).foregroundStyle(.secondary)
                 AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                     events: dubs.snapshot?.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } ?? [],
                     loading: dubs.loading, error: dubs.notice)
@@ -148,24 +144,10 @@ struct AnimeVisualsView: View {
                     artwork(image, index: index)
                 }
             }
-        }.modifier(CatalogEntrance())
+        }
     }
     private func artwork(_ image: AnimeVisual, index: Int) -> some View {
-        Button {
-            preview = AnimeImagePreview(url: image.imageURL, title: image.title, credit: image.copyright, source: image.source.label)
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                GeometryReader { geometry in
-                    ArtworkImage(url: image.thumbnailURL, pointSize: 600) { $0.resizable().scaledToFit() } placeholder: { Theme.surface }
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                }.aspectRatio(2.0 / 3, contentMode: .fit)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(image.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                    Text(image.source.label).font(.caption).foregroundStyle(.secondary)
-                    if let copyright = image.copyright { Text(copyright).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            }.background(Theme.surface).clipShape(RoundedRectangle(cornerRadius: 14)).foregroundStyle(.primary)
-        }.buttonStyle(.plain).accessibilityLabel("Expand \(image.title), \(image.source.label)")
+        AnimeVisualCard(image: image) { preview = image.preview }
             .accessibilityIdentifier("visual-card-\(image.source.rawValue)-\(index)")
     }
     @MainActor private func loadTitle(_ anime: Anime, refresh: Bool = false) async {

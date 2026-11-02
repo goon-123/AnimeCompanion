@@ -70,6 +70,36 @@ final class MangaExtensionTests: XCTestCase {
         catch { XCTAssertEqual(error as? MangaExtensionError, .checksumUnavailable) }
     }
 
+    func testCurrentFlatChecksumInventoryAndMixedEntriesRemainReadable() async throws {
+        let package = "eu.kanade.tachiyomi.extension.en.fixture"
+        for inventory in [
+            [package: String(repeating: "A", count: 64)] as [String: Any],
+            [package: String(repeating: "a", count: 64), "future-metadata": ["format": 2], "invalid": NSNull()]
+        ] {
+            let transport = MangaFixtureTransport(index: try gzip(fixtureIndex()), filename: "unused", inventory: try JSONSerialization.data(withJSONObject: inventory))
+            let catalog = try await MangaRepositoryClient(transport: transport).catalog()
+            XCTAssertEqual(catalog.extensions.first?.sha256, String(repeating: "a", count: 64))
+        }
+    }
+    func testMalformedChecksumFeedReportsRepositoryErrorInsteadOfDecoderFailure() async throws {
+        for raw in ["[]", "<html>Unavailable</html>", "{}", "{\"package\": 7}", "{\"package\": \"not-a-checksum\"}"] {
+            let transport = MangaFixtureTransport(index: fixtureIndex(), filename: "unused", inventory: Data(raw.utf8))
+            do { _ = try await MangaRepositoryClient(transport: transport).catalog(); XCTFail("Malformed feed accepted") }
+            catch { XCTAssertEqual(error as? MangaExtensionError, .invalidChecksums) }
+        }
+    }
+    func testUpdatePlanIncludesDisabledInstallationsAndFiltersMatureCollections() throws {
+        let old = try installation(digest: "a", enabled: false)
+        let same = try MangaExtensionCatalog.decode(fixtureIndex())
+        XCTAssertTrue(same.updates(for: [old]).isEmpty)
+        let updated = try MangaExtensionCatalog.decode(fixtureIndex(code: 106002))
+        XCTAssertEqual(updated.updates(for: [old]).map(\.id), [old.id])
+        XCTAssertEqual(updated.update(for: old)?.versionCode, 106002)
+        let mature = try MangaExtensionCatalog.decode(fixtureIndex(warning: 3, code: 106002))
+        XCTAssertTrue(mature.updates(for: [old], includeAdult: false).isEmpty)
+        XCTAssertEqual(mature.updates(for: [old], includeAdult: true).count, 1)
+    }
+
     func testInspectionMustMatchPackageAndVersionBeforeInstallation() throws {
         let entry = try fixtureEntry()
         let inspection = try fixtureInspection(package: "eu.kanade.tachiyomi.extension.en.other")
@@ -151,12 +181,13 @@ private func installation(digest: String, enabled: Bool = true) throws -> Instal
 private struct MangaFixtureTransport: HTTPTransport {
     let index: Data
     let filename: String
+    var inventory: Data? = nil
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = try XCTUnwrap(request.url)
         let data: Data
         if url.path.hasSuffix("index.pb") { data = index }
         else if url.path.hasSuffix("release-assets.json") {
-            data = try JSONSerialization.data(withJSONObject: ["eu.kanade.tachiyomi.extension.en.fixture": ["apk": ["name": filename, "sha256": String(repeating: "a", count: 64)]]])
+            data = try inventory ?? JSONSerialization.data(withJSONObject: ["eu.kanade.tachiyomi.extension.en.fixture": ["apk": ["name": filename, "sha256": String(repeating: "a", count: 64)]]])
         } else { throw ServiceError.invalidResponse }
         return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
@@ -172,12 +203,12 @@ private func varint(_ value: UInt64) -> Data {
 private func bytesField(_ number: UInt64, _ data: Data) -> Data { varint(number << 3 | 2) + varint(UInt64(data.count)) + data }
 private func stringField(_ number: UInt64, _ text: String) -> Data { bytesField(number, Data(text.utf8)) }
 private func integerField(_ number: UInt64, _ value: UInt64) -> Data { varint(number << 3) + varint(value) }
-private func fixtureIndex(signingKey: String = MangaRepository.fingerprint, duplicate: Bool = false, api: String = "1.6", warning: UInt64 = 1, extra: Data = Data()) -> Data {
+private func fixtureIndex(signingKey: String = MangaRepository.fingerprint, duplicate: Bool = false, api: String = "1.6", warning: UInt64 = 1, code: UInt64 = 106001, extra: Data = Data()) -> Data {
     let source = integerField(1, 918273645546372819) + stringField(2, "Fixture") + stringField(3, "en") + stringField(4, "https://example.com")
     let resources = stringField(1, "https://github.com/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk")
         + stringField(2, "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main/src/en/fixture/res/mipmap-xhdpi/ic_launcher.png")
     var entry = stringField(1, "Fixture") + stringField(2, "eu.kanade.tachiyomi.extension.en.fixture") + bytesField(3, resources)
-    entry += stringField(4, api) + integerField(5, 106001) + stringField(6, "1.6.1") + integerField(7, warning) + bytesField(8, source)
+    entry += stringField(4, api) + integerField(5, code) + stringField(6, "1.6.1") + integerField(7, warning) + bytesField(8, source)
     var list = bytesField(1, entry); if duplicate { list += bytesField(1, entry) }
     return stringField(1, "Keiyoushi") + stringField(3, signingKey) + bytesField(101, list) + extra
 }
