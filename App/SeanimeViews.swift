@@ -42,7 +42,7 @@ struct SeanimeSettingsView: View {
                             .disabled(busy || manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .accessibilityIdentifier("seanime-review")
                     }
-                }.padding(20).surfacePanel()
+                }.padding(20).companionPanel(padding: 0)
                 HStack {
                     Text("Your providers").font(.title2.bold())
                     Spacer()
@@ -51,7 +51,7 @@ struct SeanimeSettingsView: View {
                 if seanime.installations.isEmpty {
                     ContentUnavailableView("Add your first provider", systemImage: "puzzlepiece.extension",
                         description: Text("Browse the marketplace or paste a provider URL above. Installed providers search independently on this device."))
-                        .padding().surfacePanel()
+                        .padding().companionPanel(padding: 0)
                 }
                 ForEach(seanime.installations) { installation in providerCard(installation) }
                 if let notice { Label(notice, systemImage: "info.circle").font(.subheadline).accessibilityIdentifier("seanime-notice") }
@@ -99,7 +99,7 @@ struct SeanimeSettingsView: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-        }.padding(16).frame(maxWidth: .infinity, minHeight: 86, alignment: .leading).surfacePanel()
+        }.padding(16).frame(maxWidth: .infinity, minHeight: 86, alignment: .leading).companionPanel(padding: 0)
     }
     private func providerCard(_ installation: SeanimeInstallation) -> some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -129,7 +129,7 @@ struct SeanimeSettingsView: View {
                 HStack(spacing: 12) { providerActions(installation) }
                 VStack(alignment: .leading, spacing: 12) { providerActions(installation) }
             }
-        }.padding(20).surfacePanel()
+        }.padding(20).companionPanel(padding: 0)
     }
     @ViewBuilder private func providerActions(_ installation: SeanimeInstallation) -> some View {
         NavigationLink { SeanimeConfigurationView(installation: installation) } label: {

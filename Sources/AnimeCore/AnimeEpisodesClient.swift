@@ -71,11 +71,11 @@ public enum AnimeEpisodeDecoding {
                 integer(row["absoluteEpisodeNumber"]).map { $0 == number } == true
             // Some upstream TVDB records have a conflicting episode number. Keep the
             // AniDB title/summary but do not attach that record's still or plot overview.
-            return AnimeEpisodeMetadata(number: number, title: text(titles["en"] ?? titles["x-jat"] ?? titles["ja"], limit: 300),
-                overview: text(row["summary"] ?? (numberMatches ? row["overview"] : nil), limit: 6000),
+            return AnimeEpisodeMetadata(number: number, title: text(titles["en"], limit: 300) ?? text(titles["x-jat"], limit: 300) ?? text(titles["ja"], limit: 300),
+                overview: text(row["summary"], limit: 6000) ?? (numberMatches ? text(row["overview"], limit: 6000) : nil),
                 image: numberMatches ? text(row["image"], limit: 4096) : nil,
-                airDate: text(row["airdate"] ?? row["airDateUtc"] ?? row["airDate"], limit: 40),
-                runtime: integer(row["runtime"] ?? row["length"]).flatMap { (1...500).contains($0) ? $0 : nil },
+                airDate: text(row["airdate"], limit: 40) ?? text(row["airDateUtc"], limit: 40) ?? text(row["airDate"], limit: 40),
+                runtime: (integer(row["runtime"]) ?? integer(row["length"])).flatMap { (1...500).contains($0) ? $0 : nil },
                 rating: decimal(row["rating"]).flatMap { (0...10).contains($0) ? $0 : nil })
         }.sorted { $0.number < $1.number }
     }
@@ -84,7 +84,7 @@ public enum AnimeEpisodeDecoding {
         var seen = Set<Int>()
         let episodes = rows.compactMap { row -> AnimeEpisodeMetadata? in
             guard let number = integer(row["mal_id"]), (1...10_000).contains(number), seen.insert(number).inserted else { return nil }
-            return AnimeEpisodeMetadata(number: number, title: text(row["title"] ?? row["title_romanji"], limit: 300),
+            return AnimeEpisodeMetadata(number: number, title: text(row["title"], limit: 300) ?? text(row["title_romanji"], limit: 300),
                 airDate: text(row["aired"], limit: 40), rating: decimal(row["score"]),
                 filler: row["filler"] as? Bool ?? false, recap: row["recap"] as? Bool ?? false)
         }.sorted { $0.number < $1.number }

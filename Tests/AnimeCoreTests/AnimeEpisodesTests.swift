@@ -9,10 +9,12 @@ final class AnimeEpisodesTests: XCTestCase {
         try JSONDecoder().decode(Anime.self, from: Data("{\"id\":1,\"idMal\":\(mal ? "7" : "null"),\"episodes\":\(count),\"status\":\"FINISHED\"}".utf8))
     }
     func testCanonicalEpisodesExcludeSpecialsAndConflictingTVDBStills() throws {
-        let raw = Data(#"{"mappings":{"anilist_id":1,"mal_id":7},"episodes":{"1":{"episode":"1","episodeNumber":1,"title":{"en":"Owned first episode"},"image":"https://art.example/1.jpg","summary":"Canonical synopsis","airdate":"2026-01-02","runtime":24,"rating":"8.2"},"2":{"episode":"2","episodeNumber":40,"absoluteEpisodeNumber":30,"title":{"en":"Owned second episode"},"summary":"AniDB summary","overview":"Wrong TVDB plot","image":"https://art.example/wrong.jpg"},"S1":{"episode":"1","title":{"en":"Special"}},"3":{"episode":"9","title":{"en":"Wrong number"}},"99":{"episode":"99","title":{"en":"Other season"}}}}"#.utf8)
+        let raw = Data(#"{"mappings":{"anilist_id":1,"mal_id":7},"episodes":{"1":{"episode":"1","episodeNumber":1,"title":{"en":null,"x-jat":"Owned first episode"},"image":"https://art.example/1.jpg","summary":null,"overview":"Canonical synopsis","airdate":null,"airDateUtc":"2026-01-02T12:00:00Z","runtime":null,"length":24,"rating":"8.2"},"2":{"episode":"2","episodeNumber":40,"absoluteEpisodeNumber":30,"title":{"en":"Owned second episode"},"summary":"AniDB summary","overview":"Wrong TVDB plot","image":"https://art.example/wrong.jpg"},"S1":{"episode":"1","title":{"en":"Special"}},"3":{"episode":"9","title":{"en":"Wrong number"}},"99":{"episode":"99","title":{"en":"Other season"}}}}"#.utf8)
         let rows = try AnimeEpisodeDecoding.mapping(raw, anime: anime())
         XCTAssertEqual(rows.map(\.number), [1, 2])
         XCTAssertEqual(rows[0].imageURL?.lastPathComponent, "1.jpg")
+        XCTAssertEqual(rows[0].title, "Owned first episode"); XCTAssertEqual(rows[0].overview, "Canonical synopsis")
+        XCTAssertEqual(rows[0].airDate, "2026-01-02T12:00:00Z")
         XCTAssertEqual(rows[0].rating, 8.2); XCTAssertEqual(rows[0].runtime, 24)
         XCTAssertEqual(rows[1].overview, "AniDB summary"); XCTAssertNil(rows[1].imageURL)
         let wrong = Data(#"{"mappings":{"anilist_id":2,"mal_id":7},"episodes":{}}"#.utf8)
@@ -21,10 +23,10 @@ final class AnimeEpisodesTests: XCTestCase {
         XCTAssertThrowsError(try AnimeEpisodeDecoding.mapping(wrongMAL, anime: anime()))
     }
     func testFallbackListKeepsFillerRecapDatesAndRejectsPrivateImageURLs() throws {
-        let raw = Data(#"{"pagination":{"has_next_page":true},"data":[{"mal_id":1,"title":"Owned title","aired":"2026-01-02T10:00:00+00:00","score":7.2,"filler":true},{"mal_id":2,"title":"Owned recap","recap":true},{"mal_id":2,"title":"Duplicate"}]}"#.utf8)
+        let raw = Data(#"{"pagination":{"has_next_page":true},"data":[{"mal_id":1,"title":null,"title_romanji":"Owned title","aired":"2026-01-02T10:00:00+00:00","score":7.2,"filler":true},{"mal_id":2,"title":"Owned recap","recap":true},{"mal_id":2,"title":"Duplicate"}]}"#.utf8)
         let (rows, more) = try AnimeEpisodeDecoding.jikan(raw)
         XCTAssertEqual(rows.map(\.number), [1, 2]); XCTAssertTrue(more)
-        XCTAssertTrue(rows[0].filler); XCTAssertTrue(rows[1].recap); XCTAssertNotNil(rows[0].dateLabel)
+        XCTAssertEqual(rows[0].title, "Owned title"); XCTAssertTrue(rows[0].filler); XCTAssertTrue(rows[1].recap); XCTAssertNotNil(rows[0].dateLabel)
         XCTAssertNil(AnimeEpisodeMetadata(number: 1, image: "https://user:secret@images.example/1.jpg").imageURL)
         XCTAssertNil(AnimeEpisodeMetadata(number: 1, image: "http://localhost/a.jpg").imageURL)
         XCTAssertTrue(AnimeEpisodeMetadata(number: 1, airDate: "2027-01-02T10:00:00Z").isFuture(at: Date(timeIntervalSince1970: 1_700_000_000)))

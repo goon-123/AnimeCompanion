@@ -42,7 +42,7 @@ struct AnimeEpisodesSection: View {
                 } label: { Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).frame(minWidth: 44, minHeight: 44) }
                     .accessibilityLabel("Episode filters")
             }
-            TextField("Find an episode or title", text: $query).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+            TextField("Search loaded episodes or titles", text: $query).textFieldStyle(.roundedBorder).autocorrectionDisabled()
                 .accessibilityIdentifier("anime-episode-search")
             if loading && rows.isEmpty { ProgressView("Loading episode details…").font(.caption) }
             if let error {
