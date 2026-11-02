@@ -116,7 +116,9 @@ public struct SeanimeTorrent: Codable, Identifiable, Sendable {
         name = text(.name) ?? ""
         infoHash = text(.infoHash); magnetLink = text(.magnetLink); downloadUrl = text(.downloadUrl); link = text(.link)
         formattedSize = text(.formattedSize); size = number(.size); episodeNumber = number(.episodeNumber)
-        seeders = number(.seeders).flatMap { $0 >= 0 && $0 < Double(Int.max) ? Int($0) : nil }
+        if let count = try? values.decode(Int.self, forKey: .seeders) { seeders = count >= 0 ? count : nil }
+        else if let count = text(.seeders).flatMap(Int.init) { seeders = count >= 0 ? count : nil }
+        else { seeders = number(.seeders).flatMap { $0 >= 0 && $0 < Double(Int.max) ? Int($0) : nil } }
         isBatch = (try? values.decode(Bool.self, forKey: .isBatch)) ?? text(.isBatch).flatMap { $0 == "true" ? true : ($0 == "false" ? false : nil) }
     }
     public var seederSummary: String {
