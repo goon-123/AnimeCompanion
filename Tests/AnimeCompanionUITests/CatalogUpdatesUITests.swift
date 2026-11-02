@@ -18,7 +18,7 @@ final class CatalogUpdatesUITests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 10)); XCTAssertFalse(skeleton.exists)
     }
     @MainActor
-    func testNativeScheduleVisualsAndHeadlinesReplaceTheTrackerSwitch() {
+    func testDubLinkArtworkAndNewsShelfReplaceShortcutChips() {
         let app = launch()
         app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
@@ -26,17 +26,18 @@ final class CatalogUpdatesUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.segmentedControls["metadata-source-picker"].exists)
         XCTAssertFalse(app.buttons["LiveChart.me"].exists)
-        let schedule = app.buttons["detail-open-schedule"]
+        let schedule = app.buttons["detail-episodes-dubbed"]
         app.revealInContent(schedule); schedule.tap()
-        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["English dub"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["detail-weekly-schedule"].exists)
-        capture("Native-Schedule", app)
+        capture("Native-Dub-Schedule", app)
         app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["detail-open-visuals"].tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "visuals-watch-trailer").firstMatch.waitForExistence(timeout: 10))
-        capture("Native-Visuals", app)
-        app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["detail-open-headlines"].tap()
+        XCTAssertFalse(app.buttons["detail-open-visuals"].exists)
+        let artwork = app.descendants(matching: .any).matching(identifier: "series-anime-artwork").firstMatch
+        app.revealInContent(artwork)
+        XCTAssertTrue(artwork.exists)
+        let news = app.buttons["series-news-view-all"]
+        app.revealInContent(news); news.tap()
         XCTAssertTrue(app.navigationBars["Headlines"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Series news from recent feeds and Anime Corner’s title search, including other seasons."].exists)
         capture("Native-Headlines", app)

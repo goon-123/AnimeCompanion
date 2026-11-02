@@ -18,7 +18,7 @@ struct MangaBakaDetailView: View {
     private var entry: MangaBakaLibraryEntry? { account.entries[series.id] }
     private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .manga, saved: sectionOrder) }
     private var visibleSections: [SeriesDetailSection] {
-        layout.order.filter { section in
+        layout.visible.filter { section in
             if section == .synopsis { return !series.synopsis.isEmpty }
             if section == .coverage { return series.animeAdaptation.map { $0.exists || $0.hasCoverage } == true }
             return true
@@ -39,6 +39,9 @@ struct MangaBakaDetailView: View {
                         jumpLinks(proxy)
                         if let notice = account.notice { Text(notice).font(.subheadline).foregroundStyle(.mint) }
                         if let error { NoticeView(message: error) { Task { await reload(refresh: true) } } }
+                        if visibleSections.isEmpty {
+                            Text("Sections are hidden or unavailable. Use Arrange sections in the toolbar to show more.").font(.subheadline).foregroundStyle(.secondary)
+                        }
                         ForEach(visibleSections) { section in
                             detailSection(section).id(section.rawValue)
                         }

@@ -26,9 +26,13 @@ struct SeriesLayoutEditor: View {
         List {
             Section {
                 ForEach(preferences.order) { section in
-                    Text(section.title(on: page))
+                    Toggle(isOn: Binding(get: { !preferences.hidden.contains(section) }, set: { visible in
+                        var value = preferences; value.setVisible(section, visible); saved = value.saved
+                    })) {
+                        Text(section.title(on: page))
+                    }
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .accessibilityIdentifier("series-arrange-row-" + section.rawValue)
+                        .accessibilityIdentifier("series-visible-" + section.rawValue)
                         .accessibilityAction(named: Text("Move up")) { move(section, down: false) }
                         .accessibilityAction(named: Text("Move down")) { move(section, down: true) }
                 }.onMove { offsets, destination in
@@ -37,10 +41,12 @@ struct SeriesLayoutEditor: View {
                     saved = value.saved
                 }
             } footer: {
-                Text(page.explanation + " Changes save immediately on this device. Sections without content appear when available.")
+                Text(page.explanation + " Switch sections off to hide them. Changes save immediately on this device; empty sections appear when content is available.")
             }
             Section {
-                Button("Restore default order") { saved = "" }.accessibilityIdentifier("series-arrange-reset")
+                Button("Show all sections") { var value = preferences; value.setAllVisible(true); saved = value.saved }
+                Button("Hide all sections") { var value = preferences; value.setAllVisible(false); saved = value.saved }
+                Button("Restore default layout") { saved = "" }.accessibilityIdentifier("series-arrange-reset")
             }
         }.environment(\.editMode, .constant(.active))
             .navigationTitle(page.title).navigationBarTitleDisplayMode(.inline)

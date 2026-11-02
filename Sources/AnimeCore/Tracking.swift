@@ -52,6 +52,18 @@ public struct TrackingEdit: Equatable, Sendable {
         }
         return Self(progress: episode, status: status, repeatCount: repeats)
     }
+    /// AniList has a single watched-through number, not independent episode
+    /// flags. Unwatching N resets progress to N-1, also unwatching later rows.
+    public static func unwatched(from episode: Int, entry: LibraryEntry?, total: Int?) throws -> Self {
+        guard (1...100_000).contains(episode), total.map({ $0 <= 0 || episode <= $0 }) ?? true else {
+            throw ServiceError.message("Choose an episode within this anime's episode total.")
+        }
+        guard let entry, episode <= entry.progressValue else {
+            throw ServiceError.message("This episode is no longer marked watched.")
+        }
+        let status = entry.status == .completed ? LibraryStatus.watching : (entry.status ?? .watching)
+        return Self(progress: episode - 1, status: status)
+    }
 }
 
 extension LibraryEntry {

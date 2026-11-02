@@ -2,6 +2,47 @@ import XCTest
 @testable import AnimeCore
 
 final class SeriesDetailLayoutTests: XCTestCase {
+    func testLegacyOrderMigratesAndMergedDubSectionIsNoLongerSeparate() {
+        let layout = SeriesDetailLayout(page: .anime, saved: #"["reviews","dubSchedule","information","watchlist"]"#)
+        XCTAssertEqual(Array(layout.order.prefix(3)), [.reviews, .information, .watchlist])
+        XCTAssertFalse(layout.order.contains(.dubSchedule))
+        XCTAssertTrue(layout.hidden.isEmpty)
+        XCTAssertEqual(SeriesDetailLayout(page: .anime, saved: layout.saved), layout)
+    }
+    func testVisibilitySurvivesRelaunchAndMovingHiddenSectionsKeepsTheirPosition() {
+        var layout = SeriesDetailLayout(page: .anime)
+        layout.setVisible(.synopsis, false)
+        let index = layout.order.firstIndex(of: .synopsis)!
+        layout.move(fromOffsets: IndexSet(integer: index), toOffset: 0)
+        var restored = SeriesDetailLayout(page: .anime, saved: layout.saved)
+        XCTAssertEqual(restored.order.first, .synopsis)
+        XCTAssertFalse(restored.visible.contains(.synopsis))
+        restored.setVisible(.synopsis, true)
+        XCTAssertEqual(restored.visible.first, .synopsis)
+    }
+    func testHideAllAndShowAllDoNotResetOrderOrOtherPageTypes() {
+        var layout = SeriesDetailLayout(page: .reader)
+        layout.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+        let order = layout.order
+        layout.setAllVisible(false)
+        let restored = SeriesDetailLayout(page: .reader, saved: layout.saved)
+        XCTAssertTrue(restored.visible.isEmpty)
+        XCTAssertEqual(restored.order, order)
+        layout.setAllVisible(true)
+        XCTAssertEqual(layout.visible, order)
+        XCTAssertEqual(SeriesDetailLayout(page: .manga).visible, SeriesDetailPage.manga.sections)
+    }
+    func testVisibilityRejectsForeignAndRemovedSectionsWithoutLosingValidSettings() {
+        let saved = #"{"order":["publication","synopsis"],"hidden":["synopsis","dubSchedule","actors","chapters"]}"#
+        var layout = SeriesDetailLayout(page: .manga, saved: saved)
+        XCTAssertEqual(layout.hidden, [.synopsis])
+        XCTAssertEqual(layout.order.first, .publication)
+        layout.setVisible(.chapters, false)
+        XCTAssertEqual(layout.hidden, [.synopsis])
+        let withoutVisibility = SeriesDetailLayout(page: .anime, saved: #"{"order":["reviews","information"]}"#)
+        XCTAssertTrue(withoutVisibility.hidden.isEmpty)
+        XCTAssertEqual(withoutVisibility.order.first, .reviews)
+    }
     func testSavedOrdersSurviveReopeningAndEachPageHasItsOwnKey() {
         var layout = SeriesDetailLayout(page: .anime)
         let synopsis = layout.order.firstIndex(of: .synopsis)!

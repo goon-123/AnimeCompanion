@@ -65,7 +65,7 @@ struct MangaTitleDetailView: View {
     private var record: MangaReadingRecord? { reading.record(title.id) }
     private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .reader, saved: sectionOrder) }
     private var visibleSections: [SeriesDetailSection] {
-        layout.order.filter {
+        layout.visible.filter {
             if $0 == .synopsis { return !model.manga.description.isEmpty }
             if $0 == .genres { return !model.manga.genre.isEmpty }
             return true
@@ -103,6 +103,10 @@ struct MangaTitleDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
+                if visibleSections.isEmpty {
+                    Text("Sections are hidden or unavailable. Use Arrange sections in the toolbar to show more.")
+                        .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
+                }
                 ForEach(visibleSections) { section in
                     detailSection(section).id(section.rawValue)
                 }

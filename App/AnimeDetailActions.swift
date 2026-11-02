@@ -61,7 +61,12 @@ struct AnimeEpisodeFacts: View {
             let dubbed = dub?.released.map(String.init) ?? "—"
             HStack(spacing: 8) {
                 fact("Aired", value: aired, key: "aired")
-                fact("Dubbed", value: (dub?.confidence == .estimated ? "~" : "") + dubbed, key: "dubbed")
+                NavigationLink {
+                    AnimeDubScheduleView(anime: anime)
+                } label: {
+                    fact("Dubbed", value: (dub?.confidence == .estimated ? "~" : "") + dubbed, key: "dubbed")
+                }.buttonStyle(.plain).accessibilityIdentifier("detail-episodes-dubbed")
+                    .accessibilityHint("Open the English dub schedule")
                 fact("Watched", value: entry.map { String($0.progressValue) } ?? "—", key: "watched")
             }.font(.caption).foregroundStyle(.secondary)
         }

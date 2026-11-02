@@ -1,54 +1,6 @@
 import SwiftUI
 import AnimeCore
 
-struct AnimeUpdatesLinks: View {
-    let anime: Anime
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) { links }
-            VStack(alignment: .leading, spacing: 10) { links }
-        }
-    }
-    @ViewBuilder private var links: some View {
-        NavigationLink { AnimeReleaseInfoView(anime: anime) } label: { label("Schedule", symbol: "calendar") }
-            .accessibilityIdentifier("detail-open-schedule")
-        NavigationLink(value: AnimeVisualsRoute(anime: anime)) { label("Visuals", symbol: "photo.on.rectangle") }
-            .accessibilityIdentifier("detail-open-visuals")
-        NavigationLink { NewsView(anime: anime) } label: { label("Headlines", symbol: "newspaper") }
-            .accessibilityIdentifier("detail-open-headlines")
-    }
-    private func label(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol).font(.caption.weight(.semibold))
-            .padding(.horizontal, 12).frame(minHeight: 44)
-            .background(Theme.surface, in: Capsule()).foregroundStyle(.primary)
-    }
-}
-
-private struct AnimeReleaseInfoView: View {
-    @EnvironmentObject private var store: AppStore
-    @EnvironmentObject private var dubs: ExploreDubStore
-    @EnvironmentObject private var navigation: AppNavigationStore
-    let anime: Anime
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if store.isVisible(anime) {
-                Text(anime.displayTitle).font(.title2.bold())
-                AnimeOriginalBroadcast(anime: anime)
-                Text("AniList broadcast times use your device timezone and do not confirm regional streaming availability.")
-                    .font(.caption).foregroundStyle(.secondary)
-                AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
-                    events: dubs.snapshot?.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } ?? [],
-                    loading: dubs.loading, error: dubs.notice)
-                Button { navigation.openSchedule() } label: { Label("Open the weekly schedule", systemImage: "calendar") }
-                    .buttonStyle(.bordered).accessibilityIdentifier("detail-weekly-schedule")
-                } else { ContentUnavailableView("Adult content is hidden", systemImage: "eye.slash") }
-            }.padding(18).readableContent(width: 940)
-        }.background(Theme.background).navigationTitle("Schedule").navigationBarTitleDisplayMode(.inline)
-            .accessibilityIdentifier("anime-release-info")
-    }
-}
-
 struct AnimeVisualsView: View {
     @EnvironmentObject private var store: AppStore
     var anime: Anime? = nil

@@ -94,21 +94,20 @@ struct AnimeDetailView: View {
         switch selectedTab {
         case .info:
             LazyVStack(alignment: .leading, spacing: 18) {
+                if visibleSections(for: anime).isEmpty { hiddenSectionsNotice }
                 ForEach(visibleSections(for: anime)) { section in
                     infoSection(section, anime: anime).id(section.rawValue)
                 }
             }.accessibilityIdentifier("series-info-tab")
         case .episodes:
-            VStack(alignment: .leading, spacing: 18) {
-                watchlist(anime)
-                AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID, appliedRefreshID: $episodeAppliedRefreshID,
-                    play: { playbackRequest = DetailPlaybackRequest(episode: $0) }, edit: editEntry)
-            }
+            AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID, appliedRefreshID: $episodeAppliedRefreshID,
+                play: { playbackRequest = DetailPlaybackRequest(episode: $0) }, edit: editEntry)
         }
     }
     private func visibleSections(for anime: Anime) -> [SeriesDetailSection] {
-        layout.order.filter { section in
+        layout.visible.filter { section in
             switch section {
+            case .broadcast: return AnimeSeriesContent.showsOriginalBroadcast(for: anime)
             case .related:
                 return (anime.relations?.edges ?? []).contains { edge in
                     edge.node.map { store.includeAdult || $0.isAdult != true } == true
@@ -122,6 +121,10 @@ struct AnimeDetailView: View {
             }
         }
     }
+    private var hiddenSectionsNotice: some View {
+        Text("Info sections are hidden or unavailable. Use Arrange sections in the toolbar to show more.")
+            .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 20)
+    }
     @ViewBuilder private func infoSection(_ section: SeriesDetailSection, anime: Anime) -> some View {
         switch section {
         case .watchlist: watchlist(anime)
@@ -132,10 +135,7 @@ struct AnimeDetailView: View {
         case .recommendations: VStack(alignment: .leading, spacing: 12) { recommendations(anime) }
         case .artwork: AnimeArtworkShelf(anime: anime, refreshID: episodeRefreshID)
         case .trailer: VStack(alignment: .leading, spacing: 12) { trailer(anime) }
-        case .dubSchedule:
-            AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
-                events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
-        case .news: AnimeUpdatesLinks(anime: anime)
+        case .news: AnimeSeriesNewsWidget(anime: anime, refreshID: episodeRefreshID)
         case .discussions: AnimeDiscussionsSection(anime: anime)
         case .reviews: reviews(anime)
         case .links:
@@ -249,9 +249,6 @@ struct AnimeDetailView: View {
         }
     }
     private func sectionTitle(_ title: String) -> some View { Text(title).font(.title3.bold()).padding(.top, 12) }
-    private func dubEvents(for anime: Anime) -> [ReleaseEvent] {
-        dubs.snapshot?.events(knownMedia: [anime.id: anime]).filter { $0.anime.id == anime.id } ?? []
-    }
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let requestedAdult = store.includeAdult
         let targetID = mediaID

@@ -23,4 +23,24 @@ public struct AnimeEpisodeReleaseGroups: Sendable {
         if let released = anime.releasedEpisodeCount(at: now) { return episode.number <= released }
         return !episode.isFuture(at: now)
     }
+    /// Paginated metadata must not make the next unwatched episode disappear.
+    /// Fill number-only rows where the original broadcast confirms release,
+    /// while keeping real metadata and never inventing titles, dates or stills.
+    public static func listedEpisodes(anime: Anime, metadata: [AnimeEpisodeMetadata], watched: Int, now: Date = Date()) -> [AnimeEpisodeMetadata] {
+        var values = metadata.reduce(into: [Int: AnimeEpisodeMetadata]()) { result, episode in
+            if (1...10_000).contains(episode.number) { result[episode.number] = episode }
+        }
+        let released = anime.releasedEpisodeCount(at: now)
+        let count: Int
+        if metadata.isEmpty {
+            count = min(10_000, max(max(anime.episodes ?? 0, released ?? 0), max(watched, anime.nextAiringEpisode?.episode ?? 0)))
+        } else { count = min(10_000, max(0, released ?? 0)) }
+        if count > 0 {
+            for number in 1...count where values[number] == nil { values[number] = AnimeEpisodeMetadata(number: number) }
+        }
+        if let next = anime.nextAiringEpisode, (1...10_000).contains(next.episode), next.date > now, values[next.episode] == nil {
+            values[next.episode] = AnimeEpisodeMetadata(number: next.episode)
+        }
+        return values.values.sorted { $0.number < $1.number }
+    }
 }

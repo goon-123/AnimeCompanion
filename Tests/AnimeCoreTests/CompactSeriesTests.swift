@@ -2,6 +2,29 @@ import XCTest
 @testable import AnimeCore
 
 final class CompactSeriesTests: XCTestCase {
+    func testUnwatchingCompletedEntriesResetsCumulativeProgressWithoutCompletionClamping() throws {
+        let existing = try entry(12, status: "COMPLETED", repeats: 4)
+        let edit = try TrackingEdit.unwatched(from: 9, entry: existing, total: 12)
+        XCTAssertEqual(edit.progress, 8)
+        XCTAssertEqual(edit.status, .watching)
+        XCTAssertEqual(try edit.validated(total: 12).progress, 8)
+        XCTAssertNil(edit.scoreRaw); XCTAssertNil(edit.notes); XCTAssertNil(edit.repeatCount)
+    }
+    func testUnwatchingPreservesPausedDroppedAndRewatchStatesAndUnrelatedFields() throws {
+        for (status, expected) in [("PAUSED", LibraryStatus.paused), ("DROPPED", .dropped), ("REPEATING", .rewatching)] {
+            let edit = try TrackingEdit.unwatched(from: 4, entry: entry(8, status: status, repeats: 3), total: 12)
+            XCTAssertEqual(edit.progress, 3); XCTAssertEqual(edit.status, expected)
+            XCTAssertNil(edit.scoreRaw); XCTAssertNil(edit.notes); XCTAssertNil(edit.repeatCount)
+        }
+    }
+    func testUnwatchingFirstEpisodeAndUnknownTotalsAndRejectingInvalidSelections() throws {
+        XCTAssertEqual(try TrackingEdit.unwatched(from: 1, entry: entry(8), total: nil).progress, 0)
+        XCTAssertEqual(try TrackingEdit.unwatched(from: 8, entry: entry(8), total: nil).progress, 7)
+        for number in [0, -1, 9, 13, 100_001] {
+            XCTAssertThrowsError(try TrackingEdit.unwatched(from: number, entry: entry(8), total: 12))
+        }
+        XCTAssertThrowsError(try TrackingEdit.unwatched(from: 1, entry: nil, total: 12))
+    }
     private func entry(_ progress: Int, status: String = "CURRENT", repeats: Int = 2) throws -> LibraryEntry {
         try JSONDecoder().decode(LibraryEntry.self, from: Data("{\"id\":11,\"mediaId\":1,\"progress\":\(progress),\"status\":\"\(status)\",\"repeat\":\(repeats),\"score\":85,\"notes\":\"Keep my notes\"}".utf8))
     }

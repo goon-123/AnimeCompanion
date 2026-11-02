@@ -21,7 +21,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .anime:
             return [.watchlist, .synopsis, .information, .broadcast, .related, .recommendations,
-                    .dubSchedule, .news, .discussions, .reviews, .artwork, .trailer, .links]
+                    .news, .discussions, .reviews, .artwork, .trailer, .links]
         case .manga:
             return [.watchlist, .reading, .synopsis, .publication, .tags, .adaptations,
                     .coverage, .related, .artwork, .links]
@@ -47,7 +47,7 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
         case .artwork: return page == .manga ? "Artwork & covers" : "Artwork"
         case .trailer: return "Trailer"
         case .dubSchedule: return "English dub"
-        case .news: return "Headlines"
+        case .news: return "Series news"
         case .discussions: return "Discussions"
         case .reviews: return "Reviews"
         case .links: return "Links"
@@ -63,23 +63,40 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
     }
 }
 
-/// Page-scoped, device-local preferences. Unknown/removed sections are ignored;
-/// newly introduced sections are appended without disturbing a saved order.
+/// Page-scoped, device-local order and visibility. The original array-only
+/// format migrates without losing its order. Hiding never deletes content.
 public struct SeriesDetailLayout: Equatable, Sendable {
     public let page: SeriesDetailPage
     public private(set) var order: [SeriesDetailSection]
+    public private(set) var hidden: Set<SeriesDetailSection>
+    public var visible: [SeriesDetailSection] { order.filter { !hidden.contains($0) } }
+    private struct Saved: Codable {
+        let order: [String]
+        let hidden: [String]?
+    }
     public init(page: SeriesDetailPage, saved: String = "") {
         self.page = page
-        let values = saved.utf8.count <= 16_384
-            ? (try? JSONDecoder().decode([String].self, from: Data(saved.utf8))) ?? [] : []
+        let data = Data(saved.utf8.prefix(16_385))
+        let snapshot = data.count <= 16_384 ? (try? JSONDecoder().decode(Saved.self, from: data)) : nil
+        let legacy = data.count <= 16_384 ? (try? JSONDecoder().decode([String].self, from: data)) : nil
+        let values = snapshot?.order ?? legacy ?? []
         let allowed = Set(page.sections)
         var seen = Set<SeriesDetailSection>()
         order = values.compactMap(SeriesDetailSection.init(rawValue:))
             .filter { allowed.contains($0) && seen.insert($0).inserted }
         order += page.sections.filter { seen.insert($0).inserted }
+        hidden = Set((snapshot?.hidden ?? []).compactMap(SeriesDetailSection.init(rawValue:))).intersection(allowed)
     }
     public var saved: String {
-        (try? JSONEncoder().encode(order.map(\.rawValue))).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        let value = Saved(order: order.map(\.rawValue), hidden: hidden.map(\.rawValue).sorted())
+        return (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+    public mutating func setVisible(_ section: SeriesDetailSection, _ visible: Bool) {
+        guard order.contains(section) else { return }
+        if visible { hidden.remove(section) } else { hidden.insert(section) }
+    }
+    public mutating func setAllVisible(_ visible: Bool) {
+        hidden = visible ? [] : Set(order)
     }
     /// Uses the same original-array destination indices as SwiftUI's onMove.
     public mutating func move(fromOffsets offsets: IndexSet, toOffset destination: Int) {

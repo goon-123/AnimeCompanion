@@ -13,7 +13,7 @@ final class NewsExperienceUITests: XCTestCase {
         app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         app.revealInContent(entry); entry.tap()
-        let headlines = app.buttons["detail-open-headlines"]
+        let headlines = app.buttons["series-news-view-all"]
         app.revealInContent(headlines); headlines.tap()
         XCTAssertTrue(app.navigationBars["Headlines"].waitForExistence(timeout: 10))
         waitForCount(3, app)

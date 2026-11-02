@@ -83,13 +83,15 @@ final class PhaseTwoNavigationUITests: XCTestCase {
         app.appTab("My Library").tap()
         let entry = app.buttons["library-entry-1"]
         reveal(entry, in: app); entry.tap()
+        let dubLink = app.buttons["detail-episodes-dubbed"]
+        reveal(dubLink, in: app); dubLink.tap()
+        XCTAssertTrue(app.navigationBars["English dub"].waitForExistence(timeout: 10))
         let dub = app.staticTexts["detail-dub-count"]
+
         reveal(dub, in: app)
         XCTAssertTrue(dub.label.contains("26/26"))
-        XCTAssertFalse(app.staticTexts["Upcoming releases"].exists)
-        app.buttons["detail-dub-disclosure"].tap()
         XCTAssertTrue(app.staticTexts["Upcoming releases"].exists)
-        app.buttons["detail-dub-disclosure"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
         XCTAssertFalse(app.buttons["detail-episodes-disclosure"].exists)
         app.openAnimeActions(); app.buttons["watch-in-vidhub"].tap()
         XCTAssertTrue(app.textFields["playback-episode-number"].waitForExistence(timeout: 10))
