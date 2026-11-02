@@ -10,6 +10,7 @@ struct ExploreView: View {
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
+    @AppStorage(ExploreSurface.anime.storageKey) private var savedLayout = ""
     @State private var widgetRefreshID = 0
     @State private var showSeasons = false
     @State private var showSettings = false
@@ -28,7 +29,7 @@ struct ExploreView: View {
         GeometryReader { geometry in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 26) {
-                    catalogNotices
+                    if hasCatalogNotices { catalogNotices }
                     ExploreRows(surface: .anime, refreshID: widgetRefreshID, widgetInset: 16) { row in
                         catalogRow(row, geometry: geometry)
                     }
@@ -39,7 +40,7 @@ struct ExploreView: View {
                         }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                     }
                     DiscoveryDataNote().padding(.horizontal)
-                }.padding(.top, geometry.safeAreaInsets.top + 12).padding(.bottom, 24)
+                }.padding(.top, spotlightLeadsPage ? 0 : geometry.safeAreaInsets.top + 12).padding(.bottom, 24)
                     .readableContent(width: 1280).frame(maxWidth: .infinity)
             }.accessibilityIdentifier("explore-scroll").ignoresSafeArea(.container, edges: .top)
         }.background(Theme.background.ignoresSafeArea())
@@ -60,6 +61,14 @@ struct ExploreView: View {
                 _ = await (metadata, dubInfo)
             }
     }
+    private var hasCatalogNotices: Bool {
+        let checkingDubs = dubFilters.selection.isActive && !dubs.loaded
+        let unavailableDubs = dubFilters.selection.dub != .all && dubs.loaded && dubs.unavailable
+        return checkingDubs || error != nil || unavailableDubs
+    }
+    private var spotlightLeadsPage: Bool {
+        !hasCatalogNotices && ExplorePreferences(surface: .anime, saved: savedLayout).visible.first == .catalog(.spotlight)
+    }
     private var catalogNotices: some View {
         VStack(alignment: .leading, spacing: 10) {
             if dubFilters.selection.isActive && !dubs.loaded { ProgressView("Checking English dubs…").frame(maxWidth: .infinity) }
@@ -74,7 +83,8 @@ struct ExploreView: View {
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow, geometry: GeometryProxy) -> some View {
         if row == .spotlight {
             if !featured.isEmpty {
-                FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry), topInset: 0, background: $posterBackground)
+                FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
+                    topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
                     .modifier(CatalogEntrance())
             } else if loading {
                 RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))

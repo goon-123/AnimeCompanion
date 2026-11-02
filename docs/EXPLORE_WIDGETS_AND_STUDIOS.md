@@ -1,4 +1,6 @@
-# Explore widgets and series links — 0.48.0 (110)
+# Explore widgets and series links — 0.48.1 (111)
+
+0.48.1 fixes two regressions from 0.48.0. The Add a Home widget and Customize shortcuts actions use explicit button-driven navigation, so native List reorder mode cannot disable them; their destination pages use normal non-editing controls. When Spotlight leads Classic Anime, its artwork once again extends to the top behind the format controls. Empty catalog notices no longer reserve a row of spacing. When Spotlight is hidden, moved below another row or preceded by an actual notice, normal content stays clear of the fixed header. Saved widget choices and row order are preserved.
 
 Explore now has a visible Customize control. Choose **Add a Home widget**, then return to the row list and drag its handle between catalog shelves. Toggle any row or added widget off, or use its context menu to move it up/down or hide it. Restore Explore layout returns that layout to its catalog defaults. Hide all retains the customization entry point.
 
@@ -10,7 +12,7 @@ Information keeps its compact Aired/Dubbed/Watched counts. Dubbed now has an acc
 
 The large separate discussion card is replaced with a single compact **Discussions** link in the Reviews header. It opens the existing discussion page and preserves its watched-episode starting point and episode/source controls. The layout editor calls the merged section **Reviews & discussions**. Old section orders migrate to one merged position; it remains visible if either old section was visible, and remains hidden if both were hidden.
 
-Focused verification covers mixed row/widget persistence, hidden rows, independent Home options and shortcuts, malformed preferences, season rollover, all-time filters, new query variables, studio identity/pagination/content filtering and merged discussion visibility. CI additionally checks the three new live AniList routes and builds the universal Release IPA. Longer simulator suites remain opt-in.
+Focused verification covers mixed row/widget persistence, hidden rows, independent Home options and shortcuts, malformed preferences, season rollover, all-time filters, new query variables, studio identity/pagination/content filtering and merged discussion visibility. Two offline iPhone UI regressions exercise adding a widget and editing its shortcuts while reorder handles are active, persistence after relaunch, the Spotlight top edge, and the safe header position with Spotlight hidden. CI checks the three new live AniList routes and builds the universal Release IPA. Longer simulator suites remain opt-in.
 
 ## Quick device checks
 

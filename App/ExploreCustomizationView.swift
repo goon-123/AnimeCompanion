@@ -6,6 +6,8 @@ struct ExploreCustomizationView: View {
     let surface: ExploreSurface
     @AppStorage private var saved: String
     @State private var confirmReset = false
+    @State private var pickingWidgets = false
+    @State private var customizingShortcuts = false
     init(surface: ExploreSurface) {
         self.surface = surface; _saved = AppStorage(wrappedValue: "", surface.storageKey)
     }
@@ -16,8 +18,16 @@ struct ExploreCustomizationView: View {
     var body: some View {
         List {
             Section {
-                NavigationLink { ExploreWidgetPicker(surface: surface) } label: { Label("Add a Home widget", systemImage: "plus.circle.fill") }
-                    .accessibilityIdentifier("explore-add-widgets")
+                // List edit mode disables NavigationLink rows. Keep the reorder
+                // handles active and push destinations with explicit buttons.
+                Button { pickingWidgets = true } label: {
+                    HStack {
+                        Label("Add a Home widget", systemImage: "plus.circle.fill")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }.foregroundStyle(Theme.accent).frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("explore-add-widgets")
+                    .accessibilityHint("Open the Home widget picker")
             } footer: { Text("Add any Home widget here. Explore keeps its own order, visibility, layouts and preview sizes.") }
             Section {
                 ForEach(preferences.order) { row in
@@ -28,7 +38,8 @@ struct ExploreCustomizationView: View {
                         if case .widget(let section) = row {
                             Text(section.detail).font(.caption).foregroundStyle(.secondary)
                             if section == .featureLinks {
-                                NavigationLink("Customize shortcuts") { HomeShortcutCustomizationView(savedOverride: widgetOptions) }.font(.caption)
+                                Button("Customize shortcuts") { customizingShortcuts = true }.font(.caption)
+                                    .frame(minHeight: 44).accessibilityIdentifier("explore-widget-shortcuts")
                             }
                             if section.supportsLayout {
                                 Picker("Widget layout", selection: Binding(get: { preferences.widgetOptions.layout(for: section) }, set: { value in update { $0.widgetOptions.setLayout(value, for: section) } })) {
@@ -54,6 +65,12 @@ struct ExploreCustomizationView: View {
             }
         }.environment(\.editMode, .constant(.active))
             .navigationTitle("Customize Explore").navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $pickingWidgets) {
+                ExploreWidgetPicker(surface: surface).environment(\.editMode, .constant(.inactive))
+            }
+            .navigationDestination(isPresented: $customizingShortcuts) {
+                HomeShortcutCustomizationView(savedOverride: widgetOptions).environment(\.editMode, .constant(.inactive))
+            }
             .confirmationDialog("Restore this Explore layout?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Restore layout") { saved = ExplorePreferences(surface: surface).saved }
             } message: { Text("This restores catalog rows and removes widgets from this Explore layout.") }
