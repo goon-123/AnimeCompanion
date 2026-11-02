@@ -1,6 +1,9 @@
 import XCTest
 import CZlib
 @testable import AnimeCore
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -59,35 +62,96 @@ final class MangaExtensionTests: XCTestCase {
         XCTAssertTrue(adult.matches(query: "", language: "en", includeAdult: true))
     }
 
-    func testRepositoryJoinsChecksumsByPackageAndExactFilename() async throws {
-        let transport = MangaFixtureTransport(index: try gzip(fixtureIndex()), filename: "fixture-v1.6.1.apk")
+    func testCatalogDoesNotUseBuildContentHashesAsAPKDigests() async throws {
+        let transport = MangaFixtureTransport(index: try gzip(fixtureIndex()))
         let catalog = try await MangaRepositoryClient(transport: transport).catalog()
-        XCTAssertEqual(catalog.extensions[0].sha256, String(repeating: "a", count: 64))
-        let wrong = MangaFixtureTransport(index: fixtureIndex(), filename: "old-version.apk")
-        let stale = try await MangaRepositoryClient(transport: wrong).catalog()
-        XCTAssertNil(stale.extensions[0].sha256)
-        do { _ = try await MangaRepositoryClient(transport: wrong).package(stale.extensions[0]); XCTFail("Unverified APK was requested") }
-        catch { XCTAssertEqual(error as? MangaExtensionError, .checksumUnavailable) }
+        XCTAssertNil(catalog.extensions[0].sha256)
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1, "release-assets.json is build metadata, not a package checksum feed")
+        XCTAssertTrue(requests[0].url!.path.hasSuffix("index.pb"))
     }
 
-    func testCurrentFlatChecksumInventoryAndMixedEntriesRemainReadable() async throws {
-        let package = "eu.kanade.tachiyomi.extension.en.fixture"
-        for inventory in [
-            [package: String(repeating: "A", count: 64)] as [String: Any],
-            [package: String(repeating: "a", count: 64), "future-metadata": ["format": 2], "invalid": NSNull()]
+    func testExactReleaseAssetReplacesPreviouslyCachedContentHash() async throws {
+        let transport = MangaFixtureTransport(index: fixtureIndex())
+        let client = MangaRepositoryClient(transport: transport)
+        let old = try fixtureEntry(digest: "b")
+        let verified = try await client.verifiedDescriptor(old)
+        XCTAssertEqual(verified.sha256, String(repeating: "a", count: 64))
+        XCTAssertEqual(old.sha256, String(repeating: "b", count: 64), "Old cached descriptors must not be trusted or mutated")
+        let apk = try await client.package(verified)
+        XCTAssertEqual(apk, Data("fixture-apk".utf8))
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests[0].url?.absoluteString, "https://api.github.com/repos/keiyoushi/extensions/releases/tags/fixture")
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
+        XCTAssertTrue(requests.allSatisfy { $0.cachePolicy == .reloadIgnoringLocalCacheData })
+    }
+
+    func testVerificationRequiresTheExactUploadedAPKWithAnUnambiguousSHA256() async throws {
+        let valid = fixtureReleaseAsset()
+        var invalid: [[String: Any]] = []
+        for (key, value) in [
+            ("name", "old-version.apk"),
+            ("browser_download_url", "https://github.com/other/extensions/releases/download/fixture/fixture-v1.6.1.apk"),
+            ("digest", String(repeating: "a", count: 64)),
+            ("digest", "sha256:invalid"), ("state", "new")
         ] {
-            let transport = MangaFixtureTransport(index: try gzip(fixtureIndex()), filename: "unused", inventory: try JSONSerialization.data(withJSONObject: inventory))
-            let catalog = try await MangaRepositoryClient(transport: transport).catalog()
-            XCTAssertEqual(catalog.extensions.first?.sha256, String(repeating: "a", count: 64))
+            var asset = valid; asset[key] = value
+            invalid.append(["tag_name": "fixture", "draft": false, "assets": [asset]])
+        }
+        var missing = valid; missing["digest"] = NSNull()
+        invalid += [
+            ["tag_name": "fixture", "draft": false, "assets": [missing]],
+            ["tag_name": "other", "draft": false, "assets": [valid]],
+            ["tag_name": "fixture", "draft": true, "assets": [valid]],
+            ["tag_name": "fixture", "draft": false, "assets": [valid, valid]],
+            ["tag_name": "fixture", "draft": false, "assets": []]
+        ]
+        for release in invalid {
+            let transport = MangaFixtureTransport(index: fixtureIndex(), release: try JSONSerialization.data(withJSONObject: release))
+            do {
+                _ = try await MangaRepositoryClient(transport: transport).verifiedDescriptor(fixtureEntry())
+                XCTFail("Unverified or ambiguous asset was accepted")
+            } catch { XCTAssertEqual(error as? MangaExtensionError, .checksumUnavailable) }
+            let requests = await transport.requests
+            XCTAssertEqual(requests.count, 1, "No APK should be downloaded after verification fails")
         }
     }
-    func testMalformedChecksumFeedReportsRepositoryErrorInsteadOfDecoderFailure() async throws {
-        for raw in ["[]", "<html>Unavailable</html>", "{}", "{\"package\": 7}", "{\"package\": \"not-a-checksum\"}"] {
-            let transport = MangaFixtureTransport(index: fixtureIndex(), filename: "unused", inventory: Data(raw.utf8))
-            do { _ = try await MangaRepositoryClient(transport: transport).catalog(); XCTFail("Malformed feed accepted") }
-            catch { XCTAssertEqual(error as? MangaExtensionError, .invalidChecksums) }
-        }
+
+    func testBatchReusesReleaseMetadataButExplicitRetryRefreshesIt() async throws {
+        let replacement = try fixtureRelease(digest: "sha256:" + String(repeating: "c", count: 64))
+        let transport = MangaFixtureTransport(index: fixtureIndex(), replacement: replacement)
+        let client = MangaRepositoryClient(transport: transport), entry = try fixtureEntry()
+        let first = try await client.verifiedDescriptor(entry)
+        let second = try await client.verifiedDescriptor(entry)
+        XCTAssertEqual(first.sha256, second.sha256)
+        var requests = await transport.requests
+        XCTAssertEqual(requests.count, 1)
+        let refreshed = try await client.verifiedDescriptor(entry, refresh: true)
+        XCTAssertEqual(refreshed.sha256, String(repeating: "c", count: 64))
+        requests = await transport.requests
+        XCTAssertEqual(requests.count, 2)
     }
+
+    func testUntrustedReleaseURLIsRejectedBeforeAnyNetworkRequest() async throws {
+        let transport = MangaFixtureTransport(index: fixtureIndex())
+        let client = MangaRepositoryClient(transport: transport)
+        let entry = try fixtureEntry()
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        for url in [
+            "https://github.com/other/extensions/releases/download/fixture/fixture-v1.6.1.apk",
+            "https://github.com.evil.test/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk",
+            "https://github.com/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk?token=anything"
+        ] {
+            object["apkURL"] = url
+            let untrusted = try JSONDecoder().decode(MangaExtensionDescriptor.self, from: JSONSerialization.data(withJSONObject: object))
+            do { _ = try await client.verifiedDescriptor(untrusted); XCTFail("Untrusted release requested") }
+            catch { XCTAssertEqual(error as? MangaExtensionError, .invalidRepository) }
+        }
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testUpdatePlanIncludesDisabledInstallationsAndFiltersMatureCollections() throws {
         let old = try installation(digest: "a", enabled: false)
         let same = try MangaExtensionCatalog.decode(fixtureIndex())
@@ -155,12 +219,20 @@ final class MangaExtensionTests: XCTestCase {
 
     func testLiveKeiyoushiCatalogWhenExplicitlyEnabled() async throws {
         guard ProcessInfo.processInfo.environment["ANIMECOMPANION_LIVE_MANGA"] == "1" else { throw XCTSkip("Opt-in network check") }
-        let catalog = try await MangaRepositoryClient().catalog()
+        let client = MangaRepositoryClient()
+        let catalog = try await client.catalog()
         XCTAssertGreaterThan(catalog.extensions.count, 500)
         let mangaPlus = try XCTUnwrap(catalog.extensions.first { $0.packageName == "eu.kanade.tachiyomi.extension.all.mangaplus" })
         XCTAssertEqual(mangaPlus.apiVersion, "1.6")
-        XCTAssertNotNil(mangaPlus.sha256)
+        XCTAssertNil(mangaPlus.sha256, "APK digests are resolved only when an extension is installed")
         XCTAssertFalse(mangaPlus.adult)
+        for source in ["hiperdex", "toonily", "weebcentral"] {
+            let entry = try XCTUnwrap(catalog.extensions.first { $0.packageName == "eu.kanade.tachiyomi.extension.en.\(source)" })
+            let verified = try await client.verifiedDescriptor(entry)
+            let apk = try await client.package(verified)
+            XCTAssertEqual(try packageSHA256(apk), verified.sha256, "\(source) must match the actual APK bytes, not a build content hash")
+            print("Verified live Keiyoushi APK: \(source) \(verified.versionName) (\(apk.count) bytes)")
+        }
     }
 }
 
@@ -178,19 +250,56 @@ private func fixtureInspection(package: String = "eu.kanade.tachiyomi.extension.
 private func installation(digest: String, enabled: Bool = true) throws -> InstalledMangaExtension {
     try InstalledMangaExtension(descriptor: fixtureEntry(digest: digest), inspection: fixtureInspection(), enabled: enabled)
 }
-private struct MangaFixtureTransport: HTTPTransport {
+private func fixtureReleaseAsset(digest: String = "sha256:" + String(repeating: "A", count: 64)) -> [String: Any] {
+    ["name": "fixture-v1.6.1.apk",
+     "browser_download_url": "https://github.com/keiyoushi/extensions/releases/download/fixture/fixture-v1.6.1.apk",
+     "digest": digest, "state": "uploaded"]
+}
+private func fixtureRelease(digest: String = "sha256:" + String(repeating: "A", count: 64)) throws -> Data {
+    try JSONSerialization.data(withJSONObject: ["tag_name": "fixture", "draft": false, "assets": [fixtureReleaseAsset(digest: digest)]])
+}
+private actor MangaFixtureTransport: HTTPTransport {
     let index: Data
-    let filename: String
-    var inventory: Data? = nil
+    let release: Data?
+    let replacement: Data?
+    private(set) var requests: [URLRequest] = []
+    private var releaseRequests = 0
+    init(index: Data, release: Data? = nil, replacement: Data? = nil) {
+        self.index = index; self.release = release; self.replacement = replacement
+    }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
         let url = try XCTUnwrap(request.url)
         let data: Data
         if url.path.hasSuffix("index.pb") { data = index }
-        else if url.path.hasSuffix("release-assets.json") {
-            data = try inventory ?? JSONSerialization.data(withJSONObject: ["eu.kanade.tachiyomi.extension.en.fixture": ["apk": ["name": filename, "sha256": String(repeating: "a", count: 64)]]])
-        } else { throw ServiceError.invalidResponse }
+        else if url.host == "api.github.com" {
+            releaseRequests += 1
+            data = try (releaseRequests > 1 ? replacement ?? release : release) ?? fixtureRelease()
+        } else if url.path.hasSuffix(".apk") { data = Data("fixture-apk".utf8) }
+        else { throw ServiceError.invalidResponse }
         return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
+}
+
+private func packageSHA256(_ data: Data) throws -> String {
+    #if canImport(CryptoKit)
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    #elseif os(Linux)
+    // Cross-check the app client's downloaded bytes on the Linux CI runner too.
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: file) }
+    try data.write(to: file)
+    let task = Process(), output = Pipe()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/sha256sum"); task.arguments = [file.path]
+    task.standardOutput = output
+    try task.run()
+    let result = output.fileHandleForReading.readDataToEndOfFile()
+    task.waitUntilExit()
+    guard task.terminationStatus == 0, let digest = String(data: result, encoding: .utf8)?.split(separator: " ").first else { throw ServiceError.invalidResponse }
+    return String(digest)
+    #else
+    throw XCTSkip("No SHA-256 implementation on this test host")
+    #endif
 }
 
 // Independently encoded upstream index schema; no downloaded catalogs or APKs

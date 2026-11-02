@@ -80,16 +80,24 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     }
     private func installPackage(_ entry: MangaExtensionDescriptor) async throws {
         installing = entry.id; defer { installing = nil }
-        let apk = try await client.package(entry)
-        try verify(apk, descriptor: entry)
-        let inspection = try await MangaRuntime.inspect(apk, modern: entry.modernAPI)
+        var descriptor = try await client.verifiedDescriptor(entry)
+        var apk = try await client.package(descriptor)
+        do { try verify(apk, descriptor: descriptor) }
+        catch MangaExtensionError.checksumMismatch {
+            // A replaced upstream asset or stale CDN response gets one fresh
+            // metadata/download attempt; mismatched bytes are never installed.
+            descriptor = try await client.verifiedDescriptor(entry, refresh: true)
+            apk = try await client.package(descriptor)
+            try verify(apk, descriptor: descriptor)
+        }
+        let inspection = try await MangaRuntime.inspect(apk, modern: descriptor.modernAPI)
         try Task.checkCancellation()
-        let installation = try InstalledMangaExtension(descriptor: entry, inspection: inspection, enabled: installed(entry.id)?.enabled ?? true)
+        let installation = try InstalledMangaExtension(descriptor: descriptor, inspection: inspection, enabled: installed(entry.id)?.enabled ?? true)
         state = try await storage.commit(installation, apk: apk)
     }
     func updateAll(includeAdult: Bool) async {
         guard !busy else { return }
-        let pending = updates.filter { $0.supportsRuntime && $0.sha256 != nil && (includeAdult || !$0.adult) }
+        let pending = updates.filter { $0.supportsRuntime && (includeAdult || !$0.adult) }
         guard !pending.isEmpty else { return }
         updatingAll = true; error = nil; notice = nil
         defer { updatingAll = false; updateProgress = "" }
