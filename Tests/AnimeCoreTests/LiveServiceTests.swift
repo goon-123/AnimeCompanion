@@ -3,6 +3,18 @@ import XCTest
 
 /// Opt-in checks against the same public clients used by the app. Ordinary unit tests stay offline.
 final class LiveServiceTests: XCTestCase {
+    func testAniListExploreShelvesAndStudio() async throws {
+        try requireLiveServices()
+        let api = AniListClient()
+        let catalog = try await api.explore(.current(), refresh: true)
+        XCTAssertFalse(catalog.media(for: .previousSeason).isEmpty)
+        XCTAssertFalse(catalog.media(for: .topRated).isEmpty)
+        let title = try await api.details(id: 1, refresh: true)
+        let studio = try XCTUnwrap(title.studios?.nodes?.first)
+        let works = try await api.studioAnime(id: studio.id, refresh: true)
+        XCTAssertFalse(works.media?.isEmpty ?? true)
+        XCTAssertTrue(works.media?.allSatisfy { $0.type == "ANIME" && $0.isAdult != true } == true)
+    }
     func testMangaBakaDiscoverySelections() async throws {
         try requireLiveServices()
         let api = MangaBakaClient(directory: nil)

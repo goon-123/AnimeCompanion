@@ -136,7 +136,6 @@ struct AnimeDetailView: View {
         case .artwork: AnimeArtworkShelf(anime: anime, refreshID: episodeRefreshID)
         case .trailer: VStack(alignment: .leading, spacing: 12) { trailer(anime) }
         case .news: AnimeSeriesNewsWidget(anime: anime, refreshID: episodeRefreshID)
-        case .discussions: AnimeDiscussionsSection(anime: anime)
         case .reviews: reviews(anime)
         case .links:
             VStack(alignment: .leading, spacing: 12) {
@@ -168,7 +167,7 @@ struct AnimeDetailView: View {
                 fact("Releasing", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
                 fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
                 fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
-                fact("Studio", anime.studios?.nodes?.map(\.name).joined(separator: ", ") ?? "Not listed")
+                studioLinks(anime)
                 fact("Popularity", anime.popularity.map { $0.formatted() } ?? "Not listed")
                 fact("Favourites", anime.favourites.map { $0.formatted() } ?? "Not listed")
             }
@@ -181,6 +180,19 @@ struct AnimeDetailView: View {
     }
     private func fact(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) { Text(label).font(.caption2).foregroundStyle(.secondary); Text(value).font(.caption.weight(.medium)) }
+    }
+    private func studioLinks(_ anime: Anime) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Studio").font(.caption2).foregroundStyle(.secondary)
+            let studios = anime.studios?.nodes?.filter { $0.id > 0 } ?? []
+            if studios.isEmpty { Text("Not listed").font(.caption) }
+            ForEach(studios) { studio in
+                NavigationLink { StudioAnimeView(studio: studio) } label: {
+                    HStack(spacing: 4) { Text(studio.name).multilineTextAlignment(.leading); Image(systemName: "chevron.right").font(.caption2) }
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("detail-studio-\(studio.id)").accessibilityHint("Browse anime by \(studio.name)")
+            }
+        }
     }
     @ViewBuilder private func related(_ anime: Anime) -> some View {
         if let edges = anime.relations?.edges, !edges.isEmpty {
@@ -218,7 +230,12 @@ struct AnimeDetailView: View {
         }
     }
     private func reviews(_ anime: Anime) -> some View {
-        DetailCard(title: "Reviews") {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Reviews").font(.headline)
+                Spacer(minLength: 8)
+                AnimeDiscussionsSection(anime: anime)
+            }
             let reviews = anime.reviews?.nodes ?? []
             if reviews.isEmpty { Text("No reviews listed on AniList.").font(.caption).foregroundStyle(.secondary) }
             ForEach(reviews) { review in
@@ -233,7 +250,7 @@ struct AnimeDetailView: View {
                     }
                 }
             }
-        }
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel().accessibilityIdentifier("anime-reviews-discussions")
     }
     @ViewBuilder private func externalLinks(_ anime: Anime) -> some View {
         let links = (anime.externalLinks ?? []).filter { $0.safeURL != nil }

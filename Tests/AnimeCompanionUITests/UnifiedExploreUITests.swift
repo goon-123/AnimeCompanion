@@ -62,6 +62,7 @@ final class UnifiedExploreUITests: XCTestCase {
         app.revealInContent(item); XCTAssertTrue(item.isEnabled); item.tap()
     }
     @MainActor private func chooseDesign(_ value: String, _ app: XCUIApplication) {
+        if app.buttons["media-section-anime"].exists { tap(app.buttons["explore-customize"], app) }
         tap(app.buttons["explore-designs"], app)
         XCTAssertTrue(app.buttons["explore-design-" + value].waitForExistence(timeout: 10))
         app.buttons["explore-design-" + value].tap()

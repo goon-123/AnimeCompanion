@@ -106,14 +106,18 @@ struct HomeWidgetPicker: View {
 }
 
 struct HomeShortcutCustomizationView: View {
+    var savedOverride: Binding<String>? = nil
     @AppStorage(HomePreferences.storageKey) private var saved = ""
-    private var preferences: HomePreferences { HomePreferences(saved: saved) }
+    private var preferences: HomePreferences { HomePreferences(saved: savedOverride?.wrappedValue ?? saved) }
+    private func save(_ value: HomePreferences) {
+        if let savedOverride { savedOverride.wrappedValue = value.saved } else { saved = value.saved }
+    }
     var body: some View {
         Form {
             Section {
                 ForEach(0..<3, id: \.self) { index in
                     Picker("Slot \(index + 1)", selection: Binding<HomeShortcut?>(get: { preferences.shortcuts[index] }, set: { shortcut in
-                        var value = preferences; value.setShortcut(shortcut, at: index); saved = value.saved
+                        var value = preferences; value.setShortcut(shortcut, at: index); save(value)
                     })) {
                         Text("Hidden").tag(Optional<HomeShortcut>.none)
                         ForEach(HomeShortcut.allCases) { item in Label(item.title, systemImage: item.symbol).tag(Optional(item)) }
@@ -125,7 +129,7 @@ struct HomeShortcutCustomizationView: View {
                 Button("Restore Calendar, Airing Now & News") {
                     var value = preferences
                     for (index, shortcut) in [HomeShortcut.calendar, .airing, .news].enumerated() { value.setShortcut(shortcut, at: index) }
-                    saved = value.saved
+                    save(value)
                 }
             }
         }.navigationTitle("Customize shortcuts").navigationBarTitleDisplayMode(.inline)

@@ -1,33 +1,21 @@
 import SwiftUI
 import AnimeCore
 
+/// A single quiet entry point alongside the series reviews.
 struct AnimeDiscussionsSection: View {
-    @EnvironmentObject private var store: AppStore
     let anime: Anime
-    private var watched: Int { min(100_000, max(0, store.entry(for: anime.id)?.progressValue ?? 0)) }
     var body: some View {
-        DetailCard(title: "Discussions") {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "bubble.left.and.bubble.right.fill").font(.title2).foregroundStyle(Theme.accent)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Talk through every episode.").font(.subheadline.weight(.semibold))
-                    Text(watched > 0 ? "Starts at your latest marked-watched episode: \(watched)." : "Series conversations and episode reactions. Unwatched previews stay hidden.").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) { episodeLink; seriesLink }
-                VStack(alignment: .leading, spacing: 6) { episodeLink; seriesLink }
-            }
+        HStack(spacing: 0) {
+            NavigationLink { SeriesDiscussionsView(anime: anime) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                    Text("Discussions")
+                    Image(systemName: "chevron.right").font(.caption2)
+                }.font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(Theme.accent.opacity(0.08), in: Capsule()).frame(minHeight: 44)
+            }.buttonStyle(.plain).accessibilityIdentifier("anime-discuss-latest")
         }.accessibilityIdentifier("anime-discussions-section")
-    }
-    private var episodeLink: some View {
-        NavigationLink { SeriesDiscussionsView(anime: anime) } label: {
-            Label(watched > 0 ? "Discuss episode \(watched)" : "Browse discussions", systemImage: "text.bubble")
-        }.buttonStyle(.borderedProminent).accessibilityIdentifier("anime-discuss-latest")
-    }
-    private var seriesLink: some View {
-        NavigationLink("Series discussions") { SeriesDiscussionsView(anime: anime, requestedEpisode: 0) }
-            .font(.subheadline).frame(minHeight: 44)
     }
 }
 

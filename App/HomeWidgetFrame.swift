@@ -49,7 +49,7 @@ struct HomeWidgetFrame<Content: View>: View {
             }
             .sheet(isPresented: $customizingShortcuts) {
                 AppNavigationStack {
-                    HomeShortcutCustomizationView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizingShortcuts = false } } }
+                    HomeShortcutCustomizationView(savedOverride: $saved).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizingShortcuts = false } } }
                 }
             }
             .onDrop(of: [HomeWidgetDrag.type], delegate: HomeWidgetDropDelegate(target: section, saved: $saved, dragging: $dragging, enabled: editing))

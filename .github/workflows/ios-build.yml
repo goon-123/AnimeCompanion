@@ -295,6 +295,8 @@ jobs:
           env -u DEVELOPER_DIR swift test -j 2
       - name: Verify current Keiyoushi repository and package checksums
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_MANGA=1 swift test -j 2 --filter MangaExtensionTests.testLiveKeiyoushiCatalogWhenExplicitlyEnabled
+      - name: Verify previous-season, top-anime and studio queries
+        run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter LiveServiceTests.testAniListExploreShelvesAndStudio
   news-ui:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: [manga-runtime, build, weekly-ui]

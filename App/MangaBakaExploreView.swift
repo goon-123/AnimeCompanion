@@ -53,6 +53,7 @@ struct MediaExploreView: View {
     @AppStorage("app.mediaSection") private var mode = "anime"
     @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
     @State private var designs = false
+    @State private var customizing = false
     private var design: ExploreDesign { ExploreDesign(preference: designValue) }
     var body: some View {
         Group {
@@ -63,10 +64,12 @@ struct MediaExploreView: View {
             if design == .classic {
             HStack(spacing: 10) {
                 MediaSectionPicker()
-                Button { designs = true } label: {
-                    Image(systemName: "rectangle.stack").frame(width: 44, height: 44)
-                        .silverGlass(in: Circle()).contentShape(Circle())
-                }.buttonStyle(.plain).accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
+                Menu {
+                    Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
+                    Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
+                } label: {
+                    Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle()).contentShape(Circle())
+                }.accessibilityLabel("Customize Explore").accessibilityIdentifier("explore-customize")
                 AccountSwitcherButton()
             }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
                 .background {
@@ -79,6 +82,11 @@ struct MediaExploreView: View {
         }.mangaBakaNavigation()
             .navigationDestination(for: ExploreSearchRoute.self) { _ in
                 UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
+            }
+            .sheet(isPresented: $customizing) {
+                AppNavigationStack {
+                    ExploreCustomizationView(surface: mode == "written" ? .reading : .anime).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
+                }
             }
             .sheet(isPresented: $designs) {
                 AppNavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
@@ -238,6 +246,8 @@ struct MangaBakaExploreView: View {
     var showsNavigationBar = false
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
+    @State private var widgetRefreshID = 0
+    @State private var customizing = false
     @StateObject private var model = MangaBakaHomeModel()
     @Environment(\.scenePhase) private var scenePhase
     private var allSeries: [MangaBakaSeries] {
@@ -249,22 +259,21 @@ struct MangaBakaExploreView: View {
             // scrolling; the long horizontal title rows still load cards lazily.
             VStack(alignment: .leading, spacing: 30) {
                 header
-                if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
-                    NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                }
-                if account.connected { MangaBakaPersonalShelf() }
-                formats
-                genres
-                ForEach(MangaBakaHomeModel.shelves, id: \.self) { shelf in
-                    MangaBakaShelfView(shelf: shelf, items: (model.items[shelf] ?? []).filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) },
-                        loading: model.loading.contains(shelf), error: model.errors[shelf], retry: {
-                            Task { await model.load(api: account.api, contentFilter: preferences.mangaBakaContent, refresh: true) }
-                        })
-                }
+                ExploreRows(surface: .reading, refreshID: widgetRefreshID, widgetInset: 20) { row in catalogRow(row) }
                 MangaBakaAttribution().padding(.horizontal, 20)
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
+            .modifier(ExploreWidgetSupport(surface: .reading, refreshID: widgetRefreshID))
+            .sheet(isPresented: $customizing) {
+                AppNavigationStack {
+                    ExploreCustomizationView(surface: .reading).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
+                }
+            }
+            .toolbar {
+                if showsNavigationBar {
+                    ToolbarItem(placement: .topBarTrailing) { Button("Customize", systemImage: "slider.horizontal.3") { customizing = true } }
+                }
+            }
             .task(id: preferences.mangaBakaContent) { await model.load(api: account.api, contentFilter: preferences.mangaBakaContent) }
             .task(id: "\(account.connected)-\(account.connectionID)-\(preferences.mangaBakaContent)") {
                 await account.loadRecommendations(contentFilter: preferences.mangaBakaContent)
@@ -274,10 +283,29 @@ struct MangaBakaExploreView: View {
             }
             .task { await account.loadTaxonomy() }
             .refreshable {
+                widgetRefreshID += 1
                 async let catalog: Void = model.load(api: account.api, contentFilter: preferences.mangaBakaContent, refresh: true)
                 async let personal: Void = account.loadRecommendations(contentFilter: preferences.mangaBakaContent, refresh: true)
                 _ = await (catalog, personal)
             }
+    }
+    @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
+        switch row {
+        case .spotlight:
+            if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
+                NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain).padding(.horizontal, 20)
+            }
+        case .personal: if account.connected { MangaBakaPersonalShelf() }
+        case .formats: formats
+        case .genres: genres
+        default:
+            if let shelf = row.readingShelf {
+                MangaBakaShelfView(shelf: shelf, items: (model.items[shelf] ?? []).filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) },
+                    loading: model.loading.contains(shelf), error: model.errors[shelf], retry: {
+                        Task { await model.load(api: account.api, contentFilter: preferences.mangaBakaContent, refresh: true) }
+                    })
+            }
+        }
     }
     private var header: some View {
         VStack(alignment: .leading, spacing: 15) {

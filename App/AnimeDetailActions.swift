@@ -64,8 +64,13 @@ struct AnimeEpisodeFacts: View {
                 NavigationLink {
                     AnimeDubScheduleView(anime: anime)
                 } label: {
-                    fact("Dubbed", value: (dub?.confidence == .estimated ? "~" : "") + dubbed, key: "dubbed")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Dubbed " + (dub?.confidence == .estimated ? "~" : "") + dubbed).fontWeight(.semibold)
+                        HStack(spacing: 4) { Text("Dub schedule"); Image(systemName: "chevron.right").fontWeight(.semibold) }.font(.caption2)
+                    }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 9)
+                        .foregroundStyle(Theme.accent).background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
                 }.buttonStyle(.plain).accessibilityIdentifier("detail-episodes-dubbed")
+                    .accessibilityLabel("Dubbed \(dubbed). English dub schedule")
                     .accessibilityHint("Open the English dub schedule")
                 fact("Watched", value: entry.map { String($0.progressValue) } ?? "—", key: "watched")
             }.font(.caption).foregroundStyle(.secondary)

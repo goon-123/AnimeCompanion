@@ -6,6 +6,7 @@ import AnimeCore
 /// It shares original broadcasts and the existing dub snapshot, then intersects
 /// them with every visible status in the user's actual AniList library.
 struct AiringThisWeekView: View {
+    @Environment(\.animeSplitPresentation) private var usesSplit
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var schedule: WeeklyScheduleStore
     @EnvironmentObject private var dubs: ExploreDubStore
@@ -165,9 +166,10 @@ struct AiringThisWeekView: View {
     private func openChosenAnime() {
         guard let id = pendingAnimeID else { return }
         pendingAnimeID = nil
-        // Home is a full-width stack on both devices. Push only after the day
-        // chooser has dismissed, so the detail appears with normal Back behavior.
-        navigation.home.path.append(AnimeRoute(id: id))
+        // The widget can live on Home or Explore. Route in its current tab only
+        // after the day chooser dismisses, respecting iPad's split presentation.
+        let state = navigation.state(for: navigation.selectedTab)
+        if usesSplit { state.open(id) } else { state.path.append(AnimeRoute(id: id)) }
     }
     private func refresh(force: Bool = false) async {
         guard !trackedIDs.isEmpty else { return }

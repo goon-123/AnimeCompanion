@@ -21,7 +21,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .anime:
             return [.watchlist, .synopsis, .information, .broadcast, .related, .recommendations,
-                    .news, .discussions, .reviews, .artwork, .trailer, .links]
+                    .news, .reviews, .artwork, .trailer, .links]
         case .manga:
             return [.watchlist, .reading, .synopsis, .publication, .tags, .adaptations,
                     .coverage, .related, .artwork, .links]
@@ -49,7 +49,7 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
         case .dubSchedule: return "English dub"
         case .news: return "Series news"
         case .discussions: return "Discussions"
-        case .reviews: return "Reviews"
+        case .reviews: return "Reviews & discussions"
         case .links: return "Links"
         case .reading: return page == .reader ? "Continue reading" : "Reading source"
         case .publication: return "Publication & ratings"
@@ -82,10 +82,14 @@ public struct SeriesDetailLayout: Equatable, Sendable {
         let values = snapshot?.order ?? legacy ?? []
         let allowed = Set(page.sections)
         var seen = Set<SeriesDetailSection>()
-        order = values.compactMap(SeriesDetailSection.init(rawValue:))
+        order = values.compactMap(SeriesDetailSection.init(rawValue:)).map { page == .anime && $0 == .discussions ? .reviews : $0 }
             .filter { allowed.contains($0) && seen.insert($0).inserted }
         order += page.sections.filter { seen.insert($0).inserted }
         hidden = Set((snapshot?.hidden ?? []).compactMap(SeriesDetailSection.init(rawValue:))).intersection(allowed)
+        if page == .anime, values.contains(SeriesDetailSection.discussions.rawValue),
+           !(snapshot?.hidden ?? []).contains(SeriesDetailSection.discussions.rawValue) {
+            hidden.remove(.reviews)
+        }
     }
     public var saved: String {
         let value = Saved(order: order.map(\.rawValue), hidden: hidden.map(\.rawValue).sorted())

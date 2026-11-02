@@ -2,6 +2,16 @@ import XCTest
 @testable import AnimeCore
 
 final class SeriesDetailLayoutTests: XCTestCase {
+    func testMergedDiscussionsKeepTheirPositionAndVisibilityWhenEitherOldSectionWasShown() {
+        let saved = #"{"order":["information","discussions","synopsis","reviews"],"hidden":["reviews"]}"#
+        let merged = SeriesDetailLayout(page: .anime, saved: saved)
+        XCTAssertEqual(Array(merged.order.prefix(3)), [.information, .reviews, .synopsis])
+        XCTAssertTrue(merged.visible.contains(.reviews))
+        XCTAssertFalse(merged.order.contains(.discussions))
+        let hidden = SeriesDetailLayout(page: .anime, saved: #"{"order":["discussions","reviews"],"hidden":["discussions","reviews"]}"#)
+        XCTAssertFalse(hidden.visible.contains(.reviews))
+        XCTAssertEqual(SeriesDetailLayout(page: .anime, saved: hidden.saved), hidden)
+    }
     func testLegacyOrderMigratesAndMergedDubSectionIsNoLongerSeparate() {
         let layout = SeriesDetailLayout(page: .anime, saved: #"["reviews","dubSchedule","information","watchlist"]"#)
         XCTAssertEqual(Array(layout.order.prefix(3)), [.reviews, .information, .watchlist])
