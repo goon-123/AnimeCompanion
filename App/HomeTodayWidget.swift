@@ -8,6 +8,7 @@ struct HomeTodayWidget: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.homeVisuals) private var visuals
     let limit: Int
     let refreshID: Int
     @State private var now = ScheduleClock.now
@@ -32,7 +33,7 @@ struct HomeTodayWidget: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CompanionSectionHeading(title: "Airing today")
-                Button("Calendar") { navigation.openSchedule(on: now) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+                Button("Calendar") { navigation.openSchedule(on: now) }.font(visuals.actionTextFont).frame(minHeight: 44)
             }
             if events.isEmpty {
                 if schedule.snapshot(in: week.window).loading && !tracked.isEmpty { ProgressView("Checking today's releases…") }

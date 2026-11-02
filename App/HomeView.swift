@@ -1,7 +1,20 @@
 import SwiftUI
+import UIKit
 import AnimeCore
 
 struct HomeView: View {
+    @AppStorage(HomeArtworkSize.storageKey) private var artworkSize = HomeArtworkSize.large.rawValue
+    var body: some View {
+        GeometryReader { geometry in
+            HomeDashboardView()
+                .environment(\.homeVisuals, HomeVisualMetrics(isPad: UIDevice.current.userInterfaceIdiom == .pad,
+                    availableWidth: max(0, min(geometry.size.width, 1180) - 40),
+                    artworkSize: HomeArtworkSize(rawValue: artworkSize) ?? .large))
+        }
+    }
+}
+
+private struct HomeDashboardView: View {
     @EnvironmentObject private var anime: AppStore
     @EnvironmentObject private var books: MangaBakaStore
     @EnvironmentObject private var reading: MangaReadingStore
@@ -12,7 +25,9 @@ struct HomeView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.homeVisuals) private var visuals
     @AppStorage(HomePreferences.storageKey) private var sections = ""
+    @AppStorage(HomeArtworkSize.storageKey) private var artworkSize = HomeArtworkSize.large.rawValue
     @AppStorage("manga.showMatureSources") private var matureSources = false
     @State private var customize = false
     @State private var pickingWidgets = false
@@ -26,7 +41,7 @@ struct HomeView: View {
     @State private var homeVisitID = 0
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
     private var cardColumns: [GridItem] {
-        [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: 270) : .flexible(), spacing: 12, alignment: .top)]
+        [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: visuals.gridMinimum) : .flexible(), spacing: 12, alignment: .top)]
     }
     private var shows: [LibraryEntry] {
         Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(preferences.size(for: .watching).itemLimit))
@@ -78,14 +93,14 @@ struct HomeView: View {
                 ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if editing {
-                        Button { pickingWidgets = true } label: { Image(systemName: "plus") }
+                        Button { pickingWidgets = true } label: { Image(systemName: "plus").font(visuals.toolbarIconFont) }
                             .accessibilityLabel("Add widgets").accessibilityIdentifier("home-add-widgets")
                     }
                     Button {
                         withAnimation(.easeInOut(duration: 0.18)) { editing.toggle(); dragging = nil }
                     } label: {
                         if editing { Text("Done").fontWeight(.semibold) }
-                        else { Image(systemName: "slider.horizontal.3") }
+                        else { Image(systemName: "slider.horizontal.3").font(visuals.toolbarIconFont) }
                     }.accessibilityLabel(editing ? "Finish editing Home" : "Customize Home").accessibilityIdentifier("home-customize")
                     Menu {
                         Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }
@@ -99,7 +114,7 @@ struct HomeView: View {
                         Button("My Library", systemImage: "books.vertical") { navigation.open(.library) }
                         NavigationLink { SourcesSettingsView() } label: { Label("Sources & playback", systemImage: "puzzlepiece.extension") }
                         Button("Settings", systemImage: "gearshape") { settings = true }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    } label: { Image(systemName: "ellipsis.circle").font(visuals.toolbarIconFont) }
                         .accessibilityLabel("Home actions").accessibilityIdentifier("home-actions")
                 }
             }
@@ -196,6 +211,14 @@ struct HomeView: View {
     @ViewBuilder private var editorActions: some View {
         Button("Add widgets", systemImage: "plus") { pickingWidgets = true }
         Button("Manage widgets", systemImage: "slider.horizontal.3") { customize = true }.accessibilityIdentifier("home-manage-widgets")
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            Menu {
+                Picker("Artwork size", selection: $artworkSize) {
+                    ForEach(HomeArtworkSize.allCases) { size in Text(size.title).tag(size.rawValue) }
+                }
+            } label: { Label("Artwork size", systemImage: "photo.on.rectangle.angled") }
+                .accessibilityIdentifier("home-artwork-size-menu")
+        }
     }
     private var syncStatus: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -246,7 +269,7 @@ struct HomeView: View {
                         ForEach(shows) { entry in
                             if let value = entry.media {
                                 HomeContinueWatchingCard(anime: value, entry: entry) { watching = value }
-                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(400, width * 0.90) }
+                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.watchingCardLimit, width * 0.90) }
                             }
                         }
                     }.padding(.vertical, 1)
@@ -298,7 +321,7 @@ struct HomeView: View {
     private var shortcuts: some View {
         VStack(alignment: .leading, spacing: 12) {
             CompanionSectionHeading(title: HomeSection.shortcuts.title)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: visuals.shortcutMinimum), spacing: 12)], spacing: 12) {
                 quickLink("Reading sources", detail: "Extensions & history", symbol: "book.closed", tab: .manga)
                 NavigationLink { CommunityFeedView() } label: { shortcutLabel("Community", detail: "Conversations & episodes", symbol: "bubble.left.and.bubble.right") }
                 NavigationLink { SourcesSettingsView() } label: { shortcutLabel("Sources & playback", detail: "Manage your connections", symbol: "puzzlepiece.extension") }.accessibilityIdentifier("home-sources")
@@ -310,13 +333,13 @@ struct HomeView: View {
     private func sectionHeading(_ section: HomeSection, destination: AppTab) -> some View {
         HStack {
             CompanionSectionHeading(title: section.title)
-            Button("See all") { navigation.open(destination) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+            Button("See all") { navigation.open(destination) }.font(visuals.actionTextFont).frame(minHeight: 44)
                 .accessibilityLabel("\(section.title), see all")
         }
     }
     private func empty(_ title: String, detail: String, symbol: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+            Image(systemName: symbol).font(visuals.iconFont).foregroundStyle(Theme.accent).frame(width: visuals.value(26, 40))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -328,12 +351,12 @@ struct HomeView: View {
             .accessibilityIdentifier("home-open-" + tab.rawValue)
     }
     private func shortcutLabel(_ title: String, detail: String, symbol: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent)
+        HStack(spacing: visuals.value(10, 16)) {
+            Image(systemName: symbol).font(visuals.iconFont).foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.primary)
-                Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                Text(title).font(visuals.actionTextFont).foregroundStyle(.primary)
+                Text(detail).font(visuals.enlarged ? .caption : .caption2).foregroundStyle(.secondary).lineLimit(2)
             }
-        }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).companionPanel(padding: 12).contentShape(Rectangle())
+        }.frame(maxWidth: .infinity, minHeight: visuals.value(48, 68), alignment: .leading).companionPanel(padding: visuals.value(12, 16)).contentShape(Rectangle())
     }
 }

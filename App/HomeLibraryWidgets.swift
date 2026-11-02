@@ -5,6 +5,7 @@ struct HomeLibraryWidget: View {
     @EnvironmentObject private var anime: AppStore
     @EnvironmentObject private var books: MangaBakaStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.homeVisuals) private var visuals
     let section: HomeSection
     let limit: Int
     @State private var pickedID: Int?
@@ -24,7 +25,7 @@ struct HomeLibraryWidget: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     CompanionSectionHeading(title: section.title)
-                    Button("Library") { navigation.openAccountLibrary(.aniList) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+                    Button("Library") { navigation.openAccountLibrary(.aniList) }.font(visuals.actionTextFont).frame(minHeight: 44)
                 }
                 switch section {
                 case .catchUp: catchUp(at: timeline.date)
@@ -52,7 +53,7 @@ struct HomeLibraryWidget: View {
         }
     }
     private var stats: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: visuals.value(130, 180)), spacing: 10)], spacing: 10) {
             stat("Watching", count: entries.filter { $0.status == .watching || $0.status == .rewatching }.count, symbol: "play.circle")
             stat("Completed anime", count: entries.filter { $0.status == .completed }.count, symbol: "checkmark.circle")
             stat("Plan to watch", count: planned.count, symbol: "bookmark")
@@ -61,7 +62,8 @@ struct HomeLibraryWidget: View {
     }
     private func stat(_ title: String, count: Int, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary)
+            Label { Text(title) } icon: { Image(systemName: symbol).font(visuals.enlarged ? .title2 : .caption) }
+                .font(visuals.enlarged ? .subheadline : .caption).foregroundStyle(.secondary)
             Text(count, format: .number).font(.title2.weight(.bold).monospacedDigit()).foregroundStyle(Theme.accent)
         }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 14)
             .accessibilityElement(children: .combine)
@@ -97,28 +99,30 @@ struct HomeLibraryWidget: View {
 }
 
 struct HomeLibraryRow: View {
+    @Environment(\.homeVisuals) private var visuals
     let anime: Anime
     let detail: String
     var highlighted = false
     var body: some View {
         HomeMediaCardLayout(spacing: 10) {
-            AnimeCover(anime: anime, width: 44, cornerRadius: 8, identifierPrefix: "home-widget", badgeStyle: .none)
+            AnimeCover(anime: anime, width: visuals.rowCover, cornerRadius: 8, identifierPrefix: "home-widget", badgeStyle: .none)
         } content: {
             VStack(alignment: .leading, spacing: 5) {
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text(detail).font(.caption).foregroundStyle(highlighted ? Theme.highlight : Color.secondary)
             }
-        }.companionPanel(padding: 10)
+        }.companionPanel(padding: visuals.value(10, 14))
     }
 }
 
 struct HomeWidgetEmpty: View {
+    @Environment(\.homeVisuals) private var visuals
     let symbol: String
     let title: String
     let detail: String
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+            Image(systemName: symbol).font(visuals.iconFont).foregroundStyle(Theme.accent).frame(width: visuals.value(26, 40))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(detail).font(.caption).foregroundStyle(.secondary)

@@ -4,6 +4,7 @@ import AnimeCore
 /// Optional image-led shelves reuse AniList's catalog cache and the visible library.
 struct HomeBannerWidget: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.homeVisuals) private var visuals
     let section: HomeSection
     let limit: Int
     let refreshID: Int
@@ -38,7 +39,7 @@ struct HomeBannerWidget: View {
                             ForEach(values) { anime in
                                 AnimeLink(id: anime.id) {
                                     HomeAnimeBanner(anime: anime, caption: caption(for: anime))
-                                        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(620, width * (section == .nextEpisode ? 1 : 0.92)) }
+                                        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.animeBannerLimit, width * (section == .nextEpisode ? 1 : 0.92)) }
                                 }.buttonStyle(.plain).accessibilityIdentifier("home-banner-\(section.rawValue)-\(anime.id)")
                             }
                         }.scrollTargetLayout()
@@ -87,6 +88,7 @@ struct HomeBannerWidget: View {
 
 struct HomeAnimeBanner: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.homeVisuals) private var visuals
     let anime: Anime
     let caption: String
     var body: some View {
@@ -99,8 +101,8 @@ struct HomeAnimeBanner: View {
                     .frame(width: geometry.size.width, height: geometry.size.height).clipped()
                 LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.93)], startPoint: .top, endPoint: .bottom)
                 HStack(alignment: .bottom, spacing: 12) {
-                    ArtworkImage(url: anime.coverURL, pointSize: 64) { $0.resizable().scaledToFill() } placeholder: { Theme.accent.opacity(0.25) }
-                        .frame(width: 56, height: 80).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
+                    ArtworkImage(url: anime.coverURL, pointSize: visuals.bannerCover * 1.45) { $0.resizable().scaledToFill() } placeholder: { Theme.accent.opacity(0.25) }
+                        .frame(width: visuals.bannerCover, height: visuals.value(80, 122)).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(caption).font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.82))
                         Text(anime.displayTitle).font(.headline).foregroundStyle(.white).lineLimit(textSize.isAccessibilitySize ? 4 : 2)
@@ -112,9 +114,9 @@ struct HomeAnimeBanner: View {
                             }.font(.caption.weight(.semibold)).foregroundStyle(.white)
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "arrow.up.right").foregroundStyle(.white.opacity(0.85)).accessibilityHidden(true)
+                    Image(systemName: "arrow.up.right").font(visuals.toolbarIconFont).foregroundStyle(.white.opacity(0.85)).accessibilityHidden(true)
                 }.padding(16)
             }.clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-        }.frame(height: textSize.isAccessibilitySize ? 300 : 210).accessibilityElement(children: .combine)
+        }.frame(height: textSize.isAccessibilitySize ? visuals.value(300, 420) : visuals.bannerHeight).accessibilityElement(children: .combine)
     }
 }

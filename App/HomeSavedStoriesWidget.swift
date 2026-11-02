@@ -3,6 +3,7 @@ import AnimeCore
 
 struct HomeSavedStoriesWidget: View {
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.homeVisuals) private var visuals
     @AppStorage("news.reader.v1") private var readerJSON = ""
     @AppStorage("news.readingHistory") private var historyJSON = ""
     @AppStorage("news.preferences.v1") private var preferencesJSON = ""
@@ -18,7 +19,7 @@ struct HomeSavedStoriesWidget: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CompanionSectionHeading(title: "Saved stories")
-                Button("See all") { navigation.openNews(.saved) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+                Button("See all") { navigation.openNews(.saved) }.font(visuals.actionTextFont).frame(minHeight: 44)
             }
             if articles.isEmpty {
                 HomeWidgetEmpty(symbol: "bookmark", title: "Keep a story for later.", detail: "Bookmark a headline in News to see it here.")
@@ -27,7 +28,7 @@ struct HomeSavedStoriesWidget: View {
                     ForEach(articles) { article in
                         Button { open(article) } label: {
                             HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: reader.isRead(article) ? "bookmark" : "bookmark.fill").foregroundStyle(Theme.accent)
+                                Image(systemName: reader.isRead(article) ? "bookmark" : "bookmark.fill").font(visuals.toolbarIconFont).foregroundStyle(Theme.accent)
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(article.title).font(.subheadline.weight(.semibold)).lineLimit(3)
                                     Text(article.source.label).font(.caption).foregroundStyle(.secondary)

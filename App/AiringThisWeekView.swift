@@ -11,6 +11,7 @@ struct AiringThisWeekView: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.homeVisuals) private var visuals
     @State private var now = ScheduleClock.now
     private var week: ScheduleWeek { ScheduleWeek(containing: now, firstWeekday: 1) }
     private var trackedIDs: Set<Int> { store.isSignedIn ? Set(store.visibleEntries.map(\.mediaId)) : [] }
@@ -38,11 +39,11 @@ struct AiringThisWeekView: View {
             HStack {
                 CompanionSectionHeading(title: "Airing this week")
                 Button { navigation.openSchedule() } label: {
-                    Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
+                    Image(systemName: "arrow.up.right").font(visuals.actionIconFont).frame(width: 44, height: 44)
                 }.buttonStyle(.plain).foregroundStyle(Theme.accent)
                     .accessibilityLabel("Open full calendar").accessibilityIdentifier("home-week-calendar")
             }
-            HStack(alignment: .top, spacing: 6) {
+            HStack(alignment: .top, spacing: visuals.value(6, 10)) {
                 ForEach(week.days, id: \.self) { day in
                     let titles = ScheduleDayReleases(on: day, events: weeklyEvents, now: now).trackedAnime(ids: ids)
                     Button { navigation.openSchedule(on: day) } label: {
@@ -59,7 +60,7 @@ struct AiringThisWeekView: View {
                     Text("Weekly schedule unavailable · Retry").font(.caption2).foregroundStyle(.secondary)
                 }.accessibilityHint(error)
             }
-        }.companionPanel(padding: 14).accessibilityIdentifier("home-airing-week")
+        }.companionPanel(padding: visuals.value(14, 18)).accessibilityIdentifier("home-airing-week")
             .task(id: refreshKey) {
                 guard scenePhase == .active, navigation.selectedTab == .home else { return }
                 while !Task.isCancelled {
@@ -76,7 +77,7 @@ struct AiringThisWeekView: View {
         let isToday = Calendar.current.isDate(day, inSameDayAs: now)
         return VStack(spacing: 8) {
             Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                .font(.caption2.weight(isToday ? .bold : .medium)).lineLimit(1).minimumScaleFactor(0.7)
+                .font((visuals.enlarged ? Font.caption : .caption2).weight(isToday ? .bold : .medium)).lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundStyle(isToday ? Theme.accent : Color.secondary)
             Color.clear.aspectRatio(1 / 1.45, contentMode: .fit)
                 .overlay {
@@ -91,7 +92,7 @@ struct AiringThisWeekView: View {
                         RoundedRectangle(cornerRadius: 9).fill(Theme.background)
                         RoundedRectangle(cornerRadius: 9)
                             .strokeBorder(isToday ? Theme.accent : Color.secondary.opacity(0.3), style: StrokeStyle(lineWidth: isToday ? 1.5 : 1, dash: [4, 4]))
-                        if isToday { Image(systemName: "plus").font(.headline).foregroundStyle(Theme.accent) }
+                        if isToday { Image(systemName: "plus").font(visuals.enlarged ? .title2 : .headline).foregroundStyle(Theme.accent) }
                     }
                 }
                 .overlay {
@@ -101,12 +102,12 @@ struct AiringThisWeekView: View {
                 }
                 .overlay(alignment: .bottomTrailing) {
                     if titles.count > 1 {
-                        Text("+\(titles.count - 1)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                        Text("+\(titles.count - 1)").font(.system(size: visuals.value(9, 12), weight: .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 4).padding(.vertical, 3)
                             .background(Color.black.opacity(0.8), in: Capsule()).padding(3)
                     }
                 }
-        }.frame(maxWidth: 72).contentShape(Rectangle())
+        }.frame(maxWidth: visuals.weeklyPosterLimit).contentShape(Rectangle())
     }
     private func refresh(force: Bool = false) async {
         guard !trackedIDs.isEmpty else { return }

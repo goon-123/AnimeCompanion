@@ -128,12 +128,13 @@ struct CommunityThreadReader: View {
 }
 
 struct CommunityThreadMetadata: View {
+    @Environment(\.homeVisuals) private var visuals
     let thread: CommunityThread
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) { source; count; time }
             VStack(alignment: .leading, spacing: 4) { source; HStack(spacing: 8) { count; time } }
-        }.font(.caption2).foregroundStyle(.secondary)
+        }.font(visuals.enlarged ? .caption : .caption2).foregroundStyle(.secondary)
     }
     private var source: some View { Text(thread.source.title).fontWeight(.semibold).foregroundStyle(Theme.accent) }
     @ViewBuilder private var count: some View { if let count = thread.commentCount { Label(count.formatted(), systemImage: "bubble.right").accessibilityLabel("\(count) comments") } }
@@ -219,20 +220,21 @@ struct CommunitySeriesContext: View {
 }
 
 struct CommunityThreadArtwork: View {
+    @Environment(\.homeVisuals) private var visuals
     let url: URL?
     var body: some View {
         Group {
             if let url, url.pathExtension.lowercased() == "svg" {
                 CommunitySVGImage(url: url)
             } else {
-                ArtworkImage(url: url, pointSize: 64) { $0.resizable().scaledToFill() } placeholder: {
+                ArtworkImage(url: url, pointSize: visuals.value(64, 128)) { $0.resizable().scaledToFill() } placeholder: {
                     ZStack {
                         LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.secondarySurface], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.accent)
+                        Image(systemName: "bubble.left.and.bubble.right").font(visuals.enlarged ? .largeTitle : .body).foregroundStyle(Theme.accent)
                     }
                 }
             }
-        }.frame(width: 56, height: 78).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
+        }.frame(width: visuals.communityCover, height: visuals.value(78, 122)).clipShape(RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
     }
 }
 
@@ -283,11 +285,12 @@ private struct CommunitySVGImage: UIViewRepresentable {
 }
 
 struct CommunityWebButton: View {
+    @Environment(\.homeVisuals) private var visuals
     let title: String
     let url: URL
     @State private var showing = false
     var body: some View {
-        Button { showing = true } label: { Label(title, systemImage: "safari").font(.caption.weight(.semibold)).frame(minHeight: 44) }
+        Button { showing = true } label: { Label(title, systemImage: "safari").font(visuals.actionTextFont).frame(minHeight: 44) }
             .sheet(isPresented: $showing) { ArticleBrowser(url: url).ignoresSafeArea() }
     }
 }

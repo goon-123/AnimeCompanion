@@ -3,6 +3,7 @@ import AnimeCore
 
 struct HomeSeasonWidget: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.homeVisuals) private var visuals
     let section: HomeSection
     let limit: Int
     let refreshID: Int
@@ -36,7 +37,7 @@ struct HomeSeasonWidget: View {
                                     AnimeLink(id: anime.id) {
                                         HomeAnimeBanner(anime: anime, caption: caption(anime))
                                             .overlay(alignment: .topLeading) { badge(anime) }
-                                            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(620, width * (section == .tonightPick ? 1 : 0.92)) }
+                                            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.animeBannerLimit, width * (section == .tonightPick ? 1 : 0.92)) }
                                     }.buttonStyle(.plain).accessibilityIdentifier("home-\(section.rawValue)-\(anime.id)")
                                 }
                             }.scrollTargetLayout()
@@ -79,11 +80,11 @@ struct HomeSeasonWidget: View {
             CompanionSectionHeading(title: section.title, subtitle: subtitle(countdown))
             Spacer(minLength: 4)
             if section == .tonightPick {
-                Button { pickOffset += 1 } label: { Image(systemName: "shuffle").frame(minWidth: 44, minHeight: 44) }
+                Button { pickOffset += 1 } label: { Image(systemName: "shuffle").font(visuals.toolbarIconFont).frame(minWidth: 44, minHeight: 44) }
                     .accessibilityLabel("Choose another anime for tonight")
             } else if needsLineup {
                 NavigationLink { DiscoveryBrowseView(category: .seasonal, selection: countdown.next) } label: {
-                    Image(systemName: "arrow.up.right.circle.fill").font(.title2).frame(minWidth: 44, minHeight: 44)
+                    Image(systemName: "arrow.up.right.circle.fill").font(visuals.circleIconFont).frame(minWidth: 44, minHeight: 44)
                 }.accessibilityLabel("Browse " + countdown.next.label)
             }
         }
@@ -151,6 +152,7 @@ struct HomeSeasonWidget: View {
 
 private struct HomeSeasonCountdownCard: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.homeVisuals) private var visuals
     let countdown: HomeSeasonCountdown
     let artwork: [Anime]
     private var tint: Color {
@@ -170,7 +172,7 @@ private struct HomeSeasonCountdownCard: View {
                 Circle().fill(tint).frame(width: 6, height: 6)
                 Text("NOW · " + countdown.current.label.uppercased()).font(.caption2.weight(.bold)).tracking(1)
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold))
+                Image(systemName: "arrow.up.right").font(visuals.actionIconFont)
             }.foregroundStyle(.white.opacity(0.85))
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
@@ -180,8 +182,8 @@ private struct HomeSeasonCountdownCard: View {
                     Text("New stories. New favorites.").font(.subheadline).foregroundStyle(.white.opacity(0.75))
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 if !textSize.isAccessibilitySize {
-                    Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(tint)
-                        .frame(width: 64, height: 64).background(tint.opacity(0.12), in: Circle())
+                    Image(systemName: symbol).font(.system(size: visuals.value(34, 46), weight: .light)).foregroundStyle(tint)
+                        .frame(width: visuals.value(64, 88), height: visuals.value(64, 88)).background(tint.opacity(0.12), in: Circle())
                         .overlay { Circle().strokeBorder(tint.opacity(0.25), lineWidth: 1) }.accessibilityHidden(true)
                 }
             }

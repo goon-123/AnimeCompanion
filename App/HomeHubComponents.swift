@@ -4,6 +4,7 @@ import AnimeCore
 /// Each saved slot is independent of the widget's position and visibility.
 struct HomeFeatureShortcuts: View {
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.homeVisuals) private var visuals
     @AppStorage(HomePreferences.storageKey) private var saved = ""
     @State private var customizing = false
     private var preferences: HomePreferences { HomePreferences(saved: saved) }
@@ -13,7 +14,7 @@ struct HomeFeatureShortcuts: View {
                 Text("Quick access").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button("Customize", systemImage: "slider.horizontal.3") { customizing = true }
-                    .font(.caption).frame(minHeight: 44).accessibilityIdentifier("home-edit-shortcuts")
+                    .font(visuals.actionTextFont).frame(minHeight: 44).accessibilityIdentifier("home-edit-shortcuts")
             }
             if preferences.shortcuts.allSatisfy({ $0 == nil }) {
                 Button("Choose shortcuts", systemImage: "plus.circle") { customizing = true }
@@ -54,11 +55,11 @@ struct HomeFeatureShortcuts: View {
     }
     private func tile(_ value: HomeShortcut) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Image(systemName: value.symbol).font(.title3).foregroundStyle(Theme.accent).accessibilityHidden(true)
-            Text(value.title).font(.caption.weight(.semibold)).foregroundStyle(.primary)
-            Text(value.detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-        }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .companionPanel(padding: 12).contentShape(Rectangle())
+            Image(systemName: value.symbol).font(visuals.iconFont).foregroundStyle(Theme.accent).accessibilityHidden(true)
+            Text(value.title).font(visuals.actionTextFont).foregroundStyle(.primary)
+            Text(value.detail).font(visuals.enlarged ? .caption : .caption2).foregroundStyle(.secondary).lineLimit(2)
+        }.frame(maxWidth: .infinity, minHeight: visuals.value(64, 88), alignment: .leading)
+            .companionPanel(padding: visuals.value(12, 16)).contentShape(Rectangle())
     }
     private func replace(_ shortcut: HomeShortcut?, at index: Int) {
         var value = preferences; value.setShortcut(shortcut, at: index); saved = value.saved
@@ -82,6 +83,7 @@ struct HomeFeatureShortcuts: View {
 struct HomeNewsSection: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.homeVisuals) private var visuals
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("news.reader.v1") private var readerJSON = ""
     @AppStorage("news.readingHistory") private var historyJSON = ""
@@ -110,7 +112,7 @@ struct HomeNewsSection: View {
                     Button("Saved stories", systemImage: "bookmark") { navigation.openNews(.saved) }
                     Button("Reading history", systemImage: "clock") { navigation.openNews(.history) }
                 } label: {
-                    Label("All news", systemImage: "chevron.down").font(.caption.weight(.semibold)).frame(minHeight: 44)
+                    Label("All news", systemImage: "chevron.down").font(visuals.actionTextFont).frame(minHeight: 44)
                 }.accessibilityIdentifier("home-news-collections")
             }
             if !stories.isEmpty {
@@ -119,7 +121,7 @@ struct HomeNewsSection: View {
                         ForEach(stories) { article in
                             Button { open(article) } label: {
                                 HomeNewsBanner(article: article, isSaved: reader.isSaved(article))
-                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(550, width * 0.92) }
+                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.newsBannerLimit, width * 0.92) }
                             }.buttonStyle(.plain).accessibilityIdentifier("home-news-story-" + article.id)
                                 .contextMenu {
                                     Button(reader.isSaved(article) ? "Remove saved story" : "Save story", systemImage: "bookmark") { toggleSaved(article) }
@@ -137,7 +139,7 @@ struct HomeNewsSection: View {
             } else {
                 Button { navigation.openNews() } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "newspaper").font(.title2).foregroundStyle(Theme.accent)
+                        Image(systemName: "newspaper").font(visuals.circleIconFont).foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(error == nil ? "Your anime briefing" : "Headlines are taking a break").font(.subheadline.weight(.semibold))
                             Text(preferences.enabledSources.isEmpty ? "Choose publishers and interests in News." : "Open News for stories, saved articles and your interests.")
@@ -183,6 +185,7 @@ struct HomeNewsSection: View {
 private struct HomeNewsBanner: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.homeVisuals) private var visuals
     let article: NewsArticle
     let isSaved: Bool
     @State private var imageURL: URL?
@@ -204,7 +207,7 @@ private struct HomeNewsBanner: View {
                     if let date = article.publishedAt { Text(date, style: .relative).font(.caption2).foregroundStyle(.white.opacity(0.80)) }
                 }.padding(14)
             }.clipShape(RoundedRectangle(cornerRadius: Theme.radius))
-        }.frame(height: textSize.isAccessibilitySize ? 250 : 160)
+        }.frame(height: textSize.isAccessibilitySize ? visuals.value(250, 340) : visuals.newsBannerHeight)
             .accessibilityElement(children: .combine)
             .task(id: article.id) { imageURL = await store.news.thumbnail(for: article) }
     }

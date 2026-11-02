@@ -14,6 +14,7 @@ enum HomeWidgetDrag {
 }
 
 struct HomeWidgetFrame<Content: View>: View {
+    @Environment(\.homeVisuals) private var visuals
     let section: HomeSection
     @Binding var saved: String
     @Binding var editing: Bool
@@ -60,13 +61,13 @@ struct HomeWidgetFrame<Content: View>: View {
     private var controls: some View {
         HStack(spacing: 8) {
             Button { update { $0.setVisible(section, false) } } label: {
-                Image(systemName: "minus.circle.fill").foregroundStyle(.red).frame(width: 44, height: 44)
+                Image(systemName: "minus.circle.fill").font(visuals.toolbarIconFont).foregroundStyle(.red).frame(width: 44, height: 44)
             }.buttonStyle(.plain).accessibilityLabel("Hide \(section.title)").accessibilityIdentifier("home-hide-" + section.rawValue)
             Text(section.title).font(.caption.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
             Menu { shortcutActions; moveActions; sizeActions } label: {
-                Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
+                Image(systemName: "ellipsis.circle").font(visuals.toolbarIconFont).frame(width: 44, height: 44)
             }.accessibilityLabel("Options for \(section.title)").accessibilityIdentifier("home-options-" + section.rawValue)
-            Image(systemName: "line.3.horizontal").foregroundStyle(Theme.accent).frame(width: 44, height: 44)
+            Image(systemName: "line.3.horizontal").font(visuals.toolbarIconFont).foregroundStyle(Theme.accent).frame(width: 44, height: 44)
                 .contentShape(Rectangle()).onDrag { dragging = section; return HomeWidgetDrag.provider(for: section) }
                 .accessibilityLabel("Reorder \(section.title)").accessibilityHint("Use Move up or Move down actions, or drag to a new position")
                 .accessibilityIdentifier("home-drag-" + section.rawValue)

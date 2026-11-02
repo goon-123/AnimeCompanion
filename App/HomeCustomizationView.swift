@@ -1,14 +1,24 @@
 import SwiftUI
+import UIKit
 import AnimeCore
 
 /// Shares the same live preference as Home and the inline editing controls.
 struct HomeCustomizationView: View {
     @AppStorage(HomePreferences.storageKey) private var saved = ""
+    @AppStorage(HomeArtworkSize.storageKey) private var artworkSize = HomeArtworkSize.large.rawValue
     @State private var confirmReset = false
     private var preferences: HomePreferences { HomePreferences(saved: saved) }
 
     var body: some View {
         List {
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                Section {
+                    Picker("Artwork size", selection: $artworkSize) {
+                        ForEach(HomeArtworkSize.allCases) { size in Text(size.title).tag(size.rawValue) }
+                    }.accessibilityIdentifier("home-ipad-artwork-size")
+                } header: { Text("iPad appearance") }
+                footer: { Text("Large is the default. Changes apply immediately to Home posters, thumbnails, banners and icons. Narrow Split View windows adapt to fit.") }
+            }
             Section {
                 ForEach(preferences.order) { section in
                     VStack(alignment: .leading, spacing: 6) {
@@ -48,6 +58,7 @@ struct HomeCustomizationView: View {
 }
 
 struct HomeWidgetPicker: View {
+    @Environment(\.homeVisuals) private var visuals
     @AppStorage(HomePreferences.storageKey) private var saved = ""
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -63,7 +74,7 @@ struct HomeWidgetPicker: View {
             }
             ForEach(matches) { section in
                 HStack(spacing: 14) {
-                    Image(systemName: section.symbol).font(.title2).foregroundStyle(Theme.accent).frame(width: 30)
+                    Image(systemName: section.symbol).font(visuals.circleIconFont).foregroundStyle(Theme.accent).frame(width: visuals.value(30, 44))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(section.title).font(.subheadline.weight(.semibold))
                         Text(section.detail).font(.caption).foregroundStyle(.secondary)
@@ -71,7 +82,7 @@ struct HomeWidgetPicker: View {
                     if preferences.hidden.contains(section) {
                         Button {
                             var value = preferences; value.setVisible(section, true); saved = value.saved
-                        } label: { Image(systemName: "plus.circle.fill").font(.title2).frame(minWidth: 44, minHeight: 44) }
+                        } label: { Image(systemName: "plus.circle.fill").font(visuals.circleIconFont).frame(minWidth: 44, minHeight: 44) }
                             .buttonStyle(.borderless).accessibilityLabel("Add \(section.title)")
                             .accessibilityIdentifier("home-add-" + section.rawValue)
                     } else {

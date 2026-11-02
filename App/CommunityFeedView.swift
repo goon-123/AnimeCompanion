@@ -213,6 +213,7 @@ struct CommunityFeedView: View {
 }
 
 struct CommunityThreadRow: View {
+    @Environment(\.homeVisuals) private var visuals
     let thread: CommunityThread
     let title: String
     let hiddenPreview: Bool
@@ -222,7 +223,7 @@ struct CommunityThreadRow: View {
     }
     private var snippet: String { hiddenPreview ? "" : CommunityText.preview(thread.body ?? "") }
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: visuals.value(12, 16)) {
             CommunityThreadArtwork(url: imageURL)
             VStack(alignment: .leading, spacing: 7) {
                 if !thread.mentionsEpisode, let name = anime?.displayTitle ?? thread.seriesName {
@@ -238,12 +239,13 @@ struct CommunityThreadRow: View {
                 CommunityThreadMetadata(thread: thread)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
-            .companionPanel(padding: 14).contentShape(Rectangle())
+            .companionPanel(padding: visuals.value(14, 18)).contentShape(Rectangle())
     }
 }
 
 struct HomeCommunityWidget: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.homeVisuals) private var visuals
     let refreshID: Int
     var activationID = 0
     @State private var appliedRefreshID = 0
@@ -257,14 +259,14 @@ struct HomeCommunityWidget: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CompanionSectionHeading(title: "Community", subtitle: "Keep up with the conversation")
-                NavigationLink { CommunityFeedView() } label: { Image(systemName: "arrow.up.right.circle.fill").font(.title2).foregroundStyle(Theme.accent).frame(minWidth: 44, minHeight: 44) }
+                NavigationLink { CommunityFeedView() } label: { Image(systemName: "arrow.up.right.circle.fill").font(visuals.circleIconFont).foregroundStyle(Theme.accent).frame(minWidth: 44, minHeight: 44) }
                     .accessibilityLabel("Open Community")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(CommunityFilter.allCases) { filter in
                         NavigationLink { CommunityFeedView(initialFilter: filter) } label: {
-                            Text(filter.title).font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).padding(.horizontal, 12).frame(minHeight: 36)
+                            Text(filter.title).font(visuals.actionTextFont).foregroundStyle(Theme.accent).padding(.horizontal, 12).frame(minHeight: visuals.value(36, 44))
                                 .background(Theme.accent.opacity(0.1), in: Capsule())
                         }.buttonStyle(.plain)
                     }
