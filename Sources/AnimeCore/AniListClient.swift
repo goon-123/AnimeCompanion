@@ -373,7 +373,9 @@ public actor AniListClient {
         let result: StudioMediaResponse = try await request(AniListQueries.studio,
             variables: ["id": .int(id), "page": .int(max(1, page)), "sort": .string(sort.rawValue)], bypassCache: refresh)
         guard let media = result.Studio?.media else { throw ServiceError.message("This studio is unavailable.") }
-        return MediaPage(media: (media.nodes ?? []).filter { $0.type == "ANIME" && (includeAdult || $0.isAdult != true) }, pageInfo: media.pageInfo)
+        let nodes: [Anime] = media.nodes ?? []
+        let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.isAdult != true) }
+        return MediaPage(media: visible, pageInfo: media.pageInfo)
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]
