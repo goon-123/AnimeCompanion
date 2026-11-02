@@ -69,8 +69,13 @@ struct UnifiedExploreView: View {
                          novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     private var wall: [ExploreStory] {
-        ExploreStory.mix(anime: visible((response?.trending.media ?? []) + (response?.seasonal.media ?? []) + (response?.upcoming.media ?? []) + (response?.previousSeason?.media ?? []) + (response?.topRated?.media ?? [])),
-            reading: (books.items[.trending] ?? []) + (books.items[.gems] ?? []), novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
+        let categories: [DiscoveryCategory] = [.trending, .seasonal, .upcoming, .previousSeason, .topRated]
+        let shows: [Anime] = categories.flatMap { response?.media(for: $0) ?? [] }
+        let manga: [MangaBakaSeries] = books.items[.trending] ?? []
+        let gems: [MangaBakaSeries] = books.items[.gems] ?? []
+        let novels: [MangaBakaSeries] = books.items[.novels] ?? []
+        return ExploreStory.mix(anime: visible(shows), reading: manga + gems, novels: novels,
+            includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     var body: some View {
         ScrollView {
