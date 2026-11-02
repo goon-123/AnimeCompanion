@@ -258,7 +258,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         app.openExploreControl("explore-settings")
         app.revealSettingsDestination("seanime-settings")
         let seanime = app.buttons["seanime-settings"]; XCTAssertTrue(seanime.waitForExistence(timeout: 10)); app.revealInContent(seanime); seanime.tap()
-        XCTAssertTrue(app.navigationBars["Seanime extensions"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Torrent extensions"].waitForExistence(timeout: 10))
     }
     @MainActor private func saveFixtureKey(_ app: XCUIApplication) {
         let connection = app.buttons["seanime-torbox-settings"]; app.revealInContent(connection); connection.tap()
@@ -276,7 +276,7 @@ final class SeanimeTorBoxUITests: XCTestCase {
         let review = app.buttons["seanime-review"]; app.revealInContent(review); review.tap()
         let install = app.buttons["seanime-install-confirm"]
         XCTAssertTrue(install.waitForExistence(timeout: 10)); app.revealInContent(install); install.tap()
-        XCTAssertTrue(app.navigationBars["Seanime extensions"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Torrent extensions"].waitForExistence(timeout: 10))
     }
     @MainActor private func openSearch(_ app: XCUIApplication) {
         let search = app.buttons["seanime-search"]; app.revealInContent(search); search.tap()
