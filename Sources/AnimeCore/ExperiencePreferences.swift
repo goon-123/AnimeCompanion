@@ -108,6 +108,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         }
     }
     public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame]
+    public var supportsLayout: Bool { [.seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame, .news].contains(self) }
     public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews, .seasonSpotlight, .watchlistBanners, .nextSeason, .returningSeries, .hallOfFame].contains(self) }
 }
 
@@ -159,26 +160,37 @@ public enum HomeWidgetSize: String, CaseIterable, Codable, Identifiable, Sendabl
     public var itemLimit: Int { switch self { case .compact: return 3; case .standard: return 6; case .expanded: return 10 } }
 }
 
+public enum HomeWidgetLayout: String, CaseIterable, Codable, Identifiable, Sendable {
+    case compact, poster, banner
+    public var id: String { rawValue }
+    public var title: String {
+        switch self { case .compact: return "Small · Compact row"; case .poster: return "Medium · Poster card"; case .banner: return "Large · Cinematic banner" }
+    }
+}
+
 /// All content is optional. Toolbar controls remain available even on an empty Home.
 public struct HomePreferences: Equatable, Sendable {
     public static let storageKey = "home.sections.v1"
     public var order: [HomeSection]
     public private(set) var hidden: Set<HomeSection>
     private var sizes: [HomeSection: HomeWidgetSize]
+    private var layouts: [HomeSection: HomeWidgetLayout]
     public private(set) var shortcuts: [HomeShortcut?]
     private struct Stored: Codable {
         var version: Int?
         let order: [String]
         let hidden: [String]
         var sizes: [String: String]?
+        var layouts: [String: String]?
         var shortcuts: [String]?
     }
     public init(order: [HomeSection] = HomeSection.allCases, hidden: Set<HomeSection> = HomeSection.optionalWidgets,
-                sizes: [HomeSection: HomeWidgetSize] = [:], shortcuts: [HomeShortcut?] = [.calendar, .airing, .news]) {
+                sizes: [HomeSection: HomeWidgetSize] = [:], layouts: [HomeSection: HomeWidgetLayout] = [:], shortcuts: [HomeShortcut?] = [.calendar, .airing, .news]) {
         var seen = Set<HomeSection>()
         self.order = (order + HomeSection.allCases).filter { seen.insert($0).inserted }
         self.hidden = hidden.union(HomeSection.optionalWidgets.subtracting(order))
         self.sizes = sizes.filter { $0.key.supportsItemLimit }
+        self.layouts = layouts.filter { $0.key.supportsLayout }
         var used = Set<HomeShortcut>()
         self.shortcuts = (Array(shortcuts.prefix(3)) + Array(repeating: nil, count: max(0, 3 - shortcuts.count))).map {
             guard let value = $0, used.insert(value).inserted else { return nil }
@@ -201,7 +213,10 @@ public struct HomePreferences: Equatable, Sendable {
         let sizes = (value.sizes ?? [:]).reduce(into: [HomeSection: HomeWidgetSize]()) { result, pair in
             if let section = HomeSection(rawValue: pair.key), let size = HomeWidgetSize(rawValue: pair.value) { result[section] = size }
         }
-        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes,
+        let layouts = (value.layouts ?? [:]).reduce(into: [HomeSection: HomeWidgetLayout]()) { result, pair in
+            if let section = HomeSection(rawValue: pair.key), let layout = HomeWidgetLayout(rawValue: pair.value) { result[section] = layout }
+        }
+        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes, layouts: layouts,
                   shortcuts: value.shortcuts.map { $0.map(HomeShortcut.init(rawValue:)) } ?? [.calendar, .airing, .news])
     }
     public var visible: [HomeSection] { order.filter { !hidden.contains($0) } }
@@ -220,6 +235,10 @@ public struct HomePreferences: Equatable, Sendable {
         guard section.supportsItemLimit else { return }
         sizes[section] = size
     }
+    public func layout(for section: HomeSection) -> HomeWidgetLayout { layouts[section] ?? .banner }
+    public mutating func setLayout(_ layout: HomeWidgetLayout, for section: HomeSection) {
+        guard section.supportsLayout else { return }; layouts[section] = layout
+    }
     /// Move relative to visible neighbors without disturbing hidden widget order.
     public mutating func move(_ section: HomeSection, before target: HomeSection) {
         guard section != target, order.contains(section), order.contains(target) else { return }
@@ -232,10 +251,11 @@ public struct HomePreferences: Equatable, Sendable {
         order.insert(section, at: order.firstIndex(of: target)! + 1)
     }
     public var saved: String {
-        let value = Self(order: order, hidden: hidden, sizes: sizes, shortcuts: shortcuts)
+        let value = Self(order: order, hidden: hidden, sizes: sizes, layouts: layouts, shortcuts: shortcuts)
         let storedSizes = Dictionary(uniqueKeysWithValues: value.sizes.map { ($0.key.rawValue, $0.value.rawValue) })
+        let storedLayouts = Dictionary(uniqueKeysWithValues: value.layouts.map { ($0.key.rawValue, $0.value.rawValue) })
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
-        return String(data: try! encoder.encode(Stored(version: 3, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes, shortcuts: value.shortcuts.map { $0?.rawValue ?? "" })), encoding: .utf8)!
+        return String(data: try! encoder.encode(Stored(version: 4, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes, layouts: storedLayouts, shortcuts: value.shortcuts.map { $0?.rawValue ?? "" })), encoding: .utf8)!
     }
 }
 

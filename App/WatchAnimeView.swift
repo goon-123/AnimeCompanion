@@ -132,7 +132,10 @@ struct WatchAnimeView: View {
                     searchTask?.cancel(); torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
-                .onChange(of: scenePhase) { _, phase in if phase != .active { torrents.stop() } }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background { torrents.pause() }
+                    else if phase == .active { torrents.resumeIfNeeded() }
+                }
         }.disabled(playback.openingPlayer)
     }
     private var episodeHeader: some View {

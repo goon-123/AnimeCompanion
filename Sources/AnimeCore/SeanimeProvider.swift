@@ -66,6 +66,28 @@ public struct SeanimeInstallation: Codable, Identifiable, Sendable {
         self.id = id; self.manifestURL = manifestURL; self.manifest = manifest; self.source = source
         self.enabled = enabled; self.preferences = preferences; self.allowedHosts = allowedHosts; self.adult = adult
     }
+    /// Keep the reviewed source once. Inline manifests can otherwise duplicate
+    /// megabytes of code in Keychain when more than one provider is installed.
+    public var storageSnapshot: SeanimeInstallation {
+        let descriptor = SeanimeManifest(id: manifest.id, name: manifest.name, version: manifest.version, type: manifest.type,
+            language: manifest.language, description: manifest.description, author: manifest.author, payloadURI: manifest.payloadURI,
+            payload: nil, userConfig: manifest.userConfig, semverConstraint: manifest.semverConstraint)
+        return SeanimeInstallation(id: id, manifestURL: manifestURL, manifest: descriptor, source: source, enabled: enabled,
+            preferences: preferences, allowedHosts: allowedHosts, adult: adult)
+    }
+    public func replacingReviewedCode(with candidate: SeanimeInstallation) -> SeanimeInstallation {
+        var config = candidate.preferences
+        let names = Set(candidate.manifest.userConfig?.fields?.map(\.name) ?? Array(config.keys))
+        for (name, value) in preferences where names.contains(name) { config[name] = value }
+        return SeanimeInstallation(id: id, manifestURL: candidate.manifestURL, manifest: candidate.manifest, source: candidate.source,
+            enabled: enabled, preferences: config, allowedHosts: candidate.allowedHosts, adult: adult || candidate.adult).storageSnapshot
+    }
+    public var needsConfiguration: Bool {
+        guard manifest.userConfig?.requiresConfig == true else { return false }
+        return (manifest.userConfig?.fields ?? []).contains {
+            (preferences[$0.name] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 }
 
 public struct SeanimeTorrent: Codable, Identifiable, Sendable {
@@ -79,6 +101,24 @@ public struct SeanimeTorrent: Codable, Identifiable, Sendable {
     public let seeders: Int?
     public let episodeNumber: Double?
     public let isBatch: Bool?
+    private enum CodingKeys: String, CodingKey { case name, infoHash, magnetLink, downloadUrl, link, formattedSize, size, seeders, episodeNumber, isBatch }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        func text(_ key: CodingKeys) -> String? {
+            guard let value = try? values.decode(String.self, forKey: key) else { return nil }
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean.isEmpty ? nil : clean
+        }
+        func number(_ key: CodingKeys) -> Double? {
+            let value = (try? values.decode(Double.self, forKey: key)) ?? text(key).flatMap(Double.init)
+            return value.flatMap { $0.isFinite ? $0 : nil }
+        }
+        name = text(.name) ?? ""
+        infoHash = text(.infoHash); magnetLink = text(.magnetLink); downloadUrl = text(.downloadUrl); link = text(.link)
+        formattedSize = text(.formattedSize); size = number(.size); episodeNumber = number(.episodeNumber)
+        seeders = number(.seeders).flatMap { $0 >= 0 && $0 < Double(Int.max) ? Int($0) : nil }
+        isBatch = (try? values.decode(Bool.self, forKey: .isBatch)) ?? text(.isBatch).flatMap { $0 == "true" ? true : ($0 == "false" ? false : nil) }
+    }
     public var seederSummary: String {
         guard let seeders, seeders >= 0 else { return "Seeders unlisted" }
         return "\(seeders) seeders"
@@ -86,7 +126,8 @@ public struct SeanimeTorrent: Codable, Identifiable, Sendable {
     public var id: String {
         // Stable presentation/job key, not a security hash. Keep configured URLs
         // and magnet query data out of view identities and diagnostics.
-        let raw = infoHash?.lowercased() ?? magnetLink ?? downloadUrl ?? link ?? name
+        let raw = [infoHash?.lowercased(), magnetLink, downloadUrl, link, name].compactMap { $0 }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? name
         let digest = raw.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 }
         return String(digest, radix: 16)
     }
@@ -100,6 +141,29 @@ public struct SeanimeTorrent: Codable, Identifiable, Sendable {
         }
         return nil
     }
+}
+
+public enum SeanimeRequestHeaders {
+    /// Metadata-only GET headers. App credentials, cookies and write requests remain unavailable.
+    public static func validated(_ headers: [String: String]) throws -> [String: String] {
+        let allowed: Set<String> = ["accept", "accept-language", "user-agent", "referer", "origin", "content-type", "cache-control", "range"]
+        guard headers.count <= 16 else { throw SeanimeError.invalidNetwork }
+        var result: [String: String] = [:]
+        for (key, value) in headers {
+            let name = key.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard allowed.contains(name), value.utf8.count <= 2048, !value.contains("\r"), !value.contains("\n") else { throw SeanimeError.invalidNetwork }
+            if name == "referer" || name == "origin" { _ = try SeanimeNetworkPolicy.httpsURL(value) }
+            result[name] = value
+        }
+        return result
+    }
+}
+
+public struct SeanimeHTTPResponse: Sendable {
+    public let body: String
+    public let status: Int
+    public let headers: [String: String]
+    public let url: String
 }
 
 public enum SeanimeNetworkPolicy {
@@ -180,12 +244,23 @@ public struct SeanimeClient: Sendable {
             allowedHosts: SeanimeNetworkPolicy.suggestedHosts(source: source, preferences: preferences, urls: urls), adult: manifest.adultHint)
     }
     public func fetch(_ input: String, hosts: [String]) async throws -> (String, Int) {
+        let response = try await fetchResponse(input, hosts: hosts)
+        return (response.body, response.status)
+    }
+    public func fetchResponse(_ input: String, hosts: [String], headers: [String: String] = [:]) async throws -> SeanimeHTTPResponse {
         let url = try SeanimeNetworkPolicy.validate(input, hosts: hosts)
+        let headers = try SeanimeRequestHeaders.validated(headers)
         do {
-            let (data, response) = try await transport.data(for: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20))
+            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+            let (data, response) = try await transport.data(for: request)
             try Task.checkCancellation()
             guard data.count <= 4_000_000, !(300..<400).contains(response.statusCode), let text = String(data: data, encoding: .utf8) else { throw SeanimeError.unavailable }
-            return (text, response.statusCode)
+            let responseHeaders = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
+                guard let key = pair.key as? String, key.lowercased() != "set-cookie", result.count < 64 else { return }
+                result[key.lowercased()] = String(String(describing: pair.value).prefix(2048))
+            }
+            return SeanimeHTTPResponse(body: text, status: response.statusCode, headers: responseHeaders, url: url.absoluteString)
         } catch is CancellationError { throw CancellationError() }
         catch { throw SeanimeError.unavailable }
     }

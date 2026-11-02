@@ -123,7 +123,9 @@ private struct HomeDashboardView: View {
             .navigationDestination(for: ExploreSearchRoute.self) { _ in UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation() }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
-                case .schedule(let route): ScheduleView(landing: route).environment(\.animeSplitPresentation, false)
+                case .schedule(let route):
+                    if route.page == .airing { HomeAiringNowView().environment(\.animeSplitPresentation, false) }
+                    else { ScheduleView(landing: route).environment(\.animeSplitPresentation, false) }
                 case .news(let collection): NewsView(initialCollection: collection).environment(\.animeSplitPresentation, false)
                 }
             }

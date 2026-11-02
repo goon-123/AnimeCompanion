@@ -21,8 +21,10 @@ struct AnimeDetailView: View {
     @State private var playbackRequest: DetailPlaybackRequest?
     @State private var imagePreview: AnimeImagePreview?
     @State private var requestID = UUID()
+    @State private var episodeRefreshID = 0
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
@@ -33,17 +35,28 @@ struct AnimeDetailView: View {
                 }
                 if let anime, store.isVisible(anime) {
                     AnimeDetailHero(anime: anime) { url in imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle) }
-                    VStack(alignment: .leading, spacing: 20) {
-                        AnimeEpisodeOverview(anime: anime, entry: store.entry(for: anime.id), dub: dubs.progress(for: anime))
-                        progress(anime)
-                        synopsis(anime)
+                    VStack(alignment: .leading, spacing: 24) {
+                        seriesNavigation(proxy)
+                        DetailCard(title: "Your watchlist") {
+                            AnimeEpisodeOverview(anime: anime, entry: store.entry(for: anime.id), dub: dubs.progress(for: anime))
+                            if store.isSignedIn { ProgressControl(anime: anime) }
+                            else { Button("Connect AniList") { showSettings = true }.buttonStyle(.bordered) }
+                            Button { playbackRequest = DetailPlaybackRequest(episode: nil) } label: {
+                                Label(resumeLabel(anime), systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                            }.buttonStyle(.borderedProminent).disabled(anime.status == "NOT_YET_RELEASED")
+                        }.id("series-watchlist")
+                        AnimeEpisodesSection(anime: anime, refreshID: episodeRefreshID) { number in
+                            playbackRequest = DetailPlaybackRequest(episode: number)
+                        }.id("series-episodes")
+                        synopsis(anime).id("series-story")
                         metadata(anime)
                         if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode { BroadcastCountdown(episode: next) }
                         AnimeDubSchedule(anime: anime, progress: dubs.progress(for: anime), snapshot: dubs.snapshot,
                             events: dubEvents(for: anime), loading: dubs.loading, error: dubs.notice)
                         AnimeUpdatesLinks(anime: anime)
-                        AnimeDiscussionsSection(anime: anime)
-                        related(anime)
+                        AnimeDiscussionsSection(anime: anime).id("series-discussions")
+                        AnimeArtworkShelf(anime: anime, refreshID: episodeRefreshID).id("series-artwork")
+                        related(anime).id("series-related")
                         recommendations(anime)
                         characters(anime)
                         staff(anime)
@@ -54,6 +67,7 @@ struct AnimeDetailView: View {
                     }.padding(.horizontal, 16).padding(.bottom, 90).readableContent(width: 940)
                 }
             }
+        }
         }.accessibilityIdentifier("anime-detail-scroll").background(Theme.background).navigationTitle("Anime").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .overlay(alignment: .bottomTrailing) {
@@ -71,7 +85,7 @@ struct AnimeDetailView: View {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and settings")
                 }
             }
-            .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }.refreshable { await load(refresh: true) }
+            .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }.refreshable { episodeRefreshID += 1; await load(refresh: true) }
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $editing) {
                 if let anime { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
@@ -80,6 +94,23 @@ struct AnimeDetailView: View {
                 if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
             }
             .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
+    }
+    private func seriesNavigation(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                jump("Episodes", symbol: "play.rectangle", anchor: "series-episodes", proxy: proxy)
+                jump("Story", symbol: "text.alignleft", anchor: "series-story", proxy: proxy)
+                jump("Artwork", symbol: "photo.on.rectangle", anchor: "series-artwork", proxy: proxy)
+                jump("Related", symbol: "rectangle.stack", anchor: "series-related", proxy: proxy)
+                jump("Discussions", symbol: "bubble.left.and.bubble.right", anchor: "series-discussions", proxy: proxy)
+            }
+        }
+    }
+    private func jump(_ title: String, symbol: String, anchor: String, proxy: ScrollViewProxy) -> some View {
+        Button { proxy.scrollTo(anchor, anchor: .top) } label: {
+            Label(title, systemImage: symbol).font(.caption.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44)
+                .background(Theme.accent.opacity(0.1), in: Capsule())
+        }.buttonStyle(.plain)
     }
     private func resumeLabel(_ anime: Anime) -> String {
         let entry = store.entry(for: anime.id)

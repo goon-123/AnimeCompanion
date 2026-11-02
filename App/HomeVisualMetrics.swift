@@ -1,4 +1,5 @@
 import SwiftUI
+import AnimeCore
 
 enum HomeArtworkSize: String, CaseIterable, Identifiable {
     case standard, large, extraLarge
@@ -50,5 +51,13 @@ extension EnvironmentValues {
     var homeVisuals: HomeVisualMetrics {
         get { self[HomeVisualMetricsKey.self] }
         set { self[HomeVisualMetricsKey.self] = newValue }
+    }
+}
+
+private struct HomeWidgetLayoutKey: EnvironmentKey { static let defaultValue = HomeWidgetLayout.banner }
+extension EnvironmentValues {
+    var homeWidgetLayout: HomeWidgetLayout {
+        get { self[HomeWidgetLayoutKey.self] }
+        set { self[HomeWidgetLayoutKey.self] = newValue }
     }
 }

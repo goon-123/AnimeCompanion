@@ -32,6 +32,13 @@ struct HomeCustomizationView: View {
                             NavigationLink("Customize the three shortcuts") { HomeShortcutCustomizationView() }
                                 .font(.caption).accessibilityIdentifier("home-manage-shortcuts")
                         }
+                        if section.supportsLayout && !preferences.hidden.contains(section) {
+                            Picker("Widget layout", selection: Binding(get: { preferences.layout(for: section) }, set: { layout in
+                                update { $0.setLayout(layout, for: section) }
+                            })) {
+                                ForEach(HomeWidgetLayout.allCases) { layout in Text(layout.title).tag(layout) }
+                            }.accessibilityIdentifier("home-layout-" + section.rawValue)
+                        }
                         if section.supportsItemLimit && !preferences.hidden.contains(section) {
                             Picker("Preview items", selection: Binding(get: { preferences.size(for: section) }, set: { size in
                                 update { $0.setSize(size, for: section) }

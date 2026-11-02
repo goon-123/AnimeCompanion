@@ -95,3 +95,64 @@ test('bundled worker can be terminated while extension JavaScript spins', async 
     const code = await worker.terminate(); assert.equal(typeof code, 'number');
   } finally { await worker.terminate(); }
 });
+
+test('documented Seanime DOM traversal and callable length work on torrent tables', () => {
+  const $ = loadDoc('<table><tbody><tr class="release" data-episode="7"><td class="name"><a href="/view/7">Episode 7</a></td><td class="size">1 GiB</td><td class="seed">42</td></tr><tr class="release"><td>Other</td></tr></tbody></table>');
+  assert.equal($('tr').length(), 2);
+  assert.ok($('tr').length > 0);
+  assert.equal($('a').parent().next().text(), '1 GiB');
+  assert.equal($('a').closest('tr').find('.seed').text(), '42');
+  assert.equal($('tr').first().data('episode'), '7');
+  assert.equal($('tr').first().next().prev().is('.release'), true);
+  assert.equal($('tr').eq(-1).text(), 'Other');
+  assert.equal($('tr').has('a').length(), 1);
+  assert.equal($('tr').not((_, e) => e.find('a').length() > 0).text(), 'Other');
+  assert.equal($('tr').first().find('a').end().length(), 1);
+});
+
+test('read-only public fetch headers and response metadata are supported', async () => {
+  response = {status: 200, text:'[{"name":"Header fixture"}]', headers:{'content-type':'application/json'}, url:'https://provider.example/feed'};
+  const value = await runProvider(input(`class Provider {async search(){const r=await fetch('https://provider.example/feed',{headers:{'Accept':'application/json','User-Agent':'Provider fixture'}}); if(r.headers['content-type']!=='application/json'||r.method!=='GET'||!r.contentLength)throw new Error('response ABI');return r.json();}}`));
+  assert.equal(value.torrents[0].name, 'Header fixture');
+  assert.equal(calls.at(-1).headers.accept, 'application/json');
+  for (const options of ["{headers:{Cookie:'private'}}", "{headers:{Host:'other.example'}}", "{headers:{Accept:'x\\r\\ny: z'}}"]) {
+    await assert.rejects(runProvider(input(`class Provider {async search(){await fetch('https://provider.example/feed',${options});return [];}}`)));
+  }
+  response = {status:200,text:'[]'};
+});
+
+test('named and default TypeScript Provider exports run in the isolated module', async () => {
+  for (const prefix of ['export ', 'export default ']) {
+    const result = await runProvider(input(`${prefix}class Provider {search(){return [{name:'Exported provider'}]}}`));
+    assert.equal(result.torrents[0].name,'Exported provider');
+  }
+});
+
+test('malformed entries do not discard valid torrents or masquerade as empty results', async () => {
+  const mixed = await runProvider(input(`class Provider {search(){return [null,{name:'Valid release'},{foo:'broken'}]}}`));
+  assert.equal(mixed.torrents.length,1); assert.equal(mixed.warnings,2);
+  await assert.rejects(runProvider(input(`class Provider {search(){return [null,{foo:'broken'}]}}`)));
+});
+
+test('two bundled providers keep preferences, networking and errors isolated', async () => {
+  const bundle = await readFile(new URL('../../App/SeanimeRuntimeResources/worker.js', import.meta.url),'utf8');
+  async function run(label, fail) {
+    const worker = new Worker(`const {parentPort}=require('node:worker_threads');globalThis.process=undefined;globalThis.self={postMessage:m=>parentPort.postMessage(m)};${bundle}\n;parentPort.on('message',data=>self.onmessage({data}));parentPort.postMessage({ready:true});`,{eval:true});
+    try {
+      await new Promise((resolve,reject)=>{worker.once('message',resolve);worker.once('error',reject)});
+      const result = new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>reject(new Error('provider fixture timeout')),10000);
+        worker.on('message',message=>{
+          if(message.kind==='fetch') worker.postMessage({kind:'response',id:message.id,status:200,text:'[{"name":"'+label+'"}]'});
+          if(message.kind==='result'){clearTimeout(timer);resolve(message.result)}
+        });
+      });
+      worker.postMessage({kind:'run',input:{...input(`class Provider {async search(){if($getUserPreference('label')!=='${label}')throw new Error('crossed preferences'); ${fail ? "throw new Error('owned provider failure');" : "const r=await fetch('https://provider.example/feed');return r.json();"}}}`),preferences:{label}}});
+      return await result;
+    } finally { await worker.terminate(); }
+  }
+  const [first,second]=await Promise.all([run('First',true),run('Second',false)]);
+  assert.equal(first.error,'runtime'); assert.equal(second.torrents[0].name,'Second');
+  const both=await Promise.all([run('One',false),run('Two',false)]);
+  assert.deepEqual(both.map(result=>result.torrents[0].name),['One','Two']);
+});

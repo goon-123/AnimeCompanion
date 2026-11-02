@@ -30,7 +30,7 @@ struct HomeWidgetFrame<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if editing { controls }
-            content.disabled(editing).allowsHitTesting(!editing)
+            content.environment(\.homeWidgetLayout, preferences.layout(for: section)).disabled(editing).allowsHitTesting(!editing)
         }.padding(editing ? 12 : 0)
             .overlay {
                 if editing {
@@ -43,6 +43,7 @@ struct HomeWidgetFrame<Content: View>: View {
                 Button("Edit Home", systemImage: "slider.horizontal.3") { editing = true }
                 shortcutActions
                 moveActions
+                layoutActions
                 sizeActions
                 Button("Hide widget", systemImage: "minus.circle", role: .destructive) { update { $0.setVisible(section, false) } }
             }
@@ -64,7 +65,7 @@ struct HomeWidgetFrame<Content: View>: View {
                 Image(systemName: "minus.circle.fill").font(visuals.toolbarIconFont).foregroundStyle(.red).frame(width: 44, height: 44)
             }.buttonStyle(.plain).accessibilityLabel("Hide \(section.title)").accessibilityIdentifier("home-hide-" + section.rawValue)
             Text(section.title).font(.caption.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
-            Menu { shortcutActions; moveActions; sizeActions } label: {
+            Menu { shortcutActions; moveActions; layoutActions; sizeActions } label: {
                 Image(systemName: "ellipsis.circle").font(visuals.toolbarIconFont).frame(width: 44, height: 44)
             }.accessibilityLabel("Options for \(section.title)").accessibilityIdentifier("home-options-" + section.rawValue)
             Image(systemName: "line.3.horizontal").font(visuals.toolbarIconFont).foregroundStyle(Theme.accent).frame(width: 44, height: 44)
@@ -87,6 +88,13 @@ struct HomeWidgetFrame<Content: View>: View {
         Button("Move to bottom", systemImage: "arrow.down.to.line") {
             if let last = preferences.visible.last { update { $0.move(section, after: last) } }
         }.disabled(preferences.visible.last == section)
+    }
+    @ViewBuilder private var layoutActions: some View {
+        if section.supportsLayout {
+            Picker("Widget layout", selection: Binding(get: { preferences.layout(for: section) }, set: { layout in update { $0.setLayout(layout, for: section) } })) {
+                ForEach(HomeWidgetLayout.allCases) { layout in Text(layout.title).tag(layout) }
+            }
+        }
     }
     @ViewBuilder private var sizeActions: some View {
         if section.supportsItemLimit {

@@ -1,3 +1,11 @@
+## Series, episode cards and torrent sources — version 0.44.0 / build 104
+
+Separate Home Airing Now from Weekly Schedule. Home weekly posters open anime details, with a poster chooser for multi-title days. Add persisted Small/Medium/Large designs to the large artwork/countdown widgets. Redesign anime and manga/novel details with visible artwork and connections, richer anime episode cards and progress-based watched/replay treatment.
+
+Repair Seanime DOM/fetch compatibility, numeric/empty-hash torrent decoding, multi-provider status and foreground resumption. Redesign installed-provider management with direct configuration/testing, preserve reviewed-update configuration and avoid duplicated inline source in storage. Public episode metadata uses exact entry IDs, bounded cache/pagination and conservative fallbacks. See docs/SERIES_EPISODES_TORRENTS.md for behavior, implementation limits and focused device checks.
+
+Validation uses the normal Core/runtime checks and universal Release compile/IPA packaging. The longer native UI/simulator suites remain opt-in under the existing user preference. No claim of successful live playback through every marketplace extension is made by the fixture tests.
+
 ## Balanced Home cards — version 0.37.3 / build 96
 
 Use medium 80/72/64-point artwork for watching, reading and upcoming cards, 12-point panel padding, tighter metadata spacing and two-line titles. Watching cards use 90% of the shelf up to 400 points, leaving the next card visible; tablet grids use a 270-point minimum. Remove the extra watch footer and place the compact Continue pill beside the episode label, with a vertical fit fallback. Artwork and title remain separate details links from the playback action, avoiding nested buttons and overlay sizing dependencies. Retain the 44-point action touch area, accessibility stacking, clear Home posters, saved resume, progress, routes and section preferences.

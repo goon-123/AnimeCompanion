@@ -13,6 +13,8 @@ struct AiringThisWeekView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.homeVisuals) private var visuals
     @State private var now = ScheduleClock.now
+    @State private var chosenDay: HomeDaySelection?
+    private struct HomeDaySelection: Identifiable { let day: Date; let anime: [Anime]; var id: Date { day } }
     private var week: ScheduleWeek { ScheduleWeek(containing: now, firstWeekday: 1) }
     private var trackedIDs: Set<Int> { store.isSignedIn ? Set(store.visibleEntries.map(\.mediaId)) : [] }
     private var events: [ReleaseEvent] {
@@ -46,13 +48,13 @@ struct AiringThisWeekView: View {
             HStack(alignment: .top, spacing: visuals.value(6, 10)) {
                 ForEach(week.days, id: \.self) { day in
                     let titles = ScheduleDayReleases(on: day, events: weeklyEvents, now: now).trackedAnime(ids: ids)
-                    Button { navigation.openSchedule(on: day) } label: {
+                    Button { open(day, titles: titles) } label: {
                         dayCell(day, titles: titles).frame(maxWidth: .infinity)
                     }.buttonStyle(.plain)
                         .accessibilityIdentifier("home-week-\(Calendar.current.component(.weekday, from: day))")
                         .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + (Calendar.current.isDate(day, inSameDayAs: now) ? ", Today" : ""))
                         .accessibilityValue(titles.isEmpty ? "No tracked releases" : titles.map(\.displayTitle).joined(separator: ", "))
-                        .accessibilityHint("Open this date in Weekly Schedule")
+                        .accessibilityHint(titles.isEmpty ? "View this day's releases" : (titles.count > 1 ? "Choose an anime airing on this day" : "Open anime details"))
                 }
             }
             if let error = schedule.snapshot(in: week.window).error, !trackedIDs.isEmpty {
@@ -68,6 +70,27 @@ struct AiringThisWeekView: View {
                     await refresh()
                     do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 }
+            }
+            .sheet(item: $chosenDay) { selection in
+                AppNavigationStack {
+                    ScrollView {
+                        if selection.anime.isEmpty {
+                            ContentUnavailableView("No tracked anime airing", systemImage: "calendar", description: Text("Add an airing anime to your library to see it here."))
+                        }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .top)], alignment: .leading, spacing: 18) {
+                            ForEach(selection.anime) { anime in
+                                Button { chosenDay = nil; navigation.home.open(anime.id) } label: {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        AnimeCover(anime: anime, width: 140, cornerRadius: 12, identifierPrefix: "home-week-choice", badgeStyle: .none)
+                                        Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(3)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }.buttonStyle(.plain).accessibilityIdentifier("home-week-open-\(anime.id)")
+                            }
+                        }.padding(20)
+                    }.navigationTitle(selection.day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { chosenDay = nil } } }
+                }.presentationDetents([.medium, .large])
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in now = ScheduleClock.now }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in now = ScheduleClock.now }
@@ -108,6 +131,11 @@ struct AiringThisWeekView: View {
                     }
                 }
         }.frame(maxWidth: visuals.weeklyPosterLimit).contentShape(Rectangle())
+    }
+    private func open(_ day: Date, titles: [Anime]) {
+        if let only = titles.first, titles.count == 1 { navigation.home.open(only.id) }
+        else if !titles.isEmpty { chosenDay = HomeDaySelection(day: day, anime: titles) }
+        else { chosenDay = HomeDaySelection(day: day, anime: []) }
     }
     private func refresh(force: Bool = false) async {
         guard !trackedIDs.isEmpty else { return }

@@ -95,7 +95,7 @@ struct MangaTitleDetailView: View {
                 header
                 if !model.manga.description.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(model.manga.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(expanded ? nil : 3)
+                        Text(model.manga.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(expanded ? nil : 5)
                         Button(expanded ? "Show less" : "Read more") { expanded.toggle() }.font(.caption.bold())
                     }.padding(.horizontal, 20)
                 }
@@ -133,7 +133,7 @@ struct MangaTitleDetailView: View {
         }.padding(20).padding(.top, 12).frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 MangaCover(title: current, width: 500).blur(radius: 28).opacity(0.30)
-                    .overlay(LinearGradient(colors: [.black.opacity(0.15), .black], startPoint: .top, endPoint: .bottom)).clipped()
+                    .overlay(LinearGradient(colors: [Theme.background.opacity(0.35), Theme.background], startPoint: .top, endPoint: .bottom)).clipped()
             }
     }
     private var readingAction: some View {

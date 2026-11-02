@@ -5,6 +5,7 @@ import AnimeCore
 struct HomeBannerWidget: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     let section: HomeSection
     let limit: Int
     let refreshID: Int
@@ -39,7 +40,7 @@ struct HomeBannerWidget: View {
                             ForEach(values) { anime in
                                 AnimeLink(id: anime.id) {
                                     HomeAnimeBanner(anime: anime, caption: caption(for: anime))
-                                        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.animeBannerLimit, width * (section == .nextEpisode ? 1 : 0.92)) }
+                                        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(layout == .compact ? visuals.value(300, 400) : (layout == .poster ? visuals.value(340, 460) : visuals.animeBannerLimit), width * (section == .nextEpisode ? 1 : 0.92)) }
                                 }.buttonStyle(.plain).accessibilityIdentifier("home-banner-\(section.rawValue)-\(anime.id)")
                             }
                         }.scrollTargetLayout()
@@ -89,9 +90,31 @@ struct HomeBannerWidget: View {
 struct HomeAnimeBanner: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     let anime: Anime
     let caption: String
     var body: some View {
+        Group {
+            if layout == .banner { cinematic }
+            else { tile(compact: layout == .compact) }
+        }
+    }
+    private func tile(compact: Bool) -> some View {
+        let width = compact ? visuals.value(44, 60) : visuals.value(88, 104)
+        return HStack(spacing: 14) {
+            ArtworkImage(url: anime.coverURL, pointSize: width * 1.45) { $0.resizable().scaledToFill() } placeholder: { Theme.accent.opacity(0.15) }
+                .frame(width: width, height: width * 1.45).clipped().clipShape(RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(caption).font(.caption2.weight(.bold)).foregroundStyle(Theme.accent).lineLimit(2)
+                Text(anime.displayTitle).font(compact ? .subheadline.weight(.semibold) : .headline).foregroundStyle(.primary).lineLimit(compact ? 2 : 3)
+                if caption.contains("UP NEXT"), let next = anime.nextAiringEpisode {
+                    HStack(spacing: 4) { Image(systemName: "clock"); Text(next.date, style: .relative).monospacedDigit() }
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.companionPanel(padding: compact ? 12 : 14).accessibilityElement(children: .combine)
+    }
+    private var cinematic: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
                 LinearGradient(colors: [Theme.accent.opacity(0.40), Theme.secondarySurface], startPoint: .topLeading, endPoint: .bottomTrailing)

@@ -4,6 +4,7 @@ import AnimeCore
 struct HomeSeasonWidget: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     let section: HomeSection
     let limit: Int
     let refreshID: Int
@@ -36,8 +37,8 @@ struct HomeSeasonWidget: View {
                                 ForEach(values) { anime in
                                     AnimeLink(id: anime.id) {
                                         HomeAnimeBanner(anime: anime, caption: caption(anime))
-                                            .overlay(alignment: .topLeading) { badge(anime) }
-                                            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.animeBannerLimit, width * (section == .tonightPick ? 1 : 0.92)) }
+                                            .overlay(alignment: .topLeading) { if layout == .banner { badge(anime) } }
+                                            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(layout == .compact ? visuals.value(300, 400) : (layout == .poster ? visuals.value(340, 460) : visuals.animeBannerLimit), width * (section == .tonightPick ? 1 : 0.92)) }
                                     }.buttonStyle(.plain).accessibilityIdentifier("home-\(section.rawValue)-\(anime.id)")
                                 }
                             }.scrollTargetLayout()
@@ -102,7 +103,9 @@ struct HomeSeasonWidget: View {
         case .nextSeason, .returningSeries:
             if let date = anime.startDate, date.year != nil { return "PREMIERES · " + date.label.uppercased() }
             return "PREMIERE DATE TO BE ANNOUNCED"
-        case .hallOfFame: return "COMPLETED · YOUR COLLECTION"
+        case .hallOfFame:
+            if layout != .banner, let score = store.entry(for: anime.id)?.score, score > 0 { return "YOUR SCORE · \(Int(score.rounded()))/100" }
+            return "COMPLETED · YOUR COLLECTION"
         default:
             let next = (store.entry(for: anime.id)?.progressValue ?? 0) + 1
             return next == 1 ? "TONIGHT · START EPISODE 1" : "TONIGHT · CONTINUE EPISODE \(next)"
@@ -153,6 +156,7 @@ struct HomeSeasonWidget: View {
 private struct HomeSeasonCountdownCard: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     let countdown: HomeSeasonCountdown
     let artwork: [Anime]
     private var tint: Color {
@@ -167,6 +171,37 @@ private struct HomeSeasonCountdownCard: View {
         switch countdown.next.season { case .winter: return "snowflake"; case .spring: return "leaf.fill"; case .summer: return "sun.max.fill"; case .fall: return "leaf.circle.fill" }
     }
     var body: some View {
+        Group {
+            if layout == .compact { compactCard }
+            else if layout == .poster { mediumCard }
+            else { cinematic }
+        }
+    }
+    private var compactCard: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol).font(.title).foregroundStyle(tint).frame(width: 44)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(countdown.next.label).font(.headline)
+                Text("\(countdown.days)d  \(countdown.hours)h  \(countdown.minutes)m").font(.title3.weight(.bold).monospacedDigit()).foregroundStyle(tint)
+                Text("Next anime season · Season dates vary").font(.caption2).foregroundStyle(.white.opacity(0.7))
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "arrow.up.right").font(.headline)
+        }.foregroundStyle(.white).padding(16).background { background }.clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            .accessibilityElement(children: .combine)
+    }
+    private var mediumCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: symbol).foregroundStyle(tint)
+                Text(countdown.next.label).font(.title2.bold())
+                Spacer(); Image(systemName: "arrow.up.right").font(.subheadline)
+            }
+            HStack(spacing: 10) { counter(countdown.days, label: "DAYS"); counter(countdown.hours, label: "HOURS"); counter(countdown.minutes, label: "MINUTES") }
+            Text(countdown.startsAt, format: .dateTime.month(.wide).day().year()).font(.caption.weight(.semibold))
+            Text("Season boundary · Individual premiere dates vary").font(.caption2).foregroundStyle(.white.opacity(0.65))
+        }.foregroundStyle(.white).padding(18).background { background }.clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+    }
+    private var cinematic: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 6) {
                 Circle().fill(tint).frame(width: 6, height: 6)

@@ -3,7 +3,6 @@ import UIKit
 import AnimeCore
 
 private enum ScheduleFilter: String, CaseIterable { case all = "All", sub = "Sub", dub = "Dub" }
-private enum ScheduleMode: String, CaseIterable { case airing = "Airing Now", weekly = "Weekly Schedule" }
 private enum WeeklyScheduleMode: String, CaseIterable { case continuous, day }
 private struct ScheduleScrollRequest: Equatable { let day: Date; var token = UUID() }
 
@@ -15,7 +14,6 @@ struct ScheduleView: View {
     @EnvironmentObject private var schedule: WeeklyScheduleStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var textSize
-    @AppStorage("schedule.page") private var mode = ScheduleMode.airing
     @State private var showSettings = false
     @State private var anchor = ScheduleClock.now
     @State private var now = ScheduleClock.now
@@ -59,14 +57,8 @@ struct ScheduleView: View {
         }.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
     }
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Schedule view", selection: $mode) {
-                ForEach(ScheduleMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 12)
-                .readableContent(width: 1000).accessibilityIdentifier("schedule-mode")
-            if mode == .airing { AiringNowView(showSettings: $showSettings) }
-            else { weeklySchedule }
-        }.background(Theme.background).navigationTitle("Schedule").navigationBarTitleDisplayMode(.inline).animeNavigation()
+        weeklySchedule
+            .background(Theme.background).navigationTitle("Weekly schedule").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }
@@ -77,15 +69,13 @@ struct ScheduleView: View {
             .onChange(of: landing, initial: true) { _, request in
                 guard let request, appliedLanding != request.id else { return }
                 appliedLanding = request.id
-                mode = request.page == .weekly ? .weekly : .airing
                 selectDate(request.day)
             }
-            .onChange(of: mode) { _, mode in if mode == .weekly { refreshToday() } }
             .onChange(of: scenePhase) { _, phase in if phase == .active { refreshToday() } }
             .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshToday() }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in refreshToday() }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
-                if scenePhase == .active, mode == .weekly { refreshToday() }
+                if scenePhase == .active { refreshToday() }
             }
     }
     private var weeklySchedule: some View {

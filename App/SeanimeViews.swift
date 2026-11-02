@@ -12,53 +12,145 @@ struct SeanimeSettingsView: View {
     @State private var work: Task<Void, Never>?
     @FocusState private var editing: Bool
     var body: some View {
-        Form {
-            Section {
-                Button { editing = false; marketplace = true } label: { Label("Browse Seanime Marketplace", systemImage: "globe") }.accessibilityIdentifier("seanime-marketplace")
-                NavigationLink { SeanimeSearchView() } label: { Label("Search installed providers", systemImage: "magnifyingglass") }.accessibilityIdentifier("seanime-search")
-                NavigationLink { TorBoxSettingsView() } label: {
-                    LabeledContent("TorBox connection", value: seanime.hasTorBoxKey ? "Key saved" : "Not connected")
-                }.accessibilityIdentifier("seanime-torbox-settings")
-            }
-            Section {
-                TextField("Paste Seanime extension JSON URL", text: $manifestURL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .keyboardType(.URL).focused($editing).submitLabel(.done).onSubmit { editing = false }.accessibilityIdentifier("seanime-manifest-url")
-                PasteButton(payloadType: String.self) { values in if let value = values.first { manifestURL = value } }
-                Button("Review extension") {
-                    editing = false
-                    work = Task { busy = true; notice = nil; defer { busy = false }
-                        do { let value = try await seanime.client.inspect(manifestURL); try Task.checkCancellation(); candidate = value }
-                        catch is CancellationError {} catch { notice = error.localizedDescription }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                header
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
+                    Button { editing = false; marketplace = true } label: {
+                        destinationTile("Discover providers", detail: "Seanime Marketplace", icon: "globe")
+                    }.accessibilityIdentifier("seanime-marketplace")
+                    NavigationLink { SeanimeSearchView() } label: {
+                        destinationTile("Search releases", detail: "All enabled providers", icon: "magnifyingglass")
+                    }.accessibilityIdentifier("seanime-search")
+                    NavigationLink { TorBoxSettingsView() } label: {
+                        destinationTile("TorBox", detail: seanime.hasTorBoxKey ? "Connected · key saved" : "Connect your account", icon: "cloud")
+                    }.accessibilityIdentifier("seanime-torbox-settings")
+                }.buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("Install a provider", systemImage: "plus.circle.fill").font(.headline)
+                    Text("Paste an extension JSON URL, then review its code and network access.").font(.subheadline).foregroundStyle(.secondary)
+                    TextField("Seanime extension JSON URL", text: $manifestURL)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        .focused($editing).submitLabel(.done).onSubmit { editing = false }
+                        .padding(14).background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityIdentifier("seanime-manifest-url")
+                    HStack {
+                        PasteButton(payloadType: String.self) { values in if let value = values.first { manifestURL = value } }
+                        Spacer()
+                        if busy { ProgressView() }
+                        Button("Review extension") { review() }.buttonStyle(.borderedProminent)
+                            .disabled(busy || manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityIdentifier("seanime-review")
                     }
-                }.disabled(busy || manifestURL.isEmpty).accessibilityIdentifier("seanime-review")
-                if busy { ProgressView() }
-            } header: { Text("Install from URL") } footer: { Text("Review and install trusted torrent-provider extensions. Runs on this device; no Seanime server needed.") }
-            Section("Installed · \(seanime.installations.count)") {
-                ForEach(seanime.installations) { installation in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(installation.manifest.name).font(.headline)
-                        Toggle("Enable \(installation.manifest.name)", isOn: Binding(get: {
-                            seanime.installations.first { $0.id == installation.id }?.enabled ?? false
-                        }, set: { enabled in var value = installation; value.enabled = enabled; _ = seanime.update(value) }))
-                        DisclosureGroup("Details & configuration") {
-                            Text("\(installation.manifest.version) · \(installation.manifest.language)").font(.caption).foregroundStyle(.secondary)
-                            NavigationLink("Configure \(installation.manifest.name)") { SeanimeConfigurationView(installation: installation) }
-                            Button("Remove \(installation.manifest.name)", role: .destructive) { seanime.remove(installation.id) }
-                        }
-                    }
+                }.padding(20).surfacePanel()
+                HStack {
+                    Text("Your providers").font(.title2.bold())
+                    Spacer()
+                    Text("\(seanime.installations.count) installed").font(.subheadline).foregroundStyle(.secondary)
                 }
-            }
-            if let notice { Section { Text(notice).font(.caption).accessibilityIdentifier("seanime-notice") } }
-            if let error = seanime.error { Section { Text(error).foregroundStyle(.orange) } }
-            Section { NavigationLink("Compatibility & privacy") { SeanimeSafetyView() } }
-        }.navigationTitle("Seanime extensions").navigationBarTitleDisplayMode(.inline)
+                if seanime.installations.isEmpty {
+                    ContentUnavailableView("Add your first provider", systemImage: "puzzlepiece.extension",
+                        description: Text("Browse the marketplace or paste a provider URL above. Installed providers search independently on this device."))
+                        .padding().surfacePanel()
+                }
+                ForEach(seanime.installations) { installation in providerCard(installation) }
+                if let notice { Label(notice, systemImage: "info.circle").font(.subheadline).accessibilityIdentifier("seanime-notice") }
+                if let error = seanime.error { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange) }
+                NavigationLink { SeanimeSafetyView() } label: {
+                    Label("Compatibility & privacy", systemImage: "checkmark.shield").font(.subheadline).frame(minHeight: 44)
+                }
+            }.frame(maxWidth: 860).padding(20).frame(maxWidth: .infinity)
+        }.background(Theme.background)
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Torrent extensions").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $candidate) { value in
-                AppNavigationStack { SeanimeInstallReview(installation: value) { if seanime.install($0) { candidate = nil; manifestURL = ""; notice = "Seanime extension installed." } } }
+                AppNavigationStack { SeanimeInstallReview(installation: value) {
+                    if seanime.install($0) { candidate = nil; manifestURL = ""; notice = "Provider saved. Configure it or run a test search below." }
+                } }
             }
             .sheet(isPresented: $marketplace) {
                 AppNavigationStack { SeanimeMarketplaceView { value in manifestURL = value; marketplace = false } }
             }
             .onDisappear { work?.cancel() }
+    }
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                Image(systemName: "puzzlepiece.extension.fill").font(.system(size: 32)).foregroundStyle(Theme.accent)
+                    .frame(width: 68, height: 68).background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 20))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Your release sources").font(.title.bold())
+                    Text("Seanime providers, made for your device.").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 16) {
+                Label("\(seanime.installations.filter(\.enabled).count) enabled", systemImage: "checkmark.circle.fill")
+                Label("On-device search", systemImage: "iphone")
+            }.font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
+            Text("Search providers together or test them individually. Each has its own preferences and approved hosts.")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+    }
+    private func destinationTile(_ title: String, detail: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).font(.title2).foregroundStyle(Theme.accent).frame(width: 36)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline).foregroundStyle(.primary)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+        }.padding(16).frame(maxWidth: .infinity, minHeight: 86, alignment: .leading).surfacePanel()
+    }
+    private func providerCard(_ installation: SeanimeInstallation) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "shippingbox.fill").font(.title2).foregroundStyle(Theme.accent)
+                    .frame(width: 52, height: 52).background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(installation.manifest.name).font(.headline)
+                    Text("v\(installation.manifest.version) · \(installation.manifest.language)").font(.caption).foregroundStyle(.secondary)
+                    Text(installation.needsConfiguration ? "Setup needed" : (installation.enabled ? "Enabled" : "Disabled"))
+                        .font(.caption.weight(.semibold)).foregroundStyle(installation.needsConfiguration ? .orange : Theme.accent)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Toggle("Enable \(installation.manifest.name)", isOn: Binding(get: {
+                    seanime.installations.first { $0.id == installation.id }?.enabled ?? false
+                }, set: { seanime.setEnabled(installation.id, enabled: $0) })).labelsHidden()
+                    .accessibilityLabel("Enable \(installation.manifest.name)")
+            }
+            if let description = PlaybackSourceText.clean(installation.manifest.description, maximumLines: 2, maximumCharacters: 300) {
+                Text(description).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+            }
+            HStack {
+                Label("\(installation.allowedHosts.count) approved hosts", systemImage: "network")
+                if installation.adult { Text("Adult provider") }
+            }.font(.caption).foregroundStyle(.secondary)
+            Divider()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { providerActions(installation) }
+                VStack(alignment: .leading, spacing: 12) { providerActions(installation) }
+            }
+        }.padding(20).surfacePanel()
+    }
+    @ViewBuilder private func providerActions(_ installation: SeanimeInstallation) -> some View {
+        NavigationLink { SeanimeConfigurationView(installation: installation) } label: {
+            Label("Configure", systemImage: "slider.horizontal.3").frame(minHeight: 44)
+        }.buttonStyle(.bordered)
+        NavigationLink { SeanimeSearchView(preferredProvider: installation.id) } label: {
+            Label("Test search", systemImage: "magnifyingglass").frame(minHeight: 44)
+        }.buttonStyle(.borderedProminent).disabled(!installation.enabled)
+        Menu {
+            Button("Remove \(installation.manifest.name)", role: .destructive) { seanime.remove(installation.id) }
+        } label: { Image(systemName: "ellipsis.circle").font(.title2).frame(width: 44, height: 44) }
+            .accessibilityLabel("Manage \(installation.manifest.name)")
+    }
+    private func review() {
+        editing = false; work?.cancel()
+        let url = manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        work = Task {
+            busy = true; notice = nil; defer { busy = false }
+            do { let value = try await seanime.client.inspect(url); try Task.checkCancellation(); candidate = value }
+            catch is CancellationError {} catch { notice = error.localizedDescription }
+        }
     }
 }
 
@@ -144,6 +236,7 @@ struct SeanimeSearchView: View {
     @StateObject private var search = SeanimeSearchModel()
     var anime: Anime? = nil
     var episode: Int = 1
+    var preferredProvider: UUID? = nil
     var body: some View {
         ScrollView {
             SeanimeSourcesSections(search: search, anime: anime, episode: episode)
@@ -153,9 +246,13 @@ struct SeanimeSearchView: View {
             .navigationTitle("Find streams").navigationBarTitleDisplayMode(.inline)
             .task(id: "\(seanime.revision)-\(store.includeAdult)") {
                 search.configure(store: seanime, anime: anime, allowAdult: store.includeAdult)
-                if anime != nil { search.search() }
+                if let preferredProvider { search.selectProvider(preferredProvider) }
+                else if anime != nil { search.search() }
             }
-            .onChange(of: scenePhase) { _, phase in if phase != .active { search.stop() } }
+            .onChange(of: scenePhase) { _, phase in
+                    if phase == .background { search.pause() }
+                    else if phase == .active { search.resumeIfNeeded() }
+                }
             .onDisappear { search.stop() }
     }
 }
@@ -197,6 +294,7 @@ struct SeanimeSourcesSections: View {
                     NavigationLink("Manage Seanime extensions") { SeanimeSettingsView() }
                 }
             } else {
+                providerStatus
                 if anime == nil {
                     searchPanel
                 } else {
@@ -222,9 +320,13 @@ struct SeanimeSourcesSections: View {
                     }
                 }
                 if search.searched && !search.loading && visible.isEmpty {
-                    StreamPickerEmptyState(title: search.results.isEmpty ? "No releases found" : "No matching releases",
-                        message: search.results.isEmpty ? "Try another title or torrent provider." : "Try All audio or clear the release filter. Unlisted audio may still include your language.",
-                        symbol: "magnifyingglass")
+                    let failed = search.states.values.contains { $0.failed }
+                    StreamPickerEmptyState(title: search.results.isEmpty ? (failed ? "Some providers couldn't search" : "No releases found") : "No matching releases",
+                        message: search.results.isEmpty ? (failed ? "Check each provider's status above. Configure its hosts or preferences, then retry." : "Try another title or torrent provider.") : "Try All audio or clear the release filter. Unlisted audio may still include your language.",
+                        symbol: failed ? "exclamationmark.triangle" : "magnifyingglass")
+                    if !search.results.isEmpty, audioValue != StreamAudioFilter.all.rawValue {
+                        Button("Show all audio") { audioValue = StreamAudioFilter.all.rawValue }.font(.subheadline)
+                    }
                 }
                 LazyVStack(spacing: 12) {
                     ForEach(visible) { choice in
@@ -243,6 +345,33 @@ struct SeanimeSourcesSections: View {
                     Section { Text("Release titles and audio hints are supplied by this provider. Verify the episode and file before playing.").font(.caption).foregroundStyle(.secondary) }
                 }.navigationTitle("Release information").navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { releaseInfo = nil } } }
+            }
+        }
+    }
+    private var providerStatus: some View {
+        StreamPickerCard {
+            if search.providers.count > 1 {
+                Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
+                    Text("All enabled providers").tag(Optional<UUID>.none)
+                    ForEach(search.providers) { Text($0.manifest.name).tag(Optional($0.id)) }
+                }.accessibilityIdentifier("seanime-provider-picker")
+            }
+            ForEach(search.providers.filter { search.providerID == nil || search.providerID == $0.id }) { provider in
+                let state = search.states[provider.id]
+                HStack(spacing: 10) {
+                    if state == .searching { ProgressView().controlSize(.small) }
+                    else { Image(systemName: state?.symbol ?? "shippingbox").foregroundStyle(state?.failed == true ? .orange : Theme.accent) }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(provider.manifest.name).font(.subheadline.weight(.medium))
+                        Text(state?.label ?? (provider.needsConfiguration ? "Setup needed" : "Ready to search"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    if state?.failed == true || provider.needsConfiguration {
+                        NavigationLink { SeanimeConfigurationView(installation: provider) } label: {
+                            Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
+                        }.accessibilityLabel("Configure \(provider.manifest.name)")
+                    }
+                }.accessibilityElement(children: .contain).accessibilityIdentifier("seanime-provider-status")
             }
         }
     }
@@ -272,12 +401,7 @@ struct SeanimeSourcesSections: View {
                     .disabled(search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || search.loading)
                     .accessibilityLabel("Search torrent releases").accessibilityIdentifier("seanime-run-search")
             }
-            if search.providers.count > 1 {
-                Picker("Providers", selection: Binding(get: { search.providerID }, set: { search.selectProvider($0) })) {
-                    Text("All enabled providers").tag(Optional<UUID>.none)
-                    ForEach(search.providers) { Text($0.manifest.name).tag(Optional($0.id)) }
-                }.accessibilityIdentifier("seanime-provider-picker")
-            }
+
         }
     }
     private func releaseCard(_ choice: SeanimeSearchModel.Choice) -> some View {

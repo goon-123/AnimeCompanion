@@ -84,6 +84,7 @@ struct HomeNewsSection: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("news.reader.v1") private var readerJSON = ""
     @AppStorage("news.readingHistory") private var historyJSON = ""
@@ -121,7 +122,7 @@ struct HomeNewsSection: View {
                         ForEach(stories) { article in
                             Button { open(article) } label: {
                                 HomeNewsBanner(article: article, isSaved: reader.isSaved(article))
-                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.newsBannerLimit, width * 0.92) }
+                                    .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(layout == .compact ? visuals.value(300, 400) : (layout == .poster ? visuals.value(340, 460) : visuals.newsBannerLimit), width * 0.92) }
                             }.buttonStyle(.plain).accessibilityIdentifier("home-news-story-" + article.id)
                                 .contextMenu {
                                     Button(reader.isSaved(article) ? "Remove saved story" : "Save story", systemImage: "bookmark") { toggleSaved(article) }
@@ -186,10 +187,37 @@ private struct HomeNewsBanner: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.homeWidgetLayout) private var layout
     let article: NewsArticle
     let isSaved: Bool
     @State private var imageURL: URL?
     var body: some View {
+        Group {
+            if layout == .banner { cinematic }
+            else if layout == .compact {
+                HStack(spacing: 12) {
+                    thumbnail.frame(width: 96, height: 64).clipped().clipShape(RoundedRectangle(cornerRadius: 9))
+                    storyText.frame(maxWidth: .infinity, alignment: .leading)
+                }.companionPanel(padding: 12)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    thumbnail.frame(height: visuals.value(80, 120)).clipped()
+                    storyText.padding(.horizontal, 12).padding(.bottom, 12)
+                }.background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radius)).clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            }
+        }.accessibilityElement(children: .combine)
+            .task(id: article.id) { imageURL = await store.news.thumbnail(for: article) }
+    }
+    private var thumbnail: some View {
+        ArtworkImage(url: imageURL ?? article.imageURL, pointSize: visuals.value(340, 460)) { $0.resizable().scaledToFill() } placeholder: { Theme.accent.opacity(0.15) }
+    }
+    private var storyText: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(article.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(2)
+            Text(article.source.label).font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+        }
+    }
+    private var cinematic: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
                 Theme.accent.opacity(0.20)
@@ -209,6 +237,5 @@ private struct HomeNewsBanner: View {
             }.clipShape(RoundedRectangle(cornerRadius: Theme.radius))
         }.frame(height: textSize.isAccessibilitySize ? visuals.value(250, 340) : visuals.newsBannerHeight)
             .accessibilityElement(children: .combine)
-            .task(id: article.id) { imageURL = await store.news.thumbnail(for: article) }
     }
 }
