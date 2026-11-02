@@ -51,14 +51,14 @@ extension XCUIApplication {
     /// than the phone's bottom tab bar. Keep feature assertions in both modes.
     @MainActor func appTab(_ title: String) -> XCUIElement {
         // Legacy feature journeys now enter through Home's permanent links.
-        // Schedule journeys start at Airing Now and can still choose Weekly.
-        if title == "Schedule" || title == "News" {
+        // Calendar and Airing Now have separate Home destinations.
+        if title == "Schedule" || title == "Airing Now" || title == "News" {
             let home = appTab("Home")
             if home.waitForExistence(timeout: 10) { home.tap() }
-            let action = buttons[title == "Schedule" ? "home-open-airing" : "home-open-news"]
+            let action = buttons[title == "Schedule" ? "home-open-schedule" : (title == "Airing Now" ? "home-open-airing" : "home-open-news")]
             for _ in 0..<8 {
                 if action.exists && action.isHittable { return action }
-                let back = navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["Home", "Back", "Anime News", "Headlines", "Schedule"])).firstMatch
+                let back = navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["Home", "Back", "Anime News", "Headlines", "Schedule", "Weekly schedule", "Airing now"])).firstMatch
                 if back.exists && back.isHittable { back.tap() }
                 else if scrollViews["home-dashboard"].exists { scrollViews["home-dashboard"].swipeDown() }
                 else { break }
@@ -93,7 +93,7 @@ extension XCUIApplication {
         if descendants(matching: .any).matching(identifier: "torbox-webdav-list").firstMatch.exists { return self }
         // A sheet sits over the browse/detail panes; drag its form, not the
         // retained view underneath. The screen center is inside these sheets.
-        if ["Sources & playback", "Appearance & layout", "Customize Home", "Saved views", "Accounts", "MangaBaka account", "Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
+        if ["Sources & playback", "Appearance & layout", "Customize Home", "Saved views", "Accounts", "MangaBaka account", "Customize News", "Display options", "Dub filters", "Settings", "Watch in VidHub", "Find streams", "Source options", "Playback help", "Release information", "Edit AniList tracking", "Stremio add-ons", "Browse add-ons", "Review add-on", "Installed catalogs", "Exact video ID", "Add-on sources", "Subtitles", "Seanime extensions", "Torrent extensions", "TorBox", "AniList account", "Browsing & content", "Watch tracking", "Video player", "About & data sources", "Compatibility & privacy", "Review Seanime extension", "Seanime sources", "TorBox playback", "Configure provider"].contains(where: { navigationBars[$0].exists }) {
             return self
         }
         if navigationBars["iPad layout"].exists { return self }

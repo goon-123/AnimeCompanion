@@ -8,8 +8,8 @@ final class AiringProgressUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-library-preview", "--ui-airing-preview", "--ui-reset-content-preferences"]
         app.launch()
-        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("Schedule").tap()
-        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
+        XCTAssertTrue(app.appTab("My Library").waitForExistence(timeout: 30)); app.appTab("Airing Now").tap()
+        XCTAssertFalse(app.segmentedControls["schedule-mode"].exists)
         XCTAssertTrue(app.staticTexts["schedule-airing-title"].exists)
         let behind = app.staticTexts["library-airing-status-990101"]
         XCTAssertTrue(behind.waitForExistence(timeout: 45)); reveal(behind, app: app)
@@ -28,7 +28,7 @@ final class AiringProgressUITests: XCTestCase {
         XCTAssertTrue(app.buttons["library-entry-990101"].exists)
         XCTAssertFalse(app.buttons["library-entry-990102"].exists)
         capture("Schedule-Airing-Behind-Only")
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
+        app.appTab("Schedule").tap()
         XCTAssertTrue(app.buttons["schedule-week"].waitForExistence(timeout: 15))
         let initial = app.buttons["schedule-week"].value as? String
         app.buttons["Next week"].tap()
@@ -69,10 +69,10 @@ final class AiringProgressUITests: XCTestCase {
             capture("Library-Tracking-Without-Airing-iPad-Landscape")
             XCUIDevice.shared.orientation = .portrait
         }
-        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: app.appTab("Schedule"))
+        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: app.appTab("Airing Now"))
         XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 15), .completed)
-        app.appTab("Schedule").tap()
-        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
+        app.appTab("Airing Now").tap()
+        XCTAssertFalse(app.segmentedControls["schedule-mode"].exists)
         reveal(behind, app: app); XCTAssertEqual(behind.label, "2 episodes behind")
     }
     @MainActor

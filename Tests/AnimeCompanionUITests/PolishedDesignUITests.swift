@@ -173,9 +173,9 @@ final class PolishedDesignUITests: XCTestCase {
         let tags = app.descendants(matching: .any).matching(identifier: "detail-genres-1").firstMatch
         reveal(tags, in: app); tags.buttons["genre-1-Action"].tap()
         assertGenre("Action", in: app)
-        app.appTab("Schedule").tap()
-        XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable, "Returning to Schedule must open the glanceable watchlist")
-        XCTAssertTrue(app.segmentedControls["schedule-mode"].buttons["Airing Now"].isSelected)
+        app.appTab("Airing Now").tap()
+        XCTAssertTrue(app.staticTexts["schedule-airing-title"].isHittable, "Airing Now must open the glanceable watchlist")
+        XCTAssertFalse(app.segmentedControls["schedule-mode"].exists)
     }
 
     @MainActor private func launchPreview(extra: [String] = []) -> XCUIApplication {

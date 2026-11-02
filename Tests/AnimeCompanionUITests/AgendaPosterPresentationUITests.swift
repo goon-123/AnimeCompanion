@@ -44,8 +44,7 @@ final class AgendaPosterPresentationUITests: XCTestCase {
         for appearance in ["dark", "light"] {
             let app = launch(extra: ["-appearance.scheme.v1", appearance])
             app.appTab("Schedule").tap()
-            app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
-            let today = app.descendants(matching: .any).matching(identifier: "schedule-day-2026-10-28").firstMatch
+                let today = app.descendants(matching: .any).matching(identifier: "schedule-day-2026-10-28").firstMatch
             XCTAssertTrue(today.waitForExistence(timeout: 15))
             let first = app.buttons["release-entry-990203-sub-4"]
             XCTAssertTrue(first.waitForExistence(timeout: 15))

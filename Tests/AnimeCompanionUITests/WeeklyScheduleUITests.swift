@@ -36,18 +36,14 @@ final class WeeklyScheduleUITests: XCTestCase {
         // The list remains freely scrollable below and above the automatic target.
         if list.exists { list.swipeUp(); list.swipeDown() }
         else { app.contentSurface.swipeUp(); app.contentSurface.swipeDown() }
-        XCTAssertTrue(app.navigationBars["Schedule"].exists)
+        XCTAssertTrue(app.navigationBars["Weekly schedule"].exists)
 
-        app.segmentedControls["schedule-mode"].buttons["Airing Now"].tap()
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         assertAtTop(today, app: app)
 
         app.buttons["Next week"].tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", ", Today")).firstMatch.exists)
         app.buttons["schedule-jump-2026-10-14"].tap()
         assertAtTop(day("2026-10-14", in: app), app: app)
-        app.segmentedControls["schedule-mode"].buttons["Airing Now"].tap()
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         XCTAssertTrue(app.buttons["schedule-week"].label.contains("Choose schedule date"))
         XCTAssertFalse(app.buttons["schedule-jump-2026-10-07"].exists)
         XCTAssertTrue(app.buttons["schedule-jump-2026-10-14"].exists)
@@ -92,7 +88,6 @@ final class WeeklyScheduleUITests: XCTestCase {
     @MainActor private func openWeekly(in app: XCUIApplication) {
         XCTAssertTrue(app.appTab("Schedule").waitForExistence(timeout: 20))
         app.appTab("Schedule").tap()
-        app.segmentedControls["schedule-mode"].buttons["Weekly Schedule"].tap()
         XCTAssertTrue(app.buttons["schedule-week"].waitForExistence(timeout: 15))
     }
     @MainActor private func day(_ date: String, in app: XCUIApplication) -> XCUIElement {
