@@ -54,7 +54,16 @@ private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
 private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
 private struct StudioMediaResponse: Decodable, Sendable { let Studio: StudioMedia? }
 private struct StudioMedia: Decodable, Sendable { let media: StudioMediaConnection? }
-private struct StudioMediaConnection: Decodable, Sendable { let nodes: [Anime]?; let pageInfo: PageInfo? }
+private struct StudioMediaConnection: Decodable, Sendable { let nodes: [StudioMediaNode]?; let pageInfo: PageInfo? }
+private struct StudioMediaNode: Decodable, Sendable {
+    let type: String?
+    let anime: Anime
+    private enum CodingKeys: String, CodingKey { case type }
+    init(from decoder: Decoder) throws {
+        type = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .type)
+        anime = try Anime(from: decoder)
+    }
+}
 private struct WrittenAdaptationsResponse: Decodable, Sendable { let Media: WrittenAdaptationsMedia? }
 private struct WrittenAdaptationsMedia: Decodable, Sendable {
     let id: Int
@@ -373,8 +382,8 @@ public actor AniListClient {
         let result: StudioMediaResponse = try await request(AniListQueries.studio,
             variables: ["id": .int(id), "page": .int(max(1, page)), "sort": .string(sort.rawValue)], bypassCache: refresh)
         guard let media = result.Studio?.media else { throw ServiceError.message("This studio is unavailable.") }
-        let nodes: [Anime] = media.nodes ?? []
-        let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.isAdult != true) }
+        let nodes: [StudioMediaNode] = media.nodes ?? []
+        let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
         return MediaPage(media: visible, pageInfo: media.pageInfo)
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {

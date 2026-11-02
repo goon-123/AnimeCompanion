@@ -13,7 +13,7 @@ final class LiveServiceTests: XCTestCase {
         let studio = try XCTUnwrap(title.studios?.nodes?.first)
         let works = try await api.studioAnime(id: studio.id, refresh: true)
         XCTAssertFalse(works.media?.isEmpty ?? true)
-        XCTAssertTrue(works.media?.allSatisfy { $0.type == "ANIME" && $0.isAdult != true } == true)
+        XCTAssertTrue(works.media?.allSatisfy { $0.isAdult != true } == true)
     }
     func testMangaBakaDiscoverySelections() async throws {
         try requireLiveServices()
