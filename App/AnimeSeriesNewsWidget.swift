@@ -6,6 +6,7 @@ import AnimeCore
 struct AnimeSeriesNewsWidget: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.seriesPosterWidth) private var posterWidth
+    @ScaledMetric(relativeTo: .subheadline) private var textHeight: CGFloat = 114
     @AppStorage("news.reader.v1") private var readerJSON = ""
     @AppStorage("news.readingHistory") private var historyJSON = ""
     @AppStorage("news.preferences.v1") private var preferencesJSON = ""
@@ -39,7 +40,8 @@ struct AnimeSeriesNewsWidget: View {
                             story(article, read: state.isRead(article), saved: state.isSaved(article))
                         }
                     }
-                }.accessibilityIdentifier("series-news-shelf")
+                }.frame(height: width * 0.48 + textHeight)
+                    .accessibilityIdentifier("series-news-shelf")
             } else if loading {
                 ProgressView("Finding series headlines…").font(.caption).frame(maxWidth: .infinity, minHeight: 70)
             } else {
