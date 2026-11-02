@@ -1,4 +1,8 @@
 import XCTest
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import AnimeCore
 
 final class ExploreShelfAndStudioTests: XCTestCase {
@@ -13,7 +17,7 @@ final class ExploreShelfAndStudioTests: XCTestCase {
         XCTAssertTrue(DiscoveryCategory.previousSeason.label(season: selection).contains("Fall 2025"))
     }
     func testExploreRequestsBothNewShelvesWithThePreviousSeasonAndContentPolicy() async throws {
-        let transport = MockTransport([.json(#"{"data":{"seasonal":{},"trending":{},"upcoming":{},"previousSeason":{"media":[{"id":1}]},"topRated":{"media":[{"id":2}]}}}"#)])
+        let transport = ExploreStudioTransport([.json(#"{"data":{"seasonal":{},"trending":{},"upcoming":{},"previousSeason":{"media":[{"id":1}]},"topRated":{"media":[{"id":2}]}}}"#)])
         let api = AniListClient(transport: transport, minimumRequestInterval: 0)
         let response = try await api.explore(SeasonSelection(season: .winter, year: 2026))
         XCTAssertEqual(response.media(for: .previousSeason).map(\.id), [1])
@@ -28,7 +32,7 @@ final class ExploreShelfAndStudioTests: XCTestCase {
     }
     func testStudioUsesItsOwnIDAndPaginationWhileFilteringAdultAndNonAnimeNodes() async throws {
         let json = #"{"data":{"Studio":{"media":{"nodes":[{"id":1,"type":"ANIME","isAdult":false},{"id":2,"type":"ANIME","isAdult":true},{"id":3,"type":"MANGA"}],"pageInfo":{"hasNextPage":true}}}}}"#
-        let transport = MockTransport([.json(json), .json(json)])
+        let transport = ExploreStudioTransport([.json(json), .json(json)])
         let api = AniListClient(transport: transport, minimumRequestInterval: 0)
         let safe = try await api.studioAnime(id: 44, page: 2, sort: .rating)
         XCTAssertEqual(safe.media?.map(\.id), [1]); XCTAssertEqual(safe.pageInfo?.hasNextPage, true)
@@ -43,11 +47,30 @@ final class ExploreShelfAndStudioTests: XCTestCase {
         XCTAssertNil(variables["search"])
     }
     func testMissingOrInvalidStudioFailsWithoutInventingAnEmptyCatalog() async throws {
-        let transport = MockTransport([.json(#"{"data":{"Studio":null}}"#)])
+        let transport = ExploreStudioTransport([.json(#"{"data":{"Studio":null}}"#)])
         let api = AniListClient(transport: transport, minimumRequestInterval: 0)
         do { _ = try await api.studioAnime(id: 0); XCTFail("Invalid studio accepted") } catch {}
         let invalidRequests = await transport.recorded()
         XCTAssertTrue(invalidRequests.isEmpty)
         do { _ = try await api.studioAnime(id: 44); XCTFail("Missing studio accepted") } catch {}
     }
+}
+
+private actor ExploreStudioTransport: HTTPTransport {
+    struct Response: Sendable {
+        let data: Data; let status: Int; let headers: [String: String]
+        static func json(_ value: String, status: Int = 200, headers: [String: String] = [:]) -> Self {
+            Self(data: Data(value.utf8), status: status, headers: headers)
+        }
+    }
+    private var queue: [Response]
+    private var requests: [URLRequest] = []
+    init(_ queue: [Response]) { self.queue = queue }
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        guard !queue.isEmpty else { throw ServiceError.message("Unexpected extra request") }
+        let next = queue.removeFirst()
+        return (next.data, HTTPURLResponse(url: request.url!, statusCode: next.status, httpVersion: nil, headerFields: next.headers)!)
+    }
+    func recorded() -> [URLRequest] { requests }
 }
