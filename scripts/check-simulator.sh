@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != schedule && "$test_scope" != presentation && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore ]]; then
-  echo "Expected full, focused, weekly, schedule, presentation, fixes, streams, layout, reader, visuals, customization, news or explore test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != schedule && "$test_scope" != presentation && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore && "$test_scope" != explore-fixes ]]; then
+  echo "Expected full, focused, weekly, schedule, presentation, fixes, streams, layout, reader, visuals, customization, news, explore or explore-fixes test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -228,8 +228,14 @@ if [[ "$test_scope" == explore ]]; then
     -only-testing:AnimeCompanionUITests/MangaBakaSavedAccountsUITests
     -only-testing:MangaRuntimeTests/MangaBakaSavedAccountsTests)
 fi
+if [[ "$test_scope" == explore-fixes ]]; then
+  result_path="build/ExploreFixes-${device_family}.xcresult"
+  screenshot_path="build/explore-fixes-${device_family}-screenshots"
+  diagnostic_path="build/explore-fixes-${device_family}-diagnostics"
+  test_arguments=(-only-testing:AnimeCompanionUITests/ExploreWidgetFixUITests)
+fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
-if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore ]]; then
+if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes ]]; then
   test_retry_arguments=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240)
 fi
 run_tests() {
@@ -240,7 +246,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   "${test_retry_arguments[@]}" \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

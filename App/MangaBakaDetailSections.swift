@@ -160,6 +160,7 @@ struct MangaBakaCoverGallery: View {
 }
 
 struct MangaBakaRelatedSection: View {
+    @Environment(\.seriesPosterWidth) private var posterWidth
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     let series: MangaBakaSeries
@@ -182,8 +183,8 @@ struct MangaBakaRelatedSection: View {
                             NavigationLink(value: MangaBakaSeriesRoute(series: item.series)) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     if let label = context(item) { Text(label).font(.caption2.weight(.semibold)).foregroundStyle(.mint).lineLimit(1) }
-                                    MangaBakaCard(series: item.series, width: 156)
-                                }.frame(width: 156, alignment: .leading)
+                                    MangaBakaCard(series: item.series, width: posterWidth)
+                                }.frame(width: posterWidth, alignment: .leading)
                             }.buttonStyle(.plain)
                         }
                     }

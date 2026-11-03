@@ -24,51 +24,46 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         }
     }
 
-    @MainActor func testDetailOverviewFloatingMenuEditingPlaybackDismissalAndSwipeBack() {
+    @MainActor func testInlineTrackingTabsToolbarEditingPlaybackAndSwipeBack() {
         let app = launch()
         let entry = app.buttons["library-entry-1"]
         app.revealInContent(entry); entry.tap()
-        let actions = app.buttons["detail-actions"]
-        XCTAssertTrue(actions.waitForExistence(timeout: 15))
+        let options = app.buttons["detail-options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["detail-actions"].exists)
         XCTAssertFalse(app.tabBars.firstMatch.isHittable)
-        XCTAssertFalse(app.buttons["detail-episodes-disclosure"].exists)
-        XCTAssertTrue(app.segmentedControls["anime-detail-tabs"].buttons["Info"].isSelected)
-        app.segmentedControls["anime-detail-tabs"].buttons["Episodes"].tap()
+        let tabs = app.segmentedControls["anime-detail-tabs"]
+        XCTAssertTrue(tabs.buttons["Info"].isSelected)
+        XCTAssertFalse(tabs.buttons["Read"].exists)
+        tabs.buttons["Episodes"].tap()
         XCTAssertTrue(app.textFields["anime-episode-search"].waitForExistence(timeout: 10))
-        app.segmentedControls["anime-detail-tabs"].buttons["Info"].tap()
+        tabs.buttons["Info"].tap()
+        let strip = app.descendants(matching: .any).matching(identifier: "detail-watchlist-strip").firstMatch
+        app.revealInContent(strip)
+        let initialY = strip.frame.minY
+        app.contentSurface.swipeUp()
+        if strip.isHittable { XCTAssertLessThan(strip.frame.minY, initialY, "The tracking card must scroll with the page") }
+        XCTAssertTrue(options.isHittable)
+        XCTAssertTrue(app.buttons["series-arrange-anime"].exists)
         let aired = app.descendants(matching: .any).matching(identifier: "detail-episodes-aired").firstMatch
         app.revealInContent(aired)
         XCTAssertEqual(aired.label, "Aired: 17/26")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-dubbed").firstMatch.label, "Dubbed: 15")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "detail-episodes-watched").firstMatch.label, "Watched: 16")
-        let initialFrame = actions.frame
-        app.revealInContent(app.staticTexts["Fixture studio"])
-        XCTAssertFalse(app.buttons["detail-more-information"].exists)
-        XCTAssertTrue(actions.isHittable)
-        XCTAssertEqual(actions.frame.minY, initialFrame.minY, accuracy: 2)
-        capture("Detail-Overview-And-Visible-Information")
-        app.openAnimeActions()
-        XCTAssertTrue(app.buttons["detail-edit-entry"].exists)
-        XCTAssertTrue(app.buttons["detail-find-manga"].exists)
-        capture("Detail-Actions-Expanded")
-        app.dismissAnimeActions()
-        actions.tap() // The floating pencil opens editing directly.
-
+        app.openAnimeActions(); app.buttons["detail-edit-entry"].tap()
         XCTAssertTrue(app.textFields["tracking-episode-input"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["tracking-episode-input"].value as? String, "16")
         app.buttons["Cancel"].tap()
         app.openAnimeActions(); app.buttons["watch-in-vidhub"].tap()
         XCTAssertTrue(app.textFields["playback-episode-number"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "17")
-        // Playback and the separate Episodes tab both retain explicit episode selection.
         app.enterPlaybackEpisode(2); app.buttons["playback-episode-go"].tap()
         XCTAssertEqual(app.textFields["playback-episode-number"].value as? String, "2")
         app.buttons["Done"].tap()
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
-            XCTAssertTrue(actions.isHittable)
-            XCTAssertLessThanOrEqual(actions.frame.maxX, app.frame.maxX)
-            capture("Detail-Landscape-Actions")
+            XCTAssertTrue(options.isHittable)
+            capture("Detail-Inline-Tracking-Landscape")
             XCUIDevice.shared.orientation = .portrait
             app.returnToBrowsing()
         } else {
@@ -77,7 +72,6 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
             start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTAssertTrue(app.segmentedControls["library-layout"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.appTab("My Library").isHittable)
         app.revealInContent(entry)
         XCTAssertTrue(entry.label.contains("Watched 16/26"))
     }
@@ -87,9 +81,6 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         let entry = app.buttons["library-entry-1"]
         app.revealInContent(entry); entry.tap()
         app.openAnimeActions(); app.buttons["detail-find-manga"].tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "series-read-tab").firstMatch.waitForExistence(timeout: 15))
-        let sourceSearch = app.buttons["anime-read-search-sources"]
-        app.revealInContent(sourceSearch); sourceSearch.tap()
         let search = app.textFields["manga-search-title"]
         XCTAssertTrue(search.waitForExistence(timeout: 15))
         XCTAssertTrue((search.value as? String)?.contains("The Archivist") == true)
@@ -97,7 +88,7 @@ final class LibraryDetailImprovementsUITests: XCTestCase {
         XCTAssertTrue(app.appTab("My Library").isHittable)
         capture("Detail-To-Manga-Source-Search")
         app.appTab("My Library").tap()
-        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["detail-options"].waitForExistence(timeout: 10))
         app.returnToBrowsing(); app.revealInContent(entry)
         XCTAssertTrue(entry.label.contains("Watched 16/26"))
     }

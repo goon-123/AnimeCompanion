@@ -1,6 +1,7 @@
 import Foundation
 
 public enum AnimeSeriesContent {
+    public static func showsOriginalBroadcast(for anime: Anime) -> Bool { anime.status == "RELEASING" }
     /// Written media have their own AniList IDs. Source works come first; keep
     /// alternate adaptations available without guessing equivalence by title.
     public static func writtenMedia(for anime: Anime, includeAdult: Bool) -> [RelatedAnime] {

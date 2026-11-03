@@ -6,6 +6,7 @@ struct MangaBakaDetailView: View {
     @EnvironmentObject private var preferences: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.dynamicTypeSize) private var textSize
+    @AppStorage("series.layout.manga.v1") private var sectionOrder = ""
     @State var series: MangaBakaSeries
     @State private var error: String?
     @State private var editing = false
@@ -15,6 +16,14 @@ struct MangaBakaDetailView: View {
     @State private var refreshToken = 0
     @State private var preview: AnimeImagePreview?
     private var entry: MangaBakaLibraryEntry? { account.entries[series.id] }
+    private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .manga, saved: sectionOrder) }
+    private var visibleSections: [SeriesDetailSection] {
+        layout.visible.filter { section in
+            if section == .synopsis { return !series.synopsis.isEmpty }
+            if section == .coverage { return series.animeAdaptation.map { $0.exists || $0.hasCoverage } == true }
+            return true
+        }
+    }
     private var publishers: [MangaBakaPublisher] {
         Array(Set(series.publishers.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -24,36 +33,24 @@ struct MangaBakaDetailView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 if series.isVisible(contentFilter: preferences.mangaBakaContent) {
-                    VStack(alignment: .leading, spacing: 26) {
+                    LazyVStack(alignment: .leading, spacing: 22) {
                         header(width: min(geometry.size.width, 1000) - 40).padding(18).companionPanel(padding: 0).id("overview")
                         MangaBakaBadges(series: series)
-                        actions
-                        readingSource.id("reading")
                         jumpLinks(proxy)
                         if let notice = account.notice { Text(notice).font(.subheadline).foregroundStyle(.mint) }
                         if let error { NoticeView(message: error) { Task { await reload(refresh: true) } } }
-                        story.id("story")
-                        DetailCard(title: "Artwork & covers") {
-                            MangaBakaCoverGallery(series: series, refreshToken: refreshToken)
-                        }.id("covers").accessibilityIdentifier("series-artwork")
-                        DetailCard(title: "Related & recommendations") {
-                            ForEach(MangaBakaRelatedKind.allCases, id: \.self) { kind in
-                                MangaBakaRelatedSection(series: series, kind: kind, refreshToken: refreshToken).id(kind.rawValue)
-                            }
-                        }.id("connections").accessibilityIdentifier("series-related")
-                        DetailCard(title: "Publication & ratings") {
-                            metadata
-                            sourceRatings
+                        if visibleSections.isEmpty {
+                            Text("Sections are hidden or unavailable. Use Arrange sections in the toolbar to show more.").font(.subheadline).foregroundStyle(.secondary)
                         }
-                        MangaBakaAnimeSection(series: series, refreshToken: refreshToken).id("anime")
-                        animeCoverage
-                        MangaBakaSeriesTags(series: series).id("tags")
-                        officialLinks
+                        ForEach(visibleSections) { section in
+                            detailSection(section).id(section.rawValue)
+                        }
                         MangaBakaAttribution(providers: series.providers)
                     }.padding(20).frame(maxWidth: 1000, alignment: .leading).frame(maxWidth: .infinity)
                 } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash") }
             }
         }.background(Theme.background).navigationTitle("Series").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { SeriesLayoutButton(page: .manga) } }
             .navigationDestination(for: MangaBakaAnimeRoute.self) { route in
                 AnimeDetailView(mediaID: route.id).id(route.id)
                     .environment(\.animeDetailContext, true).toolbar(.visible, for: .navigationBar)
@@ -71,6 +68,30 @@ struct MangaBakaDetailView: View {
             }
             .fullScreenCover(item: $preview) { AnimeImageViewer(preview: $0) }
             .onChange(of: preferences.mangaBakaContent) { _, _ in preview = nil }
+        }.seriesPosterSizing()
+    }
+    @ViewBuilder private func detailSection(_ section: SeriesDetailSection) -> some View {
+        switch section {
+        case .watchlist: actions
+        case .reading: readingSource
+        case .synopsis: story
+        case .publication:
+            DetailCard(title: "Publication & ratings") { metadata; sourceRatings }
+        case .artwork:
+            DetailCard(title: "Artwork & covers") {
+                MangaBakaCoverGallery(series: series, refreshToken: refreshToken)
+            }.accessibilityIdentifier("series-artwork")
+        case .related:
+            DetailCard(title: "Related & recommendations") {
+                ForEach(MangaBakaRelatedKind.allCases, id: \.self) { kind in
+                    MangaBakaRelatedSection(series: series, kind: kind, refreshToken: refreshToken).id(kind.rawValue)
+                }
+            }.accessibilityIdentifier("series-related")
+        case .adaptations: MangaBakaAnimeSection(series: series, refreshToken: refreshToken)
+        case .coverage: animeCoverage
+        case .tags: MangaBakaSeriesTags(series: series)
+        case .links: officialLinks
+        default: EmptyView()
         }
     }
     private func header(width: CGFloat) -> some View {
@@ -118,12 +139,9 @@ struct MangaBakaDetailView: View {
     private func jumpLinks(_ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                jump("Story", id: "story", proxy: proxy)
-                jump("Read", id: "reading", proxy: proxy)
-                jump("Anime", id: "anime", proxy: proxy)
-                jump("Tags", id: "tags", proxy: proxy)
-                jump("Artwork", id: "covers", proxy: proxy)
-                jump("Related", id: "connections", proxy: proxy)
+                ForEach(visibleSections.filter { [.synopsis, .reading, .adaptations, .tags, .artwork, .related].contains($0) }) { section in
+                    jump(section.title(on: .manga), id: section.rawValue, proxy: proxy)
+                }
             }
         }
     }

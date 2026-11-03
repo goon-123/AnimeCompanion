@@ -55,7 +55,7 @@ final class NativeVisualGalleryUITests: XCTestCase {
         app.appTab("My Library").tap()
         let title = app.buttons["library-entry-1"]
         app.revealInContent(title); title.tap()
-        let visuals = app.buttons["detail-open-visuals"]
+        let visuals = app.buttons["Open full artwork gallery"]
         app.revealInContent(visuals); visuals.tap()
         waitForLabel("4 images", on: app.staticTexts["visuals-image-count"])
         XCTAssertTrue(app.staticTexts["visuals-notice"].label.contains("MyAnimeList"))

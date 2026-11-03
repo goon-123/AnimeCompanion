@@ -55,6 +55,9 @@ struct UnifiedExploreView: View {
     @StateObject private var books = UnifiedReadingCatalog()
     @State private var selection = SeasonSelection.current()
     @Binding var designs: Bool
+    @State private var customizing = false
+    @State private var widgetRefreshID = 0
+    private var surface: ExploreSurface { design == .posterGrid ? .grid : .discovery }
     @State private var seasons = false
     @State private var dubFilters = false
     private var response: ExploreResponse? { catalog.state.response }
@@ -66,37 +69,20 @@ struct UnifiedExploreView: View {
                          novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     private var wall: [ExploreStory] {
-        ExploreStory.mix(anime: visible((response?.trending.media ?? []) + (response?.seasonal.media ?? []) + (response?.upcoming.media ?? [])),
-            reading: (books.items[.trending] ?? []) + (books.items[.gems] ?? []), novels: books.items[.novels] ?? [], includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
+        let categories: [DiscoveryCategory] = [.trending, .seasonal, .upcoming, .previousSeason, .topRated]
+        let shows: [Anime] = categories.flatMap { response?.media(for: $0) ?? [] }
+        let manga: [MangaBakaSeries] = books.items[.trending] ?? []
+        let gems: [MangaBakaSeries] = books.items[.gems] ?? []
+        let novels: [MangaBakaSeries] = books.items[.novels] ?? []
+        return ExploreStory.mix(anime: visible(shows), reading: manga + gems, novels: novels,
+            includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent)
     }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 header
                 notices
-                if design == .posterGrid {
-                    catalogDirectory
-                    HStack {
-                        Text("A world of stories").font(.title2.bold())
-                        Spacer()
-                        Text("\(wall.count) discoveries").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if wall.isEmpty && isLoading { loadingPosters }
-                    ExploreStoryGrid(items: wall)
-                    Text("A discovery selection from both catalogs. Browse a format above for its full catalog and filters.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    catalogDirectory
-                    if !trending.isEmpty { spotlight }
-                    else if isLoading { loadingPosters }
-                    storyShelf("Trending", subtitle: "Across anime, manga & novels", items: Array(trending.dropFirst(4).prefix(12)))
-                    animeShelf(.seasonal, title: "This season", subtitle: selection.label, values: response?.seasonal.media ?? [])
-                    readingShelf(.novels, title: "Novels", subtitle: "Light novels & web novels")
-                    readingShelf(.trending, title: "Manga & manhwa", subtitle: "Trending manga, manhwa & more")
-                    if reading.connected { MangaBakaPersonalShelf().padding(.horizontal, -20) }
-                    readingShelf(.gems, title: "Hidden gems", subtitle: "MangaBaka's hidden gems")
-                    animeShelf(.upcoming, title: "Coming soon", subtitle: "Upcoming anime", values: response?.upcoming.media ?? [])
-                }
+                ExploreRows(surface: surface, refreshID: widgetRefreshID) { row in catalogRow(row) }
                 if wall.isEmpty && !isLoading {
                     ContentUnavailableView("No discoveries to show", systemImage: "sparkles",
                         description: Text("Adjust your content or dub filters, or retry a catalog above."))
@@ -113,6 +99,12 @@ struct UnifiedExploreView: View {
         }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar).animeNavigation()
             .accessibilityIdentifier("unified-explore-" + design.rawValue)
+            .modifier(ExploreWidgetSupport(surface: surface, refreshID: widgetRefreshID))
+            .sheet(isPresented: $customizing) {
+                AppNavigationStack {
+                    ExploreCustomizationView(surface: surface).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
+                }
+            }
             .sheet(isPresented: $seasons) { seasonPicker }
             .sheet(isPresented: $dubFilters) { DubFiltersView() }
             .task(id: "\(selection.label)-\(anime.includeAdult)") { await loadAnime() }
@@ -122,12 +114,46 @@ struct UnifiedExploreView: View {
                 if scene == .active { await reading.loadRecommendations(contentFilter: anime.mangaBakaContent) }
             }
             .refreshable {
+                widgetRefreshID += 1
                 async let shows: Void = loadAnime(refresh: true)
                 async let written: Void = books.load(api: reading.api, contentFilter: anime.mangaBakaContent, refresh: true)
                 async let personal: Void = reading.loadRecommendations(contentFilter: anime.mangaBakaContent, refresh: true)
                 async let dub: Void = dubs.load(using: anime.dubs, refresh: true)
                 _ = await (shows, written, personal, dub)
             }
+    }
+    @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
+        switch row {
+        case .directory: catalogDirectory
+        case .spotlight:
+            if !trending.isEmpty { spotlight } else if isLoading { loadingPosters }
+        case .trending:
+            storyShelf("Trending", subtitle: "Across anime, manga & novels", items: Array(trending.prefix(16)))
+        case .seasonal:
+            animeShelf(.seasonal, title: selection == .current() ? "This season" : "Season picks", subtitle: selection.label, values: response?.seasonal.media ?? [])
+        case .previousSeason:
+            animeShelf(.previousSeason, title: "Previous season", subtitle: selection.advanced(by: -1).label, values: response?.previousSeason?.media ?? [])
+        case .topAnime:
+            animeShelf(.topRated, title: "Top anime of all time", subtitle: "Highest rated on AniList", values: response?.topRated?.media ?? [])
+        case .upcoming:
+            animeShelf(.upcoming, title: "Coming soon", subtitle: selection.advanced(by: 1).label, values: response?.upcoming.media ?? [])
+        case .novels: readingShelf(.novels, title: "Novels", subtitle: "Light novels & web novels")
+        case .manga: readingShelf(.trending, title: "Manga & manhwa", subtitle: "Trending manga, manhwa & more")
+        case .personal: if reading.connected { MangaBakaPersonalShelf().padding(.horizontal, -20) }
+        case .gems: readingShelf(.gems, title: "Hidden gems", subtitle: "MangaBaka's hidden gems")
+        case .posterWall:
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("A world of stories").font(.title2.bold())
+                    Spacer()
+                    Text("\(wall.count) discoveries").font(.caption).foregroundStyle(.secondary)
+                }
+                if wall.isEmpty && isLoading { loadingPosters }
+                ExploreStoryGrid(items: wall)
+                Text("A discovery selection from both catalogs. Browse a format above for its full catalog and filters.").font(.caption).foregroundStyle(.secondary)
+            }
+        default: EmptyView()
+        }
     }
     private var isLoading: Bool { catalog.state.loading || !books.loading.isEmpty }
     private var header: some View {
@@ -138,6 +164,8 @@ struct UnifiedExploreView: View {
                     Text("Find your next favorite.").font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button { customizing = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle()) }
+                    .accessibilityLabel("Customize Explore").accessibilityIdentifier("explore-customize")
                 Button { designs = true } label: { Image(systemName: design.symbol).frame(width: 44, height: 44).silverGlass(in: Circle()) }
                     .accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
                 AccountSwitcherButton()

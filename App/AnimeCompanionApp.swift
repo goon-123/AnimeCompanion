@@ -246,6 +246,9 @@ struct AppTabs: View {
                 if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { hidden.insert(.library) }
                 if !ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") { hidden.insert(.home) }
                 UserDefaults.standard.removeObject(forKey: TrackingAccount.storageKey)
+                for page in SeriesDetailPage.allCases { UserDefaults.standard.removeObject(forKey: page.storageKey) }
+                for surface in ExploreSurface.allCases { UserDefaults.standard.removeObject(forKey: surface.storageKey) }
+                UserDefaults.standard.removeObject(forKey: AnimeEpisodeFilter.storageKey)
                 var preferences = ProcessInfo.processInfo.arguments.contains("--ui-redesign-preview") ? AppTabPreferences() : AppTabPreferences(hidden: hidden)
                 if ProcessInfo.processInfo.arguments.contains("--ui-account-hidden-library") { preferences.setVisible(.library, false) }
                 UserDefaults.standard.set(preferences.saved, forKey: AppTabPreferences.storageKey)

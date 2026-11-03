@@ -127,15 +127,15 @@ struct AnimeOriginalBroadcast: View {
     let anime: Anime
     var body: some View {
         Group {
-            if anime.isCurrentlyAiring, let next = anime.nextAiringEpisode {
+            if AnimeSeriesContent.showsOriginalBroadcast(for: anime), let next = anime.nextAiringEpisode {
                 BroadcastCountdown(episode: next)
-            } else {
+            } else if AnimeSeriesContent.showsOriginalBroadcast(for: anime) {
                 HStack(spacing: 12) {
                     Image(systemName: "antenna.radiowaves.left.and.right").font(.title3).foregroundStyle(Theme.accent)
                         .frame(width: 38, height: 38).background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Original broadcast").font(.subheadline.weight(.semibold))
-                        Text(anime.status == "FINISHED" ? "Broadcast finished" : "Next episode time not announced")
+                        Text("Next episode time not announced")
                             .font(.caption).foregroundStyle(.secondary)
                         if let start = anime.startDate?.label { Text("First release · " + start).font(.caption2).foregroundStyle(.secondary) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
@@ -177,9 +177,9 @@ struct BroadcastCountdown: View {
 
 struct RelatedAnimeCard: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.seriesPosterWidth) private var posterWidth
     let anime: RelatedAnime
     var caption: String? = nil
-    private var posterWidth: CGFloat { sizeClass == .regular ? 200 : 160 }
     var body: some View {
       VStack(alignment: .leading, spacing: 3) {
         Group {
@@ -230,6 +230,7 @@ struct AnimeDubSchedule: View {
     let events: [ReleaseEvent]
     let loading: Bool
     let error: String?
+    var showExpandedDetails = false
     @State private var expandedHistory = false
     @State private var expandedSchedule = false
     private var upcoming: [ReleaseEvent] { events.filter { $0.date == nil || ($0.date ?? .distantPast) >= Date() } }
@@ -244,8 +245,11 @@ struct AnimeDubSchedule: View {
             }
             if loading { ProgressView("Checking this anime’s dub releases…") }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            DetailDisclosure("Release dates, history and sources", identifier: "detail-dub-disclosure", isExpanded: $expandedSchedule) {
-                scheduleDetails
+            if showExpandedDetails { scheduleDetails }
+            else {
+                DetailDisclosure("Release dates, history and sources", identifier: "detail-dub-disclosure", isExpanded: $expandedSchedule) {
+                    scheduleDetails
+                }
             }
         }
     }

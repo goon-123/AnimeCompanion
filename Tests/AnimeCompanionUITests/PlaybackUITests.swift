@@ -41,6 +41,6 @@ final class PlaybackUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Set up add-on & VidHub"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "VidHub-Episode-Picker"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["detail-options"].waitForExistence(timeout: 10))
     }
 }

@@ -10,6 +10,8 @@ struct ExploreView: View {
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
+    @AppStorage(ExploreSurface.anime.storageKey) private var savedLayout = ""
+    @State private var widgetRefreshID = 0
     @State private var showSeasons = false
     @State private var showSettings = false
     @State private var showDisplay = false
@@ -25,56 +27,27 @@ struct ExploreView: View {
 
     var body: some View {
         GeometryReader { geometry in
-          ScrollView {
-            if catalog.state.response == nil {
-                if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.top, geometry.safeAreaInsets.top + 24).padding() }
-                else {
-                    ExploreLoadingSkeleton(featuredHeight: featuredHeight(in: geometry), availableWidth: geometry.size.width,
-                        posterWidth: min(CGFloat(min(360, max(120, posters.shelfWidth))), geometry.size.width * 0.85))
-                        .frame(width: geometry.size.width).clipped()
-                }
-            } else {
-            VStack(alignment: .leading, spacing: 0) {
-                if !featured.isEmpty {
-                    FeaturedAnimeCarousel(anime: featured,
-                        height: featuredHeight(in: geometry),
-                        topInset: geometry.safeAreaInsets.top, background: $posterBackground)
-                        .modifier(CatalogEntrance())
-                }
+            ScrollView {
                 LazyVStack(alignment: .leading, spacing: 26) {
-                if dubFilters.selection.isActive && !dubs.loaded {
-                    ProgressView("Checking English dubs…").frame(maxWidth: .infinity)
-                }
-                if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
-                if dubFilters.selection.dub != .all && dubs.loaded && dubs.unavailable {
-                    NoticeView(message: "Dub information is temporarily incomplete. Existing matches are shown; adjust your dub filters to browse all anime.") {
-                        Task { await dubs.load(using: store.dubs, refresh: true) }
-                    }.padding(.horizontal)
-                }
-                shelf(.trending, anime: trending, availableWidth: geometry.size.width)
-                    .modifier(CatalogEntrance(delay: 0.05))
-                shelf(.seasonal, anime: seasonal, availableWidth: geometry.size.width)
-                    .modifier(CatalogEntrance(delay: 0.10))
-                shelf(.upcoming, anime: upcoming, availableWidth: geometry.size.width)
-                    .modifier(CatalogEntrance(delay: 0.15))
-                if let savedCatalogDate {
-                    HStack(spacing: 6) {
-                        if loading { ProgressView().controlSize(.mini) }
-                        Text("Saved catalog · Updated \(savedCatalogDate.formatted(.relative(presentation: .named)))")
-                    }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
-                }
-                DiscoveryDataNote().padding(.horizontal)
-                }.padding(.top, 20)
-                    .padding(.bottom, 24).readableContent(width: 1280)
-                    .frame(maxWidth: .infinity).background(Theme.background)
-            }
-            }
-          }.accessibilityIdentifier("explore-scroll")
-              .ignoresSafeArea(.container, edges: .top)
+                    if hasCatalogNotices { catalogNotices }
+                    ExploreRows(surface: .anime, refreshID: widgetRefreshID, widgetInset: 16) { row in
+                        catalogRow(row, geometry: geometry)
+                    }
+                    if let savedCatalogDate {
+                        HStack(spacing: 6) {
+                            if loading { ProgressView().controlSize(.mini) }
+                            Text("Saved catalog · Updated \(savedCatalogDate.formatted(.relative(presentation: .named)))")
+                        }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+                    }
+                    DiscoveryDataNote().padding(.horizontal)
+                }.padding(.top, spotlightLeadsPage ? 0 : geometry.safeAreaInsets.top + 12).padding(.bottom, 24)
+                    .readableContent(width: 1280).frame(maxWidth: .infinity)
+            }.accessibilityIdentifier("explore-scroll").ignoresSafeArea(.container, edges: .top)
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottomTrailing) { floatingSearch.padding(.trailing, 20).padding(.bottom, 16) }
+            .modifier(ExploreWidgetSupport(surface: .anime, refreshID: widgetRefreshID))
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
             .sheet(isPresented: $showDubFilters) { DubFiltersView() }
@@ -82,10 +55,44 @@ struct ExploreView: View {
             .task(id: "\(selection.label)-\(store.includeAdult)") { await load() }
             .task { await dubs.load(using: store.dubs) }
             .refreshable {
+                widgetRefreshID += 1
                 async let metadata: Void = load(refresh: true)
                 async let dubInfo: Void = dubs.load(using: store.dubs, refresh: true)
                 _ = await (metadata, dubInfo)
             }
+    }
+    private var hasCatalogNotices: Bool {
+        let checkingDubs = dubFilters.selection.isActive && !dubs.loaded
+        let unavailableDubs = dubFilters.selection.dub != .all && dubs.loaded && dubs.unavailable
+        return checkingDubs || error != nil || unavailableDubs
+    }
+    private var spotlightLeadsPage: Bool {
+        !hasCatalogNotices && ExplorePreferences(surface: .anime, saved: savedLayout).visible.first == .catalog(.spotlight)
+    }
+    private var catalogNotices: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if dubFilters.selection.isActive && !dubs.loaded { ProgressView("Checking English dubs…").frame(maxWidth: .infinity) }
+            if let error { NoticeView(message: error) { Task { await load(refresh: true) } }.padding(.horizontal) }
+            if dubFilters.selection.dub != .all && dubs.loaded && dubs.unavailable {
+                NoticeView(message: "Dub information is temporarily incomplete. Existing matches are shown; adjust your dub filters to browse all anime.") {
+                    Task { await dubs.load(using: store.dubs, refresh: true) }
+                }.padding(.horizontal)
+            }
+        }
+    }
+    @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow, geometry: GeometryProxy) -> some View {
+        if row == .spotlight {
+            if !featured.isEmpty {
+                FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
+                    topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
+                    .modifier(CatalogEntrance())
+            } else if loading {
+                RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
+                    .overlay { ProgressView("Loading anime…") }
+            }
+        } else if let category = row.discoveryCategory {
+            shelf(category, anime: catalog.state.response?.media(for: category) ?? [], availableWidth: geometry.size.width)
+        }
     }
     private var floatingSearch: some View {
         NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {

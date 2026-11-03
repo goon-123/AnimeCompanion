@@ -16,7 +16,7 @@ final class AgendaPosterPresentationUITests: XCTestCase {
         capture("Library-Wide-Full-Height")
         // Artwork and genres retain their independent navigation targets.
         library.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8)).tap()
-        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["detail-options"].waitForExistence(timeout: 15))
         app.returnToBrowsing()
         app.appTab("Explore").tap(); app.buttons["explore-search"].tap()
         let layout = app.buttons["discovery-layout"]

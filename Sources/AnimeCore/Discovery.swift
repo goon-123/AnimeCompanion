@@ -5,11 +5,13 @@ public enum DiscoveryGenres {
 }
 
 public enum DiscoveryCategory: String, Hashable, Sendable {
-    case trending, seasonal, upcoming
+    case trending, seasonal, previousSeason, topRated, upcoming
     public func label(season: SeasonSelection) -> String {
         switch self {
         case .trending: return "Trending"
         case .seasonal: return season == .current() ? "Popular this season" : "Popular · " + season.label
+        case .previousSeason: return "Previous season · " + season.advanced(by: -1).label
+        case .topRated: return "Top anime of all time"
         case .upcoming: return "Upcoming · " + season.advanced(by: 1).label
         }
     }
@@ -41,6 +43,10 @@ public struct DiscoveryFilters: Hashable, Sendable {
         switch category {
         case .trending: sort = .trending
         case .seasonal: year = selection.year; season = selection.season
+        case .previousSeason:
+            let previous = selection.advanced(by: -1)
+            year = previous.year; season = previous.season
+        case .topRated: sort = .rating
         case .upcoming:
             let next = selection.advanced(by: 1)
             year = next.year; season = next.season; status = "NOT_YET_RELEASED"

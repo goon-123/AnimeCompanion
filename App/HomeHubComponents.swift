@@ -3,11 +3,12 @@ import AnimeCore
 
 /// Each saved slot is independent of the widget's position and visibility.
 struct HomeFeatureShortcuts: View {
+    var savedOverride: Binding<String>? = nil
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.homeVisuals) private var visuals
     @AppStorage(HomePreferences.storageKey) private var saved = ""
     @State private var customizing = false
-    private var preferences: HomePreferences { HomePreferences(saved: saved) }
+    private var preferences: HomePreferences { HomePreferences(saved: savedOverride?.wrappedValue ?? saved) }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -27,7 +28,7 @@ struct HomeFeatureShortcuts: View {
             }
         }.sheet(isPresented: $customizing) {
             AppNavigationStack {
-                HomeShortcutCustomizationView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
+                HomeShortcutCustomizationView(savedOverride: savedOverride).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
             }
         }
     }
@@ -62,7 +63,8 @@ struct HomeFeatureShortcuts: View {
             .companionPanel(padding: visuals.value(12, 16)).contentShape(Rectangle())
     }
     private func replace(_ shortcut: HomeShortcut?, at index: Int) {
-        var value = preferences; value.setShortcut(shortcut, at: index); saved = value.saved
+        var value = preferences; value.setShortcut(shortcut, at: index)
+        if let savedOverride { savedOverride.wrappedValue = value.saved } else { saved = value.saved }
     }
     private func open(_ shortcut: HomeShortcut) {
         switch shortcut {

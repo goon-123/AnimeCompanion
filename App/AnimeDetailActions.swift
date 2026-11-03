@@ -1,32 +1,7 @@
 import SwiftUI
 import AnimeCore
 
-/// One tap opens editing. Secondary actions stay available on a long press.
-struct AnimeDetailActions: View {
-    let resumeLabel: String
-    let canWatch: Bool
-    let canEdit: Bool
-    let edit: () -> Void
-    let resume: () -> Void
-    let findManga: () -> Void
-    var body: some View {
-        Button(action: edit) {
-            Image(systemName: "pencil").font(.system(size: 23, weight: .semibold))
-                .frame(width: 56, height: 56).foregroundStyle(Theme.background).background(Theme.accent, in: Circle())
-                .shadow(color: .black.opacity(0.22), radius: 12, y: 5)
-        }.buttonStyle(.plain).disabled(!canEdit).padding(16)
-            .accessibilityLabel("Edit watchlist").accessibilityHint("Edit status, watched episodes, rating and notes")
-            .accessibilityIdentifier("detail-actions")
-            .contextMenu {
-                Button("Edit Entry", systemImage: "square.and.pencil", action: edit).disabled(!canEdit)
-                Button(resumeLabel, systemImage: "play.fill", action: resume).disabled(!canWatch)
-                Button("Read manga / novel", systemImage: "book.closed", action: findManga)
-            }
-    }
-}
-
-/// A pinned strip replaces the large progress panel, with the familiar +1 and
-/// server-confirmed feedback/undo shared by the existing library controls.
+/// An inline tracking card with server-confirmed progress and Undo.
 struct AnimeWatchlistStrip: View {
     @EnvironmentObject private var store: AppStore
     let anime: Anime
@@ -86,7 +61,17 @@ struct AnimeEpisodeFacts: View {
             let dubbed = dub?.released.map(String.init) ?? "—"
             HStack(spacing: 8) {
                 fact("Aired", value: aired, key: "aired")
-                fact("Dubbed", value: (dub?.confidence == .estimated ? "~" : "") + dubbed, key: "dubbed")
+                NavigationLink {
+                    AnimeDubScheduleView(anime: anime)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Dubbed " + (dub?.confidence == .estimated ? "~" : "") + dubbed).fontWeight(.semibold)
+                        HStack(spacing: 4) { Text("Dub schedule"); Image(systemName: "chevron.right").fontWeight(.semibold) }.font(.caption2)
+                    }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 9)
+                        .foregroundStyle(Theme.accent).background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+                }.buttonStyle(.plain).accessibilityIdentifier("detail-episodes-dubbed")
+                    .accessibilityLabel("Dubbed \(dubbed). English dub schedule")
+                    .accessibilityHint("Open the English dub schedule")
                 fact("Watched", value: entry.map { String($0.progressValue) } ?? "—", key: "watched")
             }.font(.caption).foregroundStyle(.secondary)
         }

@@ -295,6 +295,8 @@ jobs:
           env -u DEVELOPER_DIR swift test -j 2
       - name: Verify current Keiyoushi repository and package checksums
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_MANGA=1 swift test -j 2 --filter MangaExtensionTests.testLiveKeiyoushiCatalogWhenExplicitlyEnabled
+      - name: Verify previous-season, top-anime and studio queries
+        run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter LiveServiceTests.testAniListExploreShelvesAndStudio
   news-ui:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     needs: [manga-runtime, build, weekly-ui]
@@ -501,6 +503,51 @@ jobs:
           path: |
             build/focused-${{ matrix.device }}-screenshots
             build/Focused-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
+  explore-fixes:
+    # Only the two reported UI regressions; longer simulator suites stay opt-in.
+    name: Explore widget picker and Spotlight regressions
+    needs: manga-runtime
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - name: Download bundled on-device manga runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - name: Download runtime license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - name: Download native runtime test fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Check adding widgets and the Spotlight top edge
+        run: bash scripts/check-simulator.sh iphone explore-fixes
+      - name: Upload focused Explore screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-explore-fixes-iphone
+          path: |
+            build/explore-fixes-iphone-screenshots
+            build/explore-fixes-iphone-diagnostics
+            build/ExploreFixes-iphone.xcresult
           if-no-files-found: ignore
           retention-days: 30
   build:

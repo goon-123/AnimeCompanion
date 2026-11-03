@@ -31,12 +31,39 @@ public struct ExploreResponse: Codable, Sendable {
     public let seasonal: MediaPage
     public let trending: MediaPage
     public let upcoming: MediaPage
+    public let previousSeason: MediaPage?
+    public let topRated: MediaPage?
+    public init(seasonal: MediaPage, trending: MediaPage, upcoming: MediaPage, previousSeason: MediaPage? = nil, topRated: MediaPage? = nil) {
+        self.seasonal = seasonal; self.trending = trending; self.upcoming = upcoming
+        self.previousSeason = previousSeason; self.topRated = topRated
+    }
+    public func media(for category: DiscoveryCategory) -> [Anime] {
+        switch category {
+        case .seasonal: return seasonal.media ?? []
+        case .trending: return trending.media ?? []
+        case .upcoming: return upcoming.media ?? []
+        case .previousSeason: return previousSeason?.media ?? []
+        case .topRated: return topRated?.media ?? []
+        }
+    }
 }
 private struct GraphQLError: Decodable { let message: String; let status: Int? }
 private struct GraphQLResponse<T: Decodable>: Decodable { let data: T?; let errors: [GraphQLError]? }
 private struct RequestBody: Encodable { let query: String; let variables: [String: QueryValue] }
 private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
 private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
+private struct StudioMediaResponse: Decodable, Sendable { let Studio: StudioMedia? }
+private struct StudioMedia: Decodable, Sendable { let media: StudioMediaConnection? }
+private struct StudioMediaConnection: Decodable, Sendable { let nodes: [StudioMediaNode]?; let pageInfo: PageInfo? }
+private struct StudioMediaNode: Decodable, Sendable {
+    let type: String?
+    let anime: Anime
+    private enum CodingKeys: String, CodingKey { case type }
+    init(from decoder: Decoder) throws {
+        type = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .type)
+        anime = try Anime(from: decoder)
+    }
+}
 private struct WrittenAdaptationsResponse: Decodable, Sendable { let Media: WrittenAdaptationsMedia? }
 private struct WrittenAdaptationsMedia: Decodable, Sendable {
     let id: Int
@@ -64,7 +91,7 @@ public enum AniListQueries {
     }
     """
     public static let explore = """
-    query Explore($season: MediaSeason!, $year: Int!, $nextSeason: MediaSeason!, $nextYear: Int!, $isAdult: Boolean) {
+    query Explore($season: MediaSeason!, $year: Int!, $previousSeason: MediaSeason!, $previousYear: Int!, $nextSeason: MediaSeason!, $nextYear: Int!, $isAdult: Boolean) {
       seasonal: Page(page: 1, perPage: 16) {
         media(type: ANIME, season: $season, seasonYear: $year, isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
         pageInfo { hasNextPage }
@@ -75,6 +102,24 @@ public enum AniListQueries {
       upcoming: Page(page: 1, perPage: 12) {
         media(type: ANIME, season: $nextSeason, seasonYear: $nextYear, status: NOT_YET_RELEASED,
               isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard description(asHtml: false) }
+      }
+      previousSeason: Page(page: 1, perPage: 16) {
+        media(type: ANIME, season: $previousSeason, seasonYear: $previousYear, isAdult: $isAdult, sort: POPULARITY_DESC) { ...AnimeCard }
+        pageInfo { hasNextPage }
+      }
+      topRated: Page(page: 1, perPage: 16) {
+        media(type: ANIME, isAdult: $isAdult, sort: [SCORE_DESC, POPULARITY_DESC]) { ...AnimeCard }
+        pageInfo { hasNextPage }
+      }
+    }
+    """ + card
+    public static let studio = """
+    query StudioAnime($id: Int!, $page: Int!, $sort: [MediaSort]) {
+      Studio(id: $id) {
+        media(page: $page, perPage: 24, sort: $sort) {
+          pageInfo { hasNextPage }
+          nodes { ...AnimeCard type }
+        }
       }
     }
     """ + card
@@ -102,12 +147,10 @@ public enum AniListQueries {
         popularity favourites
         rankings { id rank type context year season allTime }
         studios(isMain: true) { nodes { id name } }
-        characters(perPage: 12, sort: ROLE) { nodes { id name { full } image { medium } } }
         relations { edges { relationType node {
           id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
           title { romaji english userPreferred } coverImage { extraLarge large medium }
         } } }
-        staff(perPage: 12) { edges { id role node { id name { full } image { large medium } } } }
         recommendations(perPage: 12, sort: RATING_DESC) {
           nodes { id mediaRecommendation {
             id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
@@ -327,10 +370,21 @@ public actor AniListClient {
 
     public func explore(_ selection: SeasonSelection, refresh: Bool = false, includeAdult: Bool = false) async throws -> ExploreResponse {
         let next = selection.advanced(by: 1)
+        let previous = selection.advanced(by: -1)
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue),
-            "year": .int(selection.year), "nextSeason": .string(next.season.rawValue), "nextYear": .int(next.year)]
+            "year": .int(selection.year), "nextSeason": .string(next.season.rawValue), "nextYear": .int(next.year),
+            "previousSeason": .string(previous.season.rawValue), "previousYear": .int(previous.year)]
         if !includeAdult { vars["isAdult"] = .bool(false) }
         return try await request(AniListQueries.explore, variables: vars, bypassCache: refresh)
+    }
+    public func studioAnime(id: Int, page: Int = 1, sort: DiscoverySort = .popularity, includeAdult: Bool = false, refresh: Bool = false) async throws -> MediaPage {
+        guard id > 0 else { throw ServiceError.message("This studio is unavailable.") }
+        let result: StudioMediaResponse = try await request(AniListQueries.studio,
+            variables: ["id": .int(id), "page": .int(max(1, page)), "sort": .string(sort.rawValue)], bypassCache: refresh)
+        guard let media = result.Studio?.media else { throw ServiceError.message("This studio is unavailable.") }
+        let nodes: [StudioMediaNode] = media.nodes ?? []
+        let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
+        return MediaPage(media: visible, pageInfo: media.pageInfo)
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]

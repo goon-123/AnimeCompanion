@@ -11,13 +11,13 @@ public struct ExploreSnapshot: Codable, Sendable {
 
     public init(response: ExploreResponse, selection: SeasonSelection, savedAt: Date = Date(), includeAdult: Bool = false) {
         self.response = response; self.savedAt = savedAt
-        season = selection.season; year = selection.year; version = 1
+        season = selection.season; year = selection.year; version = 2
         includesAdult = includeAdult
     }
     public func needsRefresh(at now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) >= 300 }
     public func isUsable(for selection: SeasonSelection, at now: Date = Date(), includeAdult: Bool = false) -> Bool {
         let age = now.timeIntervalSince(savedAt)
-        return version == 1 && season == selection.season && year == selection.year &&
+        return version == 2 && season == selection.season && year == selection.year &&
             (includesAdult ?? false) == includeAdult && age >= -300 && age < 7 * 86400
     }
 }
@@ -55,7 +55,7 @@ public actor ExploreCache {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try data.write(to: directory.appendingPathComponent(key), options: .atomic)
             let files = try FileManager.default.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: [.contentModificationDateKey]).filter { $0.lastPathComponent.hasPrefix("explore-v1-") && $0.pathExtension == "json" }
+                includingPropertiesForKeys: [.contentModificationDateKey]).filter { $0.lastPathComponent.hasPrefix("explore-v") && $0.pathExtension == "json" }
             let newest = files.sorted {
                 ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) >
                 ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
@@ -71,6 +71,6 @@ public actor ExploreCache {
         }
     }
     private func key(for selection: SeasonSelection, includeAdult: Bool) -> String {
-        "explore-v1-\(selection.year)-\(selection.season.rawValue)\(includeAdult ? "-adult" : "").json"
+        "explore-v2-\(selection.year)-\(selection.season.rawValue)\(includeAdult ? "-adult" : "").json"
     }
 }

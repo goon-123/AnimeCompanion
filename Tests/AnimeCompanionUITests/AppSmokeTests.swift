@@ -202,9 +202,9 @@ final class AppSmokeTests: XCTestCase {
         capture("Expanded-cover")
         app.buttons["Close enlarged image"].tap()
         XCTAssertTrue(app.buttons["expand-anime-cover"].waitForExistence(timeout: 15))
-        app.revealInContent(app.staticTexts["English dub schedule"])
-        XCTAssertTrue(app.staticTexts["English dub schedule"].isHittable)
-        app.buttons["detail-dub-disclosure"].tap()
+        let dubLink = app.buttons["detail-episodes-dubbed"]
+        app.revealInContent(dubLink); dubLink.tap()
+        XCTAssertTrue(app.navigationBars["English dub"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Upcoming releases"].exists)
         capture("Anime-dub-schedule")
     }

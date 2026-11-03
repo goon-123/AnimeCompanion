@@ -18,7 +18,7 @@ final class UnifiedExploreUITests: XCTestCase {
             XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 15))
         }
         tap(app.buttons["related-anime-5"], app)
-        XCTAssertTrue(app.buttons["detail-actions"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["detail-options"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["mangabaka-series-cover"].exists)
     }
     @MainActor func testUnlinkedAdaptationOffersMangaBakaSearch() {
@@ -62,6 +62,7 @@ final class UnifiedExploreUITests: XCTestCase {
         app.revealInContent(item); XCTAssertTrue(item.isEnabled); item.tap()
     }
     @MainActor private func chooseDesign(_ value: String, _ app: XCUIApplication) {
+        if app.buttons["media-section-anime"].exists { tap(app.buttons["explore-customize"], app) }
         tap(app.buttons["explore-designs"], app)
         XCTAssertTrue(app.buttons["explore-design-" + value].waitForExistence(timeout: 10))
         app.buttons["explore-design-" + value].tap()
