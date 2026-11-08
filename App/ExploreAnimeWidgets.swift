@@ -1,6 +1,47 @@
 import SwiftUI
 import AnimeCore
 
+struct HomeTrendingAnimeWidget: View {
+    let refreshID: Int
+    let activationID: Int
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var dubs: ExploreDubStore
+    @EnvironmentObject private var filters: DiscoveryFilterStore
+    @State private var items: [Anime] = []
+    @State private var loading = false
+    @State private var failed = false
+    @State private var retry = 0
+    @State private var appliedRefresh = 0
+    private var visible: [Anime] { items.filter { store.isVisible($0) && filters.includes($0, dubs: dubs, library: store) } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TopTrendingAnimeWidget(anime: visible)
+            if loading { ProgressView().controlSize(.small) }
+            if failed {
+                HStack { Text(items.isEmpty ? "Trending unavailable" : "Showing saved trending titles").font(.caption).foregroundStyle(.secondary); Spacer(); Button("Retry") { retry += 1 }.font(.caption) }
+            }
+        }.task(id: "\(store.includeAdult)-\(refreshID)-\(activationID)-\(retry)") { await load() }
+            .task { await dubs.load(using: store.dubs) }
+    }
+    private func load() async {
+        let adult = store.includeAdult
+        let key = "home-trending-v1-\(adult)"
+        let refresh = refreshID != appliedRefresh || retry > 0
+        loading = true; failed = false
+        defer { if !Task.isCancelled { loading = false } }
+        let saved = await store.homeContentCache.load([Anime].self, key: key)
+        guard !Task.isCancelled, store.includeAdult == adult else { return }
+        items = saved?.value ?? []
+        if !refresh, let saved, !saved.needsRefresh() { return }
+        do {
+            let page = try await store.aniList.browse(DiscoveryFilters(category: .trending), page: 1, refresh: refresh || saved != nil, includeAdult: adult)
+            guard !Task.isCancelled, store.includeAdult == adult else { return }
+            items = page.media ?? []; appliedRefresh = refreshID
+            await store.homeContentCache.save(HomeContentSnapshot(items), key: key)
+        } catch is CancellationError {} catch { if !Task.isCancelled { failed = true } }
+    }
+}
+
 struct TopTrendingAnimeWidget: View {
     let anime: [Anime]
     var selection = SeasonSelection.current()

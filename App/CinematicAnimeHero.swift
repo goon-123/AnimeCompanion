@@ -90,8 +90,7 @@ struct SeriesAiringCountdown: View {
     let anime: Anime
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            if anime.status == "RELEASING" || anime.status == "NOT_YET_RELEASED",
-               let next = anime.nextAiringEpisode, next.date > context.date {
+            if let next = AnimeSeriesContent.nextBroadcast(for: anime, now: context.date) {
                 let remaining = max(0, Int(next.date.timeIntervalSince(context.date)))
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { label(next); Spacer(minLength: 8); digits(remaining) }
@@ -140,7 +139,7 @@ struct SeriesWatchActions: View {
                         }
                     }.frame(maxWidth: .infinity, minHeight: 60)
                         .foregroundStyle(Theme.background).background(Theme.accent, in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED" || busy)
+                }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED")
                     .accessibilityLabel("Watch Now. " + resumeLabel).accessibilityIdentifier("detail-watch-now")
                 Button(action: edit) {
                     Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")

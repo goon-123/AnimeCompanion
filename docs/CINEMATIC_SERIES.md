@@ -21,6 +21,7 @@ Anime detail pages open with a larger edge-to-edge backdrop, cover and branded t
 ## Explore and glass controls
 
 - Trending is a numbered top-ten poster row with independent plus/check controls and a full catalog destination. Existing hidden Trending preferences still apply.
+- The same Top 10 Trending widget is available in Home's Add widgets picker, initially hidden for existing layouts, and can also be added independently to Explore.
 - Animation Studios uses a single batched AniList query for live studio names and representative non-adult covers. Cards open the existing paginated studio catalog.
 - Anime Genres uses current public catalog artwork and opens the full genre-filtered catalog without a season restriction.
 - All three rows can be hidden, restored and reordered in Customize Explore for Classic Anime, Discovery and the poster grid. Existing saved layouts and Home widgets are preserved; Home settings are independent.

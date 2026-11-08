@@ -97,6 +97,10 @@ struct AnimeDetailView: View {
             }
             .task(id: "\(anime?.id ?? 0)-\(episodeRefreshID)-\(store.includeAdult)") {
                 guard let anime, store.isVisible(anime) else { artwork = SeriesArtwork(); return }
+                #if DEBUG
+                // Keep existing offline device fixtures independent of public artwork services.
+                if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { return }
+                #endif
                 let result = await store.seriesArtwork.artwork(for: anime, refresh: episodeRefreshID > 0)
                 guard !Task.isCancelled else { return }
                 artwork = result

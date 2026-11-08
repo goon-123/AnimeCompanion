@@ -51,6 +51,10 @@ final class SeriesArtworkTests: XCTestCase {
         XCTAssertEqual(restored, first)
     }
     func testNewExploreCollectionsKeepIndependentHiddenStatesAfterUpgrade() {
+        var home = HomePreferences()
+        XCTAssertFalse(home.visible.contains(.trendingAnime))
+        home.setVisible(.trendingAnime, true)
+        XCTAssertTrue(HomePreferences(saved: home.saved).visible.contains(.trendingAnime))
         let old = #"{"order":["catalog.trending","catalog.spotlight"],"hidden":["catalog.trending"]}"#
         var value = ExplorePreferences(surface: .anime, saved: old)
         XCTAssertEqual(value.order.first, .catalog(.trending))
@@ -61,6 +65,16 @@ final class SeriesArtworkTests: XCTestCase {
         let reopened = ExplorePreferences(surface: .anime, saved: value.saved)
         XCTAssertFalse(reopened.visible.contains(.catalog(.studios)))
         XCTAssertTrue(reopened.visible.contains(.catalog(.animeGenres)))
+    }
+    func testCountdownRequiresAFutureOriginalEpisodeWithinTheSeason() throws {
+        let now = Date(timeIntervalSince1970: 100)
+        let current = try anime(#"{"id":1,"status":"RELEASING","episodes":12,"nextAiringEpisode":{"episode":8,"airingAt":200}}"#)
+        XCTAssertEqual(AnimeSeriesContent.nextBroadcast(for: current, now: now)?.episode, 8)
+        XCTAssertNil(AnimeSeriesContent.nextBroadcast(for: current, now: Date(timeIntervalSince1970: 200)))
+        let finished = try anime(#"{"id":1,"status":"FINISHED","nextAiringEpisode":{"episode":8,"airingAt":200}}"#)
+        XCTAssertNil(AnimeSeriesContent.nextBroadcast(for: finished, now: now))
+        let outsideSeason = try anime(#"{"id":1,"status":"RELEASING","episodes":12,"nextAiringEpisode":{"episode":13,"airingAt":200}}"#)
+        XCTAssertNil(AnimeSeriesContent.nextBroadcast(for: outsideSeason, now: now))
     }
 }
 

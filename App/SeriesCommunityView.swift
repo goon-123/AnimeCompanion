@@ -2,6 +2,7 @@ import SwiftUI
 import AnimeCore
 
 struct SeriesCommunityView: View {
+    @EnvironmentObject private var store: AppStore
     let anime: Anime
     @State private var tab = CommunityTab.reviews
     private enum CommunityTab: String, CaseIterable { case reviews = "Series Reviews", episodes = "Episode Comments" }
@@ -23,7 +24,7 @@ struct SeriesCommunityView: View {
                     }.padding(20).readableContent(width: 940)
                 }.accessibilityIdentifier("series-community-reviews")
             case .episodes:
-                SeriesDiscussionsView(anime: anime)
+                SeriesDiscussionsView(anime: anime, requestedEpisode: max(1, store.entry(for: anime.id)?.progressValue ?? 1))
             }
         }.background(Theme.background).navigationTitle("Reviews & Comments").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar).toolbarBackground(.visible, for: .navigationBar)

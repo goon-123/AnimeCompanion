@@ -21,7 +21,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .anime:
             return [.watchlist, .synopsis, .characters, .information, .broadcast, .related, .recommendations,
-                    .news, .reviews, .artwork, .trailer, .links]
+                    .artwork, .news, .reviews, .trailer, .links]
         case .manga:
             return [.watchlist, .reading, .synopsis, .publication, .tags, .adaptations,
                     .coverage, .related, .artwork, .links]
