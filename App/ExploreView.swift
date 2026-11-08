@@ -25,6 +25,12 @@ struct ExploreView: View {
     private var loadedKey: ExploreCatalogState.Key? { catalog.state.loadedKey }
     private var savedCatalogDate: Date? { catalog.state.savedAt }
 
+    init(showSeasons: Binding<Bool>, showDisplay: Binding<Bool>, showDubFilters: Binding<Bool>) {
+        _showSeasons = showSeasons
+        _showDisplay = showDisplay
+        _showDubFilters = showDubFilters
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
