@@ -5,9 +5,9 @@ public enum ExploreSurface: String, CaseIterable, Sendable {
     public var storageKey: String { "explore.layout.\(rawValue).v1" }
     public var catalog: [ExploreCatalogRow] {
         switch self {
-        case .anime: return [.spotlight, .trending, .seasonal, .previousSeason, .topAnime, .upcoming]
-        case .discovery: return [.directory, .spotlight, .trending, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
-        case .grid: return [.directory, .posterWall, .seasonal, .previousSeason, .topAnime]
+        case .anime: return [.spotlight, .trending, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .upcoming]
+        case .discovery: return [.directory, .spotlight, .trending, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
+        case .grid: return [.directory, .posterWall, .trending, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime]
         case .reading: return [.spotlight, .personal, .formats, .genres, .readingTrending, .rising, .gems, .popular, .topReading, .newReleases, .recentlyAdded]
         }
     }
@@ -17,11 +17,12 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
     case spotlight, directory, trending, seasonal, previousSeason, topAnime, upcoming
     case novels, manga, personal, gems, posterWall, formats, genres
     case readingTrending, rising, popular, topReading, newReleases, recentlyAdded
+    case studios, animeGenres
     public var title: String {
         switch self {
         case .spotlight: return "Spotlight"
         case .directory: return "Browse by format"
-        case .trending: return "Trending"
+        case .trending: return "Top 10 trending anime"
         case .seasonal: return "This season"
         case .previousSeason: return "Previous season"
         case .topAnime: return "Top anime of all time"
@@ -39,6 +40,8 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
         case .topReading: return "Top rated reads"
         case .newReleases: return "New releases"
         case .recentlyAdded: return "Recently added"
+        case .studios: return "Animation Studios"
+        case .animeGenres: return "Anime Genres"
         }
     }
     public var discoveryCategory: DiscoveryCategory? {

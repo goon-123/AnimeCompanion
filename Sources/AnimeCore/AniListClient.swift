@@ -54,6 +54,11 @@ private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
 private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
 private struct StudioMediaResponse: Decodable, Sendable { let Studio: StudioMedia? }
 private struct StudioMedia: Decodable, Sendable { let media: StudioMediaConnection? }
+private struct StudioCollectionResponse: Decodable, Sendable {
+    let id: Int
+    let name: String
+    let media: StudioMediaConnection?
+}
 private struct StudioMediaConnection: Decodable, Sendable { let nodes: [StudioMediaNode]?; let pageInfo: PageInfo? }
 private struct StudioMediaNode: Decodable, Sendable {
     let type: String?
@@ -147,6 +152,7 @@ public enum AniListQueries {
         popularity favourites
         rankings { id rank type context year season allTime }
         studios(isMain: true) { nodes { id name } }
+        characters(perPage: 16, sort: [ROLE, RELEVANCE, ID]) { nodes { id name { full } image { medium } } }
         relations { edges { relationType node {
           id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
           title { romaji english userPreferred } coverImage { extraLarge large medium }
@@ -157,7 +163,7 @@ public enum AniListQueries {
             title { romaji english userPreferred } coverImage { extraLarge large medium }
           } }
         }
-        reviews(perPage: 3, sort: RATING_DESC) { nodes { id summary score siteUrl } }
+        reviews(perPage: 10, sort: RATING_DESC) { nodes { id summary body(asHtml: false) score siteUrl } }
         externalLinks { id site url isDisabled }
         trailer { id site thumbnail }
       }
@@ -385,6 +391,19 @@ public actor AniListClient {
         let nodes: [StudioMediaNode] = media.nodes ?? []
         let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
         return MediaPage(media: visible, pageInfo: media.pageInfo)
+    }
+    /// One public request supplies the studio directory and its representative covers.
+    public func studioCollections(includeAdult: Bool = false, refresh: Bool = false) async throws -> [AnimeStudioCollection] {
+        let fields = AnimeStudioCollection.featured.map { studio in
+            "s\(studio.id): Studio(id: \(studio.id)) { id name media(perPage: 6, sort: POPULARITY_DESC) { nodes { ...AnimeCard type } } }"
+        }.joined(separator: "\n")
+        let query = "query StudioCollections {\n" + fields + "\n}\n" + AniListQueries.card
+        let result: [String: StudioCollectionResponse?] = try await request(query, bypassCache: refresh)
+        return AnimeStudioCollection.featured.compactMap { studio in
+            guard let row = result["s\(studio.id)"] ?? nil, row.id == studio.id else { return nil }
+            let shows = (row.media?.nodes ?? []).filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
+            return AnimeStudioCollection(studio: Studio(id: row.id, name: row.name), anime: shows)
+        }
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]

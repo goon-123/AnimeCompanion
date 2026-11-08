@@ -128,7 +128,10 @@ struct UnifiedExploreView: View {
         case .spotlight:
             if !trending.isEmpty { spotlight } else if isLoading { loadingPosters }
         case .trending:
-            storyShelf("Trending", subtitle: "Across anime, manga & novels", items: Array(trending.prefix(16)))
+            TopTrendingAnimeWidget(anime: visible(response?.trending.media ?? []), selection: selection)
+        case .studios: AnimeStudioCollectionsWidget(refreshID: widgetRefreshID)
+        case .animeGenres:
+            AnimeGenreCollectionsWidget(anime: visible((response?.trending.media ?? []) + (response?.seasonal.media ?? []) + (response?.upcoming.media ?? [])))
         case .seasonal:
             animeShelf(.seasonal, title: selection == .current() ? "This season" : "Season picks", subtitle: selection.label, values: response?.seasonal.media ?? [])
         case .previousSeason:

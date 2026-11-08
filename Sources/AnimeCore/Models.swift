@@ -113,7 +113,11 @@ public struct AiringEpisode: Codable, Hashable, Sendable {
     public let episode: Int
     public var date: Date { Date(timeIntervalSince1970: Double(airingAt)) }
 }
-public struct Studio: Codable, Hashable, Identifiable, Sendable { public let id: Int; public let name: String }
+public struct Studio: Codable, Hashable, Identifiable, Sendable {
+    public let id: Int
+    public let name: String
+    public init(id: Int, name: String) { self.id = id; self.name = name }
+}
 public struct StudioConnection: Codable, Hashable, Sendable { public let nodes: [Studio]? }
 public struct AnimeCharacter: Codable, Hashable, Identifiable, Sendable {
     public let id: Int
@@ -197,6 +201,7 @@ public struct RecommendationConnection: Codable, Hashable, Sendable { public let
 public struct AnimeReview: Codable, Hashable, Identifiable, Sendable {
     public let id: Int
     public let summary: String?
+    public let body: String?
     public let score: Int?
     public let siteUrl: String?
 }

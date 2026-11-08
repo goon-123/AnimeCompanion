@@ -293,6 +293,7 @@ struct AppTabs: View {
                 pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
     }
     private var sidebar: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility, preferredCompactColumn: $sidebarColumn) {

@@ -6,6 +6,21 @@ import FoundationNetworking
 @testable import AnimeCore
 
 final class ExploreShelfAndStudioTests: XCTestCase {
+    func testStudioDirectoryUsesOneBatchedRequestAndSafeRepresentativeCovers() async throws {
+        let json = #"{"data":{"s569":{"id":569,"name":"MAPPA","media":{"nodes":[{"id":1,"type":"ANIME","isAdult":true},{"id":2,"type":"MANGA"},{"id":3,"type":"ANIME","isAdult":false}]}}}}"#
+        let transport = ExploreStudioTransport([.json(json)])
+        let api = AniListClient(transport: transport, minimumRequestInterval: 0)
+        let result = try await api.studioCollections()
+        XCTAssertEqual(result.map(\.studio.id), [569])
+        XCTAssertEqual(result.first?.anime.map(\.id), [3])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization"))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
+        let query = try XCTUnwrap(body["query"] as? String)
+        XCTAssertTrue(query.contains("s569: Studio(id: 569)"))
+        XCTAssertTrue(query.contains("s43: Studio(id: 43)"))
+    }
     func testPreviousSeasonRollsBackAcrossTheYearAndTopAnimeHasNoSeasonLimit() throws {
         let selection = SeasonSelection(season: .winter, year: 2026)
         let previous = DiscoveryFilters(category: .previousSeason, selection: selection)

@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Retained API, now an opaque surface without blur or glass compositing.
+/// Floating controls let the actual artwork and scrolling content show through.
 struct SilverGlass<S: Shape>: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let shape: S
     func body(content: Content) -> some View {
-        content.foregroundStyle(.primary).background(Theme.surface, in: shape)
-            .overlay { shape.stroke(Theme.border, lineWidth: 1).allowsHitTesting(false) }
+        content.foregroundStyle(.primary).background {
+            if reduceTransparency { shape.fill(Theme.surface) }
+            else { shape.fill(.ultraThinMaterial) }
+        }.overlay { shape.stroke(.white.opacity(0.16), lineWidth: 0.75).allowsHitTesting(false) }
     }
 }
 extension View {

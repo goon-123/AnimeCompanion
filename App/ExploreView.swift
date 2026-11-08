@@ -90,6 +90,12 @@ struct ExploreView: View {
                 RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
                     .overlay { ProgressView("Loading anime…") }
             }
+        } else if row == .trending {
+            TopTrendingAnimeWidget(anime: trending.filter { store.isVisible($0) && dubFilters.includes($0, dubs: dubs, library: store) }, selection: selection).padding(.horizontal, 16)
+        } else if row == .studios {
+            AnimeStudioCollectionsWidget(refreshID: widgetRefreshID).padding(.horizontal, 16)
+        } else if row == .animeGenres {
+            AnimeGenreCollectionsWidget(anime: trending + seasonal + upcoming).padding(.horizontal, 16)
         } else if let category = row.discoveryCategory {
             shelf(category, anime: catalog.state.response?.media(for: category) ?? [], availableWidth: geometry.size.width)
         }
