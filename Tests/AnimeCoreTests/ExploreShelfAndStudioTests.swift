@@ -33,6 +33,19 @@ final class ExploreShelfAndStudioTests: XCTestCase {
         XCTAssertEqual(top.sort, .rating)
         XCTAssertTrue(DiscoveryCategory.previousSeason.label(season: selection).contains("Fall 2025"))
     }
+    func testStudioDirectoryStopsAtRateLimitsInsteadOfRetryingEveryStudio() async throws {
+        for responses in [[ExploreStudioTransport.Response.json("{}", status: 429)],
+                          [.json("{}", status: 400), .json("{}", status: 429)]] {
+            let transport = ExploreStudioTransport(responses)
+            let api = AniListClient(transport: transport, minimumRequestInterval: 0)
+            do { _ = try await api.studioCollections(); XCTFail("Rate limit was swallowed") }
+            catch let error as ServiceError {
+                guard case .rateLimited = error else { return XCTFail("Unexpected error: \(error)") }
+            }
+            let requests = await transport.recorded()
+            XCTAssertEqual(requests.count, responses.count)
+        }
+    }
     func testExploreRequestsBothNewShelvesWithThePreviousSeasonAndContentPolicy() async throws {
         let transport = ExploreStudioTransport([.json(#"{"data":{"seasonal":{},"trending":{},"upcoming":{},"previousSeason":{"media":[{"id":1}]},"topRated":{"media":[{"id":2}]}}}"#)])
         let api = AniListClient(transport: transport, minimumRequestInterval: 0)

@@ -76,12 +76,9 @@ private struct HomeDashboardView: View {
                         Button { pickingWidgets = true } label: { Image(systemName: "plus").font(visuals.toolbarIconFont) }
                             .accessibilityLabel("Add widgets").accessibilityIdentifier("home-add-widgets")
                     }
-                    if editing { Button {
-                        withAnimation(.easeInOut(duration: 0.18)) { editing.toggle(); dragging = nil }
-                    } label: {
-                        if editing { Text("Done").fontWeight(.semibold) }
-                        else { Image(systemName: "slider.horizontal.3").font(visuals.toolbarIconFont) }
-                    }.accessibilityLabel("Finish editing Home").accessibilityIdentifier("home-customize") }
+                    if editing { Button("Done") {
+                        withAnimation(.easeInOut(duration: 0.18)) { editing = false; dragging = nil }
+                    }.fontWeight(.semibold).accessibilityLabel("Finish editing Home").accessibilityIdentifier("home-finish-editing") }
                     Menu {
                         Button("Customize Home", systemImage: "slider.horizontal.3") { editing = true }.accessibilityIdentifier("home-customize")
                         Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }

@@ -9,6 +9,6 @@ public struct AnimeStudioCollection: Codable, Identifiable, Sendable {
         Studio(id: 569, name: "MAPPA"), Studio(id: 43, name: "ufotable"),
         Studio(id: 34, name: "WIT STUDIO"), Studio(id: 2, name: "Kyoto Animation"),
         Studio(id: 4, name: "Bones"), Studio(id: 11, name: "Madhouse"),
-        Studio(id: 1835, name: "CloverWorks"), Studio(id: 803, name: "TRIGGER")
+        Studio(id: 6222, name: "CloverWorks"), Studio(id: 803, name: "TRIGGER")
     ]
 }

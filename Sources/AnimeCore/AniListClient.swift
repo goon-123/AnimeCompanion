@@ -429,7 +429,13 @@ public actor AniListClient {
             do {
                 let page = try await studioAnime(id: studio.id, includeAdult: includeAdult, refresh: refresh)
                 values.append(AnimeStudioCollection(studio: studio, anime: page.media ?? []))
-            } catch is CancellationError { throw CancellationError() } catch { continue }
+            } catch is CancellationError { throw CancellationError() }
+            catch let error as ServiceError {
+                switch error {
+                case .message, .invalidResponse, .http(400), .http(404): continue
+                default: throw error
+                }
+            } catch is DecodingError { continue } catch { throw error }
         }
         guard !values.isEmpty else { throw ServiceError.message("Studio artwork is unavailable right now.") }
         return values
