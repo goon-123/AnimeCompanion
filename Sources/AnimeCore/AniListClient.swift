@@ -166,6 +166,7 @@ public enum AniListQueries {
         reviews(perPage: 10, sort: RATING_DESC) { nodes { id summary body(asHtml: false) score siteUrl } }
         externalLinks { id site url isDisabled }
         trailer { id site thumbnail }
+        streamingEpisodes { title thumbnail }
       }
     }
     """ + card
@@ -392,18 +393,46 @@ public actor AniListClient {
         let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
         return MediaPage(media: visible, pageInfo: media.pageInfo)
     }
-    /// One public request supplies the studio directory and its representative covers.
+    /// One bounded Page query avoids the failure of a multi-root Studio alias
+    /// query. A failed collection can be retried independently as a Studio read.
     public func studioCollections(includeAdult: Bool = false, refresh: Bool = false) async throws -> [AnimeStudioCollection] {
-        let fields = AnimeStudioCollection.featured.map { studio in
-            "s\(studio.id): Studio(id: \(studio.id)) { id name media(perPage: 6, sort: POPULARITY_DESC) { nodes { ...AnimeCard type } } }"
-        }.joined(separator: "\n")
-        let query = "query StudioCollections {\n" + fields + "\n}\n" + AniListQueries.card
-        let result: [String: StudioCollectionResponse?] = try await request(query, bypassCache: refresh)
-        return AnimeStudioCollection.featured.compactMap { studio in
-            guard let row = result["s\(studio.id)"] ?? nil, row.id == studio.id else { return nil }
-            let shows = (row.media?.nodes ?? []).filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
-            return AnimeStudioCollection(studio: Studio(id: row.id, name: row.name), anime: shows)
+        let query = """
+        query StudioCollections($ids: [Int]) {
+          Page(page: 1, perPage: 12) {
+            studios(id_in: $ids) {
+              id name media(perPage: 3, sort: POPULARITY_DESC, isMain: true) { nodes { ...AnimeCard type } }
+            }
+          }
         }
+        """ + AniListQueries.card
+        struct Response: Decodable, Sendable { let Page: StudioPage }
+        struct StudioPage: Decodable, Sendable { let studios: [StudioCollectionResponse?]? }
+        do {
+            let result: Response = try await request(query, variables: ["ids": .ints(AnimeStudioCollection.featured.map(\.id))], bypassCache: refresh)
+            let rows = (result.Page.studios ?? []).compactMap { $0 }
+            let values = AnimeStudioCollection.featured.compactMap { studio -> AnimeStudioCollection? in
+                guard let row = rows.first(where: { $0.id == studio.id }) else { return nil }
+                let shows = (row.media?.nodes ?? []).filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
+                return AnimeStudioCollection(studio: Studio(id: row.id, name: row.name), anime: shows)
+            }
+            if !values.isEmpty { return values }
+        } catch is CancellationError { throw CancellationError() }
+        catch let error as ServiceError {
+            switch error {
+            case .message, .invalidResponse, .http(400): break
+            default: throw error
+            }
+        } catch is DecodingError { } catch { throw error }
+        var values: [AnimeStudioCollection] = []
+        for studio in AnimeStudioCollection.featured {
+            try Task.checkCancellation()
+            do {
+                let page = try await studioAnime(id: studio.id, includeAdult: includeAdult, refresh: refresh)
+                values.append(AnimeStudioCollection(studio: studio, anime: page.media ?? []))
+            } catch is CancellationError { throw CancellationError() } catch { continue }
+        }
+        guard !values.isEmpty else { throw ServiceError.message("Studio artwork is unavailable right now.") }
+        return values
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]

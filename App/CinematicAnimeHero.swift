@@ -5,13 +5,18 @@ struct CinematicAnimeHero: View {
     @EnvironmentObject private var dubs: ExploreDubStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
+    @AppStorage(SeriesArtworkPreferences.logoKey) private var logoFallback = false
+    @AppStorage(SeriesArtworkPreferences.bannerKey) private var bannerFallback = false
+    @AppStorage(SeriesArtworkPreferences.posterKey) private var posterFallback = false
     let anime: Anime
     let artwork: SeriesArtwork
     let trailer: () -> Void
     let expand: (URL) -> Void
     private var bannerHeight: CGFloat { sizeClass == .regular ? 530 : 390 }
     private var posterWidth: CGFloat { sizeClass == .regular ? 186 : 138 }
-    private var backgroundURL: URL? { artwork.backdrop ?? anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL }
+    private var preferences: SeriesArtworkPreferences { .init(logo: logoFallback, banner: bannerFallback, poster: posterFallback) }
+    private var backgroundURL: URL? { preferences.bannerURL(artwork: artwork, anime: anime) }
+    private var posterURL: URL? { preferences.posterURL(artwork: artwork, anime: anime) }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             banner
@@ -23,7 +28,7 @@ struct CinematicAnimeHero: View {
                 }
             }.padding(.horizontal, 20).padding(.top, -72).padding(.bottom, 18)
                 .readableContent(width: 1060).frame(maxWidth: .infinity, alignment: .leading)
-        }.accessibilityIdentifier("cinematic-series-hero")
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("cinematic-series-hero")
     }
     private var banner: some View {
         GeometryReader { geometry in
@@ -32,12 +37,12 @@ struct CinematicAnimeHero: View {
                     ArtworkImage(url: backgroundURL, pointSize: max(geometry.size.width, bannerHeight)) {
                         $0.resizable().scaledToFill()
                     } placeholder: {
-                        ArtworkImage(url: anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL, pointSize: max(geometry.size.width, bannerHeight)) {
+                        ArtworkImage(url: bannerFallback ? anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL : nil, pointSize: max(geometry.size.width, bannerHeight)) {
                             $0.resizable().scaledToFill()
-                        } placeholder: { Theme.surface }
+                        } placeholder: { LinearGradient(colors: [Theme.accent.opacity(0.18), Theme.background], startPoint: .topLeading, endPoint: .bottomTrailing) }
                     }
                         .frame(width: geometry.size.width, height: bannerHeight).clipped()
-                }.buttonStyle(.plain).accessibilityLabel("Expand anime banner").accessibilityIdentifier("expand-anime-banner")
+                }.buttonStyle(.plain).disabled(backgroundURL == nil).accessibilityLabel("Expand anime banner").accessibilityIdentifier("expand-anime-banner")
                 LinearGradient(stops: [.init(color: .black.opacity(0.08), location: 0),
                     .init(color: .clear, location: 0.38), .init(color: Theme.background.opacity(0.45), location: 0.72),
                     .init(color: Theme.background, location: 1)], startPoint: .top, endPoint: .bottom)
@@ -53,19 +58,26 @@ struct CinematicAnimeHero: View {
         }.frame(height: bannerHeight)
     }
     private var poster: some View {
-        Button { if let url = anime.coverURL { expand(url) } } label: {
-            AnimeCover(anime: anime, width: posterWidth, cornerRadius: 14)
+        Button { if let posterURL { expand(posterURL) } } label: {
+            ArtworkImage(url: posterURL, pointSize: posterWidth * 1.45) { $0.resizable().scaledToFill() } placeholder: {
+                ArtworkImage(url: posterFallback ? anime.coverURL : nil, pointSize: posterWidth * 1.45) { $0.resizable().scaledToFill() } placeholder: {
+                    ZStack {
+                        LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.surface], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        Image(systemName: "play.rectangle").font(.largeTitle).foregroundStyle(Theme.accent.opacity(0.6))
+                    }
+                }
+            }.frame(width: posterWidth, height: posterWidth * 1.45).clipped().clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay { RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.18), lineWidth: 1) }
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
-        }.buttonStyle(.plain).accessibilityLabel("Expand anime cover").accessibilityIdentifier("expand-anime-cover")
+        }.buttonStyle(.plain).disabled(posterURL == nil).accessibilityLabel("Expand anime cover").accessibilityIdentifier("expand-anime-cover")
     }
     private var identity: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let logo = artwork.logo {
-                ArtworkImage(url: logo, pointSize: 700) { $0.resizable().scaledToFit() } placeholder: { title }
+                ArtworkImage(url: logo, pointSize: 700) { $0.resizable().scaledToFit() } placeholder: { logoPlaceholder }
                     .frame(maxWidth: .infinity, alignment: .leading).frame(height: sizeClass == .regular ? 132 : 96, alignment: .leading)
                     .accessibilityLabel(anime.displayTitle).accessibilityIdentifier("detail-series-logo")
-            } else { title }
+            } else { logoPlaceholder }
             Text([anime.season.map { $0.label + (anime.seasonYear.map { " \($0)" } ?? "") },
                 anime.format?.replacingOccurrences(of: "_", with: " ")].compactMap { $0 }.joined(separator: " · "))
                 .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
@@ -83,6 +95,13 @@ struct CinematicAnimeHero: View {
     private var title: some View {
         Text(anime.displayTitle).font(sizeClass == .regular ? .largeTitle.bold() : .title2.bold())
             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail-title")
+    }
+    @ViewBuilder private var logoPlaceholder: some View {
+        if logoFallback { title }
+        else {
+            Label("Logo unavailable", systemImage: "photo")
+                .font(.caption).foregroundStyle(.secondary).accessibilityLabel("Logo unavailable for " + anime.displayTitle)
+        }
     }
 }
 

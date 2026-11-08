@@ -79,18 +79,17 @@ struct TopTrendingAnimeWidget: View {
                 }.buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityLabel("Number \(rank). \(anime.displayTitle)")
             }.frame(width: width, height: posterWidth * 1.45).clipped()
-                .overlay(alignment: .topTrailing) {
+            HStack(alignment: .top, spacing: 4) {
+                Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
                     Button {
                         if store.isSignedIn { editing = anime } else { settings = true }
                     } label: {
                         Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
-                            .font(.headline.bold()).foregroundStyle(Theme.highlight).frame(width: 44, height: 44)
-                            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 11))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent).frame(width: 36, height: 44)
                     }.buttonStyle(.plain).disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
                         .accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to library" : "Edit \(anime.displayTitle) in library")
-                }
-            Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
-                .padding(.leading, width - posterWidth)
+            }.padding(.leading, width - posterWidth)
+            DiscoveryPosterSummary(anime: anime).padding(.leading, width - posterWidth)
         }.frame(width: width, alignment: .leading)
     }
 }
@@ -119,7 +118,9 @@ struct AnimeStudioCollectionsWidget: View {
                     }
                 }
             }
-            if let error { NoticeView(message: error) { Task { await load(refresh: true) } } }
+            if let error {
+                HStack { Text(error).font(.caption).foregroundStyle(.secondary); Spacer(); Button("Retry") { Task { await load(refresh: true) } }.font(.caption.weight(.semibold)) }
+            }
         }.accessibilityIdentifier("explore-studios-widget")
             .task(id: "\(store.includeAdult)-\(refreshID)") { await load(refresh: refreshID > 0) }
     }
@@ -128,11 +129,18 @@ struct AnimeStudioCollectionsWidget: View {
         collections = collections.map { AnimeStudioCollection(studio: $0.studio, anime: $0.anime.filter { adult || $0.isAdult != true }) }
         loading = true; error = nil
         defer { loading = false }
+        let key = "studio-directory-v2-\(adult)"
+        if let saved = await store.homeContentCache.load([AnimeStudioCollection].self, key: key) {
+            guard !Task.isCancelled, store.includeAdult == adult else { return }
+            collections = saved.value
+            if !refresh, Date().timeIntervalSince(saved.savedAt) < 3600 { return }
+        }
         do {
             let result = try await store.aniList.studioCollections(includeAdult: adult, refresh: refresh)
             guard !Task.isCancelled, store.includeAdult == adult else { return }
             collections = result
-        } catch is CancellationError { } catch { if !Task.isCancelled { self.error = "Studio artwork is unavailable. You can still open each collection." } }
+            await store.homeContentCache.save(HomeContentSnapshot(result), key: key)
+        } catch is CancellationError { } catch { if !Task.isCancelled { self.error = collections.isEmpty ? "Artwork unavailable. Collections still open." : "Showing saved studio artwork." } }
     }
 }
 

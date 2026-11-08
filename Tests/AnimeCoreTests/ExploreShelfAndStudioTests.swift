@@ -7,7 +7,7 @@ import FoundationNetworking
 
 final class ExploreShelfAndStudioTests: XCTestCase {
     func testStudioDirectoryUsesOneBatchedRequestAndSafeRepresentativeCovers() async throws {
-        let json = #"{"data":{"s569":{"id":569,"name":"MAPPA","media":{"nodes":[{"id":1,"type":"ANIME","isAdult":true},{"id":2,"type":"MANGA"},{"id":3,"type":"ANIME","isAdult":false}]}}}}"#
+        let json = #"{"data":{"Page":{"studios":[{"id":569,"name":"MAPPA","media":{"nodes":[{"id":1,"type":"ANIME","isAdult":true},{"id":2,"type":"MANGA"},{"id":3,"type":"ANIME","isAdult":false}]}}]}}}"#
         let transport = ExploreStudioTransport([.json(json)])
         let api = AniListClient(transport: transport, minimumRequestInterval: 0)
         let result = try await api.studioCollections()
@@ -18,8 +18,10 @@ final class ExploreShelfAndStudioTests: XCTestCase {
         XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization"))
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
         let query = try XCTUnwrap(body["query"] as? String)
-        XCTAssertTrue(query.contains("s569: Studio(id: 569)"))
-        XCTAssertTrue(query.contains("s43: Studio(id: 43)"))
+        XCTAssertTrue(query.contains("studios(id_in: $ids)"))
+        XCTAssertFalse(query.contains("s569:"))
+        let variables = try XCTUnwrap(body["variables"] as? [String: Any])
+        XCTAssertEqual(variables["ids"] as? [Int], AnimeStudioCollection.featured.map(\.id))
     }
     func testPreviousSeasonRollsBackAcrossTheYearAndTopAnimeHasNoSeasonLimit() throws {
         let selection = SeasonSelection(season: .winter, year: 2026)

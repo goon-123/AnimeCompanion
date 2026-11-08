@@ -13,6 +13,10 @@ struct CombinedLibraryView: View {
     @AppStorage("combined.library.ascending") private var ascending = true
     @State private var search = ""
     @State private var settings = false
+    @State private var availableWidth: CGFloat = 390
+    @State private var display = false
+    @State private var contentRatings = false
+    private var posters = PosterPreferences(.library)
     private var items: [CombinedLibraryItem] {
         let values = CombinedLibraryItem.merge(anime: anime.isSignedIn ? anime.entries : [], reading: reading.connected ? reading.library : [],
             includeAdult: anime.includeAdult, query: search, status: status, contentFilter: anime.mangaBakaContent)
@@ -65,14 +69,22 @@ struct CombinedLibraryView: View {
                 }
                 Text("Anime progress syncs with AniList. Reading progress syncs with MangaBaka.")
                     .font(.caption2).foregroundStyle(.secondary)
-            }.padding(20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
+            }.padding(20).frame(maxWidth: layout == "grid" ? 1180 : 1000).frame(maxWidth: .infinity)
         }.scrollDismissesKeyboard(.interactively).background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
             .animeNavigation().accessibilityIdentifier("combined-library")
-            .toolbar { ToolbarItemGroup(placement: .topBarTrailing) {
-                MangaBakaContentButton().labelStyle(.iconOnly)
-                Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
+                    Button("Content ratings", systemImage: "eye") { contentRatings = true }
+                    Button("Account & settings", systemImage: "gearshape") { settings = true }
+                } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Library options")
             } }
             .appSettingsSheet(isPresented: $settings)
+            .sheet(isPresented: $display) { DisplayOptionsView(scope: .library) }
+            .sheet(isPresented: $contentRatings) {
+                AppNavigationStack { MangaBakaContentSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { contentRatings = false } } } }
+            }
             .onChange(of: defaultStatus) { _, _ in status = CombinedLibraryStatus(rawValue: LibraryScope.combined.openingStatus()) ?? .active }
             .task(id: "\(reading.connected)-\(reading.connectionID)-\(reading.revision)") { await loadReading() }
             .task(id: "\(anime.isSignedIn)-\(scene)") {
@@ -100,14 +112,17 @@ struct CombinedLibraryView: View {
     }
     @ViewBuilder private func results(_ values: [CombinedLibraryItem]) -> some View {
         if layout == "grid" {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 190 : 140), spacing: 14)], alignment: .leading, spacing: 22) {
-                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: true) } }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: CGFloat(LibraryArtworkSizing.gridMinimum(preferred: posters.libraryGridMinimum, accessible: textSize.isAccessibilitySize))), spacing: 14)], alignment: .leading, spacing: 22) {
+                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: true, listPosterWidth: listPosterWidth) } }
             }.accessibilityIdentifier("combined-library-grid")
         } else {
             LazyVStack(spacing: 14) {
-                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: false) } }
+                ForEach(values) { item in destination(item) { CombinedLibraryCard(item: item, grid: false, listPosterWidth: listPosterWidth) } }
             }.accessibilityIdentifier("combined-library-list")
         }
+    }
+    private var listPosterWidth: CGFloat {
+        CGFloat(LibraryArtworkSizing.listWidth(preferred: posters.listWidth, availableWidth: Double(max(0, min(availableWidth, 1000) - 40)), accessible: textSize.isAccessibilitySize))
     }
     @ViewBuilder private func destination<Content: View>(_ item: CombinedLibraryItem, @ViewBuilder content: () -> Content) -> some View {
         switch item {
@@ -139,6 +154,7 @@ struct CombinedLibraryView: View {
 private struct CombinedLibraryCard: View {
     let item: CombinedLibraryItem
     let grid: Bool
+    let listPosterWidth: CGFloat
     private var format: String {
         switch item { case .anime: return "Anime"; case .reading(let value): return value.series?.formatLabel ?? "Book" }
     }
@@ -166,7 +182,7 @@ private struct CombinedLibraryCard: View {
                 }
             } else {
                 HStack(spacing: 14) {
-                    cover(width: 76)
+                    cover(width: listPosterWidth)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(item.title).font(.headline).lineLimit(3)
                         Text(format + " · " + status).font(.caption).foregroundStyle(.secondary)

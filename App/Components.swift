@@ -39,6 +39,7 @@ struct AnimeCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 AnimeCover(anime: anime, width: posterWidth)
                 Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
+                DiscoveryPosterSummary(anime: anime)
                 DiscoveryLibraryBadge(anime: anime)
             }.frame(width: posterWidth).foregroundStyle(.primary).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")

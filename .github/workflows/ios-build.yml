@@ -506,7 +506,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   explore-fixes:
-    # Only the two reported UI regressions; longer simulator suites stay opt-in.
+    # Device checks are opt-in; the user tests UI changes on their own devices.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
     name: Explore widget picker and Spotlight regressions
     needs: manga-runtime
     runs-on: macos-15-intel

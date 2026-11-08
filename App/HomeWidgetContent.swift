@@ -51,6 +51,7 @@ struct HomeWidgetContent: View {
     }
     var body: some View {
         widget(section)
+            .environment(\.posterArtworkBadgesEnabled, false)
             .appSettingsSheet(isPresented: $settings)
             .sheet(item: $watching) { WatchAnimeView(anime: $0) }
     }

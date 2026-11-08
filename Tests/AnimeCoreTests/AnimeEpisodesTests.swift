@@ -46,7 +46,8 @@ final class AnimeEpisodesTests: XCTestCase {
         XCTAssertEqual(values[0].episodes.count, 100); XCTAssertTrue(values[0].hasMore)
         let next = try await client.page(for: series, page: 2)
         XCTAssertEqual(next.episodes.map(\.number), [101]); XCTAssertFalse(next.hasMore)
-        let count = await transport.count; XCTAssertEqual(count, 1)
+        let requests = await transport.requests
+        XCTAssertEqual(requests.filter { $0.url?.host == "api.ani.zip" }.count, 1)
         let restored = await AnimeEpisodesClient(transport: transport, cache: HomeContentCache(directory: folder), minimumRequestInterval: 0).cached(for: series)
         XCTAssertEqual(restored?.episodes.first?.title, "Episode 1")
     }
@@ -56,7 +57,7 @@ final class AnimeEpisodesTests: XCTestCase {
         let result = try await client.page(for: anime())
         XCTAssertEqual(result.episodes.first?.title, "Fallback episode")
         let requests = await transport.requests
-        XCTAssertEqual(requests.last?.url?.path, "/v4/anime/7/episodes")
+        XCTAssertTrue(requests.contains { $0.url?.path == "/v4/anime/7/episodes" })
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
     }
     func testFailedRefreshRetainsPreviousEpisodeMetadata() async throws {
@@ -65,6 +66,28 @@ final class AnimeEpisodesTests: XCTestCase {
         let client = AnimeEpisodesClient(transport: EpisodeTransport(mapping: Data("{}".utf8)), cache: cache, minimumRequestInterval: 0)
         let result = try await client.page(for: anime(mal: false), refresh: true)
         XCTAssertEqual(result.episodes.first?.title, "Saved episode"); XCTAssertNotNil(result.notice)
+    }
+    func testPartialMappingIsEnrichedInsteadOfMaskingTheSecondProvider() async throws {
+        let mapping = Data(#"{"mappings":{"anilist_id":1,"mal_id":7},"episodes":{"1":{"episode":"1","episodeNumber":1,"image":"https://art.example/one.jpg","summary":"A real plot","length":24}}}"#.utf8)
+        let listing = Data(#"{"data":[{"mal_id":1,"title":"An English episode title","aired":"2026-01-02T00:00:00Z","score":8.4,"filler":true}],"pagination":{"has_next_page":true}}"#.utf8)
+        let client = AnimeEpisodesClient(transport: EpisodeTransport(mapping: mapping, jikan: listing), cache: HomeContentCache(directory: nil), minimumRequestInterval: 0)
+        let result = try await client.page(for: anime())
+        let row = try XCTUnwrap(result.episodes.first)
+        XCTAssertEqual(row.title, "An English episode title")
+        XCTAssertEqual(row.imageURL?.lastPathComponent, "one.jpg")
+        XCTAssertEqual(row.overview, "A real plot"); XCTAssertEqual(row.runtime, 24)
+        XCTAssertEqual(row.rating, 8.4); XCTAssertTrue(row.filler)
+        XCTAssertTrue(result.hasMore)
+    }
+    func testStreamingArtworkRequiresExplicitEntryLocalEpisodeNumbers() throws {
+        let series = try JSONDecoder().decode(Anime.self, from: Data(#"{"id":1,"episodes":12,"streamingEpisodes":[{"title":"Episode 2 - A title","thumbnail":"https://art.example/2.jpg"},{"title":"Episode 25 - A different cour","thumbnail":"https://art.example/wrong.jpg"},{"title":"Episode 0 - Special"},{"title":"A random unnumbered trailer"}]}"#.utf8))
+        let rows = AnimeEpisodeDecoding.streaming(series.streamingEpisodes ?? [], anime: series)
+        XCTAssertEqual(rows.map(\.number), [2])
+        XCTAssertEqual(rows.first?.imageURL?.lastPathComponent, "2.jpg")
+        let videos = Data(#"{"data":[{"mal_id":9999,"episode":"Episode 3","title":"Third episode","images":{"jpg":{"image_url":"https://art.example/3.jpg"}}},{"mal_id":4,"episode":"Season two","images":{"jpg":{"image_url":"https://art.example/wrong.jpg"}}}]}"#.utf8)
+        let stills = try AnimeEpisodeDecoding.jikanVideos(videos, anime: series)
+        XCTAssertEqual(stills.map(\.number), [3])
+        XCTAssertEqual(stills.first?.imageURL?.lastPathComponent, "3.jpg")
     }
 }
 

@@ -56,6 +56,8 @@ struct UnifiedExploreView: View {
     @State private var selection = SeasonSelection.current()
     @Binding var designs: Bool
     @State private var customizing = false
+    @State private var accounts = false
+    @State private var settings = false
     @State private var widgetRefreshID = 0
     private var surface: ExploreSurface { design == .posterGrid ? .grid : .discovery }
     @State private var seasons = false
@@ -97,9 +99,12 @@ struct UnifiedExploreView: View {
                 }.font(.caption).foregroundStyle(.secondary)
             }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline)
+            .environment(\.posterArtworkBadgesEnabled, false)
             .toolbar(.hidden, for: .navigationBar).animeNavigation()
             .accessibilityIdentifier("unified-explore-" + design.rawValue)
             .modifier(ExploreWidgetSupport(surface: surface, refreshID: widgetRefreshID))
+            .appAccountSwitcherSheet(isPresented: $accounts)
+            .appSettingsSheet(isPresented: $settings)
             .sheet(isPresented: $customizing) {
                 AppNavigationStack {
                     ExploreCustomizationView(surface: surface).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customizing = false } } }
@@ -167,11 +172,16 @@ struct UnifiedExploreView: View {
                     Text("Find your next favorite.").font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { customizing = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle()) }
-                    .accessibilityLabel("Customize Explore").accessibilityIdentifier("explore-customize")
-                Button { designs = true } label: { Image(systemName: design.symbol).frame(width: 44, height: 44).silverGlass(in: Circle()) }
-                    .accessibilityLabel("Explore design").accessibilityIdentifier("explore-designs")
-                AccountSwitcherButton()
+                Menu {
+                    Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
+                    Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
+                    Button("Browse seasons", systemImage: "calendar") { seasons = true }
+                    Button("Anime filters", systemImage: "line.3.horizontal.decrease") { dubFilters = true }
+                    Divider()
+                    Button("Switch account", systemImage: "person.crop.circle") { accounts = true }
+                    Button("Settings", systemImage: "gearshape") { settings = true }
+                } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                    .accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
             }.buttonStyle(.plain)
             CompanionSearchLink().accessibilityIdentifier("unified-explore-search")
         }

@@ -93,7 +93,13 @@ struct AnimeEpisodesSection: View {
     private var feedback: some View {
         VStack(alignment: .leading, spacing: 8) {
             if loading && rows.isEmpty { ProgressView("Loading episode details…").font(.caption) }
-            if let error { NoticeView(message: error) { Task { await load(reset: true, refresh: true) } } }
+            if let error {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle").foregroundStyle(.secondary)
+                    Text(error).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Retry") { Task { await load(reset: true, refresh: true) } }.font(.caption.weight(.semibold)).disabled(loading)
+                }.padding(.vertical, 6)
+            }
             if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("episode-tracking-error") }
             TrackingFeedback(anime: anime)
         }
@@ -239,7 +245,7 @@ private struct AnimeEpisodeCard: View {
     }
     private var thumbnail: some View {
         ArtworkImage(url: episode.imageURL, pointSize: width) { $0.resizable().scaledToFill() } placeholder: {
-            ZStack { Theme.accent.opacity(0.12); Image(systemName: "film").font(.title2).foregroundStyle(Theme.accent.opacity(0.5)) }
+            EpisodeArtworkPlaceholder(number: episode.number)
         }.frame(width: width, height: width * 9 / 16).clipped().clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(alignment: .topTrailing) {
                 if watched { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, Theme.accent).padding(5).accessibilityLabel("Watched") }
@@ -253,6 +259,7 @@ private struct AnimeEpisodeCard: View {
                 if episode.overview != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(.secondary) }
             }
             if let title = episode.title { Text(title).font(.subheadline).foregroundStyle(.secondary).lineLimit(3) }
+            else if episode.overview == nil { Text("Episode details not supplied").font(.caption).foregroundStyle(.secondary) }
             let facts = [episode.dateLabel, episode.runtime.map { "\($0) min" }].compactMap { $0 }
             if !facts.isEmpty { Text(facts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
             if let rating = episode.rating {
@@ -287,5 +294,23 @@ private struct AnimeEpisodeCard: View {
                 Button("Connect AniList", systemImage: "person.crop.circle") { setWatched(true) }.disabled(!canTrack)
             }
         } else { Label("Not yet aired", systemImage: "clock") }
+    }
+}
+
+private struct EpisodeArtworkPlaceholder: View {
+    let number: Int
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Theme.accent.opacity(0.35), Color.indigo.opacity(0.2), Theme.surface], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle().stroke(Theme.accent.opacity(0.14), lineWidth: 14).frame(width: 78, height: 78).offset(x: 38, y: -22)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("EP").font(.system(size: 9, weight: .bold)).tracking(2)
+                    Text(String(format: "%02d", number)).font(.system(size: 26, weight: .bold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "play.rectangle.fill").font(.system(size: 20, weight: .regular)).opacity(0.45)
+            }.foregroundStyle(Theme.accent).padding(10)
+        }
     }
 }

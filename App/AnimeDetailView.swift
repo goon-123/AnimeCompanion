@@ -12,7 +12,11 @@ struct AnimeDetailView: View {
     @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AnimeSeriesStyle.storageKey) private var savedStyle = AnimeSeriesStyle.cinematic.rawValue
+    @AppStorage(SeriesMoreInfoPreferences.storageKey) private var moreInfoSaved = ""
     @AppStorage("series.layout.anime.v1") private var sectionOrder = ""
+    @Namespace private var tabIndicator
     let mediaID: Int
     @State private var anime: Anime?
     @State private var loading = false
@@ -27,12 +31,45 @@ struct AnimeDetailView: View {
     @State private var selectedTab = SeriesTab.episodes
     @State private var artwork = SeriesArtwork()
     @State private var showingTrailer = false
+    @State private var arranging = false
+    @State private var appearance = false
     @State private var synopsisExpanded = false
-    private enum SeriesTab: String, CaseIterable { case episodes = "Episodes", info = "More Info", recommendations = "You May Also Like" }
+    private enum SeriesTab: String, CaseIterable { case episodes = "Episodes", info = "More Info", recommendations = "Similar" }
     private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .anime, saved: sectionOrder) }
+    private var style: AnimeSeriesStyle { AnimeSeriesStyle(preference: savedStyle) }
+    private var moreInfo: SeriesMoreInfoPreferences { .init(saved: moreInfoSaved) }
+    private var tabs: [SeriesTab] { style == .classic ? [.info, .episodes] : SeriesTab.allCases }
+    init(mediaID: Int) {
+        self.mediaID = mediaID
+        let style = AnimeSeriesStyle(preference: UserDefaults.standard.string(forKey: AnimeSeriesStyle.storageKey) ?? "")
+        _selectedTab = State(initialValue: style == .classic ? .info : .episodes)
+    }
 
     var body: some View {
-        ScrollViewReader { proxy in
+        seriesScroll.seriesPosterSizing()
+            .ignoresSafeArea(.container, edges: style == .cinematic ? .top : [])
+            .background(Theme.background).navigationTitle(anime?.displayTitle ?? "Anime").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+            .overlay(alignment: .bottomLeading) { commentsButton }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { optionsMenu } }
+            .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }
+            .refreshable { episodeRefreshID += 1; await load(refresh: true) }
+            .appSettingsSheet(isPresented: $showSettings)
+            .sheet(isPresented: $arranging) { AppNavigationStack { SeriesLayoutEditor(page: .anime) } }
+            .sheet(isPresented: $appearance) {
+                AppNavigationStack {
+                    SeriesAppearanceSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { appearance = false } } }
+                }
+            }
+            .sheet(isPresented: $editing) { if let anime { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) } }
+            .sheet(item: $playbackRequest) { request in if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) } }
+            .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
+            .sheet(isPresented: $showingTrailer) { if let trailer = anime?.trailer, let url = trailer.url { SeriesTrailerSheet(trailer: trailer, url: url) } }
+            .onChange(of: savedStyle) { _, _ in selectedTab = style == .classic ? .info : .episodes }
+            .task(id: "\(anime?.id ?? 0)-\(episodeRefreshID)-\(store.includeAdult)-\(savedStyle)") { await loadArtwork() }
+    }
+    private var seriesScroll: some View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if loading && anime == nil { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding(40) }
@@ -42,34 +79,42 @@ struct AnimeDetailView: View {
                         Button("Open content settings") { showSettings = true }.buttonStyle(.bordered)
                     }
                     if let anime, store.isVisible(anime) {
-                        CinematicAnimeHero(anime: anime, artwork: artwork, trailer: { showingTrailer = true }) { url in
-                            imagePreview = AnimeImagePreview(url: url, title: anime.displayTitle)
-                        }
-                        seriesIntroduction(anime).padding(.horizontal, 20).padding(.bottom, 20).readableContent(width: 1060)
+                        seriesHeader(anime)
                         tabPicker
-                        tabContent(anime).padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 90).readableContent(width: 1060)
+                        VStack(alignment: .leading, spacing: 0) { tabContent(anime) }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .id(selectedTab).transition(reduceMotion ? .identity : .opacity)
+                            .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 90).readableContent(width: 1060)
                             .id("series-tab-content")
                     }
                 }
             }.accessibilityIdentifier("anime-detail-scroll")
-                .ignoresSafeArea(.container, edges: .top)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .ignoresSafeArea(.container, edges: style == .cinematic ? .top : [])
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: selectedTab) { _, _ in proxy.scrollTo("series-tab-header", anchor: .top) }
-        }.seriesPosterSizing().background(Theme.background).navigationTitle("").navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar(.hidden, for: .tabBar)
-            .overlay(alignment: .bottomLeading) {
+    }
+    @ViewBuilder private func seriesHeader(_ anime: Anime) -> some View {
+        if style == .classic {
+            ClassicAnimeDetailHero(anime: anime) { imagePreview = AnimeImagePreview(url: $0, title: anime.displayTitle) }
+        } else {
+            CinematicAnimeHero(anime: anime, artwork: artwork, trailer: { showingTrailer = true }) { imagePreview = AnimeImagePreview(url: $0, title: anime.displayTitle) }
+            seriesIntroduction(anime).padding(.horizontal, 20).padding(.bottom, 18).readableContent(width: 1060)
+        }
+    }
+    @ViewBuilder private var commentsButton: some View {
                 if let anime, store.isVisible(anime) {
                     NavigationLink { SeriesCommunityView(anime: anime) } label: {
                         Image(systemName: "text.bubble").font(.title2).frame(width: 56, height: 56).silverGlass(in: RoundedRectangle(cornerRadius: 18))
                     }.buttonStyle(.plain).padding(.leading, 20).padding(.bottom, 16)
                         .accessibilityLabel("Series reviews and episode comments").accessibilityIdentifier("detail-floating-comments")
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { SeriesLayoutButton(page: .anime) }
-                ToolbarItem(placement: .topBarTrailing) {
+    }
+    private var optionsMenu: some View {
                     Menu {
+                        Section("Appearance") {
+                            Button("Customize sections", systemImage: "slider.horizontal.3") { arranging = true }.accessibilityIdentifier("series-arrange-anime")
+                            Button("Series appearance", systemImage: "rectangle.on.rectangle") { appearance = true }.accessibilityIdentifier("detail-series-appearance")
+                        }
                         if let anime, store.isVisible(anime) {
                             Button("Edit Entry", systemImage: "square.and.pencil", action: editEntry)
                                 .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityIdentifier("detail-edit-entry")
@@ -78,25 +123,11 @@ struct AnimeDetailView: View {
                             Button("Find manga / manhwa", systemImage: "book.closed") { navigation.openMangaSearch(for: anime) }.accessibilityIdentifier("detail-find-manga")
                         }
                         Button("Account and settings", systemImage: "person.crop.circle") { showSettings = true }
-                    } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                    } label: { Image(systemName: "ellipsis").frame(width: 32, height: 32) }
                         .accessibilityLabel("Series options").accessibilityIdentifier("detail-options")
-                }
-            }
-            .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }
-            .refreshable { episodeRefreshID += 1; await load(refresh: true) }
-            .appSettingsSheet(isPresented: $showSettings)
-            .sheet(isPresented: $editing) {
-                if let anime { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
-            }
-            .sheet(item: $playbackRequest) { request in
-                if let anime { WatchAnimeView(anime: anime, requestedEpisode: request.episode) }
-            }
-            .fullScreenCover(item: $imagePreview) { AnimeImageViewer(preview: $0) }
-            .sheet(isPresented: $showingTrailer) {
-                if let trailer = anime?.trailer, let url = trailer.url { SeriesTrailerSheet(trailer: trailer, url: url) }
-            }
-            .task(id: "\(anime?.id ?? 0)-\(episodeRefreshID)-\(store.includeAdult)") {
-                guard let anime, store.isVisible(anime) else { artwork = SeriesArtwork(); return }
+    }
+    private func loadArtwork() async {
+                guard style == .cinematic, let anime, store.isVisible(anime) else { artwork = SeriesArtwork(); return }
                 #if DEBUG
                 // Keep existing offline device fixtures independent of public artwork services.
                 if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { return }
@@ -104,22 +135,24 @@ struct AnimeDetailView: View {
                 let result = await store.seriesArtwork.artwork(for: anime, refresh: episodeRefreshID > 0)
                 guard !Task.isCancelled else { return }
                 artwork = result
-            }
     }
     private func editEntry() { if store.isSignedIn { editing = true } else { showSettings = true } }
     private var tabPicker: some View {
         HStack(spacing: 0) {
-            ForEach(SeriesTab.allCases, id: \.self) { tab in
-                Button { selectedTab = tab } label: {
+            ForEach(tabs, id: \.self) { tab in
+                Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { selectedTab = tab } } label: {
                     VStack(spacing: 12) {
-                        Text(tab.rawValue).font(.subheadline.weight(selectedTab == tab ? .bold : .medium))
+                        Text(style == .classic && tab == .info ? "Info" : tab.rawValue).font(.subheadline.weight(selectedTab == tab ? .bold : .medium))
                             .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 44)
                             .foregroundStyle(selectedTab == tab ? Color.primary : Color.secondary)
-                        Rectangle().fill(selectedTab == tab ? Theme.accent : Theme.border).frame(height: 3)
+                        ZStack {
+                            Rectangle().fill(Theme.border)
+                            if selectedTab == tab { Rectangle().fill(Theme.accent).matchedGeometryEffect(id: "selected-series-tab", in: tabIndicator) }
+                        }.frame(height: 2)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
             }
-        }.accessibilityIdentifier("anime-detail-tabs").readableContent(width: 1060)
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("anime-detail-tabs").readableContent(width: 1060)
             .id("series-tab-header")
     }
     private func seriesIntroduction(_ anime: Anime) -> some View {
@@ -159,8 +192,7 @@ struct AnimeDetailView: View {
         }
     }
     private func visibleSections(for anime: Anime) -> [SeriesDetailSection] {
-        layout.visible.filter { section in
-            if [.watchlist, .synopsis, .characters, .broadcast, .recommendations].contains(section) { return false }
+        (style == .classic ? layout.visible : moreInfo.visible).filter { section in
             switch section {
             case .broadcast: return AnimeSeriesContent.showsOriginalBroadcast(for: anime)
             case .related:
@@ -217,60 +249,61 @@ struct AnimeDetailView: View {
         }
     }
     private func metadata(_ anime: Anime) -> some View {
-        DetailCard(title: "Information") {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: sizeClass == .regular ? 4 : 3), alignment: .leading, spacing: 16) {
-                fact("Releasing", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
-                fact("Episodes", anime.episodes.map(String.init) ?? "Not announced")
-                fact("Duration", anime.duration.map { "\($0) min" } ?? "Not announced")
-                studioLinks(anime)
-                fact("Popularity", anime.popularity.map { $0.formatted() } ?? "Not listed")
-                fact("Favourites", anime.favourites.map { $0.formatted() } ?? "Not listed")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Information").font(.headline)
+                Spacer()
+                Text([anime.format?.replacingOccurrences(of: "_", with: " "), anime.seasonYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
             }
+            Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
+            HStack(spacing: 16) {
+                Label(anime.episodes.map { "\($0) episodes" } ?? "Episodes TBA", systemImage: "rectangle.stack")
+                if let duration = anime.duration { Label("\(duration) min", systemImage: "clock") }
+            }.font(.caption).foregroundStyle(.secondary)
+            studioLinks(anime)
             AnimeEpisodeFacts(anime: anime, entry: store.entry(for: anime.id), dub: dubs.progress(for: anime))
-            if let ranks = anime.rankings, !ranks.isEmpty {
-                Divider()
-                ForEach(Array(ranks.prefix(4))) { rank in Label(rank.label, systemImage: rank.type == "POPULAR" ? "heart.fill" : "star.fill").font(.caption).foregroundStyle(Theme.highlight) }
+            DisclosureGroup("Dates & rankings") {
+                VStack(alignment: .leading, spacing: 10) {
+                    fact("Broadcast", (anime.startDate?.label ?? "Not announced") + (anime.endDate?.year == nil ? "" : " – " + (anime.endDate?.label ?? "")))
+                    HStack { fact("Popularity", anime.popularity.map { $0.formatted() } ?? "Not listed"); Spacer(); fact("Favourites", anime.favourites.map { $0.formatted() } ?? "Not listed") }
+                    ForEach(Array((anime.rankings ?? []).prefix(4))) { rank in
+                        Label(rank.label, systemImage: rank.type == "POPULAR" ? "heart.fill" : "star.fill").font(.caption).foregroundStyle(Theme.highlight)
+                    }
+                }.padding(.top, 8)
             }
-        }
+            .font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 12).accessibilityIdentifier("detail-information")
     }
     private func fact(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) { Text(label).font(.caption2).foregroundStyle(.secondary); Text(value).font(.caption.weight(.medium)) }
     }
     private func studioLinks(_ anime: Anime) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text("Studio").font(.caption2).foregroundStyle(.secondary)
             let studios = anime.studios?.nodes?.filter { $0.id > 0 } ?? []
             if studios.isEmpty { Text("Not listed").font(.caption) }
             ForEach(studios) { studio in
                 NavigationLink { StudioAnimeView(studio: studio) } label: {
                     HStack(spacing: 4) { Text(studio.name).multilineTextAlignment(.leading); Image(systemName: "chevron.right").font(.caption2) }
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).frame(minHeight: 32, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("detail-studio-\(studio.id)").accessibilityHint("Browse anime by \(studio.name)")
             }
         }
     }
     @ViewBuilder private func related(_ anime: Anime) -> some View {
-        if let edges = anime.relations?.edges, !edges.isEmpty {
-            sectionTitle("Related")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
-                        if let media = edge.node, store.includeAdult || media.isAdult != true { RelatedAnimeCard(anime: media, caption: edge.relationType) }
-                    }
-                }
-            }
+        let rows = (anime.relations?.edges ?? []).compactMap { edge -> RelatedSeriesShelf.Item? in
+            guard let media = edge.node, store.includeAdult || media.isAdult != true else { return nil }
+            return .init(anime: media, caption: edge.relationType)
         }
+        if !rows.isEmpty { RelatedSeriesShelf(title: "Related", items: rows) }
     }
     @ViewBuilder private func recommendations(_ anime: Anime) -> some View {
         let entries = (anime.recommendations?.nodes ?? []).filter { (store.includeAdult || $0.mediaRecommendation?.isAdult != true) && $0.mediaRecommendation != nil }
         if !entries.isEmpty {
-            sectionTitle("You may also like")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(entries) { entry in if let media = entry.mediaRecommendation { RelatedAnimeCard(anime: media) } }
-                }
-            }
-        }
+            RelatedSeriesShelf(title: style == .classic ? "Similar" : nil,
+                items: entries.compactMap { $0.mediaRecommendation.map { RelatedSeriesShelf.Item(anime: $0, caption: nil) } })
+        } else { ContentUnavailableView("No similar titles yet", systemImage: "sparkles") }
     }
     @ViewBuilder private func trailer(_ anime: Anime) -> some View {
         if let trailer = anime.trailer, let url = trailer.url {
@@ -324,7 +357,7 @@ struct AnimeDetailView: View {
     private func load(refresh: Bool = false) async {
         let attempt = UUID(); requestID = attempt; let requestedAdult = store.includeAdult
         let targetID = mediaID
-        if anime?.id != targetID { anime = nil; artwork = SeriesArtwork(); selectedTab = .episodes }
+        if anime?.id != targetID { anime = nil; artwork = SeriesArtwork(); selectedTab = style == .classic ? .info : .episodes }
         if let anime, !store.isVisible(anime) { error = nil; return }
         loading = true; error = nil
         defer { if requestID == attempt { loading = false } }

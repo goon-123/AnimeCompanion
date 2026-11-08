@@ -13,6 +13,10 @@ struct MangaBakaLibraryView: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var connection = false
     @State private var appSettings = false
+    @State private var contentRatings = false
+    @State private var display = false
+    @State private var availableWidth: CGFloat = 390
+    private var posters = PosterPreferences(.library)
     private var entries: [MangaBakaLibraryEntry] {
         let values = account.library.filter { entry in
             guard selectedState == nil || entry.state == selectedState else { return false }
@@ -32,11 +36,19 @@ struct MangaBakaLibraryView: View {
                 } actions: { Button("Connect MangaBaka") { connection = true }.buttonStyle(.borderedProminent) }
             }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItemGroup(placement: .topBarTrailing) {
-                MangaBakaContentButton().labelStyle(.iconOnly)
-                Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
+                    Button("Content ratings", systemImage: "eye") { contentRatings = true }
+                    Button("Account & settings", systemImage: "gearshape") { appSettings = true }
+                } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Library options")
             } }
             .appSettingsSheet(isPresented: $appSettings)
+            .sheet(isPresented: $display) { DisplayOptionsView(scope: .library) }
+            .sheet(isPresented: $contentRatings) {
+                AppNavigationStack { MangaBakaContentSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { contentRatings = false } } } }
+            }
             .sheet(isPresented: $connection) {
                 AppNavigationStack { MangaBakaAccountView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connection = false } } } }
             }
@@ -84,7 +96,7 @@ struct MangaBakaLibraryView: View {
                         description: Text(account.hasMoreLibrary ? "Load more entries, or adjust your filters." : "Add a series from Explore, or choose another reading status."))
                 }
                 if layout == "grid" {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: textSize.isAccessibilitySize ? 190 : 140), spacing: 14)], alignment: .leading, spacing: 22) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: CGFloat(LibraryArtworkSizing.gridMinimum(preferred: posters.libraryGridMinimum, accessible: textSize.isAccessibilitySize))), spacing: 14)], alignment: .leading, spacing: 22) {
                         ForEach(entries) { entry in
                             if let series = entry.series {
                                 NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryTile(entry: entry, series: series) }
@@ -96,7 +108,10 @@ struct MangaBakaLibraryView: View {
                 } else {
                     ForEach(entries) { entry in
                         if let series = entry.series {
-                            NavigationLink(value: MangaBakaSeriesRoute(series: series)) { MangaBakaLibraryRow(entry: entry, series: series) }
+                            NavigationLink(value: MangaBakaSeriesRoute(series: series)) {
+                                MangaBakaLibraryRow(entry: entry, series: series,
+                                    posterWidth: CGFloat(LibraryArtworkSizing.listWidth(preferred: posters.listWidth, availableWidth: Double(max(0, min(availableWidth, 1000) - 40)), accessible: textSize.isAccessibilitySize)))
+                            }
                                 .buttonStyle(.plain)
                                 .contextMenu { MangaLibrarySourceMenu(series: series) }
                         }
@@ -108,7 +123,7 @@ struct MangaBakaLibraryView: View {
                         .buttonStyle(.bordered).frame(maxWidth: .infinity)
                 }
                 MangaBakaAttribution().padding(.top, 12)
-            }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
+            }.padding(20).frame(maxWidth: layout == "grid" ? 1180 : 1000).frame(maxWidth: .infinity)
         }.refreshable { await account.loadCompleteLibrary(state: selectedState, refresh: true) }
     }
     private func status(_ title: String, value: String) -> some View {
@@ -120,6 +135,7 @@ struct MangaBakaLibraryView: View {
 struct MangaBakaLibraryRow: View {
     let entry: MangaBakaLibraryEntry
     let series: MangaBakaSeries
+    var posterWidth: CGFloat = 128
     private var statusText: String {
         let status = MangaBakaReadingStatus(rawValue: entry.state)?.label ?? entry.state.capitalized
         return series.formatLabel + " · " + status
@@ -131,7 +147,7 @@ struct MangaBakaLibraryRow: View {
     }
     var body: some View {
         HStack(spacing: 16) {
-            MangaBakaCover(series: series, width: 80)
+            MangaBakaCover(series: series, width: posterWidth)
             details.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
         }.padding(13).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))

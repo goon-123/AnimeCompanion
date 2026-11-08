@@ -40,7 +40,7 @@ struct MediaSectionPicker: View {
             }
             mode = value
         } label: {
-            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+            Text(title).font(.subheadline.weight(.semibold))
                 .lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, minHeight: 44)
                 .background(mode == value ? Theme.accent.opacity(0.12) : .clear, in: Capsule())
                 .contentShape(Capsule())
@@ -54,32 +54,23 @@ struct MediaExploreView: View {
     @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
     @State private var designs = false
     @State private var customizing = false
+    @State private var accounts = false
+    @State private var settings = false
+    @State private var seasons = false
+    @State private var filters = false
+    @State private var display = false
     private var design: ExploreDesign { ExploreDesign(preference: designValue) }
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            if design == .classic { classicHeader }
+            Group {
             if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
             else if mode == "written" { MangaBakaExploreView() }
-            else { ExploreView() }
-        }.safeAreaInset(edge: .top, spacing: 0) {
-            if design == .classic {
-            HStack(spacing: 10) {
-                MediaSectionPicker()
-                Menu {
-                    Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
-                    Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
-                } label: {
-                    Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44).silverGlass(in: Circle()).contentShape(Circle())
-                }.accessibilityLabel("Customize Explore").accessibilityIdentifier("explore-customize")
-                AccountSwitcherButton()
-            }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxWidth: .infinity)
-                .background {
-                    // Claim the complete header, including transparent glass and
-                    // gaps, so taps cannot reach the spotlight poster behind it.
-                    Color.clear.contentShape(Rectangle()).onTapGesture { }
-                }
-                .zIndex(10)
+            else { ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters) }
             }
         }.mangaBakaNavigation()
+            .appAccountSwitcherSheet(isPresented: $accounts)
+            .appSettingsSheet(isPresented: $settings)
             .navigationDestination(for: ExploreSearchRoute.self) { _ in
                 UnifiedExploreSearchView().animeNavigation().mangaBakaNavigation()
             }
@@ -91,6 +82,25 @@ struct MediaExploreView: View {
             .sheet(isPresented: $designs) {
                 AppNavigationStack { ExploreDesignSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { designs = false } } } }
             }
+    }
+    private var classicHeader: some View {
+        HStack(spacing: 10) {
+            MediaSectionPicker()
+            Menu {
+                NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }.accessibilityIdentifier("explore-search")
+                Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
+                Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
+                if mode == "anime" {
+                    Button("Browse seasons", systemImage: "calendar") { seasons = true }
+                    Button("Anime filters", systemImage: "line.3.horizontal.decrease") { filters = true }
+                    Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
+                }
+                Divider()
+                Button("Switch account", systemImage: "person.crop.circle") { accounts = true }
+                Button("Settings", systemImage: "gearshape") { settings = true }
+            } label: { Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                .accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
+        }.padding(.horizontal, 16).padding(.vertical, 6).background(Theme.background)
     }
 }
 

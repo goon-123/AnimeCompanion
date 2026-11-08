@@ -55,6 +55,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
     public let recommendations: RecommendationConnection?
     public let reviews: ReviewConnection?
     public let externalLinks: [AnimeExternalLink]?
+    public let streamingEpisodes: [AnimeStreamingEpisode]?
     public var displayTitle: String { title?.english ?? title?.userPreferred ?? title?.romaji ?? "Anime #\(id)" }
     public var coverURL: URL? { coverImage?.preferredURL }
     public var synopsis: String { TextSanitizer.synopsis(description ?? "Synopsis not available.") }
@@ -74,7 +75,7 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
         averageScore = nil; genres = nil; isAdult = nil; nextAiringEpisode = nil
         airingSchedule = nil; studios = nil; characters = nil; relations = nil; trailer = nil
         startDate = nil; endDate = nil; popularity = nil; favourites = nil; rankings = nil
-        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil
+        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil; streamingEpisodes = nil
     }
 
     /// Related/adaptation results carry the same poster evidence as catalog
@@ -87,10 +88,14 @@ public struct Anime: Codable, Identifiable, Hashable, Sendable {
         genres = related.genres; isAdult = related.isAdult; nextAiringEpisode = related.nextAiringEpisode
         airingSchedule = nil; studios = nil; characters = nil; relations = nil; trailer = nil
         startDate = nil; endDate = nil; popularity = nil; favourites = nil; rankings = nil
-        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil
+        staff = nil; recommendations = nil; reviews = nil; externalLinks = nil; streamingEpisodes = nil
     }
 }
 
+public struct AnimeStreamingEpisode: Codable, Hashable, Sendable {
+    public let title: String?
+    public let thumbnail: String?
+}
 public struct AnimeTitle: Codable, Hashable, Sendable {
     public let romaji: String?
     public let english: String?

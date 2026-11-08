@@ -1,6 +1,6 @@
 import Foundation
 
-public struct AnimeStudioCollection: Identifiable, Sendable {
+public struct AnimeStudioCollection: Codable, Identifiable, Sendable {
     public let studio: Studio
     public let anime: [Anime]
     public var id: Int { studio.id }

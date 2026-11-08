@@ -90,6 +90,45 @@ public enum AnimeEpisodeDecoding {
         }.sorted { $0.number < $1.number }
         return (episodes, (root["pagination"] as? [String: Any])?["has_next_page"] as? Bool == true)
     }
+    /// Streaming stills must carry an explicit episode number. Never infer an
+    /// absolute-to-season offset or assign images using array position.
+    public static func streaming(_ values: [AnimeStreamingEpisode], anime: Anime) -> [AnimeEpisodeMetadata] {
+        var seen = Set<Int>()
+        return values.prefix(2000).compactMap { row in
+            guard let title = row.title, let number = episodeNumber(title), seen.insert(number).inserted else { return nil }
+            if let total = anime.episodes, total > 0, number > total { return nil }
+            return AnimeEpisodeMetadata(number: number, title: nil, image: row.thumbnail)
+        }
+    }
+    public static func jikanVideos(_ data: Data, anime: Anime) throws -> [AnimeEpisodeMetadata] {
+        guard data.count <= 2_000_000, let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = root["data"] as? [[String: Any]], rows.count <= 1000 else { throw ServiceError.invalidResponse }
+        return rows.compactMap { row in
+            guard let label = row["episode"] as? String, let number = episodeNumber(label) else { return nil }
+            if let total = anime.episodes, total > 0, number > total { return nil }
+            let images = row["images"] as? [String: Any]
+            let jpg = images?["jpg"] as? [String: Any]
+            return AnimeEpisodeMetadata(number: number, title: text(row["title"], limit: 300), image: jpg?["image_url"] as? String)
+        }
+    }
+    public static func merged(primary: [AnimeEpisodeMetadata], supplement: [AnimeEpisodeMetadata]) -> [AnimeEpisodeMetadata] {
+        var rows = Dictionary(primary.map { ($0.number, $0) }, uniquingKeysWith: { first, _ in first })
+        for extra in supplement {
+            guard let value = rows[extra.number] else { rows[extra.number] = extra; continue }
+            rows[extra.number] = AnimeEpisodeMetadata(number: value.number, title: value.title ?? extra.title,
+                overview: value.overview ?? extra.overview, image: value.imageURL != nil ? value.image : extra.image,
+                airDate: value.airDate ?? extra.airDate, runtime: value.runtime ?? extra.runtime,
+                rating: value.rating ?? extra.rating, filler: value.filler || extra.filler, recap: value.recap || extra.recap)
+        }
+        return rows.values.sorted { $0.number < $1.number }
+    }
+    private static func episodeNumber(_ label: String) -> Int? {
+        let pattern = #"(?i)^\s*(?:episode|ep\.?)\s+(\d{1,5})(?:\b|\s*[-:])"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: label, range: NSRange(label.startIndex..., in: label)),
+              let range = Range(match.range(at: 1), in: label), let value = Int(label[range]), (1...10_000).contains(value) else { return nil }
+        return value
+    }
     private static func integer(_ value: Any?) -> Int? {
         if let number = value as? Int { return number }
         if let value = value as? String { return Int(value) }; return nil
@@ -115,16 +154,20 @@ public actor AnimeEpisodesClient {
     public init(transport: any HTTPTransport = AnimeVisualsClient.publicTransport(), cache: HomeContentCache = HomeContentCache(), minimumRequestInterval: TimeInterval = 1.1) {
         self.transport = transport; self.cache = cache; interval = max(0, minimumRequestInterval)
     }
-    private func mapKey(_ anime: Anime) -> String { "episode-map-v1-\(anime.id)-\(anime.idMal ?? 0)" }
-    private func pageKey(_ anime: Anime, _ page: Int) -> String { "episode-page-v1-\(anime.id)-\(anime.idMal ?? 0)-\(page)" }
+    private func mapKey(_ anime: Anime) -> String { "episode-map-v2-\(anime.id)-\(anime.idMal ?? 0)" }
+    private func pageKey(_ anime: Anime, _ page: Int) -> String { "episode-page-v2-\(anime.id)-\(anime.idMal ?? 0)-\(page)" }
     public func cached(for anime: Anime, page: Int = 1) async -> AnimeEpisodePage? {
         guard (1...100).contains(page) else { return nil }
         let savedPage = await cache.load(AnimeEpisodePage.self, key: pageKey(anime, page))
-        if let saved = await cache.load([AnimeEpisodeMetadata].self, key: mapKey(anime)), !saved.value.isEmpty,
-           saved.savedAt >= (savedPage?.savedAt ?? .distantPast) {
+        if let savedPage { return savedPage.value }
+        if let saved = await cache.load([AnimeEpisodeMetadata].self, key: mapKey(anime)), !saved.value.isEmpty {
             return mappedPage(saved.value, anime: anime, page: page)
         }
-        return savedPage?.value
+        if let legacy = await cache.load(AnimeEpisodePage.self, key: "episode-page-v1-\(anime.id)-\(anime.idMal ?? 0)-\(page)") { return legacy.value }
+        if let legacy = await cache.load([AnimeEpisodeMetadata].self, key: "episode-map-v1-\(anime.id)-\(anime.idMal ?? 0)"), !legacy.value.isEmpty {
+            return mappedPage(legacy.value, anime: anime, page: page)
+        }
+        return nil
     }
     public func page(for anime: Anime, page: Int = 1, refresh: Bool = false) async throws -> AnimeEpisodePage {
         guard anime.id > 0, (1...100).contains(page) else { throw ServiceError.invalidResponse }
@@ -137,40 +180,78 @@ public actor AnimeEpisodesClient {
             source: "ani.zip · AniDB / TVDB", sourceURL: URL(string: "https://api.ani.zip/mappings?anilist_id=\(anime.id)")!)
     }
     private func fetch(_ anime: Anime, page: Int, refresh: Bool) async throws -> AnimeEpisodePage {
-        let cachedMap = await cache.load([AnimeEpisodeMetadata].self, key: mapKey(anime))
-        let cachedPage = await cache.load(AnimeEpisodePage.self, key: pageKey(anime, page))
-        if !refresh, let saved = cachedMap, Date().timeIntervalSince(saved.savedAt) < 3600, !saved.value.isEmpty,
-           saved.savedAt >= (cachedPage?.savedAt ?? .distantPast) {
-            return mappedPage(saved.value, anime: anime, page: page)
+        let saved = await cache.load(AnimeEpisodePage.self, key: pageKey(anime, page))
+        if !refresh, let saved, Date().timeIntervalSince(saved.savedAt) < 3600 { return saved.value }
+        async let mapping = mapping(for: anime, refresh: refresh)
+        async let listing = listing(for: anime, page: page)
+        let (mappingResult, listed) = try await (mapping, listing)
+        let mapped = mappingResult.values
+        let start = (page - 1) * 100
+        let local = Array(mapped.dropFirst(start).prefix(100))
+        var values = AnimeEpisodeDecoding.merged(primary: listed?.0 ?? [], supplement: local)
+        let streamed = AnimeEpisodeDecoding.streaming(anime.streamingEpisodes ?? [], anime: anime)
+            .filter { $0.number > start && $0.number <= start + 100 }
+        values = AnimeEpisodeDecoding.merged(primary: values, supplement: streamed)
+        var sources: [String] = []
+        if !local.isEmpty { sources.append("ani.zip") }
+        if listed != nil { sources.append("MyAnimeList") }
+        if !streamed.isEmpty { sources.append("AniList streaming artwork") }
+        if values.contains(where: { $0.imageURL == nil }), let mal = anime.idMal, mal > 0 {
+            do {
+                let data = try await get(URL(string: "https://api.jikan.moe/v4/anime/\(mal)/videos/episodes?page=\(page)")!)
+                let thumbnails = try AnimeEpisodeDecoding.jikanVideos(data, anime: anime)
+                    .filter { $0.number > start && $0.number <= start + 100 }
+                values = AnimeEpisodeDecoding.merged(primary: values, supplement: thumbnails)
+                if !thumbnails.isEmpty && !sources.contains("MyAnimeList") { sources.append("MyAnimeList") }
+            } catch is CancellationError { throw CancellationError() } catch { }
         }
-        if !refresh, let saved = cachedPage, Date().timeIntervalSince(saved.savedAt) < 3600 { return saved.value }
+        try Task.checkCancellation()
+        if !values.isEmpty {
+            // A refresh cannot discard previously retrieved stills/plots when a
+            // provider temporarily returns only numbered placeholders.
+            values = AnimeEpisodeDecoding.merged(primary: values, supplement: saved?.value.episodes ?? [])
+            let more = listed?.1 == true || mapped.count > start + 100
+            let result = AnimeEpisodePage(episodes: values, hasMore: more,
+                source: sources.joined(separator: " · "),
+                sourceURL: URL(string: anime.idMal.map { "https://myanimelist.net/anime/\($0)/_/episode" } ?? "https://anilist.co/anime/\(anime.id)")!,
+                notice: mappingResult.stale && listed == nil ? "Showing saved episode details · Refresh unavailable" : nil)
+            await cache.save(HomeContentSnapshot(result), key: pageKey(anime, page))
+            return result
+        }
+        if let previous = await cached(for: anime, page: page) {
+            var result = previous; result.notice = "Showing saved episode details · Refresh unavailable"; return result
+        }
+        throw ServiceError.message("Episode details are unavailable. Numbered episodes remain playable; try refreshing later.")
+    }
+    private struct MappingResult: Sendable { let values: [AnimeEpisodeMetadata]; let stale: Bool }
+    private func savedMapping(for anime: Anime) async -> HomeContentSnapshot<[AnimeEpisodeMetadata]>? {
+        if let saved = await cache.load([AnimeEpisodeMetadata].self, key: mapKey(anime)) { return saved }
+        return await cache.load([AnimeEpisodeMetadata].self, key: "episode-map-v1-\(anime.id)-\(anime.idMal ?? 0)")
+    }
+    private func mapping(for anime: Anime, refresh: Bool) async throws -> MappingResult {
+        let saved = await savedMapping(for: anime)
+        if !refresh, let saved, Date().timeIntervalSince(saved.savedAt) < 3600 { return MappingResult(values: saved.value, stale: false) }
         do {
             let data = try await get(URL(string: "https://api.ani.zip/mappings?anilist_id=\(anime.id)")!)
-            let values = try AnimeEpisodeDecoding.mapping(data, anime: anime)
-            guard !values.isEmpty else { throw ServiceError.invalidResponse }
-            await cache.save(HomeContentSnapshot(values), key: mapKey(anime))
-            return mappedPage(values, anime: anime, page: page)
-        } catch is CancellationError { throw CancellationError() } catch {}
-        if let mal = anime.idMal, mal > 0 {
-            do {
-                let data = try await get(URL(string: "https://api.jikan.moe/v4/anime/\(mal)/episodes?page=\(page)")!)
-                let (values, more) = try AnimeEpisodeDecoding.jikan(data)
-                let result = AnimeEpisodePage(episodes: values, hasMore: more, source: "Jikan · MyAnimeList", sourceURL: URL(string: "https://myanimelist.net/anime/\(mal)/_/episode")!)
-                await cache.save(HomeContentSnapshot(result), key: pageKey(anime, page))
-                return result
-            } catch is CancellationError { throw CancellationError() } catch {}
-        }
-        if let saved = await cached(for: anime, page: page) {
-            var result = saved; result.notice = "Showing saved episode metadata · Refresh unavailable"; return result
-        }
-        throw ServiceError.message("Episode metadata is unavailable right now. You can still choose an episode from Find streams.")
+            let rows = try AnimeEpisodeDecoding.mapping(data, anime: anime)
+            if !rows.isEmpty { await cache.save(HomeContentSnapshot(rows), key: mapKey(anime)) }
+            return MappingResult(values: rows, stale: false)
+        } catch is CancellationError { throw CancellationError() } catch { return MappingResult(values: saved?.value ?? [], stale: saved != nil) }
+    }
+    private func listing(for anime: Anime, page: Int) async throws -> ([AnimeEpisodeMetadata], Bool)? {
+        guard let mal = anime.idMal, mal > 0 else { return nil }
+        do {
+            let data = try await get(URL(string: "https://api.jikan.moe/v4/anime/\(mal)/episodes?page=\(page)")!)
+            return try AnimeEpisodeDecoding.jikan(data)
+        } catch is CancellationError { throw CancellationError() } catch { return nil }
     }
     private func get(_ url: URL) async throws -> Data {
-        while nextRequest > Date() {
-            try await Task.sleep(for: .seconds(min(1, nextRequest.timeIntervalSinceNow)))
-        }
-        try Task.checkCancellation(); nextRequest = Date().addingTimeInterval(interval)
-        var request = URLRequest(url: url); request.timeoutInterval = 20
+        let start = max(Date(), nextRequest)
+        nextRequest = start.addingTimeInterval(interval)
+        let delay = start.timeIntervalSinceNow
+        if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+        try Task.checkCancellation()
+        var request = URLRequest(url: url); request.timeoutInterval = 9
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await transport.data(for: request)
         guard (200..<300).contains(response.statusCode), data.count <= 8_000_000 else { throw ServiceError.invalidResponse }

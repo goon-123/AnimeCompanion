@@ -1,4 +1,6 @@
-# Cinematic series and transparent navigation — 0.49.0 (112)
+# Cinematic series and transparent navigation
+
+The current behavior is described in [Build 113 refinements](BUILD113_REFINEMENTS.md), including opt-in AniList fallback and Classic layout. The following describes the original build 112 introduction.
 
 Anime detail pages open with a larger edge-to-edge backdrop, cover and branded transparent title logo. Episodes is the initial tab; More Info contains information, related entries, artwork, news, reviews and links; You May Also Like has its own tab. Existing episode filters, default preferences, tracking/Undo, library state, source selection and all reading integrations remain in place.
 

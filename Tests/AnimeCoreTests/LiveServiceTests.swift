@@ -14,6 +14,9 @@ final class LiveServiceTests: XCTestCase {
         let works = try await api.studioAnime(id: studio.id, refresh: true)
         XCTAssertFalse(works.media?.isEmpty ?? true)
         XCTAssertTrue(works.media?.allSatisfy { $0.isAdult != true } == true)
+        let directory = try await api.studioCollections(refresh: true)
+        XCTAssertEqual(Set(directory.map(\.id)), Set(AnimeStudioCollection.featured.map(\.id)))
+        XCTAssertTrue(directory.allSatisfy { !$0.anime.isEmpty && $0.anime.contains(where: { $0.coverURL != nil }) })
     }
     func testMangaBakaDiscoverySelections() async throws {
         try requireLiveServices()

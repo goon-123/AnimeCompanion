@@ -8,6 +8,7 @@ enum AnimePosterBadgeStyle: Equatable {
 /// All listing artwork shares the Library badge layout. The parent owns sizing,
 /// navigation and context menus; this view never starts its own metadata request.
 struct AnimePoster: View {
+    @Environment(\.posterArtworkBadgesEnabled) private var badgesEnabled
     let anime: Anime
     var dub: LibraryDubProgress? = nil
     var identifierPrefix = "explore"
@@ -18,13 +19,34 @@ struct AnimePoster: View {
     var body: some View {
         AnimeRowArtwork(anime: anime, identifierPrefix: artworkIdentifierPrefix ?? identifierPrefix)
             .overlay {
-                if badgeStyle != .none {
+                if badgeStyle != .none && badgesEnabled {
                     AnimePosterBadges(anime: anime, dub: dub, identifierPrefix: identifierPrefix, style: badgeStyle)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .contentShape(Rectangle())
     }
+}
+
+private struct PosterArtworkBadgesKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues {
+    var posterArtworkBadgesEnabled: Bool {
+        get { self[PosterArtworkBadgesKey.self] }
+        set { self[PosterArtworkBadgesKey.self] = newValue }
+    }
+}
+
+struct DiscoveryPosterSummary: View {
+    @EnvironmentObject private var dubs: ExploreDubStore
+    let anime: Anime
+    private var text: String {
+        var values: [String] = []
+        if let score = anime.averageScore { values.append(String(format: "%.1f", Double(score) / 10)) }
+        if dubs.progress(for: anime)?.hasAvailableDub == true { values.append("DUB") }
+        if anime.isCurrentlyAiring { values.append("Airing") }
+        return values.joined(separator: " · ")
+    }
+    var body: some View { if !text.isEmpty { Text(text).font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1) } }
 }
 
 /// Also used on the featured artwork, which can be a landscape banner. All
