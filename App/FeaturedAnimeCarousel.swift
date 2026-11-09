@@ -54,7 +54,6 @@ private struct FeaturedAnimePanel: View {
     @State private var showPlayback = false
 
     var body: some View {
-        VStack(spacing: 0) {
         GeometryReader { geometry in
             let wide = geometry.size.width > geometry.size.height * 1.2
             ZStack(alignment: .bottomLeading) {
@@ -64,16 +63,12 @@ private struct FeaturedAnimePanel: View {
                 LinearGradient(stops: [.init(color: .clear, location: 0.30), .init(color: background.color.opacity(0.15), location: 0.46),
                     .init(color: background.color.opacity(0.80), location: 0.73), .init(color: .black, location: 1)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
+                AnimePosterBadges(anime: anime, identifierPrefix: "featured")
+                    .padding(.top, topInset).padding(.bottom, 10)
                 information.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
-                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)
+                    .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.trailing, 64).padding(.bottom, 18)
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack { watchAction; Spacer(); libraryAction }
-                AnimeGenres(anime: anime).accessibilityIdentifier("featured-genres-\(anime.id)")
-                HStack { DiscoveryLibraryBadge(anime: anime, identifierPrefix: "featured"); Spacer(); DiscoveryPosterSummary(anime: anime) }
-            }.padding(.horizontal, 20).padding(.vertical, 10).background(Theme.background)
-        }
             .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
@@ -97,7 +92,13 @@ private struct FeaturedAnimePanel: View {
                 if let year = anime.seasonYear { Text(String(year)) }
                 Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " "))
             }.font(.caption.weight(.semibold))
+            AnimeGenres(anime: anime).accessibilityIdentifier("featured-genres-\(anime.id)")
+            DiscoveryLibraryBadge(anime: anime, identifierPrefix: "featured")
             Text(anime.synopsis).font(.subheadline).lineLimit(textSize.isAccessibilitySize ? 3 : 2)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { watchAction; detailsAction; libraryAction }
+                VStack(alignment: .leading, spacing: 8) { watchAction; HStack { detailsAction; libraryAction } }
+            }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var watchAction: some View {
@@ -107,13 +108,17 @@ private struct FeaturedAnimePanel: View {
                 .background(.white, in: Capsule()).foregroundStyle(.black)
         }.buttonStyle(.plain).accessibilityIdentifier("featured-watch-\(anime.id)")
     }
+    private var detailsAction: some View {
+            AnimeLink(id: anime.id) {
+                Image(systemName: "info.circle").font(.headline).frame(width: 48, height: 48).silverGlass(in: Circle())
+            }.buttonStyle(.plain).accessibilityLabel("View details for \(anime.displayTitle)").accessibilityIdentifier("featured-details-\(anime.id)")
+    }
     private var libraryAction: some View {
         Button {
             if store.isSignedIn { showTracking = true } else { showSettings = true }
         } label: {
-            Label(store.entry(for: anime.id) == nil ? "Save" : "In library", systemImage: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
-                .font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 48)
-                .foregroundStyle(Theme.accent).background(Theme.secondarySurface, in: Capsule())
+            Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
+                .font(.headline).frame(width: 48, height: 48).silverGlass(in: Circle())
         }.buttonStyle(.plain).accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to Library" : "Edit Library tracking for \(anime.displayTitle)")
             .disabled(store.isSignedIn && store.loadingLibrary)
             .accessibilityIdentifier("featured-add-library-\(anime.id)")

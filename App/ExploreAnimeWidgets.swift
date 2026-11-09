@@ -4,6 +4,7 @@ import AnimeCore
 struct HomeTrendingAnimeWidget: View {
     let refreshID: Int
     let activationID: Int
+    var ranked = true
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var filters: DiscoveryFilterStore
@@ -15,7 +16,8 @@ struct HomeTrendingAnimeWidget: View {
     private var visible: [Anime] { items.filter { store.isVisible($0) && filters.includes($0, dubs: dubs, library: store) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TopTrendingAnimeWidget(anime: visible)
+            if ranked { TopTrendingAnimeWidget(anime: visible) }
+            else { PlainTrendingAnimeWidget(anime: visible) }
             if loading { ProgressView().controlSize(.small) }
             if failed {
                 HStack { Text(items.isEmpty ? "Trending unavailable" : "Showing saved trending titles").font(.caption).foregroundStyle(.secondary); Spacer(); Button("Retry") { retry += 1 }.font(.caption) }
@@ -42,6 +44,27 @@ struct HomeTrendingAnimeWidget: View {
     }
 }
 
+struct PlainTrendingAnimeWidget: View {
+    let anime: [Anime]
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NavigationLink(value: DiscoveryRoute(category: .trending, selection: .current())) {
+                WidgetHeading(title: "Trending anime")
+            }.buttonStyle(.plain)
+            if !anime.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 14) {
+                        ForEach(Array(anime.prefix(10))) { anime in
+                            AnimeCard(anime: anime, posterWidth: sizeClass == .regular ? 184 : 164)
+                        }
+                    }
+                }
+            } else { Text("Trending titles will appear when the catalog is available.").font(.caption).foregroundStyle(.secondary) }
+        }.accessibilityIdentifier("plain-trending-anime-widget")
+    }
+}
+
 struct TopTrendingAnimeWidget: View {
     let anime: [Anime]
     var selection = SeasonSelection.current()
@@ -49,13 +72,12 @@ struct TopTrendingAnimeWidget: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var editing: Anime?
     @State private var settings = false
-    private var width: CGFloat { sizeClass == .regular ? 220 : 192 }
-    private var posterWidth: CGFloat { sizeClass == .regular ? 176 : 152 }
+    private var width: CGFloat { sizeClass == .regular ? 188 : 164 }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection)) {
                 WidgetHeading(title: "Top 10 Trending Anime")
-            }.buttonStyle(.plain).accessibilityIdentifier("explore-category-trending")
+            }.buttonStyle(.plain).accessibilityIdentifier("explore-category-topTen")
             if !anime.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
@@ -70,33 +92,42 @@ struct TopTrendingAnimeWidget: View {
             .appSettingsSheet(isPresented: $settings)
     }
     private func rankedPoster(_ anime: Anime, rank: Int) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ZStack(alignment: .bottomLeading) {
-                Text(String(rank)).font(.system(size: sizeClass == .regular ? 190 : 166, weight: .black, design: .rounded))
-                    .tracking(-14).foregroundStyle(.primary).offset(x: -4, y: 28).accessibilityHidden(true)
-                AnimeLink(id: anime.id) {
-                    AnimeCover(anime: anime, width: posterWidth, cornerRadius: 13)
-                }.buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Number \(rank). \(anime.displayTitle)")
-            }.frame(width: width, height: posterWidth * 1.45).clipped()
-            HStack(alignment: .top, spacing: 4) {
-                Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
-                    Button {
-                        if store.isSignedIn { editing = anime } else { settings = true }
-                    } label: {
-                        Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent).frame(width: 36, height: 44)
-                    }.buttonStyle(.plain).disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
-                        .accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to library" : "Edit \(anime.displayTitle) in library")
-            }.padding(.leading, width - posterWidth)
-            DiscoveryPosterSummary(anime: anime).padding(.leading, width - posterWidth)
-        }.frame(width: width, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            AnimeLink(id: anime.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    AnimeCover(anime: anime, width: width, cornerRadius: 0)
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(String(format: "%02d", rank)).font(.subheadline.bold().monospacedDigit())
+                            .foregroundStyle(Theme.accent).frame(width: 30, height: 30)
+                            .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                            .accessibilityHidden(true)
+                        Text(anime.displayTitle).font(.subheadline.weight(.semibold))
+                            .lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
+                    }.padding(.horizontal, 10)
+                }
+            }.buttonStyle(.plain).foregroundStyle(.primary)
+                .accessibilityLabel("Number \(rank). \(anime.displayTitle)")
+            HStack(spacing: 4) {
+                DiscoveryPosterSummary(anime: anime)
+                Spacer(minLength: 0)
+                Button {
+                    if store.isSignedIn { editing = anime } else { settings = true }
+                } label: {
+                    Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent).frame(width: 36, height: 44)
+                }.buttonStyle(.plain).disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
+                    .accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to library" : "Edit \(anime.displayTitle) in library")
+            }.padding(.horizontal, 10).padding(.top, 2).padding(.bottom, 4)
+        }.frame(width: width, alignment: .leading).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border, lineWidth: 1).allowsHitTesting(false) }
     }
 }
 
 struct AnimeStudioCollectionsWidget: View {
     var refreshID = 0
     @EnvironmentObject private var store: AppStore
+    @Environment(\.exploreCollectionSize) private var cardSize
     @State private var collections: [AnimeStudioCollection] = []
     @State private var error: String?
     @State private var loading = false
@@ -113,7 +144,7 @@ struct AnimeStudioCollectionsWidget: View {
                     ForEach(Array(studios.enumerated()), id: \.element.id) { index, studio in
                         NavigationLink { StudioAnimeView(studio: studio) } label: {
                             AnimeCollectionTile(title: studio.name, image: collections.first { $0.id == studio.id }?.anime.first?.coverURL,
-                                color: collectionColor(index), symbol: "film.stack")
+                                color: collectionColor(index), symbol: "film.stack", size: cardSize, genre: false)
                         }.buttonStyle(.plain).accessibilityIdentifier("explore-studio-\(studio.id)")
                     }
                 }
@@ -147,6 +178,7 @@ struct AnimeStudioCollectionsWidget: View {
 struct AnimeGenreCollectionsWidget: View {
     let anime: [Anime]
     @EnvironmentObject private var store: AppStore
+    @Environment(\.exploreCollectionSize) private var cardSize
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Anime Genres").font(.title3.bold())
@@ -158,7 +190,7 @@ struct AnimeGenreCollectionsWidget: View {
                         } label: {
                             AnimeCollectionTile(title: genre,
                                 image: anime.first { store.isVisible($0) && ($0.genres ?? []).contains(genre) }?.coverURL,
-                                color: collectionColor(index + 2), symbol: "sparkles")
+                                color: collectionColor(index + 2), symbol: "sparkles", size: cardSize, genre: true)
                         }.buttonStyle(.plain).accessibilityIdentifier("explore-genre-" + genre)
                     }
                 }
@@ -180,19 +212,32 @@ private struct AnimeCollectionTile: View {
     let image: URL?
     let color: Color
     let symbol: String
+    let size: ExploreCollectionSize
+    let genre: Bool
     @Environment(\.horizontalSizeClass) private var sizeClass
-    private var width: CGFloat { sizeClass == .regular ? 210 : 164 }
+    private var width: CGFloat {
+        switch size {
+        case .small: return sizeClass == .regular ? 152 : 132
+        case .medium: return sizeClass == .regular ? 188 : 164
+        case .large: return sizeClass == .regular ? 220 : 190
+        }
+    }
+    private var height: CGFloat {
+        if genre { return width * (size == .small ? 0.64 : 0.72) }
+        return width * (size == .small ? 1.15 : 1.45)
+    }
     var body: some View {
         ZStack(alignment: .bottom) {
-            ArtworkImage(url: image, pointSize: 400) { $0.resizable().scaledToFill() } placeholder: {
-                ZStack { color.opacity(0.35); Image(systemName: symbol).font(.system(size: 46)).foregroundStyle(.white.opacity(0.4)) }
-            }.frame(width: width, height: width * 1.48).clipped()
+            ArtworkImage(url: image, pointSize: max(width, height)) { $0.resizable().scaledToFill() } placeholder: {
+                ZStack { color.opacity(0.35); Image(systemName: symbol).font(size == .small ? .title : .largeTitle).foregroundStyle(.white.opacity(0.4)) }
+            }.frame(width: width, height: height).clipped()
             LinearGradient(colors: [.clear, color.opacity(0.65), color.opacity(0.96)], startPoint: .center, endPoint: .bottom)
-            VStack(spacing: 8) {
-                Text(title.uppercased()).font(.subheadline.weight(.semibold)).tracking(1).multilineTextAlignment(.center)
-                Text("COLLECTION").font(.caption2).tracking(3).opacity(0.8)
-            }.foregroundStyle(.white).padding(16)
-        }.frame(width: width, height: width * 1.48).clipShape(RoundedRectangle(cornerRadius: 16))
+            VStack(spacing: 6) {
+                Text(title).font(size == .small ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                    .lineLimit(2).multilineTextAlignment(.center)
+                if size == .large && !genre { Text("COLLECTION").font(.caption2).tracking(2).opacity(0.8) }
+            }.foregroundStyle(.white).padding(size == .small ? 10 : 14)
+        }.frame(width: width, height: height).clipShape(RoundedRectangle(cornerRadius: size == .small ? 12 : 16))
             .accessibilityElement(children: .ignore).accessibilityLabel(title + " collection")
     }
 }

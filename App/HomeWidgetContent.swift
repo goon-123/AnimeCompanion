@@ -69,6 +69,7 @@ struct HomeWidgetContent: View {
         case .news: HomeNewsSection(refreshID: refreshID)
         case .community: HomeCommunityWidget(refreshID: refreshID, activationID: activationID)
         case .trendingAnime: HomeTrendingAnimeWidget(refreshID: refreshID, activationID: activationID)
+        case .trendingAnimePlain: HomeTrendingAnimeWidget(refreshID: refreshID, activationID: activationID, ranked: false)
         case .watching: watchSection
         case .reading: readingSection
         case .airing: airingSection

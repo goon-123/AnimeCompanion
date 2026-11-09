@@ -133,6 +133,8 @@ struct UnifiedExploreView: View {
         case .spotlight:
             if !trending.isEmpty { spotlight } else if isLoading { loadingPosters }
         case .trending:
+            animeShelf(.trending, title: "Trending anime", subtitle: "Popular right now", values: response?.trending.media ?? [])
+        case .topTen:
             TopTrendingAnimeWidget(anime: visible(response?.trending.media ?? []), selection: selection)
         case .studios: AnimeStudioCollectionsWidget(refreshID: widgetRefreshID)
         case .animeGenres:

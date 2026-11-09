@@ -49,6 +49,7 @@ struct ExploreView: View {
                 }.padding(.top, spotlightLeadsPage ? 0 : 12).padding(.bottom, 24)
                     .readableContent(width: 1280).frame(maxWidth: .infinity)
             }.accessibilityIdentifier("explore-scroll")
+                .ignoresSafeArea(.container, edges: spotlightLeadsPage ? .top : [])
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
@@ -90,13 +91,13 @@ struct ExploreView: View {
         if row == .spotlight {
             if !featured.isEmpty {
                 FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
-                    topInset: 0, background: $posterBackground)
+                    topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
                     .modifier(CatalogEntrance())
             } else if loading {
                 RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
                     .overlay { ProgressView("Loading anime…") }
             }
-        } else if row == .trending {
+        } else if row == .topTen {
             TopTrendingAnimeWidget(anime: trending.filter { store.isVisible($0) && dubFilters.includes($0, dubs: dubs, library: store) }, selection: selection).padding(.horizontal, 16)
         } else if row == .studios {
             AnimeStudioCollectionsWidget(refreshID: widgetRefreshID).padding(.horizontal, 16)

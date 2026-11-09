@@ -35,6 +35,11 @@ struct ExploreCustomizationView: View {
                         Toggle(isOn: Binding(get: { !preferences.hidden.contains(row) }, set: { shown in update { $0.setVisible(row, shown) } })) {
                             Text(row.title).font(.subheadline.weight(.semibold))
                         }.accessibilityIdentifier("explore-visible-" + row.id)
+                        if case .catalog(let catalog) = row, catalog.supportsCardSize {
+                            Picker("Card size", selection: Binding(get: { preferences.cardSize(for: catalog) }, set: { size in update { $0.setCardSize(size, for: catalog) } })) {
+                                ForEach(ExploreCollectionSize.allCases) { size in Text(size.title).tag(size) }
+                            }.pickerStyle(.segmented).accessibilityIdentifier("explore-card-size-" + catalog.rawValue)
+                        }
                         if case .widget(let section) = row {
                             Text(section.detail).font(.caption).foregroundStyle(.secondary)
                             if section == .featureLinks {
@@ -133,6 +138,11 @@ struct ExploreRows<Content: View>: View {
         VStack(alignment: .leading, spacing: 26) {
             ForEach(preferences.visible) { row in
                 rowContent(row).contextMenu {
+                    if case .catalog(let catalog) = row, catalog.supportsCardSize {
+                        Picker("Card size", selection: Binding(get: { preferences.cardSize(for: catalog) }, set: { size in update { $0.setCardSize(size, for: catalog) } })) {
+                            ForEach(ExploreCollectionSize.allCases) { size in Text(size.title).tag(size) }
+                        }
+                    }
                     Button("Move up", systemImage: "arrow.up") { update { $0.move(row, by: -1) } }.disabled(preferences.visible.first == row)
                     Button("Move down", systemImage: "arrow.down") { update { $0.move(row, by: 1) } }.disabled(preferences.visible.last == row)
                     Button("Hide row", systemImage: "eye.slash") { update { $0.setVisible(row, false) } }
@@ -147,7 +157,7 @@ struct ExploreRows<Content: View>: View {
     }
     @ViewBuilder private func rowContent(_ row: ExploreRow) -> some View {
         switch row {
-        case .catalog(let row): content(row)
+        case .catalog(let row): content(row).environment(\.exploreCollectionSize, preferences.cardSize(for: row))
         case .widget(let section):
             HomeWidgetContent(section: section, saved: widgetOptions, refreshID: refreshID, activationID: activationID)
                 .environment(\.homeWidgetLayout, preferences.widgetOptions.layout(for: section))
@@ -158,6 +168,13 @@ struct ExploreRows<Content: View>: View {
 }
 
 private struct ExploreWidgetActivationKey: EnvironmentKey { static let defaultValue = 0 }
+private struct ExploreCollectionSizeKey: EnvironmentKey { static let defaultValue = ExploreCollectionSize.small }
+extension EnvironmentValues {
+    var exploreCollectionSize: ExploreCollectionSize {
+        get { self[ExploreCollectionSizeKey.self] }
+        set { self[ExploreCollectionSizeKey.self] = newValue }
+    }
+}
 extension EnvironmentValues {
     var exploreWidgetActivation: Int { get { self[ExploreWidgetActivationKey.self] } set { self[ExploreWidgetActivationKey.self] = newValue } }
 }

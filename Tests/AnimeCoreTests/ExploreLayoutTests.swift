@@ -2,6 +2,56 @@ import XCTest
 @testable import AnimeCore
 
 final class ExploreLayoutTests: XCTestCase {
+    func testPlainAndRankedTrendingKeepIndependentVisibilityOnExploreAndHome() {
+        for surface in [ExploreSurface.anime, .discovery, .grid] {
+            var value = ExplorePreferences(surface: surface)
+            XCTAssertTrue(value.visible.contains(.catalog(.trending)))
+            XCTAssertTrue(value.visible.contains(.catalog(.topTen)))
+            value.setVisible(.catalog(.topTen), false)
+            let restored = ExplorePreferences(surface: surface, saved: value.saved)
+            XCTAssertTrue(restored.visible.contains(.catalog(.trending)))
+            XCTAssertFalse(restored.visible.contains(.catalog(.topTen)))
+        }
+        var home = HomePreferences()
+        XCTAssertFalse(home.visible.contains(.trendingAnime))
+        XCTAssertFalse(home.visible.contains(.trendingAnimePlain))
+        home.setVisible(.trendingAnimePlain, true)
+        XCTAssertTrue(HomePreferences(saved: home.saved).visible.contains(.trendingAnimePlain))
+        XCTAssertFalse(HomePreferences(saved: home.saved).visible.contains(.trendingAnime))
+    }
+
+    func testCollectionSizesPersistIndependentlyAcrossRowsAndExploreDesigns() {
+        var value = ExplorePreferences(surface: .anime)
+        XCTAssertEqual(value.cardSize(for: .studios), .small)
+        XCTAssertEqual(value.cardSize(for: .animeGenres), .small)
+        value.setCardSize(.large, for: .studios)
+        value.setCardSize(.medium, for: .animeGenres)
+        value.setCardSize(.large, for: .trending)
+        let restored = ExplorePreferences(surface: .anime, saved: value.saved)
+        XCTAssertEqual(restored.cardSize(for: .studios), .large)
+        XCTAssertEqual(restored.cardSize(for: .animeGenres), .medium)
+        XCTAssertEqual(restored.cardSize(for: .trending), .small)
+        XCTAssertEqual(ExplorePreferences(surface: .discovery).cardSize(for: .studios), .small)
+        let malformed = #"{"order":[],"hidden":[],"cardSizes":{"studios":"future","animeGenres":"large","trending":"large"}}"#
+        let bounded = ExplorePreferences(surface: .anime, saved: malformed)
+        XCTAssertEqual(bounded.cardSize(for: .studios), .small)
+        XCTAssertEqual(bounded.cardSize(for: .animeGenres), .large)
+        XCTAssertEqual(bounded.cardSize(for: .trending), .small)
+    }
+
+    func testOldRankedTrendingChoiceMigratesOnceWithoutMovingSavedRows() {
+        let legacy = #"{"order":["catalog.topAnime","catalog.trending","catalog.seasonal"],"hidden":["catalog.trending"]}"#
+        var value = ExplorePreferences(surface: .anime, saved: legacy)
+        XCTAssertEqual(Array(value.order.prefix(4)), [.catalog(.topAnime), .catalog(.trending), .catalog(.topTen), .catalog(.seasonal)])
+        XCTAssertFalse(value.visible.contains(.catalog(.topTen)))
+        value.setVisible(.catalog(.trending), true)
+        let restored = ExplorePreferences(surface: .anime, saved: value.saved)
+        XCTAssertEqual(restored.order, value.order)
+        XCTAssertFalse(restored.visible.contains(.catalog(.topTen)))
+        XCTAssertTrue(restored.visible.contains(.catalog(.trending)))
+        XCTAssertEqual(restored.order.filter { $0 == .catalog(.topTen) }.count, 1)
+    }
+
     func testWidgetCanSitBetweenCatalogRowsAndKeepIndependentOptionsAfterRelaunch() {
         var home = HomePreferences()
         home.setSize(.expanded, for: .watching)
