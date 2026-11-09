@@ -1,52 +1,5 @@
 import SwiftUI
-import Security
-import CryptoKit
-import AuthenticationServices
 import AnimeCore
-
-@MainActor
-private final class MangaBakaSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
-    private var session: ASWebAuthenticationSession?
-    private var continuation: CheckedContinuation<URL, Error>?
-    private func random() throws -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        let status = bytes.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, $0.count, $0.baseAddress!) }
-        guard status == errSecSuccess else { throw MangaBakaError.message("Could not prepare a secure sign-in attempt.") }
-        return urlBase64(Data(bytes))
-    }
-    private func urlBase64(_ data: Data) -> String {
-        data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-    }
-    func signIn(clientID: String, api: MangaBakaClient, addingAccount: Bool) async throws -> MangaBakaCredential {
-        guard session == nil else { throw MangaBakaError.message("MangaBaka sign-in is already open.") }
-        let state = try random(), verifier = try random(), started = Date()
-        let challenge = urlBase64(Data(SHA256.hash(data: Data(verifier.utf8))))
-        let url = try MangaBakaOAuth.authorize(clientID: clientID, state: state, challenge: challenge)
-        let callback: URL = try await withCheckedThrowingContinuation { c in
-            continuation = c
-            let web = ASWebAuthenticationSession(url: url, callbackURLScheme: MangaBakaOAuth.callback.scheme) { [weak self] callback, error in
-                Task { @MainActor in
-                    if let error { self?.finish(.failure(error)) }
-                    else if let callback { self?.finish(.success(callback)) }
-                    else { self?.finish(.failure(MangaBakaError.invalidResponse)) }
-                }
-            }
-            web.presentationContextProvider = self; web.prefersEphemeralWebBrowserSession = addingAccount
-            session = web
-            if !web.start() { finish(.failure(MangaBakaError.message("MangaBaka sign-in could not be opened."))) }
-        }
-        let code = try MangaBakaOAuth.code(from: callback, expectedState: state, startedAt: started)
-        return try await api.exchange(code: code, verifier: verifier, clientID: clientID)
-    }
-    private func finish(_ result: Result<URL, Error>) {
-        let c = continuation; continuation = nil; session = nil; c?.resume(with: result)
-    }
-    func cancel() { session?.cancel(); finish(.failure(CancellationError())) }
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }?.windows.first { $0.isKeyWindow } ?? ASPresentationAnchor()
-    }
-}
 
 @MainActor
 final class MangaBakaStore: ObservableObject {
@@ -111,16 +64,6 @@ final class MangaBakaStore: ObservableObject {
     private var restored = false
     private var libraryState: String?
     private var libraryPage = 0
-    private let authentication = MangaBakaSignIn()
-    var bundledClientID: String {
-        (Bundle.main.object(forInfoDictionaryKey: "MangaBakaClientID") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    var clientID: String {
-        let stored = (UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return stored.isEmpty ? bundledClientID : stored
-    }
     func resolvedTag(_ tag: MangaBakaTag) -> MangaBakaTag {
         tagsByName[tag.name.lowercased()].map { tag.withMetadata($0) } ?? tag
     }
@@ -148,7 +91,7 @@ final class MangaBakaStore: ObservableObject {
     }
     private func activate(_ value: MangaBakaAccounts, snapshot: MangaBakaRecommendationSnapshot? = nil) {
         // Invalidate responses before cancelling work or publishing another identity.
-        connectionID = UUID(); authentication.cancel()
+        connectionID = UUID()
         clearLibrary(); accounts = value; savedAccounts = value.identities
         activeAccountID = value.selectedID; credential = value.selected?.credential
         profile = value.selected?.profile; connected = credential != nil
@@ -220,7 +163,7 @@ final class MangaBakaStore: ObservableObject {
             if attempt == connectionID { accountError = error.localizedDescription }
         }
     }
-    func connect(apiKey: String? = nil) async {
+    func connect(apiKey: String) async {
         guard !connecting, saving.isEmpty else { return }; connecting = true; accountError = nil; notice = nil
         let attempt = connectionID
         defer { connecting = false }
@@ -228,9 +171,7 @@ final class MangaBakaStore: ObservableObject {
             // Do not replace an unreadable or newer registry with an empty list
             // merely because restoring it failed earlier in this launch.
             _ = try keychain.load()
-            let candidate: MangaBakaCredential
-            if let apiKey { candidate = try MangaBakaCredential(kind: .apiKey, secret: apiKey) }
-            else { candidate = try await authentication.signIn(clientID: clientID, api: api, addingAccount: !accounts.sessions.isEmpty) }
+            let candidate = try MangaBakaCredential(kind: .apiKey, secret: apiKey)
             let profile = try await api.profile(candidate)
             guard connectionID == attempt else { return }
             // Reload immediately before the transaction. Keychain may have
@@ -242,11 +183,7 @@ final class MangaBakaStore: ObservableObject {
             next.add(profile: profile, credential: candidate)
             try keychain.save(next)
             activate(next, snapshot: retained)
-        } catch is CancellationError {} catch {
-            if (error as NSError).domain != ASWebAuthenticationSessionError.errorDomain || (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
-                accountError = error.localizedDescription
-            }
-        }
+        } catch is CancellationError {} catch { accountError = error.localizedDescription }
     }
     func selectAccount(_ id: UUID) {
         guard id != activeAccountID, !connecting, saving.isEmpty else { return }

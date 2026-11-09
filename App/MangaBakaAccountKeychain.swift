@@ -32,7 +32,9 @@ struct MangaBakaAccountKeychain {
         let bytes = try JSONEncoder().encode(accounts)
         guard bytes.count <= 2_000_000 else { throw MangaBakaError.message("The saved MangaBaka accounts are too large for this device.") }
         let base = query("accounts.v1")
-        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: bytes] as CFDictionary)
+        let updates: [String: Any] = [kSecValueData as String: bytes,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+        let status = SecItemUpdate(base as CFDictionary, updates as CFDictionary)
         if status == errSecItemNotFound {
             var q = base; q[kSecValueData as String] = bytes
             q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
