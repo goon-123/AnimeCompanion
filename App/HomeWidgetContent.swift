@@ -59,6 +59,7 @@ struct HomeWidgetContent: View {
     @ViewBuilder private func widget(_ section: HomeSection) -> some View {
         switch section {
         case .greeting: header
+        case .cinematicSpotlight: CinematicHomeSpotlight(refreshID: refreshID)
         case .search: CompanionSearchLink().accessibilityIdentifier("home-search")
         case .featureLinks: HomeFeatureShortcuts(savedOverride: $saved)
         case .welcome:

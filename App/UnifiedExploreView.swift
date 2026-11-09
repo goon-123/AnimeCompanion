@@ -44,6 +44,13 @@ final class UnifiedReadingCatalog: ObservableObject {
 
 struct UnifiedExploreView: View {
     let design: ExploreDesign
+    @AppStorage private var savedPresentation: String
+    @State private var backdrop: URL?
+    private var cinematic: Bool { ScreenPresentation(preference: savedPresentation) == .cinematic }
+    init(design: ExploreDesign, designs: Binding<Bool>) {
+        self.design = design; _designs = designs
+        _savedPresentation = AppStorage(wrappedValue: ScreenPresentation.cinematic.rawValue, design.presentationScope.storageKey)
+    }
     @EnvironmentObject private var anime: AppStore
     @EnvironmentObject private var reading: MangaBakaStore
     @EnvironmentObject private var dubs: ExploreDubStore
@@ -85,6 +92,7 @@ struct UnifiedExploreView: View {
                 header
                 notices
                 ExploreRows(surface: surface, refreshID: widgetRefreshID) { row in catalogRow(row) }
+                    .environment(\.cinematicCards, cinematic)
                 if wall.isEmpty && !isLoading {
                     ContentUnavailableView("No discoveries to show", systemImage: "sparkles",
                         description: Text("Adjust your content or dub filters, or retry a catalog above."))
@@ -98,7 +106,9 @@ struct UnifiedExploreView: View {
                     MangaBakaAttribution()
                 }.font(.caption).foregroundStyle(.secondary)
             }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180).frame(maxWidth: .infinity)
-        }.background(Theme.background).navigationTitle("Explore").navigationBarTitleDisplayMode(.inline)
+        }.background { if cinematic { CinematicScreenBackground(url: backdrop) } else { Theme.background } }
+            .onPreferenceChange(CinematicBackdropKey.self) { backdrop = $0 }
+            .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline)
             .environment(\.posterArtworkBadgesEnabled, false)
             .toolbar(.hidden, for: .navigationBar).animeNavigation()
             .accessibilityIdentifier("unified-explore-" + design.rawValue)
@@ -153,6 +163,7 @@ struct UnifiedExploreView: View {
         case .gems: readingShelf(.gems, title: "Hidden gems", subtitle: "MangaBaka's hidden gems")
         case .posterWall:
             VStack(alignment: .leading, spacing: 14) {
+                if cinematic && !wall.isEmpty { CinematicStorySpotlight(stories: wall, eyebrow: "A world of stories").padding(.bottom, 8) }
                 HStack {
                     Text("A world of stories").font(.title2.bold())
                     Spacer()
@@ -206,7 +217,11 @@ struct UnifiedExploreView: View {
             }
         }
     }
-    private var spotlight: some View {
+    @ViewBuilder private var spotlight: some View {
+        if cinematic { CinematicStorySpotlight(stories: trending, eyebrow: "Discovery Spotlight") }
+        else { originalSpotlight }
+    }
+    private var originalSpotlight: some View {
         TabView {
             ForEach(Array(trending.prefix(4))) { item in
                 ExploreStoryLink(item: item) {
@@ -355,8 +370,13 @@ struct ExploreStoryCover: View {
 
 struct ExploreStoryCard: View {
     let item: ExploreStory
+    @Environment(\.cinematicCards) private var cinematic
     @EnvironmentObject private var reading: MangaBakaStore
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if cinematic { CinematicStoryPoster(item: item) }
+        else { originalCard }
+    }
+    private var originalCard: some View {
         VStack(alignment: .leading, spacing: 9) {
             GeometryReader { geometry in ExploreStoryCover(item: item, width: geometry.size.width) }
                 .aspectRatio(1 / 1.45, contentMode: .fit)

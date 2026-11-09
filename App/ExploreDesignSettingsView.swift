@@ -7,6 +7,10 @@ struct ExploreDesignSettingsView: View {
     var body: some View {
         Form {
             Section {
+                ScreenPresentationPicker(scope: selected.presentationScope).id(selected.presentationScope)
+                NavigationLink("Home & all Explore styles") { ScreenAppearanceSettingsView() }
+            } header: { Text("Screen appearance") }
+            Section {
                 ForEach(ExploreDesign.allCases) { design in
                     Button { saved = design.rawValue } label: {
                         HStack(spacing: 14) {
@@ -23,7 +27,7 @@ struct ExploreDesignSettingsView: View {
                         .accessibilityValue(design == selected ? "Selected" : "")
                 }
             } header: { Text("Explore design") } footer: {
-                Text("Your choice is saved. You can change it here or from Explore's layout button. Classic restores the original discovery pages and their display preferences.")
+                Text("Your choice is saved. Classic separates Anime from Manga & Novels. Choose Original above to restore the previous appearance of the selected layout.")
             }
         }.navigationTitle("Explore design").navigationBarTitleDisplayMode(.inline)
     }

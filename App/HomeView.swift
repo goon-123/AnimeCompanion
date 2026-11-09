@@ -15,6 +15,10 @@ struct HomeView: View {
 }
 
 private struct HomeDashboardView: View {
+    @AppStorage(ScreenPresentationScope.home.storageKey) private var savedPresentation = ScreenPresentation.cinematic.rawValue
+    @State private var backdrop: URL?
+    @State private var screenAppearance = false
+    private var cinematic: Bool { ScreenPresentation(preference: savedPresentation) == .cinematic }
     @EnvironmentObject private var anime: AppStore
     @EnvironmentObject private var books: MangaBakaStore
     @EnvironmentObject private var reading: MangaReadingStore
@@ -67,8 +71,12 @@ private struct HomeDashboardView: View {
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("home-empty-add")
                     }.frame(maxWidth: .infinity).padding(.vertical, 44).accessibilityIdentifier("home-empty-layout")
                 }
-            }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
-        }.background(Theme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
+            }.environment(\.cinematicCards, cinematic)
+                .padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
+        }.background { if cinematic { CinematicScreenBackground(url: backdrop) } else { Theme.background } }
+            .onPreferenceChange(CinematicBackdropKey.self) { backdrop = $0 }
+            .navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(cinematic ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -80,6 +88,7 @@ private struct HomeDashboardView: View {
                         withAnimation(.easeInOut(duration: 0.18)) { editing = false; dragging = nil }
                     }.fontWeight(.semibold).accessibilityLabel("Finish editing Home").accessibilityIdentifier("home-finish-editing") }
                     Menu {
+                        Button("Screen appearance", systemImage: "sparkles.rectangle.stack") { screenAppearance = true }
                         Button("Customize Home", systemImage: "slider.horizontal.3") { editing = true }.accessibilityIdentifier("home-customize")
                         Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }
                         Button("Manage widgets", systemImage: "slider.horizontal.3") { customize = true }
@@ -128,6 +137,9 @@ private struct HomeDashboardView: View {
                 _ = await (shows, titles, week)
             }
             .appSettingsSheet(isPresented: $settings)
+            .sheet(isPresented: $screenAppearance) {
+                AppNavigationStack { ScreenAppearanceSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { screenAppearance = false } } } }
+            }
             .sheet(isPresented: $customize) {
                 AppNavigationStack {
                     HomeCustomizationView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { customize = false } } }
@@ -145,6 +157,7 @@ private struct HomeDashboardView: View {
     }
     private func refreshBooks() async { if books.connected { await books.loadLibrary(state: nil, refresh: true) } }
     private func shouldDisplay(_ section: HomeSection) -> Bool {
+        if section == .cinematicSpotlight { return cinematic }
         if editing { return true }
         if section == .welcome { return !anime.isSignedIn && !books.connected && recent.isEmpty }
         if section == .syncStatus { return anime.loadingLibrary || books.loadingLibrary || anime.libraryError != nil || books.libraryError != nil || reading.error != nil }

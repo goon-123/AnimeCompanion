@@ -17,7 +17,7 @@ public enum ArtworkDecodeSize {
 }
 
 public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
-    case greeting, search, featureLinks, welcome, syncStatus
+    case greeting, cinematicSpotlight, search, featureLinks, welcome, syncStatus
     case weekly, news, community, watching, reading, airing, shortcuts
     case today, catchUp, libraryStats, planned, randomPick, savedNews
     case seasonSpotlight, nextEpisode, watchlistBanners
@@ -27,6 +27,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .greeting: return "Greeting & date"
+        case .cinematicSpotlight: return "Cinematic Spotlight"
         case .search: return "Search"
         case .featureLinks: return "Quick access"
         case .welcome: return "Welcome & setup"
@@ -59,6 +60,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     public var symbol: String {
         switch self {
         case .greeting: return "sun.max"
+        case .cinematicSpotlight: return "sparkles.rectangle.stack"
         case .search: return "magnifyingglass"
         case .featureLinks: return "square.grid.2x2"
         case .welcome: return "sparkles"
@@ -85,6 +87,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     public var detail: String {
         switch self {
         case .greeting: return "Today's date and your Home greeting."
+        case .cinematicSpotlight: return "Artwork-led watching, reading and discovery picks. Shown in Cinematic Home; hide or move it like any widget."
         case .search: return "Jump into anime, manga and novel search."
         case .featureLinks: return "Three shortcuts you can replace, swap or hide individually."
         case .welcome: return "Account setup when no library is connected."
@@ -217,13 +220,19 @@ public struct HomePreferences: Equatable, Sendable {
             if !order.contains(.community) { order.insert(.community, at: (order.firstIndex(of: .news) ?? 0) + 1) }
             order = [.greeting, .search, .featureLinks, .welcome, .syncStatus] + order
         }
+        var hidden = Set(value.hidden.compactMap(HomeSection.init(rawValue:)))
+        if !order.contains(.cinematicSpotlight) {
+            let wasEmpty = !order.isEmpty && order.allSatisfy(hidden.contains)
+            order.insert(.cinematicSpotlight, at: order.firstIndex(of: .greeting).map { $0 + 1 } ?? order.count)
+            if wasEmpty { hidden.insert(.cinematicSpotlight) }
+        }
         let sizes = (value.sizes ?? [:]).reduce(into: [HomeSection: HomeWidgetSize]()) { result, pair in
             if let section = HomeSection(rawValue: pair.key), let size = HomeWidgetSize(rawValue: pair.value) { result[section] = size }
         }
         let layouts = (value.layouts ?? [:]).reduce(into: [HomeSection: HomeWidgetLayout]()) { result, pair in
             if let section = HomeSection(rawValue: pair.key), let layout = HomeWidgetLayout(rawValue: pair.value) { result[section] = layout }
         }
-        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes, layouts: layouts,
+        self.init(order: order, hidden: hidden, sizes: sizes, layouts: layouts,
                   shortcuts: value.shortcuts.map { $0.map(HomeShortcut.init(rawValue:)) } ?? [.calendar, .airing, .news])
     }
     public var visible: [HomeSection] { order.filter { !hidden.contains($0) } }

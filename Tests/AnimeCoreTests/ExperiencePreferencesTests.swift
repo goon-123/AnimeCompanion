@@ -4,8 +4,8 @@ import XCTest
 final class ExperiencePreferencesTests: XCTestCase {
     func testLegacyHomeMigrationKeepsOrderAndHiddenChoicesAndAddsOptionalWidgetsHidden() {
         let repaired = HomePreferences(saved: #"{"order":["reading","reading","unknown"],"hidden":["watching","reading","airing","shortcuts","unknown"]}"#)
-        let chrome: [HomeSection] = [.greeting, .search, .featureLinks, .welcome, .syncStatus]
-        XCTAssertEqual(Array(repaired.order.prefix(12)), chrome + [.weekly, .news, .community, .reading, .watching, .airing, .shortcuts])
+        let chrome: [HomeSection] = [.greeting, .cinematicSpotlight, .search, .featureLinks, .welcome, .syncStatus]
+        XCTAssertEqual(Array(repaired.order.prefix(13)), chrome + [.weekly, .news, .community, .reading, .watching, .airing, .shortcuts])
         XCTAssertEqual(repaired.visible, chrome + [.weekly, .news, .community])
         XCTAssertTrue(HomeSection.optionalWidgets.isSubset(of: repaired.hidden))
         XCTAssertEqual(HomePreferences(saved: repaired.saved), repaired)
@@ -101,7 +101,7 @@ final class ExperiencePreferencesTests: XCTestCase {
         XCTAssertEqual(legacy.visible, [.explore, .home, .library, .manga])
         XCTAssertFalse(legacy.saved.contains("schedule")); XCTAssertFalse(legacy.saved.contains("news"))
         let upgraded = HomePreferences(saved: #"{"order":["watching","reading","weekly","airing","shortcuts"],"hidden":["reading","weekly"]}"#)
-        XCTAssertEqual(Array(upgraded.order.prefix(12)), [.greeting, .search, .featureLinks, .welcome, .syncStatus, .watching, .reading, .weekly, .news, .community, .airing, .shortcuts])
+        XCTAssertEqual(Array(upgraded.order.prefix(13)), [.greeting, .cinematicSpotlight, .search, .featureLinks, .welcome, .syncStatus, .watching, .reading, .weekly, .news, .community, .airing, .shortcuts])
         XCTAssertTrue(upgraded.hidden.contains(.reading)); XCTAssertTrue(upgraded.hidden.contains(.weekly))
         var hiddenNews = upgraded; hiddenNews.setVisible(.news, false)
         XCTAssertFalse(HomePreferences(saved: hiddenNews.saved).visible.contains(.news))

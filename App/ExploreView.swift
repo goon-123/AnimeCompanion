@@ -2,6 +2,9 @@ import SwiftUI
 import AnimeCore
 
 struct ExploreView: View {
+    @AppStorage(ScreenPresentationScope.classicExplore.storageKey) private var savedPresentation = ScreenPresentation.cinematic.rawValue
+    @State private var backdrop: URL?
+    private var cinematic: Bool { ScreenPresentation(preference: savedPresentation) == .cinematic }
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var dubs: ExploreDubStore
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
@@ -38,7 +41,7 @@ struct ExploreView: View {
                     if hasCatalogNotices { catalogNotices }
                     ExploreRows(surface: .anime, refreshID: widgetRefreshID, widgetInset: 16) { row in
                         catalogRow(row, geometry: geometry)
-                    }
+                    }.environment(\.cinematicCards, cinematic)
                     if let savedCatalogDate {
                         HStack(spacing: 6) {
                             if loading { ProgressView().controlSize(.mini) }
@@ -50,7 +53,8 @@ struct ExploreView: View {
                     .readableContent(width: 1280).frame(maxWidth: .infinity)
             }.accessibilityIdentifier("explore-scroll")
                 .ignoresSafeArea(.container, edges: spotlightLeadsPage ? .top : [])
-        }.background(Theme.background.ignoresSafeArea())
+        }.background { if cinematic { CinematicScreenBackground(url: backdrop) } else { Theme.background.ignoresSafeArea() } }
+            .onPreferenceChange(CinematicBackdropKey.self) { backdrop = $0 }
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.posterArtworkBadgesEnabled, false)
@@ -90,9 +94,14 @@ struct ExploreView: View {
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow, geometry: GeometryProxy) -> some View {
         if row == .spotlight {
             if !featured.isEmpty {
-                FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
-                    topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
-                    .modifier(CatalogEntrance())
+                if cinematic {
+                    CinematicStorySpotlight(stories: featured.map(ExploreStory.anime), eyebrow: "Anime Spotlight",
+                        topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0).padding(.horizontal, 16)
+                } else {
+                    FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
+                        topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
+                        .modifier(CatalogEntrance())
+                }
             } else if loading {
                 RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
                     .overlay { ProgressView("Loading anime…") }

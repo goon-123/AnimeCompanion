@@ -160,7 +160,12 @@ struct MangaBakaCover: View {
 struct MangaBakaCard: View {
     let series: MangaBakaSeries
     var width: CGFloat = 142
-    var body: some View {
+    @Environment(\.cinematicCards) private var cinematic
+    @ViewBuilder var body: some View {
+        if cinematic { CinematicStoryPoster(item: .reading(series), width: width) }
+        else { originalCard }
+    }
+    private var originalCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             MangaBakaCover(series: series, width: width)
                 .overlay(alignment: .bottomLeading) {
@@ -266,6 +271,9 @@ private final class MangaBakaHomeModel: ObservableObject {
 
 struct MangaBakaExploreView: View {
     var showsNavigationBar = false
+    @AppStorage(ScreenPresentationScope.classicExplore.storageKey) private var savedPresentation = ScreenPresentation.cinematic.rawValue
+    @State private var backdrop: URL?
+    private var cinematic: Bool { ScreenPresentation(preference: savedPresentation) == .cinematic }
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @State private var widgetRefreshID = 0
@@ -282,9 +290,12 @@ struct MangaBakaExploreView: View {
             VStack(alignment: .leading, spacing: 30) {
                 header
                 ExploreRows(surface: .reading, refreshID: widgetRefreshID, widgetInset: 20) { row in catalogRow(row) }
+                    .environment(\.cinematicCards, cinematic)
                 MangaBakaAttribution().padding(.horizontal, 20)
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
-        }.background(Theme.background).toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
+        }.background { if cinematic { CinematicScreenBackground(url: backdrop) } else { Theme.background } }
+            .onPreferenceChange(CinematicBackdropKey.self) { backdrop = $0 }
+            .toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
             .modifier(ExploreWidgetSupport(surface: .reading, refreshID: widgetRefreshID))
             .sheet(isPresented: $customizing) {
                 AppNavigationStack {
@@ -314,7 +325,10 @@ struct MangaBakaExploreView: View {
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
         switch row {
         case .spotlight:
-            if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
+            if cinematic {
+                let stories = (model.items[.trending] ?? []).filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) }.map(ExploreStory.reading)
+                CinematicStorySpotlight(stories: stories, eyebrow: "Manga & novels").padding(.horizontal, 20)
+            } else if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
                 NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain).padding(.horizontal, 20)
             }
         case .personal: if account.connected { MangaBakaPersonalShelf() }
