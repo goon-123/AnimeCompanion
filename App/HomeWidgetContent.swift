@@ -51,6 +51,7 @@ struct HomeWidgetContent: View {
     }
     var body: some View {
         widget(section)
+            .environment(\.posterArtworkBadgesEnabled, false)
             .appSettingsSheet(isPresented: $settings)
             .sheet(item: $watching) { WatchAnimeView(anime: $0) }
     }
@@ -67,6 +68,8 @@ struct HomeWidgetContent: View {
         case .weekly: AiringThisWeekView()
         case .news: HomeNewsSection(refreshID: refreshID)
         case .community: HomeCommunityWidget(refreshID: refreshID, activationID: activationID)
+        case .trendingAnime: HomeTrendingAnimeWidget(refreshID: refreshID, activationID: activationID)
+        case .trendingAnimePlain: HomeTrendingAnimeWidget(refreshID: refreshID, activationID: activationID, ranked: false)
         case .watching: watchSection
         case .reading: readingSection
         case .airing: airingSection

@@ -1,8 +1,31 @@
 import XCTest
 import UIKit
 
-/// Two offline regressions for the reported picker and Spotlight layout bugs.
+/// Short offline checks for Explore controls and the cinematic series destinations.
 final class ExploreWidgetFixUITests: XCTestCase {
+    @MainActor func testSeriesOpensEpisodesFirstAndCommentsHaveTwoDestinations() {
+        let app = launch()
+        app.buttons["featured-poster-1"].tap()
+        let comments = app.buttons["detail-floating-comments"]
+        XCTAssertTrue(comments.waitForExistence(timeout: 15))
+        capture("Series-Cinematic-Header")
+        let moreInfo = app.buttons["More Info"]
+        for _ in 0..<8 {
+            if moreInfo.exists && moreInfo.isHittable { break }
+            app.scrollViews["anime-detail-scroll"].swipeUp()
+        }
+        XCTAssertTrue(moreInfo.isHittable)
+        XCTAssertTrue(app.buttons["Episodes"].isSelected, "Episodes must be the initial tab")
+        moreInfo.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "series-info-tab").firstMatch.waitForExistence(timeout: 10))
+        capture("Series-More-Info")
+        comments.tap()
+        let tabs = app.segmentedControls["series-community-tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 10))
+        XCTAssertTrue(tabs.buttons["Series Reviews"].exists)
+        XCTAssertTrue(tabs.buttons["Episode Comments"].exists)
+        capture("Series-Reviews-And-Comments")
+    }
     @MainActor func testAddWidgetAndShortcutNavigationStayEnabledWhileReordering() {
         let app = launch()
         openCustomizer(app)

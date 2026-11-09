@@ -12,10 +12,10 @@ struct ExploreView: View {
     @StateObject private var catalog = ExploreCatalogModel()
     @AppStorage(ExploreSurface.anime.storageKey) private var savedLayout = ""
     @State private var widgetRefreshID = 0
-    @State private var showSeasons = false
+    @Binding var showSeasons: Bool
     @State private var showSettings = false
-    @State private var showDisplay = false
-    @State private var showDubFilters = false
+    @Binding var showDisplay: Bool
+    @Binding var showDubFilters: Bool
     private var posters = PosterPreferences(.explore)
     private var seasonal: [Anime] { catalog.state.response?.seasonal.media ?? [] }
     private var trending: [Anime] { catalog.state.response?.trending.media ?? [] }
@@ -24,6 +24,12 @@ struct ExploreView: View {
     private var error: String? { catalog.state.error }
     private var loadedKey: ExploreCatalogState.Key? { catalog.state.loadedKey }
     private var savedCatalogDate: Date? { catalog.state.savedAt }
+
+    init(showSeasons: Binding<Bool>, showDisplay: Binding<Bool>, showDubFilters: Binding<Bool>) {
+        _showSeasons = showSeasons
+        _showDisplay = showDisplay
+        _showDubFilters = showDubFilters
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -40,13 +46,14 @@ struct ExploreView: View {
                         }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                     }
                     DiscoveryDataNote().padding(.horizontal)
-                }.padding(.top, spotlightLeadsPage ? 0 : geometry.safeAreaInsets.top + 12).padding(.bottom, 24)
+                }.padding(.top, spotlightLeadsPage ? 0 : 12).padding(.bottom, 24)
                     .readableContent(width: 1280).frame(maxWidth: .infinity)
-            }.accessibilityIdentifier("explore-scroll").ignoresSafeArea(.container, edges: .top)
+            }.accessibilityIdentifier("explore-scroll")
+                .ignoresSafeArea(.container, edges: spotlightLeadsPage ? .top : [])
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
-            .overlay(alignment: .bottomTrailing) { floatingSearch.padding(.trailing, 20).padding(.bottom, 16) }
+            .environment(\.posterArtworkBadgesEnabled, false)
             .modifier(ExploreWidgetSupport(surface: .anime, refreshID: widgetRefreshID))
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .explore) }
@@ -90,36 +97,21 @@ struct ExploreView: View {
                 RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
                     .overlay { ProgressView("Loading anime…") }
             }
+        } else if row == .topTen {
+            TopTrendingAnimeWidget(anime: trending.filter { store.isVisible($0) && dubFilters.includes($0, dubs: dubs, library: store) }, selection: selection).padding(.horizontal, 16)
+        } else if row == .studios {
+            AnimeStudioCollectionsWidget(refreshID: widgetRefreshID).padding(.horizontal, 16)
+        } else if row == .animeGenres {
+            AnimeGenreCollectionsWidget(anime: trending + seasonal + upcoming).padding(.horizontal, 16)
         } else if let category = row.discoveryCategory {
             shelf(category, anime: catalog.state.response?.media(for: category) ?? [], availableWidth: geometry.size.width)
         }
-    }
-    private var floatingSearch: some View {
-        NavigationLink(value: DiscoveryRoute(category: .trending, selection: selection, titleOverride: "Search")) {
-            searchIcon
-        }.buttonStyle(.plain).accessibilityLabel("Search anime").accessibilityIdentifier("explore-search")
-            .accessibilityHint("Touch and hold for seasons, filters, display options and settings.")
-            .contextMenu {
-                Button { showSeasons = true } label: { Label("Browse seasons", systemImage: "calendar") }
-                    .accessibilityIdentifier("explore-season")
-                Button { showDubFilters = true } label: { Label("Dub filters", systemImage: "line.3.horizontal.decrease") }
-                    .accessibilityIdentifier("explore-dub-filter-toolbar")
-                Button { showDisplay = true } label: { Label("Display options", systemImage: "slider.horizontal.3") }
-                    .accessibilityIdentifier("explore-display-options")
-                Button { showSettings = true } label: { Label("Account and settings", systemImage: "gearshape") }
-                    .accessibilityIdentifier("explore-settings")
-            }
     }
     private func featuredHeight(in geometry: GeometryProxy) -> CGFloat {
         CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
             viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
             fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
             splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0)
-    }
-    private var searchIcon: some View {
-        Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))
-            .frame(width: 56, height: 56).silverGlass(in: Circle())
-            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
     }
     private var featured: [Anime] {
         var ids = Set<Int>()

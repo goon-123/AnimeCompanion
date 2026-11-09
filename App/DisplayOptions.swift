@@ -13,6 +13,7 @@ struct PosterPreferences: DynamicProperty {
     @AppStorage var gridWidth: Double
     @AppStorage var shelfWidth: Double
     @AppStorage var columns: Int
+    @AppStorage("library.shared.grid.minimum.v1") var libraryGridMinimum = 140.0
     @AppStorage var featuredHeight: Double
     @AppStorage("explore.poster.fillScreen") var fillFeaturedScreen = true
     @AppStorage("explore.poster.balanced") var balancedFeatured = false
@@ -54,6 +55,7 @@ struct PosterPreferences: DynamicProperty {
         listWidth = PosterLayout.defaultListWidth(isTablet: pad)
         gridWidth = pad ? 360 : 280; shelfWidth = pad ? 230 : 150
         columns = pad ? 4 : 2
+        if scope == .library { libraryGridMinimum = 140 }
         featuredHeight = pad ? 700 : 620
         if scope == .explore { fillFeaturedScreen = true; balancedFeatured = false }
     }
@@ -77,12 +79,18 @@ struct DisplayOptionsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Grid view") {
+                    if preferences.scope == .library {
+                        sizeControl("Grid cover size", value: preferences.$libraryGridMinimum, range: 100...260, key: "grid-size")
+                        Text("All, Anime and reading covers use the same adaptive grid sizing. Larger sizes fit fewer titles per row.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
                     Picker("Entries per row", selection: preferences.$columns) {
                         ForEach(1...8, id: \.self) { Text("\($0) per row").tag($0) }
                     }.accessibilityIdentifier("\(preferences.scope.rawValue)-display-columns")
                     sizeControl("Maximum grid poster width", value: preferences.$gridWidth, range: 120...480, key: "grid-size")
                     Text("Choose fewer entries per row for bigger images. Covers grow up to your maximum width. Narrow windows may temporarily fit fewer entries; your chosen density is remembered.")
                         .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 if preferences.scope == .explore {
                     Section("Featured poster") {

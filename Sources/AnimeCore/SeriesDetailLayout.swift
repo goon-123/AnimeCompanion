@@ -12,7 +12,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
     }
     public var explanation: String {
         switch self {
-        case .anime: return "Drag the handles to arrange the Info tab for all anime. Episodes keep their own tab."
+        case .anime: return "Show or hide header sections and arrange More Info. Episodes and recommendations have their own tabs."
         case .manga: return "Drag the handles to arrange all manga and novel series pages."
         case .reader: return "Drag the handles to arrange all reading-source detail pages."
         }
@@ -20,8 +20,8 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
     public var sections: [SeriesDetailSection] {
         switch self {
         case .anime:
-            return [.watchlist, .synopsis, .information, .broadcast, .related, .recommendations,
-                    .news, .reviews, .artwork, .trailer, .links]
+            return [.watchlist, .synopsis, .characters, .information, .broadcast, .related, .recommendations,
+                    .artwork, .news, .reviews, .trailer, .links]
         case .manga:
             return [.watchlist, .reading, .synopsis, .publication, .tags, .adaptations,
                     .coverage, .related, .artwork, .links]
@@ -35,6 +35,7 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
     case watchlist, synopsis, information, broadcast, related, recommendations, artwork, trailer
     case dubSchedule, news, discussions, reviews, links, reading, publication, adaptations, coverage
     case tags, chapters, genres, sourceLink
+    case characters
     public var id: String { rawValue }
     public func title(on page: SeriesDetailPage) -> String {
         switch self {
@@ -43,14 +44,14 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
         case .information: return "Information"
         case .broadcast: return "Original broadcast"
         case .related: return page == .manga ? "Related & recommendations" : "Related entries"
-        case .recommendations: return "You may also like"
-        case .artwork: return page == .manga ? "Artwork & covers" : "Artwork"
+        case .recommendations: return page == .anime ? "Similar" : "You may also like"
+        case .artwork: return "Artwork & covers"
         case .trailer: return "Trailer"
         case .dubSchedule: return "English dub"
         case .news: return "Series news"
         case .discussions: return "Discussions"
         case .reviews: return "Reviews & discussions"
-        case .links: return "Links"
+        case .links: return page == .anime ? "External links" : "Links"
         case .reading: return page == .reader ? "Continue reading" : "Reading source"
         case .publication: return "Publication & ratings"
         case .adaptations: return "Related anime"
@@ -59,6 +60,7 @@ public enum SeriesDetailSection: String, Identifiable, Codable, Hashable, Sendab
         case .chapters: return "Chapters"
         case .genres: return "Genres"
         case .sourceLink: return "Library link"
+        case .characters: return "Characters"
         }
     }
 }

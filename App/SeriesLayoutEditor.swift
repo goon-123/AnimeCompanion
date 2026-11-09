@@ -6,7 +6,7 @@ struct SeriesLayoutButton: View {
     let page: SeriesDetailPage
     @State private var arranging = false
     var body: some View {
-        Button("Arrange sections", systemImage: "arrow.up.arrow.down") { arranging = true }
+        Button("Arrange sections", systemImage: "slider.horizontal.3") { arranging = true }
             .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
             .accessibilityIdentifier("series-arrange-" + page.rawValue)
             .sheet(isPresented: $arranging) { AppNavigationStack { SeriesLayoutEditor(page: page) } }
@@ -16,6 +16,7 @@ struct SeriesLayoutButton: View {
 struct SeriesLayoutEditor: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage private var saved: String
+    @AppStorage(AnimeSeriesStyle.storageKey) private var style = AnimeSeriesStyle.cinematic.rawValue
     let page: SeriesDetailPage
     init(page: SeriesDetailPage) {
         self.page = page
@@ -23,6 +24,13 @@ struct SeriesLayoutEditor: View {
     }
     private var preferences: SeriesDetailLayout { SeriesDetailLayout(page: page, saved: saved) }
     var body: some View {
+        Group {
+            if page == .anime && AnimeSeriesStyle(preference: style) == .cinematic { CinematicSeriesSectionsEditor() }
+            else { legacyEditor }
+        }.navigationTitle(page.title).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+    }
+    private var legacyEditor: some View {
         List {
             Section {
                 ForEach(preferences.order) { section in
@@ -49,8 +57,7 @@ struct SeriesLayoutEditor: View {
                 Button("Restore default layout") { saved = "" }.accessibilityIdentifier("series-arrange-reset")
             }
         }.environment(\.editMode, .constant(.active))
-            .navigationTitle(page.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+
     }
     private func move(_ section: SeriesDetailSection, down: Bool) {
         var value = preferences
@@ -58,6 +65,32 @@ struct SeriesLayoutEditor: View {
               (down ? index + 1 < value.order.count : index > 0) else { return }
         value.move(fromOffsets: IndexSet(integer: index), toOffset: down ? index + 2 : index - 1)
         saved = value.saved
+    }
+}
+
+private struct CinematicSeriesSectionsEditor: View {
+    @AppStorage(SeriesMoreInfoPreferences.storageKey) private var infoSaved = ""
+    @AppStorage("series.layout.anime.v1") private var headerSaved = ""
+    private var info: SeriesMoreInfoPreferences { .init(saved: infoSaved) }
+    private var header: SeriesDetailLayout { .init(page: .anime, saved: headerSaved) }
+    var body: some View {
+        List {
+            Section("Series header") {
+                ForEach([SeriesDetailSection.watchlist, .synopsis, .characters, .broadcast, .recommendations]) { section in
+                    Toggle(section.title(on: .anime), isOn: Binding(get: { !header.hidden.contains(section) }, set: { shown in
+                        var value = header; value.setVisible(section, shown); headerSaved = value.saved
+                    })).accessibilityIdentifier("series-visible-" + section.rawValue)
+                }
+            }
+            Section {
+                ForEach(info.order) { section in
+                    Toggle(section.title(on: .anime), isOn: Binding(get: { !info.hidden.contains(section) }, set: { shown in
+                        var value = info; value.setVisible(section, shown); infoSaved = value.saved
+                    })).accessibilityIdentifier("series-visible-" + section.rawValue)
+                }.onMove { offsets, target in var value = info; value.move(fromOffsets: offsets, toOffset: target); infoSaved = value.saved }
+            } header: { Text("More Info") } footer: { Text("Drag to reorder. Information, Related, Series news, Artwork & covers, and Links are visible by default. Reviews and Trailer remain available here if enabled.") }
+            Section { Button("Restore More Info defaults") { infoSaved = "" } }
+        }.environment(\.editMode, .constant(.active))
     }
 }
 

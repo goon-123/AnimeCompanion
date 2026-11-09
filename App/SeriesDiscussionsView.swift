@@ -6,7 +6,7 @@ struct AnimeDiscussionsSection: View {
     let anime: Anime
     var body: some View {
         HStack(spacing: 0) {
-            NavigationLink { SeriesDiscussionsView(anime: anime) } label: {
+            NavigationLink { SeriesCommunityView(anime: anime) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "bubble.left.and.bubble.right")
                     Text("Discussions")

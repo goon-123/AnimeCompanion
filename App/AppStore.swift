@@ -8,6 +8,7 @@ final class AppStore: ObservableObject {
     let aniList: AniListClient
     let communityMAL = MALCommunityClient()
     let episodeMetadata = AnimeEpisodesClient()
+    let seriesArtwork = SeriesArtworkClient()
     let exploreCache: ExploreCache
     let visuals: AnimeVisualsClient
     let dubs = DubClient()

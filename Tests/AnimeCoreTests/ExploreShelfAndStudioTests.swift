@@ -6,6 +6,23 @@ import FoundationNetworking
 @testable import AnimeCore
 
 final class ExploreShelfAndStudioTests: XCTestCase {
+    func testStudioDirectoryUsesOneBatchedRequestAndSafeRepresentativeCovers() async throws {
+        let json = #"{"data":{"Page":{"studios":[{"id":569,"name":"MAPPA","media":{"nodes":[{"id":1,"type":"ANIME","isAdult":true},{"id":2,"type":"MANGA"},{"id":3,"type":"ANIME","isAdult":false}]}}]}}}"#
+        let transport = ExploreStudioTransport([.json(json)])
+        let api = AniListClient(transport: transport, minimumRequestInterval: 0)
+        let result = try await api.studioCollections()
+        XCTAssertEqual(result.map(\.studio.id), [569])
+        XCTAssertEqual(result.first?.anime.map(\.id), [3])
+        let requests = await transport.recorded()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.value(forHTTPHeaderField: "Authorization"))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(requests.first?.httpBody)) as? [String: Any])
+        let query = try XCTUnwrap(body["query"] as? String)
+        XCTAssertTrue(query.contains("studios(id_in: $ids)"))
+        XCTAssertFalse(query.contains("s569:"))
+        let variables = try XCTUnwrap(body["variables"] as? [String: Any])
+        XCTAssertEqual(variables["ids"] as? [Int], AnimeStudioCollection.featured.map(\.id))
+    }
     func testPreviousSeasonRollsBackAcrossTheYearAndTopAnimeHasNoSeasonLimit() throws {
         let selection = SeasonSelection(season: .winter, year: 2026)
         let previous = DiscoveryFilters(category: .previousSeason, selection: selection)
@@ -15,6 +32,19 @@ final class ExploreShelfAndStudioTests: XCTestCase {
         XCTAssertNil(top.year); XCTAssertNil(top.season); XCTAssertNil(top.status)
         XCTAssertEqual(top.sort, .rating)
         XCTAssertTrue(DiscoveryCategory.previousSeason.label(season: selection).contains("Fall 2025"))
+    }
+    func testStudioDirectoryStopsAtRateLimitsInsteadOfRetryingEveryStudio() async throws {
+        for responses in [[ExploreStudioTransport.Response.json("{}", status: 429)],
+                          [.json("{}", status: 400), .json("{}", status: 429)]] {
+            let transport = ExploreStudioTransport(responses)
+            let api = AniListClient(transport: transport, minimumRequestInterval: 0)
+            do { _ = try await api.studioCollections(); XCTFail("Rate limit was swallowed") }
+            catch let error as ServiceError {
+                guard case .rateLimited = error else { return XCTFail("Unexpected error: \(error)") }
+            }
+            let requests = await transport.recorded()
+            XCTAssertEqual(requests.count, responses.count)
+        }
     }
     func testExploreRequestsBothNewShelvesWithThePreviousSeasonAndContentPolicy() async throws {
         let transport = ExploreStudioTransport([.json(#"{"data":{"seasonal":{},"trending":{},"upcoming":{},"previousSeason":{"media":[{"id":1}]},"topRated":{"media":[{"id":2}]}}}"#)])

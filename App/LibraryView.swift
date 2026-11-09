@@ -80,7 +80,7 @@ struct LibraryView: View {
         Group {
             if store.isSignedIn {
               GeometryReader { geometry in
-                let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1280 : 1000) - 24)
+                let contentWidth = max(0, min(geometry.size.width, layout == "grid" ? 1180 : 1000) - 40)
                 ScrollView {
                     // Keep controls stable while the results below remain lazy.
                     VStack(alignment: .leading, spacing: 14) {
@@ -97,17 +97,13 @@ struct LibraryView: View {
                             Text("Covers fit this pane at \(Int(posters.listPosterWidth(in: contentWidth))) pt. Your saved width is \(Int(posters.listWidth)) pt.")
                                 .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("library-list-size-constrained")
                         }
-                        if layout == "grid", posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit) < posters.preferredColumns {
-                            Text("This window fits \(posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)) per row. Your saved choice is \(posters.preferredColumns).")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
                         if let error = store.libraryError { NoticeView(message: error) { Task { await store.reloadLibrary() } } }
                         if store.loadingLibrary { ProgressView("Syncing AniList…").frame(maxWidth: .infinity) }
                         if layout == "grid" {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: posters.fittingColumns(in: contentWidth, accessible: textSize.isAccessibilitySize, split: usesSplit)), alignment: .leading, spacing: 14) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: CGFloat(LibraryArtworkSizing.gridMinimum(preferred: posters.libraryGridMinimum, accessible: textSize.isAccessibilitySize))), spacing: 14, alignment: .top)], alignment: .leading, spacing: 22) {
                                 ForEach(filtered) { entry in
                                     if let anime = entry.media {
-                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: posters.gridPosterWidth)
+                                        LibraryAnimeTile(entry: entry, anime: anime, dub: dubProgress[anime.id], posterWidth: .infinity)
                                     }
                                 }
                             }.accessibilityIdentifier("library-grid")
@@ -127,21 +123,19 @@ struct LibraryView: View {
                         if let notice = dubs.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                         Text("DUB marks English audio availability. Yellow: behind the original broadcast. Green: caught up. Countdown uses the original broadcast.").font(.caption2).foregroundStyle(.secondary)
                         if let date = store.savedAt { Text("Last synced \(date.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary) }
-                    }.padding(.horizontal, 12).padding(.vertical).readableContent(width: layout == "grid" ? 1280 : 1000)
+                    }.padding(.horizontal, 20).padding(.vertical).readableContent(width: layout == "grid" ? 1180 : 1000)
                 }.accessibilityIdentifier("library-scroll").scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
               }
             } else { LibraryGuestView(showSettings: $showSettings) }
         }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showTorBoxFiles = true } label: { Image(systemName: "folder") }
-                        .accessibilityLabel("TorBox files").accessibilityIdentifier("library-torbox-files")
+                    Menu {
+                        Button("Display options", systemImage: "rectangle.grid.2x2") { showDisplay = true }.accessibilityIdentifier("library-display-options")
+                        Button("TorBox files", systemImage: "folder") { showTorBoxFiles = true }.accessibilityIdentifier("library-torbox-files")
+                        Button("Account & settings", systemImage: "gearshape") { showSettings = true }
+                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Library options")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showDisplay = true } label: { Image(systemName: "slider.horizontal.3") }
-                        .accessibilityLabel("Library display options").accessibilityIdentifier("library-display-options")
-                }
-                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings") }
             }
             .appSettingsSheet(isPresented: $showSettings)
             .sheet(isPresented: $showDisplay) { DisplayOptionsView(scope: .library) }

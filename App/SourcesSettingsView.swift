@@ -70,6 +70,8 @@ struct AppearanceSettingsView: View {
                     .accessibilityIdentifier("settings-home-sections")
                 NavigationLink { ExploreDesignSettingsView() } label: { Label("Explore layout", systemImage: "rectangle.stack") }
                     .accessibilityIdentifier("settings-explore-design")
+                NavigationLink { SeriesAppearanceSettingsView() } label: { Label("Anime series appearance", systemImage: "rectangle.on.rectangle") }
+                    .accessibilityIdentifier("settings-series-appearance")
                 NavigationLink { TabCustomizationView() } label: { Label("Navigation", systemImage: "rectangle.bottomthird.inset.filled") }
                     .accessibilityIdentifier("settings-bottom-tabs")
                 if UIDevice.current.userInterfaceIdiom == .pad {

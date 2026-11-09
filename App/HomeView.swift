@@ -76,13 +76,11 @@ private struct HomeDashboardView: View {
                         Button { pickingWidgets = true } label: { Image(systemName: "plus").font(visuals.toolbarIconFont) }
                             .accessibilityLabel("Add widgets").accessibilityIdentifier("home-add-widgets")
                     }
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) { editing.toggle(); dragging = nil }
-                    } label: {
-                        if editing { Text("Done").fontWeight(.semibold) }
-                        else { Image(systemName: "slider.horizontal.3").font(visuals.toolbarIconFont) }
-                    }.accessibilityLabel(editing ? "Finish editing Home" : "Customize Home").accessibilityIdentifier("home-customize")
+                    if editing { Button("Done") {
+                        withAnimation(.easeInOut(duration: 0.18)) { editing = false; dragging = nil }
+                    }.fontWeight(.semibold).accessibilityLabel("Finish editing Home").accessibilityIdentifier("home-finish-editing") }
                     Menu {
+                        Button("Customize Home", systemImage: "slider.horizontal.3") { editing = true }.accessibilityIdentifier("home-customize")
                         Button("Add widgets", systemImage: "plus") { editing = true; pickingWidgets = true }
                         Button("Manage widgets", systemImage: "slider.horizontal.3") { customize = true }
                         Divider()
@@ -94,7 +92,7 @@ private struct HomeDashboardView: View {
                         Button("My Library", systemImage: "books.vertical") { navigation.open(.library) }
                         NavigationLink { SourcesSettingsView() } label: { Label("Sources & playback", systemImage: "puzzlepiece.extension") }
                         Button("Settings", systemImage: "gearshape") { settings = true }
-                    } label: { Image(systemName: "ellipsis.circle").font(visuals.toolbarIconFont) }
+                    } label: { Image(systemName: "ellipsis").font(visuals.toolbarIconFont) }
                         .accessibilityLabel("Home actions").accessibilityIdentifier("home-actions")
                 }
             }

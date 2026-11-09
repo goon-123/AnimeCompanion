@@ -54,6 +54,11 @@ private struct PageResponse: Decodable, Sendable { let Page: MediaPage }
 private struct DetailResponse: Decodable, Sendable { let Media: Anime? }
 private struct StudioMediaResponse: Decodable, Sendable { let Studio: StudioMedia? }
 private struct StudioMedia: Decodable, Sendable { let media: StudioMediaConnection? }
+private struct StudioCollectionResponse: Decodable, Sendable {
+    let id: Int
+    let name: String
+    let media: StudioMediaConnection?
+}
 private struct StudioMediaConnection: Decodable, Sendable { let nodes: [StudioMediaNode]?; let pageInfo: PageInfo? }
 private struct StudioMediaNode: Decodable, Sendable {
     let type: String?
@@ -147,6 +152,7 @@ public enum AniListQueries {
         popularity favourites
         rankings { id rank type context year season allTime }
         studios(isMain: true) { nodes { id name } }
+        characters(perPage: 16, sort: [ROLE, RELEVANCE, ID]) { nodes { id name { full } image { medium } } }
         relations { edges { relationType node {
           id idMal type isAdult genres episodes status averageScore nextAiringEpisode { airingAt episode }
           title { romaji english userPreferred } coverImage { extraLarge large medium }
@@ -157,9 +163,10 @@ public enum AniListQueries {
             title { romaji english userPreferred } coverImage { extraLarge large medium }
           } }
         }
-        reviews(perPage: 3, sort: RATING_DESC) { nodes { id summary score siteUrl } }
+        reviews(perPage: 10, sort: RATING_DESC) { nodes { id summary body(asHtml: false) score siteUrl } }
         externalLinks { id site url isDisabled }
         trailer { id site thumbnail }
+        streamingEpisodes { title thumbnail }
       }
     }
     """ + card
@@ -385,6 +392,53 @@ public actor AniListClient {
         let nodes: [StudioMediaNode] = media.nodes ?? []
         let visible = nodes.filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
         return MediaPage(media: visible, pageInfo: media.pageInfo)
+    }
+    /// One bounded Page query avoids the failure of a multi-root Studio alias
+    /// query. A failed collection can be retried independently as a Studio read.
+    public func studioCollections(includeAdult: Bool = false, refresh: Bool = false) async throws -> [AnimeStudioCollection] {
+        let query = """
+        query StudioCollections($ids: [Int]) {
+          Page(page: 1, perPage: 12) {
+            studios(id_in: $ids) {
+              id name media(perPage: 3, sort: POPULARITY_DESC, isMain: true) { nodes { ...AnimeCard type } }
+            }
+          }
+        }
+        """ + AniListQueries.card
+        struct Response: Decodable, Sendable { let Page: StudioPage }
+        struct StudioPage: Decodable, Sendable { let studios: [StudioCollectionResponse?]? }
+        do {
+            let result: Response = try await request(query, variables: ["ids": .ints(AnimeStudioCollection.featured.map(\.id))], bypassCache: refresh)
+            let rows = (result.Page.studios ?? []).compactMap { $0 }
+            let values = AnimeStudioCollection.featured.compactMap { studio -> AnimeStudioCollection? in
+                guard let row = rows.first(where: { $0.id == studio.id }) else { return nil }
+                let shows = (row.media?.nodes ?? []).filter { $0.type == "ANIME" && (includeAdult || $0.anime.isAdult != true) }.map(\.anime)
+                return AnimeStudioCollection(studio: Studio(id: row.id, name: row.name), anime: shows)
+            }
+            if !values.isEmpty { return values }
+        } catch is CancellationError { throw CancellationError() }
+        catch let error as ServiceError {
+            switch error {
+            case .message, .invalidResponse, .http(400): break
+            default: throw error
+            }
+        } catch is DecodingError { } catch { throw error }
+        var values: [AnimeStudioCollection] = []
+        for studio in AnimeStudioCollection.featured {
+            try Task.checkCancellation()
+            do {
+                let page = try await studioAnime(id: studio.id, includeAdult: includeAdult, refresh: refresh)
+                values.append(AnimeStudioCollection(studio: studio, anime: page.media ?? []))
+            } catch is CancellationError { throw CancellationError() }
+            catch let error as ServiceError {
+                switch error {
+                case .message, .invalidResponse, .http(400), .http(404): continue
+                default: throw error
+                }
+            } catch is DecodingError { continue } catch { throw error }
+        }
+        guard !values.isEmpty else { throw ServiceError.message("Studio artwork is unavailable right now.") }
+        return values
     }
     public func seasonal(_ selection: SeasonSelection, page: Int, includeAdult: Bool = false) async throws -> MediaPage {
         var vars: [String: QueryValue] = ["season": .string(selection.season.rawValue), "year": .int(selection.year), "page": .int(page)]

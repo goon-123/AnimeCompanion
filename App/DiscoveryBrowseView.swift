@@ -155,7 +155,7 @@ struct DiscoveryBrowseView: View {
                .onChange(of: filters) { _, _ in scroll.scrollTo("discovery-top", anchor: .top) }
                .onChange(of: dubFilters.selection) { _, _ in paginationPaused = false; scroll.scrollTo("discovery-top", anchor: .top) }
           }
-        }.background(Theme.background)
+        }.background(Theme.background).environment(\.posterArtworkBadgesEnabled, false)
             .navigationTitle(titleOverride ?? category.label(season: selection)).navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbar {

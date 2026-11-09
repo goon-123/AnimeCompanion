@@ -22,6 +22,7 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
     case today, catchUp, libraryStats, planned, randomPick, savedNews
     case seasonSpotlight, nextEpisode, watchlistBanners
     case seasonCountdown, nextSeason, returningSeries, tonightPick, hallOfFame
+    case trendingAnime, trendingAnimePlain
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -51,6 +52,8 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .returningSeries: return "Returning favorites"
         case .tonightPick: return "Tonight’s pick"
         case .hallOfFame: return "Your hall of fame"
+        case .trendingAnime: return "Top 10 trending anime"
+        case .trendingAnimePlain: return "Trending anime"
         }
     }
     public var symbol: String {
@@ -74,6 +77,8 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .returningSeries: return "arrow.clockwise"
         case .tonightPick: return "moon.stars.fill"
         case .hallOfFame: return "trophy.fill"
+        case .trendingAnime: return "chart.line.uptrend.xyaxis"
+        case .trendingAnimePlain: return "flame"
         case .watching: return "play.circle"; case .reading: return "book"
         case .weekly, .airing: return "calendar"; case .news: return "newspaper"; case .community: return "bubble.left.and.bubble.right"; case .shortcuts: return "square.grid.2x2" }
     }
@@ -105,9 +110,11 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
         case .returningSeries: return "Next-season sequels connected to your library, plus premieres you already saved."
         case .tonightPick: return "An artwork-led daily pick from released episodes and your plan-to-watch list."
         case .hallOfFame: return "Celebrate completed anime, ranked by your own AniList scores."
+        case .trendingAnime: return "Ten trending anime with small ranking badges below the artwork."
+        case .trendingAnimePlain: return "The original anime poster shelf, without ranking numbers."
         }
     }
-    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame]
+    public static let optionalWidgets: Set<Self> = [.today, .catchUp, .libraryStats, .planned, .randomPick, .savedNews, .seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame, .trendingAnime, .trendingAnimePlain]
     public var supportsLayout: Bool { [.seasonSpotlight, .nextEpisode, .watchlistBanners, .seasonCountdown, .nextSeason, .returningSeries, .tonightPick, .hallOfFame, .news].contains(self) }
     public var supportsItemLimit: Bool { [.watching, .reading, .airing, .today, .catchUp, .planned, .savedNews, .seasonSpotlight, .watchlistBanners, .nextSeason, .returningSeries, .hallOfFame].contains(self) }
 }

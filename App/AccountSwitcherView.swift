@@ -1,6 +1,25 @@
 import SwiftUI
 import AnimeCore
 
+private struct AccountSwitcherPresentation: ViewModifier {
+    @EnvironmentObject private var navigation: AppNavigationStore
+    @Binding var presented: Bool
+    @State private var selected: TrackingAccount?
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $presented, onDismiss: {
+            navigation.applyLayoutPreference(); navigation.applyTabPreferences()
+            if let selected { self.selected = nil; navigation.openAccountLibrary(selected) }
+        }) {
+            AppNavigationStack {
+                AccountSwitcherView(close: { presented = false }, select: { selected = $0; presented = false })
+            }
+        }
+    }
+}
+extension View {
+    func appAccountSwitcherSheet(isPresented: Binding<Bool>) -> some View { modifier(AccountSwitcherPresentation(presented: isPresented)) }
+}
+
 /// The picker only changes the foreground library. Both stores keep their own
 /// sessions, in-flight saves and cached progress throughout a switch.
 struct AccountSwitcherButton: View {

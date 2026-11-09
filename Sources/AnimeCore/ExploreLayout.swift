@@ -5,9 +5,9 @@ public enum ExploreSurface: String, CaseIterable, Sendable {
     public var storageKey: String { "explore.layout.\(rawValue).v1" }
     public var catalog: [ExploreCatalogRow] {
         switch self {
-        case .anime: return [.spotlight, .trending, .seasonal, .previousSeason, .topAnime, .upcoming]
-        case .discovery: return [.directory, .spotlight, .trending, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
-        case .grid: return [.directory, .posterWall, .seasonal, .previousSeason, .topAnime]
+        case .anime: return [.spotlight, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .upcoming]
+        case .discovery: return [.directory, .spotlight, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
+        case .grid: return [.directory, .posterWall, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime]
         case .reading: return [.spotlight, .personal, .formats, .genres, .readingTrending, .rising, .gems, .popular, .topReading, .newReleases, .recentlyAdded]
         }
     }
@@ -17,11 +17,13 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
     case spotlight, directory, trending, seasonal, previousSeason, topAnime, upcoming
     case novels, manga, personal, gems, posterWall, formats, genres
     case readingTrending, rising, popular, topReading, newReleases, recentlyAdded
+    case studios, animeGenres, topTen
     public var title: String {
         switch self {
         case .spotlight: return "Spotlight"
         case .directory: return "Browse by format"
-        case .trending: return "Trending"
+        case .trending: return "Trending anime"
+        case .topTen: return "Top 10 trending anime"
         case .seasonal: return "This season"
         case .previousSeason: return "Previous season"
         case .topAnime: return "Top anime of all time"
@@ -39,11 +41,13 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
         case .topReading: return "Top rated reads"
         case .newReleases: return "New releases"
         case .recentlyAdded: return "Recently added"
+        case .studios: return "Animation Studios"
+        case .animeGenres: return "Anime Genres"
         }
     }
     public var discoveryCategory: DiscoveryCategory? {
         switch self {
-        case .trending: return .trending
+        case .trending, .topTen: return .trending
         case .seasonal: return .seasonal
         case .previousSeason: return .previousSeason
         case .topAnime: return .topRated
@@ -63,6 +67,13 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
         default: return nil
         }
     }
+    public var supportsCardSize: Bool { self == .studios || self == .animeGenres }
+}
+
+public enum ExploreCollectionSize: String, CaseIterable, Codable, Identifiable, Sendable {
+    case small, medium, large
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
 }
 
 public enum ExploreRow: Hashable, Identifiable, Sendable {
@@ -88,10 +99,14 @@ public struct ExplorePreferences: Equatable, Sendable {
     public let surface: ExploreSurface
     public private(set) var order: [ExploreRow]
     public private(set) var hidden: Set<ExploreRow>
+    private var cardSizes: [ExploreCatalogRow: ExploreCollectionSize]
     public var widgetOptions: HomePreferences
     public var visible: [ExploreRow] { order.filter { !hidden.contains($0) } }
     public var hasWidgets: Bool { visible.contains { if case .widget = $0 { return true }; return false } }
-    private struct Saved: Codable { let order: [String]; let hidden: [String]; let widgets: String? }
+    private struct Saved: Codable {
+        let order: [String]; let hidden: [String]; let widgets: String?
+        let cardSizes: [String: String]?
+    }
     public init(surface: ExploreSurface, saved: String = "") {
         self.surface = surface
         let data = Data(saved.utf8.prefix(65_537))
@@ -101,9 +116,25 @@ public struct ExplorePreferences: Equatable, Sendable {
             if case .catalog(let catalog) = row, !surface.catalog.contains(catalog) { return false }
             return seen.insert(row).inserted
         }
+        let addsRanking = !order.contains(.catalog(.topTen)) && surface.catalog.contains(.topTen)
+        if addsRanking, let index = order.firstIndex(of: .catalog(.trending)) {
+            order.insert(.catalog(.topTen), at: index + 1)
+            seen.insert(.catalog(.topTen))
+        }
         order += surface.catalog.map(ExploreRow.catalog).filter { seen.insert($0).inserted }
         hidden = Set((value?.hidden ?? []).compactMap(ExploreRow.init(id:))).intersection(order)
+        // A previously hidden ranked Trending row stays hidden on upgrade.
+        if addsRanking, value?.hidden.contains("catalog.trending") == true { hidden.insert(.catalog(.topTen)) }
+        cardSizes = (value?.cardSizes ?? [:]).reduce(into: [:]) { result, entry in
+            if let row = ExploreCatalogRow(rawValue: entry.key), row.supportsCardSize, surface.catalog.contains(row),
+               let size = ExploreCollectionSize(rawValue: entry.value) { result[row] = size }
+        }
         widgetOptions = HomePreferences(saved: value?.widgets)
+    }
+    public func cardSize(for row: ExploreCatalogRow) -> ExploreCollectionSize { cardSizes[row] ?? .small }
+    public mutating func setCardSize(_ size: ExploreCollectionSize, for row: ExploreCatalogRow) {
+        guard row.supportsCardSize, surface.catalog.contains(row) else { return }
+        cardSizes[row] = size
     }
     public mutating func setVisible(_ row: ExploreRow, _ shown: Bool) {
         if !order.contains(row) {
@@ -138,7 +169,8 @@ public struct ExplorePreferences: Equatable, Sendable {
     }
     public var saved: String {
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
-        let value = Saved(order: order.map(\.id), hidden: hidden.map(\.id).sorted(), widgets: widgetOptions.saved)
+        let sizes = Dictionary(uniqueKeysWithValues: cardSizes.map { ($0.key.rawValue, $0.value.rawValue) })
+        let value = Saved(order: order.map(\.id), hidden: hidden.map(\.id).sorted(), widgets: widgetOptions.saved, cardSizes: sizes)
         return (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
     }
 }
