@@ -1,5 +1,15 @@
 import Foundation
 
+/// Native discussion provider and an optional website destination are distinct.
+public enum CommunityDestination: String, CaseIterable, Identifiable, Sendable {
+    case aniList, fapservice
+    public static let storageKey = "community.destination.v1"
+    public var id: String { rawValue }
+    public var title: String { self == .aniList ? "AniList" : "Fapservice" }
+    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .aniList }
+    public var websiteURL: URL? { self == .fapservice ? URL(string: "https://fapservice.com/") : nil }
+}
+
 public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendable {
     case reddit, aniList, myAnimeList
     public var id: String { rawValue }
@@ -11,6 +21,8 @@ public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendab
 public enum CommunityFilter: String, CaseIterable, Identifiable, Sendable {
     case general, season, myShows, episodes
     public var id: String { rawValue }
+    public static let feedCases: [Self] = [.season, .myShows]
+    public var feedFilter: Self { Self.feedCases.contains(self) ? self : .season }
     public var title: String {
         switch self { case .general: return "General Anime"; case .season: return "This Season"; case .myShows: return "My Shows"; case .episodes: return "Episode Discussions" }
     }

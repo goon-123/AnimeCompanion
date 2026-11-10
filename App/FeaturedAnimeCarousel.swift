@@ -7,6 +7,9 @@ struct FeaturedAnimeCarousel: View {
     let topInset: CGFloat
     @Binding var background: PosterAccent
     @State private var selected = 0
+    @State private var artwork = SeriesArtwork()
+    @State private var artworkID: Int?
+    @EnvironmentObject private var store: AppStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var active: Anime? { anime.indices.contains(selected) ? anime[selected] : anime.first }
 
@@ -15,7 +18,8 @@ struct FeaturedAnimeCarousel: View {
             TabView(selection: $selected) {
                 ForEach(Array(anime.enumerated()), id: \.element.id) { index, item in
                     FeaturedAnimePanel(anime: item, topInset: topInset,
-                        background: PosterAccent(hex: item.coverImage?.color)?.backdrop ?? background)
+                        background: PosterAccent(hex: item.coverImage?.color)?.backdrop ?? background,
+                        artwork: artworkID == item.id ? artwork : SeriesArtwork())
                         .tag(index)
                 }
             }.tabViewStyle(.page(indexDisplayMode: .never)).frame(height: height)
@@ -34,6 +38,16 @@ struct FeaturedAnimeCarousel: View {
             }
         }.frame(maxWidth: .infinity)
             .onChange(of: anime.map(\.id)) { _, _ in selected = min(selected, max(0, anime.count - 1)) }
+            .task(id: active?.id) {
+                artwork = SeriesArtwork(); artworkID = nil
+                guard let active else { return }
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-") }) { return }
+                #endif
+                let result = await store.seriesArtwork.artwork(for: active)
+                guard !Task.isCancelled, self.active?.id == active.id else { return }
+                artwork = result; artworkID = active.id
+            }
             .task(id: active) {
                 guard let active else { return }
                 let accent = await PosterColor.accent(for: active)
@@ -49,6 +63,7 @@ private struct FeaturedAnimePanel: View {
     let anime: Anime
     let topInset: CGFloat
     let background: PosterAccent
+    let artwork: SeriesArtwork
     @State private var showTracking = false
     @State private var showSettings = false
     @State private var showPlayback = false
@@ -75,7 +90,7 @@ private struct FeaturedAnimePanel: View {
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         let banner = anime.bannerImage.flatMap(URL.init(string:))
-        let url = wide ? (banner ?? anime.coverURL) : anime.coverURL
+        let url = wide ? (artwork.backdrop ?? banner ?? anime.coverURL) : anime.coverURL
         return AnimeLink(id: anime.id) {
             ArtworkImage(url: url, pointSize: max(width, height)) { image in image.resizable().scaledToFill() }
                 placeholder: { background.color }
@@ -85,9 +100,11 @@ private struct FeaturedAnimePanel: View {
     }
     private var information: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(anime.displayTitle).font(.system(.title, design: .rounded, weight: .bold))
-                .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
-                .accessibilityIdentifier("featured-title-\(anime.id)")
+            if let logo = artwork.logo {
+                ArtworkImage(url: logo, pointSize: 700) { $0.resizable().scaledToFit() } placeholder: { title }
+                    .frame(maxWidth: 340, alignment: .leading).frame(height: 92, alignment: .leading)
+                    .accessibilityLabel(anime.displayTitle).accessibilityIdentifier("featured-title-\(anime.id)")
+            } else { title }
             HStack(spacing: 12) {
                 if let year = anime.seasonYear { Text(String(year)) }
                 Text((anime.format ?? "Anime").replacingOccurrences(of: "_", with: " "))
@@ -100,6 +117,11 @@ private struct FeaturedAnimePanel: View {
                 VStack(alignment: .leading, spacing: 8) { watchAction; HStack { detailsAction; libraryAction } }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private var title: some View {
+        Text(anime.displayTitle).font(.system(.title, design: .rounded, weight: .bold))
+            .lineLimit(textSize.isAccessibilitySize ? 4 : 2).shadow(color: .black.opacity(0.3), radius: 5, y: 2)
+            .accessibilityIdentifier("featured-title-\(anime.id)")
     }
     private var watchAction: some View {
         Button { showPlayback = true } label: {

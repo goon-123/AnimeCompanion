@@ -4,13 +4,10 @@ import WebKit
 
 struct CommunityThreadReader: View {
     @EnvironmentObject private var store: AppStore
-    @AppStorage(CommunityConfiguration.revisionKey) private var revision = 0
     let thread: CommunityThread
     var anime: Anime? = nil
     var localEpisode: Int? = nil
-    var confirmIdentity = false
     @State private var spoilersAllowed = false
-    @State private var identityConfirmed = false
     @State private var sort = CommunityCommentSort.oldest
     @State private var comments: [CommunityComment] = []
     @State private var opening: String?
@@ -27,8 +24,7 @@ struct CommunityThreadReader: View {
         return ids.isEmpty || ids.contains { (store.entry(for: $0)?.progressValue ?? 0) < episode }
     }
     private var spoilerGate: Bool { unwatched && !spoilersAllowed }
-    private var identityGate: Bool { confirmIdentity && !identityConfirmed }
-    private var canLoad: Bool { !spoilerGate && !identityGate }
+    private var canLoad: Bool { !spoilerGate }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
@@ -41,15 +37,6 @@ struct CommunityThreadReader: View {
                         Text("This episode is beyond your marked-watched progress, or its numbering is unverified. Plot previews, episode subtitles and comments stay hidden until you choose to read.").font(.subheadline).foregroundStyle(.secondary)
                         Button("Read anyway") { spoilersAllowed = true }.buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("community-reveal-unwatched")
-                    }.companionPanel()
-                } else if identityGate {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Label("Confirm this discussion", systemImage: "checkmark.shield").font(.headline)
-                        Text(confirmationTitle).font(.subheadline.weight(.semibold))
-                        if let anime { Text(anime.displayTitle + (localEpisode.map { " · Your episode \($0)" } ?? "")).font(.caption).foregroundStyle(Theme.accent) }
-                        Text("MyAnimeList’s topic search does not supply a series ID. Check the season/cour and episode in this title before reading. This match has not been verified by an ID.").font(.caption).foregroundStyle(.secondary)
-                        Button("This is the discussion I want") { identityConfirmed = true }.buttonStyle(.borderedProminent)
-                            .accessibilityIdentifier("community-confirm-match")
                     }.companionPanel()
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
@@ -82,17 +69,13 @@ struct CommunityThreadReader: View {
             }.padding(16).frame(maxWidth: 860, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Discussion").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
-            .task(id: "\(thread.id)-\(sort.rawValue)-\(canLoad)-\(revision)") {
+            .task(id: "\(thread.id)-\(sort.rawValue)-\(canLoad)") {
                 if canLoad { await load(reset: true) }
                 else { attempt = UUID(); comments = []; opening = nil; loading = false }
             }
             .refreshable { if canLoad { await load(reset: true, refresh: true) } }
-            .onChange(of: store.viewer?.id) { _, _ in spoilersAllowed = false; identityConfirmed = false }
+            .onChange(of: store.viewer?.id) { _, _ in spoilersAllowed = false }
             .accessibilityIdentifier("community-native-reader")
-    }
-    private var confirmationTitle: String {
-        if let parsed = CommunityEpisodeTitle.parse(thread.title) { return "\(parsed.titlePrefix) · Episode \(parsed.episode)" }
-        return thread.mentionsEpisode ? "Episode discussion · Unverified numbering" : thread.title
     }
     @MainActor private func load(reset: Bool, refresh: Bool = false) async {
         guard canLoad, reset || !loading else { return }
@@ -105,8 +88,7 @@ struct CommunityThreadReader: View {
             let result: CommunityCommentPage
             switch thread.source {
             case .aniList: result = try await store.aniList.communityComments(threadID: thread.threadID, page: requestedPage, sort: sort, refresh: refresh)
-            case .myAnimeList: result = try await store.communityMAL.comments(threadID: thread.threadID, clientID: CommunityConfiguration.malClientID ?? "", page: requestedPage, refresh: refresh)
-            case .reddit: throw ServiceError.message("Reddit comments are available in the official in-app browser.")
+            case .myAnimeList, .reddit: throw ServiceError.message("This Community source is no longer available. Choose AniList.")
             }
             try Task.checkCancellation(); guard attempt == current, canLoad else { return }
             if let number = thread.episode, CommunityEpisodeTitle.parse(result.title)?.episode != number {
@@ -295,48 +277,34 @@ struct CommunityWebButton: View {
     }
 }
 
-struct CommunityBrowserPanel: View {
-    let source: CommunitySource
-    let url: URL
-    var episode: Int? = nil
+struct CommunitySourcePicker: View {
+    @AppStorage(CommunityDestination.storageKey) private var saved = CommunityDestination.aniList.rawValue
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(source.title, systemImage: "bubble.left.and.bubble.right").font(.headline)
-            Text("Official page · In-app browser").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
-            Text(source == .reddit ? "Browse live r/anime conversations, episode threads and replies inside the app. Reddit may ask you to sign in." : "Read discussions on MyAnimeList’s official site, or add a registered client ID for native reading.")
-                .font(.subheadline).foregroundStyle(.secondary)
-            if let episode { Text("Search for episode \(episode). Check the season/cour and number before opening a result. Website previews follow the community’s own spoiler rules.").font(.caption).foregroundStyle(.secondary) }
-            CommunityWebButton(title: "Browse \(source.title)", url: url)
-        }.companionPanel().accessibilityIdentifier("community-browser-fallback")
+        Picker("Source", selection: Binding(get: { CommunityDestination(preference: saved) }, set: { saved = $0.rawValue })) {
+            ForEach(CommunityDestination.allCases) { Text($0.title).tag($0) }
+        }.pickerStyle(.menu).accessibilityIdentifier("community-source-switcher")
+    }
+}
+
+struct CommunityWebsitePanel: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Fapservice", systemImage: "globe").font(.headline)
+            Text("Website source · Opens in the in-app browser").font(.caption).foregroundStyle(.secondary)
+            CommunityWebButton(title: "Open Fapservice", url: CommunityDestination.fapservice.websiteURL!)
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 12)
+            .accessibilityIdentifier("community-website-source")
     }
 }
 
 struct CommunitySourcesView: View {
-    @State private var clientID = ""
-    @State private var message: String?
     var body: some View {
         Form {
-            Section("AniList · Native reader") {
-                Text("Public discussions, comments and nested replies need no extra sign-in. Reading uses the existing AniList integration.")
-                Link("AniList API terms", destination: URL(string: "https://docs.anilist.co/guide/terms-of-use")!)
+            Section("Community source") { CommunitySourcePicker() }
+            Section("AniList") {
+                Text("Read discussions, comments and replies for This Season or My Shows. My Shows uses your connected AniList library.")
             }
-            Section("Reddit · Official in-app browser") {
-                Text("Native Reddit data access requires approval and registered OAuth access. AnimeCompanion currently opens official r/anime pages in Safari inside the app.")
-                Link("Reddit API access requirements", destination: URL(string: "https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki")!)
-            }
-            Section {
-                SecureField("Registered MyAnimeList client ID", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Save MyAnimeList client ID") {
-                    do { try CommunityConfiguration.saveMALClientID(clientID); message = clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Saved. MyAnimeList will use its official page." : "Client ID saved. Native reading is enabled when the ID has API access." }
-                    catch { message = error.localizedDescription }
-                }
-                if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
-                Link("Register an API client", destination: URL(string: "https://myanimelist.net/apiconfig")!)
-                Link("MyAnimeList API agreement", destination: URL(string: "https://myanimelist.net/static/apiagreement.html")!)
-            } header: { Text("MyAnimeList · Native reader with client ID") } footer: {
-                Text("Use your registered client ID. It stays securely on this device. Public forum reading needs no separate user sign-in. MAL posts are chronological; quote-based replies retain their text, and the API does not provide a nested reply tree or scores.")
-            }
+            Section("Fapservice") { CommunityWebsitePanel() }
         }.navigationTitle("Community sources").navigationBarTitleDisplayMode(.inline)
-            .onAppear { clientID = CommunityConfiguration.malClientID ?? "" }
     }
 }

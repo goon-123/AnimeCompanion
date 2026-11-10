@@ -13,9 +13,9 @@ final class HomeContentCacheTests: XCTestCase {
         let thread = CommunityThread(source: .aniList, threadID: 4, title: "Episode 2", author: "Viewer", activityAt: Date(), commentCount: 5,
             media: [media], url: URL(string: "https://anilist.co/forum/thread/4")!, body: "<p>Opening preview</p>")
         let cache = HomeContentCache(directory: folder)
-        let saved = await cache.save(HomeContentSnapshot(CommunityThreadPage(threads: [thread], hasNextPage: true)), key: "community-general-v1")
+        let saved = await cache.save(HomeContentSnapshot(CommunityThreadPage(threads: [thread], hasNextPage: true)), key: HomeCommunityClient.cacheKey(mediaIDs: [42], includeAdult: false))
         XCTAssertTrue(saved)
-        let restored = await HomeContentCache(directory: folder).load(CommunityThreadPage.self, key: "community-general-v1")
+        let restored = await HomeContentCache(directory: folder).load(CommunityThreadPage.self, key: HomeCommunityClient.cacheKey(mediaIDs: [42], includeAdult: false))
         XCTAssertEqual(restored?.value.threads, [thread]); XCTAssertEqual(restored?.value.hasNextPage, true)
         XCTAssertEqual(restored?.value.threads.first?.media.first?.coverURL?.lastPathComponent, "poster.jpg")
         XCTAssertTrue(thread.hidesPreview(progress: [:]))
@@ -61,10 +61,10 @@ final class HomeContentCacheTests: XCTestCase {
         let cache = HomeContentCache(directory: folder)
         let thread = CommunityThread(source: .aniList, threadID: 4, title: "Saved conversation", author: nil, activityAt: nil, commentCount: 4,
             url: URL(string: "https://anilist.co/forum/thread/4")!)
-        await cache.save(HomeContentSnapshot(CommunityThreadPage(threads: [thread], hasNextPage: false), savedAt: Date().addingTimeInterval(-3600)), key: "community-general-v1")
+        await cache.save(HomeContentSnapshot(CommunityThreadPage(threads: [thread], hasNextPage: false), savedAt: Date().addingTimeInterval(-3600)), key: HomeCommunityClient.cacheKey(mediaIDs: [42], includeAdult: false))
         let client = HomeCommunityClient(api: AniListClient(transport: HomeCacheTransport(offline: true), minimumRequestInterval: 0), cache: cache)
-        do { _ = try await client.feed(); XCTFail("Expected offline failure") } catch {}
-        let retained = await client.cached()
+        do { _ = try await client.feed(mediaIDs: [42], includeAdult: false); XCTFail("Expected offline failure") } catch {}
+        let retained = await client.cached(mediaIDs: [42], includeAdult: false)
         XCTAssertEqual(retained?.value.threads.map(\.threadID), [4])
     }
     func testDiskHistoryIsBoundedAndUnavailableDiskStillServesMemory() async throws {

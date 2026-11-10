@@ -2,14 +2,10 @@ import SwiftUI
 import AnimeCore
 
 struct ExploreDesignSettingsView: View {
-    @AppStorage(ExploreDesign.storageKey) private var saved = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var saved = ExploreDesign.classic.rawValue
     private var selected: ExploreDesign { ExploreDesign(preference: saved) }
     var body: some View {
         Form {
-            Section {
-                ScreenPresentationPicker(scope: selected.presentationScope).id(selected.presentationScope)
-                NavigationLink("Home & all Explore styles") { ScreenAppearanceSettingsView() }
-            } header: { Text("Screen appearance") }
             Section {
                 ForEach(ExploreDesign.allCases) { design in
                     Button { saved = design.rawValue } label: {
@@ -27,7 +23,7 @@ struct ExploreDesignSettingsView: View {
                         .accessibilityValue(design == selected ? "Selected" : "")
                 }
             } header: { Text("Explore design") } footer: {
-                Text("Your choice is saved. Classic separates Anime from Manga & Novels. Choose Original above to restore the previous appearance of the selected layout.")
+                Text("Your choice is saved. You can change it here or from Explore's layout button. Classic restores the original discovery pages and their display preferences.")
             }
         }.navigationTitle("Explore design").navigationBarTitleDisplayMode(.inline)
     }

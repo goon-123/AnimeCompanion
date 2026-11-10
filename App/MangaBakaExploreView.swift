@@ -50,8 +50,9 @@ struct MediaSectionPicker: View {
 }
 
 struct MediaExploreView: View {
+    @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("app.mediaSection") private var mode = "anime"
-    @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.classic.rawValue
     @AppStorage(ExploreSurface.anime.storageKey) private var animeRows = ""
     @State private var designs = false
     @State private var customizing = false
@@ -91,29 +92,33 @@ struct MediaExploreView: View {
     }
     private var classicHeader: some View {
         HStack(spacing: 10) {
-            MediaSectionPicker()
+            AccountSwitcherButton()
+            Spacer()
+            Button(action: switchMedia) {
+                Image(systemName: mode == "anime" ? "book.closed" : "play.rectangle")
+                    .font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel(mode == "anime" ? "Switch to Manga & Novels" : "Switch to Anime")
+                .accessibilityValue(mode == "anime" ? "Anime" : "Manga & Novels")
+                .accessibilityIdentifier("explore-media-switch")
             Menu {
-                NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }.accessibilityIdentifier("explore-search")
-                Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
-                Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
-                if mode == "anime" {
-                    Button("Browse seasons", systemImage: "calendar") { seasons = true }
-                    Button("Anime filters", systemImage: "line.3.horizontal.decrease") { filters = true }
-                    Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
-                }
-                Divider()
-                Button("Switch account", systemImage: "person.crop.circle") { accounts = true }
+                NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("explore-search")
+                Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
                 Button("Settings", systemImage: "gearshape") { settings = true }
-            } label: { Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle()).contentShape(Circle()) }
-                .accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
+            } label: {
+                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+            }.accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
         }.padding(.horizontal, 16).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background {
-                ZStack {
-                    if !overlaysArtwork { Theme.background }
-                    Color.clear.contentShape(Rectangle()).onTapGesture { }
-                }
-            }
+            .background { if !overlaysArtwork { Theme.background } }
     }
+    private func switchMedia() {
+        let state = navigation.explore
+        state.path = NavigationPath(); state.detailPath = NavigationPath()
+        state.animeID = nil; state.column = .sidebar; state.visibility = .all
+        mode = mode == "anime" ? "written" : "anime"
+    }
+
 }
 
 struct MediaLibraryView: View {
@@ -160,12 +165,7 @@ struct MangaBakaCover: View {
 struct MangaBakaCard: View {
     let series: MangaBakaSeries
     var width: CGFloat = 142
-    @Environment(\.cinematicCards) private var cinematic
-    @ViewBuilder var body: some View {
-        if cinematic { CinematicStoryPoster(item: .reading(series), width: width) }
-        else { originalCard }
-    }
-    private var originalCard: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             MangaBakaCover(series: series, width: width)
                 .overlay(alignment: .bottomLeading) {
@@ -271,9 +271,6 @@ private final class MangaBakaHomeModel: ObservableObject {
 
 struct MangaBakaExploreView: View {
     var showsNavigationBar = false
-    @AppStorage(ScreenPresentationScope.classicExplore.storageKey) private var savedPresentation = ScreenPresentation.cinematic.rawValue
-    @State private var backdrop: URL?
-    private var cinematic: Bool { ScreenPresentation(preference: savedPresentation) == .cinematic }
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @State private var widgetRefreshID = 0
@@ -290,12 +287,9 @@ struct MangaBakaExploreView: View {
             VStack(alignment: .leading, spacing: 30) {
                 header
                 ExploreRows(surface: .reading, refreshID: widgetRefreshID, widgetInset: 20) { row in catalogRow(row) }
-                    .environment(\.cinematicCards, cinematic)
                 MangaBakaAttribution().padding(.horizontal, 20)
             }.padding(.top, 14).padding(.bottom, 28).frame(maxWidth: 1180).frame(maxWidth: .infinity)
-        }.background { if cinematic { CinematicScreenBackground(url: backdrop) } else { Theme.background } }
-            .onPreferenceChange(CinematicBackdropKey.self) { backdrop = $0 }
-            .toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
+        }.background(Theme.background).toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
             .modifier(ExploreWidgetSupport(surface: .reading, refreshID: widgetRefreshID))
             .sheet(isPresented: $customizing) {
                 AppNavigationStack {
@@ -325,10 +319,7 @@ struct MangaBakaExploreView: View {
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
         switch row {
         case .spotlight:
-            if cinematic {
-                let stories = (model.items[.trending] ?? []).filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) }.map(ExploreStory.reading)
-                CinematicStorySpotlight(stories: stories, eyebrow: "Manga & novels").padding(.horizontal, 20)
-            } else if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
+            if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
                 NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain).padding(.horizontal, 20)
             }
         case .personal: if account.connected { MangaBakaPersonalShelf() }

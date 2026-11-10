@@ -66,11 +66,9 @@ struct AppearanceSettingsView: View {
                 }.accessibilityIdentifier("appearance-scheme")
             }
             Section {
-                NavigationLink { ScreenAppearanceSettingsView() } label: { Label("Home & Explore appearance", systemImage: "sparkles.rectangle.stack") }
-                    .accessibilityIdentifier("settings-screen-appearance")
                 NavigationLink { HomeCustomizationView() } label: { Label("Home sections", systemImage: "house") }
                     .accessibilityIdentifier("settings-home-sections")
-                NavigationLink { ExploreDesignSettingsView() } label: { Label("Explore layout", systemImage: "rectangle.stack") }
+                NavigationLink { ExploreOptionsSettingsView() } label: { Label("Explore settings", systemImage: "rectangle.stack") }
                     .accessibilityIdentifier("settings-explore-design")
                 NavigationLink { SeriesAppearanceSettingsView() } label: { Label("Anime series appearance", systemImage: "rectangle.on.rectangle") }
                     .accessibilityIdentifier("settings-series-appearance")

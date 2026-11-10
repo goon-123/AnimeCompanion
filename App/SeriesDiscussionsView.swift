@@ -21,14 +21,12 @@ struct AnimeDiscussionsSection: View {
 
 struct SeriesDiscussionsView: View {
     @EnvironmentObject private var store: AppStore
-    @AppStorage(CommunityConfiguration.revisionKey) private var revision = 0
     @AppStorage(CommunityConfiguration.offsetKey) private var offsets = ""
     let anime: Anime
     var requestedEpisode: Int? = nil
-    @State private var source = CommunitySource.aniList
+    private let source = CommunitySource.aniList
     @State private var chosenEpisode = -1
     @State private var episodeText = ""
-    @State private var aliasIndex = 0
     @State private var numbering = false
     @State private var threads: [CommunityThread] = []
     @State private var loading = false
@@ -42,83 +40,54 @@ struct SeriesDiscussionsView: View {
     private var offset: Int { CommunityConfiguration.offset(source: source, animeID: anime.id, saved: offsets) }
     private var mappedEpisode: Int? { episode.map { $0 + offset } }
     private var episodeLimit: Int { min(100_000, [1, anime.episodes.flatMap { $0 > 0 ? $0 : nil } ?? 100_000, watched, requestedEpisode ?? 0].max() ?? 1) }
-    private var aliases: [String] {
-        var seen = Set<String>()
-        return ([anime.title?.english, anime.title?.romaji, anime.title?.userPreferred].compactMap { $0 } + (anime.synonyms ?? []))
-            .filter { !$0.isEmpty && seen.insert($0).inserted }
-    }
-    private var searchTitle: String { aliases.indices.contains(aliasIndex) ? aliases[aliasIndex] : anime.displayTitle }
     private var matches: [CommunityThread] {
         threads.filter { thread in
-            if !store.includeAdult && thread.media.contains(where: { $0.isAdult == true }) { return false }
+            guard thread.source == .aniList, store.includeAdult || !thread.media.contains(where: { $0.isAdult == true }) else { return false }
             if let episode { return CommunityEpisodeTitle.matches(thread, anime: anime, episode: episode, offset: offset) }
             return !thread.mentionsEpisode
         }
     }
     private var progress: [Int: Int] { [anime.id: watched] }
-    private var loadKey: String { "\(source)-\(selection)-\(offset)-\(searchTitle)-\(store.includeAdult)-\(revision)" }
+    private var loadKey: String { "\(selection)-\(offset)-\(store.includeAdult)" }
+    private var originalURL: URL { URL(string: "https://anilist.co/anime/\(anime.id)/social")! }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(anime.displayTitle).font(.title3.bold())
-                    Text("\(anime.season?.label ?? "") \(anime.seasonYear.map(String.init) ?? "")").font(.caption).foregroundStyle(.secondary)
-                }
+                Text(anime.displayTitle).font(.title3.bold())
                 episodePicker
-                Picker("Discussion source", selection: $source) { ForEach(CommunitySource.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu)
-                    .accessibilityIdentifier("series-discussion-source")
+                Label("AniList · Native comments & replies", systemImage: "text.bubble").font(.caption).foregroundStyle(Theme.accent)
                 if episode != nil {
                     HStack {
-                        Text(offset == 0 ? "Uses this season’s episode numbering" : "Your episode \(selection) → \(source.title) episode \(mappedEpisode ?? selection)")
+                        Text(offset == 0 ? "Uses this season’s episode numbering" : "Your episode \(selection) → AniList episode \(mappedEpisode ?? selection)")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer(minLength: 6)
                         Button("Numbering") { numbering = true }.font(.caption.weight(.semibold)).frame(minHeight: 44)
                     }
                 }
                 if let mappedEpisode, mappedEpisode < 1 {
-                    Text("This numbering adjustment produces an invalid episode. Open Numbering to correct or reset it.").font(.subheadline).foregroundStyle(.secondary).companionPanel()
-                } else if source == .reddit {
-                    CommunityBrowserPanel(source: .reddit, url: CommunityBrowserLinks.reddit(filter: .episodes, anime: anime, episode: mappedEpisode), episode: mappedEpisode)
-                } else if source == .myAnimeList && CommunityConfiguration.malClientID == nil {
-                    CommunityBrowserPanel(source: .myAnimeList, url: CommunityBrowserLinks.myAnimeList(anime: anime), episode: mappedEpisode)
-                    NavigationLink("Enable MyAnimeList native reading") { CommunitySourcesView() }.font(.subheadline)
+                    Text("Open Numbering to correct or reset this episode adjustment.").foregroundStyle(.secondary).companionPanel()
                 } else {
-                    if source == .myAnimeList {
-                        if aliases.count > 1 {
-                            Picker("Search title", selection: $aliasIndex) {
-                                ForEach(Array(aliases.enumerated()), id: \.offset) { index, alias in Text(alias).tag(index) }
-                            }.pickerStyle(.menu)
-                        }
-                        Text("Title matches · Confirm the season/cour before reading. MAL does not attach series IDs to topic results.").font(.caption).foregroundStyle(.secondary)
-                    } else { Label("AniList series ID \(anime.id) · Native reader", systemImage: "checkmark.shield").font(.caption).foregroundStyle(Theme.accent) }
-                    if let episode, episode > watched { Label("Episode \(episode) previews hidden · Not marked watched", systemImage: "eye.slash").font(.caption).foregroundStyle(.secondary) }
-                    if let error {
-                        NoticeView(message: error) { Task { await load(reset: threads.isEmpty, refresh: true) } }
-                        CommunityWebButton(title: "Open official discussions", url: originalURL)
+                    if let episode, episode > watched {
+                        Label("Episode \(episode) previews hidden · Not marked watched", systemImage: "eye.slash").font(.caption).foregroundStyle(.secondary)
                     }
+                    if let error { NoticeView(message: error) { Task { await load(reset: threads.isEmpty, refresh: true) } } }
                     ForEach(matches) { thread in
-                        NavigationLink {
-                            CommunityThreadReader(thread: thread, anime: anime, localEpisode: episode, confirmIdentity: source == .myAnimeList)
-                        } label: {
+                        NavigationLink { CommunityThreadReader(thread: thread, anime: anime, localEpisode: episode) } label: {
                             CommunityThreadRow(thread: thread, title: thread.previewTitle(progress: progress, mappedEpisode: episode, mediaID: anime.id),
                                 hiddenPreview: thread.hidesPreview(progress: progress, mappedEpisode: episode, mediaID: anime.id), anime: anime)
                         }.buttonStyle(.plain)
                     }
-                    if loading { ProgressView("Finding discussions…").frame(maxWidth: .infinity).padding() }
+                    if loading { ProgressView("Finding AniList discussions…").frame(maxWidth: .infinity).padding() }
                     else if matches.isEmpty && error == nil {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("No exact discussion found on this page.").font(.headline)
-                            Text(episode == nil ? "Try another source or search more threads. General conversations exclude episode threads." : "Only an exact single-episode match is shown. Ranges, specials and different seasons are never substituted. Try more threads, another title/source, or adjust numbering if you know the community uses an offset.")
-                                .font(.caption).foregroundStyle(.secondary)
-                            CommunityWebButton(title: "Browse official discussions", url: originalURL)
-                        }.companionPanel()
+                        Text(episode == nil ? "No series discussions found yet." : "No exact single-episode discussion found yet. Search more threads or adjust numbering if this series uses a known offset.")
+                            .font(.caption).foregroundStyle(.secondary).companionPanel()
                     }
-                    if hasMore && !loading { Button("Search more threads") { Task { await load(reset: false) } }.buttonStyle(.bordered).frame(maxWidth: .infinity) }
+                    if hasMore && !loading { Button("Search more threads") { Task { await load(reset: false) } }.buttonStyle(.bordered) }
+                    CommunityWebButton(title: "Open AniList discussions", url: originalURL)
                 }
             }.padding(16).frame(maxWidth: 860, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Discussions").navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { CommunitySourcesView() } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Community sources") } }
             .task(id: loadKey) { await load(reset: true) }
             .refreshable { await load(reset: true, refresh: true) }
             .sheet(isPresented: $numbering) {
@@ -127,9 +96,6 @@ struct SeriesDiscussionsView: View {
             .onAppear { episodeText = String(max(1, selection)) }
             .onChange(of: selection) { _, value in episodeText = String(max(1, value)) }
             .accessibilityIdentifier("series-discussions")
-    }
-    private var originalURL: URL {
-        source == .myAnimeList ? CommunityBrowserLinks.myAnimeList(anime: anime) : URL(string: "https://anilist.co/anime/\(anime.id)/social")!
     }
     private var episodePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -159,15 +125,12 @@ struct SeriesDiscussionsView: View {
         let current = UUID(); attempt = current
         if reset { threads = []; page = 0; hasMore = false }
         loading = false; error = nil
-        guard source != .reddit, mappedEpisode.map({ $0 > 0 }) ?? true,
-              source != .myAnimeList || CommunityConfiguration.malClientID != nil else { return }
+        guard mappedEpisode.map({ $0 > 0 }) ?? true else { return }
         loading = true
         let requestedPage = page + 1
         defer { if attempt == current { loading = false } }
         do {
-            let result: CommunityThreadPage
-            if source == .aniList { result = try await store.aniList.communityThreads(mediaID: anime.id, page: requestedPage, refresh: refresh) }
-            else { result = try await store.communityMAL.topics(clientID: CommunityConfiguration.malClientID ?? "", query: searchTitle, page: requestedPage, refresh: refresh) }
+            let result = try await store.aniList.communityThreads(mediaID: anime.id, page: requestedPage, refresh: refresh)
             try Task.checkCancellation(); guard attempt == current else { return }
             var ids = Set(threads.map(\.id))
             threads += result.threads.filter { ids.insert($0.id).inserted }

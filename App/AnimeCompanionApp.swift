@@ -228,7 +228,7 @@ struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
-    @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
     @State private var sidebarSettings = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all

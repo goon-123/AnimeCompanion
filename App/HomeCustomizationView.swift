@@ -126,9 +126,9 @@ struct HomeShortcutCustomizationView: View {
             } header: { Text("Quick access") }
             footer: { Text("Replace any section instantly. Choosing a shortcut already in another slot swaps them. Hidden slots stay hidden after relaunch.") }
             Section {
-                Button("Restore Calendar, Airing Now & News") {
+                Button("Restore Calendar, Catch up & News") {
                     var value = preferences
-                    for (index, shortcut) in [HomeShortcut.calendar, .airing, .news].enumerated() { value.setShortcut(shortcut, at: index) }
+                    for (index, shortcut) in [HomeShortcut.calendar, .catchUp, .news].enumerated() { value.setShortcut(shortcut, at: index) }
                     save(value)
                 }
             }

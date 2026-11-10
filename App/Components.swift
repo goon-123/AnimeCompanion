@@ -33,17 +33,7 @@ struct AnimeRowArtwork: View {
 struct AnimeCard: View {
     let anime: Anime
     var posterWidth: CGFloat = 150
-    @Environment(\.cinematicCards) private var cinematic
-    @ViewBuilder var body: some View {
-        if cinematic {
-            VStack(alignment: .leading, spacing: 6) {
-                AnimeLink(id: anime.id) { CinematicStoryPoster(item: .anime(anime), width: posterWidth) }
-                    .buttonStyle(.plain).accessibilityIdentifier("explore-shelf-entry-\(anime.id)")
-                AnimeGenres(anime: anime).accessibilityIdentifier("explore-genres-\(anime.id)")
-            }.frame(width: posterWidth, alignment: .leading)
-        } else { originalCard }
-    }
-    private var originalCard: some View {
+    var body: some View {
       VStack(alignment: .leading, spacing: 4) {
         AnimeLink(id: anime.id) {
             VStack(alignment: .leading, spacing: 8) {
