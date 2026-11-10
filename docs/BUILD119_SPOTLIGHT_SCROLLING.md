@@ -7,9 +7,10 @@ logo changes deferred during paging without adding a competing gesture. On iOS
 17, the existing visibility/selection checks protect visible titles.
 
 Measure the Explore viewport above both its navigation stack and tab container.
-Spotlight's automatic height no longer follows temporary safe-area changes from
-the series navigation bar or hidden bottom dock. Real window resizing, rotation,
-iPad split-column sizing, accessibility type
+Keep the first usable-height offset so the initial artwork and dock clearance
+stay the same. Spotlight's automatic height no longer follows temporary safe-area
+changes from the series navigation bar or hidden bottom dock. Real window
+resizing, rotation, iPad split-column sizing, accessibility type
 and saved poster sizing still apply. Selected slides and prepared logos remain
 in the existing carousel state.
 
