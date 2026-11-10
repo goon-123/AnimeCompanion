@@ -285,8 +285,14 @@ struct AppTabs: View {
         }
     }
     @ViewBuilder private var navigationSurface: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
-        else { destinationTabs }
+        // Series change navigation-bar and bottom-dock visibility. Measure above
+        // those containers so their transitions cannot change Spotlight's height.
+        GeometryReader { viewport in
+            Group {
+                if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
+                else { destinationTabs }
+            }.environment(\.animeBrowseViewportHeight, viewport.size.height + viewport.safeAreaInsets.top)
+        }
     }
     private var destinationTabs: some View {
         TabView(selection: $navigation.selectedTab) {
@@ -333,12 +339,7 @@ struct AppTabs: View {
         switch tab {
         case .home: AnimeTabPane(state: navigation.home, layout: .fullWidth) { HomeView() }
         case .explore:
-            // Measure outside navigation: showing/hiding a destination's bar must
-            // not resize Spotlight while pushing or returning to Explore.
-            GeometryReader { viewport in
-                AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
-                    .environment(\.animeBrowseViewportHeight, viewport.size.height + viewport.safeAreaInsets.top)
-            }
+            AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
         case .library:
             AnimeTabPane(state: navigation.library, layout: librarySection == "anime" ? navigation.tabletLayout : .fullWidth) { MediaLibraryView() }
         case .manga: MangaTabPane(state: navigation.manga)
