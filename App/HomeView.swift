@@ -26,9 +26,11 @@ private struct HomeDashboardView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(HomePreferences.storageKey) private var sections = ""
     @AppStorage(HomeArtworkSize.storageKey) private var artworkSize = HomeArtworkSize.large.rawValue
     @AppStorage("manga.showMatureSources") private var matureSources = false
+    @AppStorage(CommunityDestination.storageKey) private var communitySource = CommunityDestination.aniList.rawValue
     @State private var customize = false
     @State private var pickingWidgets = false
     @State private var editing = false
@@ -56,6 +58,8 @@ private struct HomeDashboardView: View {
                         HomeWidgetFrame(section: section, saved: $sections, editing: $editing, dragging: $dragging) {
                             HomeWidgetContent(section: section, saved: $sections, editing: editing, refreshID: newsRefreshID, activationID: homeVisitID)
                         }.id(section)
+                            .modifier(ContentArrival(delay: Double(preferences.visible.firstIndex(of: section) ?? 0) * 0.018))
+                            .transition(AppMotion.replacement(reduceMotion))
                     }
                 }
                 if preferences.visible.isEmpty {
@@ -67,7 +71,9 @@ private struct HomeDashboardView: View {
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("home-empty-add")
                     }.frame(maxWidth: .infinity).padding(.vertical, 44).accessibilityIdentifier("home-empty-layout")
                 }
-            }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
+            }.animation(AppMotion.content(reduceMotion), value: anime.restoring || books.restoring || reading.loading)
+                .animation(AppMotion.content(reduceMotion), value: anime.loadingLibrary || books.loadingLibrary)
+                .padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Theme.background, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
@@ -78,7 +84,7 @@ private struct HomeDashboardView: View {
                             .accessibilityLabel("Add widgets").accessibilityIdentifier("home-add-widgets")
                     }
                     if editing { Button("Done") {
-                        withAnimation(.easeInOut(duration: 0.18)) { editing = false; dragging = nil }
+                        withAnimation(AppMotion.content(reduceMotion)) { editing = false; dragging = nil }
                     }.fontWeight(.semibold).accessibilityLabel("Finish editing Home").accessibilityIdentifier("home-finish-editing") }
                     Menu {
                         Button("Customize Home", systemImage: "slider.horizontal.3") { editing = true }.accessibilityIdentifier("home-customize")
@@ -107,8 +113,15 @@ private struct HomeDashboardView: View {
                 if current == .active && previous != .active { homeVisitID += 1 }
             }
             .task {
-                await reading.load(); await sourceLinks.load()
+                async let records: Void = reading.load()
+                async let links: Void = sourceLinks.load()
+                _ = await (records, links)
                 if !reading.state.records.isEmpty { await extensions.load() }
+            }
+            .task(id: "\(preferences.visible)-\(anime.includeAdult)-\(communitySource)", priority: .utility) {
+                async let headlines: Void = warmHeadlines()
+                async let community: Void = warmCommunity()
+                _ = await (headlines, community)
             }
             .task(id: "\(books.connected)-\(books.connectionID)-\(books.revision)") { if books.connected { await books.loadLibrary(state: nil) } }
             .refreshable {
@@ -127,6 +140,15 @@ private struct HomeDashboardView: View {
             .sheet(isPresented: $pickingWidgets) { AppNavigationStack { HomeWidgetPicker() } }
             .accessibilityIdentifier("home-dashboard")
     }
+    private func warmHeadlines() async {
+        guard preferences.visible.contains(.news) else { return }
+        _ = try? await anime.news.snapshot()
+    }
+    private func warmCommunity() async {
+        guard preferences.visible.contains(.community), CommunityDestination(preference: communitySource) == .aniList else { return }
+        guard let lineup = try? await anime.homeCatalog.season(.current(), includeAdult: anime.includeAdult), !Task.isCancelled else { return }
+        _ = try? await anime.homeCommunity.feed(mediaIDs: lineup.value.filter { anime.isVisible($0) }.map(\.id), includeAdult: anime.includeAdult)
+    }
     private func refreshAnime() async { if anime.isSignedIn { await anime.reloadLibrary() } }
     private func refreshWeek() async {
         guard anime.isSignedIn, (preferences.visible.contains(.weekly) || preferences.visible.contains(.today)) else { return }
@@ -137,7 +159,7 @@ private struct HomeDashboardView: View {
     private func refreshBooks() async { if books.connected { await books.loadLibrary(state: nil, refresh: true) } }
     private func shouldDisplay(_ section: HomeSection) -> Bool {
         if editing { return true }
-        if section == .welcome { return !anime.isSignedIn && !books.connected && recent.isEmpty }
+        if section == .welcome { return !anime.restoring && !books.restoring && !reading.loading && !anime.isSignedIn && !books.connected && recent.isEmpty }
         if section == .syncStatus { return anime.loadingLibrary || books.loadingLibrary || anime.libraryError != nil || books.libraryError != nil || reading.error != nil }
         return true
     }

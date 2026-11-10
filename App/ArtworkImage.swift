@@ -42,22 +42,33 @@ actor ArtworkPipeline {
         let started = generation
         let bytes = try await data.image(at: key.url, refresh: refresh)
         try Task.checkCancellation()
-        let options = [kCGImageSourceShouldCache: false] as CFDictionary
-        let thumbnailOptions: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
-                                kCGImageSourceCreateThumbnailWithTransform: true,
-                                kCGImageSourceShouldCacheImmediately: true,
-                                kCGImageSourceThumbnailMaxPixelSize: key.pixels]
-        guard let source = CGImageSourceCreateWithData(bytes.data as CFData, options),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
-            await data.discard(key.url)
-            throw ArtworkError.invalidData
-        }
-        try Task.checkCancellation()
-        let result = ArtworkBitmap(image: image, expiresAt: bytes.expiresAt)
+        let result: ArtworkBitmap
+        do { result = try bitmap(bytes, pixels: key.pixels) }
+        catch { await data.discard(key.url); throw error }
         if generation == started {
-            cache.insert(result, for: key, cost: image.bytesPerRow * image.height, expiresAt: bytes.expiresAt)
+            cache.insert(result, for: key, cost: result.image.bytesPerRow * result.image.height, expiresAt: bytes.expiresAt)
         }
         return result
+    }
+    func cachedImage(at url: URL, pixels: Int) async -> ArtworkBitmap? {
+        let key = Key(url: url, pixels: ArtworkDecodeSize.pixels(for: pixels))
+        if let saved = cache.value(for: key) { return saved }
+        let started = generation
+        guard let bytes = await data.cachedImage(at: url), !Task.isCancelled else { return nil }
+        do {
+            let value = try bitmap(bytes, pixels: key.pixels)
+            if started == generation { cache.insert(value, for: key, cost: value.image.bytesPerRow * value.image.height, expiresAt: value.expiresAt) }
+            return value
+        } catch { await data.discard(url); return nil }
+    }
+    private func bitmap(_ bytes: ArtworkData, pixels: Int) throws -> ArtworkBitmap {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        let thumbnailOptions: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: pixels]
+        guard let source = CGImageSourceCreateWithData(bytes.data as CFData, options),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else { throw ArtworkError.invalidData }
+        return ArtworkBitmap(image: image, expiresAt: bytes.expiresAt)
     }
     func clearMemory() async {
         generation &+= 1; cache.removeAll()
@@ -95,6 +106,12 @@ struct ArtworkPhaseView<Content: View>: View {
                 let refresh = lastRetry != retryToken; lastRetry = retryToken
                 loaded = requested; phase = .empty
                 guard let url = requested.url else { return }
+                if !refresh, let bitmap = await pipeline.cachedImage(at: url, pixels: requested.pixels) {
+                    guard !Task.isCancelled, loaded == requested else { return }
+                    var instant = Transaction(); instant.disablesAnimations = true
+                    withTransaction(instant) { phase = .success(Image(decorative: bitmap.image, scale: displayScale)) }
+                    return
+                }
                 do {
                     let bitmap = try await pipeline.image(at: url, pixels: requested.pixels, refresh: refresh)
                     guard !Task.isCancelled, loaded == requested else { return }

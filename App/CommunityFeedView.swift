@@ -199,12 +199,13 @@ struct CommunityThreadRow: View {
 struct HomeCommunityWidget: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(CommunityDestination.storageKey) private var savedSource = CommunityDestination.aniList.rawValue
     let refreshID: Int
     var activationID = 0
     @State private var filter = CommunityFilter.season
     @State private var threads: [CommunityThread] = []
-    @State private var loading = false
+    @State private var loading = true
     @State private var failed = false
     @State private var attempt = UUID()
     @State private var appliedRefreshID = 0
@@ -239,7 +240,7 @@ struct HomeCommunityWidget: View {
                             hiddenPreview: thread.hidesPreview(progress: progress))
                     }.buttonStyle(.plain)
                 }
-                if loading && previews.isEmpty { ProgressView("Loading conversations…").font(.caption) }
+                if loading && previews.isEmpty { HomeRowPlaceholder(height: visuals.value(144, 180)) }
                 else if previews.isEmpty {
                     Text(filter == .myShows && libraryIDs.isEmpty ? "Add shows to AniList to see their conversations." :
                         (failed ? "Open Community to retry." : "No conversations found for these shows yet."))
@@ -247,7 +248,9 @@ struct HomeCommunityWidget: View {
                 }
                 if failed && !previews.isEmpty { Text("Showing saved conversations · Open Community to retry").font(.caption2).foregroundStyle(.secondary) }
             }
-        }.companionPanel().accessibilityIdentifier("home-community-widget")
+        }.animation(AppMotion.content(reduceMotion), value: previews.map(\.id))
+            .animation(AppMotion.content(reduceMotion), value: loading)
+            .companionPanel().accessibilityIdentifier("home-community-widget")
             .task(id: "\(requestKey)-\(refreshID)-\(activationID)") { await load() }
     }
     @MainActor private func load() async {

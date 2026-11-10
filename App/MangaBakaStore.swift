@@ -34,6 +34,7 @@ final class MangaBakaStore: ObservableObject {
     @Published private(set) var savedAccounts: [MangaBakaAccountIdentity] = []
     @Published private(set) var activeAccountID: UUID?
     @Published private(set) var connected = false
+    @Published private(set) var restoring = true
     @Published private(set) var connecting = false
     @Published private(set) var profile: MangaBakaProfile?
     @Published private(set) var revision = UUID()
@@ -114,6 +115,7 @@ final class MangaBakaStore: ObservableObject {
     }
     func restore() async {
         guard !restored else { return }; restored = true
+        defer { restoring = false }
         #if DEBUG
         if previewAccounts {
             if AccountSwitcherPreview.active && !AccountSwitcherPreview.mangaBakaConnected { return }
@@ -140,7 +142,7 @@ final class MangaBakaStore: ObservableObject {
         #endif
         do {
             guard let saved = try keychain.load() else { return }
-            activate(saved.accounts)
+            activate(saved.accounts); restoring = false
             await refreshProfile()
         } catch { accountError = error.localizedDescription }
     }

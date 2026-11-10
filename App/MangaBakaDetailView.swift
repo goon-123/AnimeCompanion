@@ -82,7 +82,7 @@ struct MangaBakaDetailView: View {
                         if let error { NoticeView(message: error) { Task { await reload(refresh: true) } } }
                         tabContent
                         MangaBakaAttribution(providers: series.providers)
-                    }.id(selectedTab).transition(reduceMotion ? .identity : .opacity)
+                    }.id(selectedTab).transition(AppMotion.replacement(reduceMotion))
                         .padding(20).padding(.bottom, 28).readableContent(width: 1060)
                 }
             } else { ContentUnavailableView("Hidden by content settings", systemImage: "eye.slash").padding(.top, 120) }
@@ -119,7 +119,7 @@ struct MangaBakaDetailView: View {
             }.buttonStyle(.plain).accessibilityIdentifier("mangabaka-read-now")
         } else {
             Button {
-                if series.type == "novel" { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { selectedTab = .read } }
+                if series.type == "novel" { withAnimation(AppMotion.page(reduceMotion)) { selectedTab = .read } }
                 else { navigation.openMangaSearch(titles: series.searchTitles, linkingTo: account.sourceLinkTarget(for: series)) }
             } label: { readLabel(series.type == "novel" ? "Reading options" : "Find a reading source") }
                 .buttonStyle(.plain).accessibilityIdentifier("mangabaka-read-now")
@@ -133,7 +133,7 @@ struct MangaBakaDetailView: View {
         HStack(spacing: 0) {
             ForEach(tabs, id: \.self) { tab in
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { selectedTab = tab }
+                    withAnimation(AppMotion.page(reduceMotion)) { selectedTab = tab }
                 } label: {
                     VStack(spacing: 14) {
                         Text(tab.rawValue).font(.subheadline.weight(selectedTab == tab ? .bold : .medium))

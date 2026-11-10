@@ -50,6 +50,7 @@ struct MediaSectionPicker: View {
 }
 
 struct MediaExploreView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("app.mediaSection") private var mode = "anime"
     @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.classic.rawValue
@@ -67,14 +68,16 @@ struct MediaExploreView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            if design == .classic && !overlaysArtwork { classicHeader }
             Group {
             if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
             else if mode == "written" { MangaBakaExploreView() }
             else { ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters) }
-            }
-        }.safeAreaInset(edge: .top, spacing: 0) {
-            if overlaysArtwork { classicHeader }
+            }.id(design == .classic ? mode : design.rawValue)
+                .transition(AppMotion.replacement(reduceMotion))
+        }.animation(AppMotion.page(reduceMotion), value: mode)
+            .animation(AppMotion.page(reduceMotion), value: design)
+            .safeAreaInset(edge: .top, spacing: 0) {
+            if design == .classic { classicHeader }
         }.mangaBakaNavigation()
             .appAccountSwitcherSheet(isPresented: $accounts)
             .appSettingsSheet(isPresented: $settings)
@@ -110,7 +113,7 @@ struct MediaExploreView: View {
                 Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
             }.accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
         }.padding(.horizontal, 16).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background { if !overlaysArtwork { Theme.background } }
+            .background(Theme.background.opacity(overlaysArtwork ? 0 : 1))
     }
     private func switchMedia() {
         let state = navigation.explore
@@ -122,6 +125,7 @@ struct MediaExploreView: View {
 }
 
 struct MediaLibraryView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("library.mediaSection") private var mode = "all"
     var body: some View {
@@ -132,10 +136,12 @@ struct MediaLibraryView: View {
                 Text("Manga & Novels").tag("written")
             }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
                 .accessibilityIdentifier("library-media-picker")
-            if mode == "written" { MangaBakaLibraryView() }
-            else if mode == "anime" { LibraryView() }
-            else { CombinedLibraryView() }
-        }.background(Theme.background).mangaBakaNavigation()
+            Group {
+                if mode == "written" { MangaBakaLibraryView() }
+                else if mode == "anime" { LibraryView() }
+                else { CombinedLibraryView() }
+            }.id(mode).transition(AppMotion.replacement(reduceMotion))
+        }.animation(AppMotion.page(reduceMotion), value: mode).background(Theme.background).mangaBakaNavigation()
             .toolbar { ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() } }
             .onChange(of: mode) { _, value in
                 if let account = TrackingAccount.allCases.first(where: { $0.librarySection == value }) {

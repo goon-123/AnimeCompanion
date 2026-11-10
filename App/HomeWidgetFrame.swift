@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 import AnimeCore
 
@@ -15,6 +16,7 @@ enum HomeWidgetDrag {
 
 struct HomeWidgetFrame<Content: View>: View {
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let section: HomeSection
     @Binding var saved: String
     @Binding var editing: Bool
@@ -118,7 +120,7 @@ struct HomeWidgetFrame<Content: View>: View {
     }
     private func update(_ change: (inout HomePreferences) -> Void) {
         var value = preferences; change(&value)
-        withAnimation(.easeInOut(duration: 0.18)) { saved = value.saved }
+        withAnimation(AppMotion.content(reduceMotion)) { saved = value.saved }
     }
 }
 
@@ -133,7 +135,7 @@ struct HomeWidgetDropDelegate: DropDelegate {
         var value = HomePreferences(saved: saved)
         guard let from = value.order.firstIndex(of: source), let to = value.order.firstIndex(of: target) else { return }
         if from < to { value.move(source, after: target) } else { value.move(source, before: target) }
-        withAnimation(.easeInOut(duration: 0.18)) { saved = value.saved }
+        withAnimation(AppMotion.content(UIAccessibility.isReduceMotionEnabled)) { saved = value.saved }
     }
     func dropUpdated(info: DropInfo) -> DropProposal? { validateDrop(info: info) ? DropProposal(operation: .move) : nil }
     func performDrop(info: DropInfo) -> Bool {

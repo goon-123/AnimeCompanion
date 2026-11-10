@@ -219,6 +219,7 @@ private struct AnimeEpisodeCard: View {
     let play: () -> Void
     let setWatched: (Bool) -> Void
     @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var width: CGFloat { sizeClass == .regular ? 180 : 108 }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -233,7 +234,8 @@ private struct AnimeEpisodeCard: View {
             }
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radius))
-            .overlay { RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.border, lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(watched ? Theme.accent.opacity(0.55) : Theme.border, lineWidth: watched ? 1.5 : 1) }
+            .animation(AppMotion.content(reduceMotion), value: watched)
             .accessibilityIdentifier("episode-row-\(episode.number)")
             .accessibilityValue(watched ? "Watched" : (canPlay ? "Unwatched" : "Not yet aired"))
             .contentShape(RoundedRectangle(cornerRadius: Theme.radius))
@@ -247,13 +249,17 @@ private struct AnimeEpisodeCard: View {
         ArtworkImage(url: episode.imageURL, pointSize: width) { $0.resizable().scaledToFill() } placeholder: {
             EpisodeArtworkPlaceholder(number: episode.number)
         }.frame(width: width, height: width * 9 / 16).clipped().clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(alignment: .topTrailing) {
-                if watched { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, Theme.accent).padding(5).accessibilityLabel("Watched") }
-            }.accessibilityHidden(true)
+            .accessibilityHidden(true)
     }
     private var labels: some View {
-        Button { expanded.toggle() } label: {
+        Button { withAnimation(AppMotion.content(reduceMotion)) { expanded.toggle() } } label: {
         VStack(alignment: .leading, spacing: 5) {
+            if watched {
+                Label("Watched", systemImage: "checkmark.circle.fill").font(.caption2.bold())
+                    .foregroundStyle(Theme.accent).padding(.horizontal, 9).padding(.vertical, 5)
+                    .background(Theme.accent.opacity(0.16), in: Capsule())
+                    .accessibilityIdentifier("episode-watched-\(episode.number)")
+            }
             HStack(spacing: 5) {
                 Text("Episode \(episode.number)").font(.headline).foregroundStyle(.primary)
                 if episode.overview != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(.secondary) }
@@ -273,7 +279,7 @@ private struct AnimeEpisodeCard: View {
     }
     private var actions: some View {
         Button(action: play) {
-            Image(systemName: canPlay ? "play.fill" : "clock")
+            Image(systemName: canPlay ? (watched ? "arrow.counterclockwise" : "play.fill") : "clock")
                 .font(.headline).frame(width: 44, height: 44).background(Theme.accent.opacity(0.12), in: Circle())
         }.buttonStyle(.plain).disabled(!canPlay).accessibilityLabel((watched ? "Replay" : "Find streams for") + " episode \(episode.number)")
             .accessibilityIdentifier("episode-play-\(episode.number)").foregroundStyle(Theme.accent)

@@ -38,8 +38,9 @@ struct AnimeCompanionApp: App {
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
-                    await store.refreshLibraryIfNeeded()
-                    await store.exploreDubs.keepUpdated(using: store.dubs)
+                    async let library: Void = store.refreshLibraryIfNeeded()
+                    async let dubbed: Void = store.exploreDubs.keepUpdated(using: store.dubs)
+                    _ = await (library, dubbed)
                 }
         }
     }
@@ -290,7 +291,8 @@ struct AppTabs: View {
     private var destinationTabs: some View {
         TabView(selection: $navigation.selectedTab) {
             ForEach(navigation.tabPreferences.visible) { tab in
-                pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
+                pane(tab).modifier(PageArrival(active: navigation.selectedTab == tab))
+                    .tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)

@@ -44,6 +44,22 @@ public actor ArtworkDataClient {
             self.transport = URLSessionTransport(session: URLSession(configuration: configuration))
         }
     }
+    /// Read public cached bytes without starting a network request.
+    public func cachedImage(at url: URL) -> ArtworkData? {
+        guard ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil,
+              url.user == nil, url.password == nil else { return nil }
+        if let value = cache.value(for: url) { return value }
+        var request = URLRequest(url: url)
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        guard let saved = httpCache?.cachedResponse(for: request),
+              let response = saved.response as? HTTPURLResponse, response.statusCode == 200,
+              !saved.data.isEmpty, saved.data.count <= 12_000_000,
+              response.mimeType.map({ $0.lowercased().hasPrefix("image/") || $0 == "application/octet-stream" }) ?? true,
+              Self.lifetime(response, now: Date()) > 0 else { return nil }
+        let value = ArtworkData(data: saved.data, expiresAt: Date().addingTimeInterval(60))
+        cache.insert(value, for: url, cost: saved.data.count, expiresAt: value.expiresAt)
+        return value
+    }
     public func image(at url: URL, refresh: Bool = false) async throws -> ArtworkData {
         try Task.checkCancellation()
         guard ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil,

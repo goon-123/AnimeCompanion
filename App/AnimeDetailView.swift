@@ -83,7 +83,7 @@ struct AnimeDetailView: View {
                         tabPicker
                         VStack(alignment: .leading, spacing: 0) { tabContent(anime) }
                             .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .id(selectedTab).transition(reduceMotion ? .identity : .opacity)
+                            .id(selectedTab).transition(AppMotion.replacement(reduceMotion))
                             .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 90).readableContent(width: 1060)
                             .id("series-tab-content")
                     }
@@ -140,7 +140,7 @@ struct AnimeDetailView: View {
     private var tabPicker: some View {
         HStack(spacing: 0) {
             ForEach(tabs, id: \.self) { tab in
-                Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { selectedTab = tab } } label: {
+                Button { withAnimation(AppMotion.page(reduceMotion)) { selectedTab = tab } } label: {
                     VStack(spacing: 12) {
                         Text(style == .classic && tab == .info ? "Info" : tab.rawValue).font(.subheadline.weight(selectedTab == tab ? .bold : .medium))
                             .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 44)

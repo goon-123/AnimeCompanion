@@ -18,6 +18,7 @@ struct HomeWidgetContent: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("manga.showMatureSources") private var matureSources = false
     @State private var settings = false
     @State private var watching: Anime?
@@ -52,6 +53,9 @@ struct HomeWidgetContent: View {
     var body: some View {
         widget(section)
             .environment(\.posterArtworkBadgesEnabled, false)
+            .animation(AppMotion.content(reduceMotion), value: shows.map(\.mediaId))
+            .animation(AppMotion.content(reduceMotion), value: recent.map(\.id))
+            .animation(AppMotion.content(reduceMotion), value: trackedBooks.map(\.id))
             .appSettingsSheet(isPresented: $settings)
             .sheet(item: $watching) { WatchAnimeView(anime: $0) }
     }
@@ -126,7 +130,7 @@ struct HomeWidgetContent: View {
     private var watchSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeading(.watching, destination: .library)
-            if anime.loadingLibrary && shows.isEmpty { ProgressView("Loading your library…").frame(minHeight: 70) }
+            if (anime.restoring || anime.loadingLibrary) && shows.isEmpty { HomeRowPlaceholder(height: visuals.value(136, 180)) }
             else if shows.isEmpty {
                 empty("Your watching list starts here.", detail: "Add an anime from Explore, or connect AniList.", symbol: "play.rectangle")
             } else {
@@ -146,7 +150,9 @@ struct HomeWidgetContent: View {
     private var readingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeading(.reading, destination: .library)
-            if recent.isEmpty && trackedBooks.isEmpty {
+            if recent.isEmpty && trackedBooks.isEmpty && (reading.loading || books.restoring || books.loadingLibrary || (!reading.state.records.isEmpty && extensions.loading)) {
+                HomeRowPlaceholder(height: visuals.value(104, 144))
+            } else if recent.isEmpty && trackedBooks.isEmpty {
                 empty("Your next chapter is waiting.", detail: "Read from a source to see your saved place here.", symbol: "book")
             } else {
                 LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 12) {
