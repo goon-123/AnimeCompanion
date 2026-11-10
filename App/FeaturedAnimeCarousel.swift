@@ -113,8 +113,11 @@ struct FeaturedAnimeCarousel: View {
             for await (id, value) in group {
                 guard !Task.isCancelled else { group.cancelAll(); return }
                 if ids.contains(id) {
-                    prepared[id] = value
-                    if value.logo != nil { titles.preparedLogo(for: id, protected: protectedIDs) }
+                    let previous = prepared[id]
+                    let resolved = PreparedSpotlightArtwork(artwork: value.artwork.fillingMissing(with: previous?.artwork ?? SeriesArtwork()),
+                        logo: value.logo ?? previous?.logo)
+                    prepared[id] = resolved
+                    if resolved.logo != nil { titles.preparedLogo(for: id, protected: protectedIDs) }
                     revealOffscreen()
                 }
                 if let item = remaining.next() { group.addTask { await prepareSpotlightLogo(item, api: api, pixels: pixelCount) } }
