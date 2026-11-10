@@ -25,6 +25,12 @@ public struct SeriesArtworkPreferences: Equatable, Sendable {
     public func posterURL(artwork: SeriesArtwork, anime: Anime) -> URL? {
         artwork.poster ?? (poster ? anime.coverURL : nil)
     }
+    public func spotlightURL(artwork: SeriesArtwork, anime: Anime, landscape: Bool) -> URL? {
+        let resolved = landscape ? artwork.backdrop ?? artwork.poster : artwork.poster ?? artwork.backdrop
+        let cover = poster ? anime.coverURL : nil
+        let backdrop = banner ? anime.bannerImage.flatMap(URL.init(string:)) : nil
+        return SeriesArtworkQuality.spotlight(resolved ?? (landscape ? backdrop ?? cover : cover ?? backdrop))
+    }
 }
 
 public struct SeriesMoreInfoPreferences: Equatable, Sendable {

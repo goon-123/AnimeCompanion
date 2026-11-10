@@ -5,6 +5,24 @@ import FoundationNetworking
 #endif
 
 final class SeriesArtworkTests: XCTestCase {
+    func testSpotlightRepairsLegacyMetadataWithoutAPosterAndCachesTheResult() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cache = HomeContentCache(directory: folder)
+        await cache.save(HomeContentSnapshot(SeriesArtwork(logo: URL(string: "https://art.example/logo.png"),
+            backdrop: URL(string: "https://art.example/backdrop.jpg"))), key: "series-art-v1-20458-20785-false")
+        let transport = LogoFirstTransport()
+        let client = SeriesArtworkClient(transport: transport, cache: cache)
+        let art = await client.spotlightArtwork(for: try anime())
+        XCTAssertEqual(art.poster?.lastPathComponent, "poster.jpg")
+        _ = await client.spotlightArtwork(for: try anime())
+        let requests = await transport.fallbacks
+        XCTAssertEqual(requests, 1)
+        let primaries = await transport.primaries
+        XCTAssertEqual(primaries, 0)
+        let cached = await client.cachedArtwork(for: try anime())
+        XCTAssertEqual(cached?.poster, art.poster)
+    }
     func testLogoDoesNotWaitForBackdropFallbackAndFullDetailsStillResolveIt() async throws {
         let transport = LogoFirstTransport()
         let client = SeriesArtworkClient(transport: transport, cache: HomeContentCache(directory: nil))
@@ -128,7 +146,7 @@ private actor LogoFirstTransport: HTTPTransport {
             json = #"{"meta":{"id":"tt3874528","type":"series","logo":"https://art.example/logo.png"}}"#
         } else {
             fallbacks += 1
-            json = #"{"mappings":{"anilist_id":20458,"mal_id":20785,"type":"TV"},"images":[{"coverType":"Fanart","url":"https://art.example/backdrop.jpg"}]}"#
+            json = #"{"mappings":{"anilist_id":20458,"mal_id":20785,"type":"TV"},"images":[{"coverType":"Fanart","url":"https://art.example/backdrop.jpg"},{"coverType":"Poster","url":"https://art.example/poster.jpg"}]}"#
         }
         return (Data(json.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }

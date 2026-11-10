@@ -5,23 +5,7 @@ enum AppMotion {
     static func page(_ reduced: Bool) -> Animation { .easeInOut(duration: reduced ? 0.12 : 0.28) }
     static func content(_ reduced: Bool) -> Animation { .easeOut(duration: reduced ? 0.12 : 0.30) }
     static func replacement(_ reduced: Bool) -> AnyTransition {
-        reduced ? .opacity : .opacity.combined(with: .offset(y: 6))
-    }
-}
-
-/// Animate arrival inside the retained native tab pane, without rebuilding its stack.
-struct PageArrival: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var arrived = false
-    func body(content: Content) -> some View {
-        content.opacity(arrived ? 1 : 0.82).offset(y: arrived || reduceMotion ? 0 : 6)
-            .task(id: active) {
-                guard active else { arrived = false; return }
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-                withAnimation(AppMotion.page(reduceMotion)) { arrived = true }
-            }
+        .opacity
     }
 }
 
@@ -31,7 +15,7 @@ struct ContentArrival: ViewModifier {
     var delay = 0.0
     @State private var appeared = false
     func body(content: Content) -> some View {
-        content.opacity(appeared ? 1 : 0).offset(y: appeared || reduceMotion ? 0 : 8)
+        content.opacity(appeared ? 1 : 0)
             .task {
                 guard !appeared else { return }
                 await Task.yield()

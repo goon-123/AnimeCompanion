@@ -8,7 +8,6 @@ struct CatalogEntrance: ViewModifier {
 
     func body(content: Content) -> some View {
         content.opacity(revealed ? 1 : 0)
-            .offset(y: revealed || reduceMotion ? 0 : 14)
             .task {
                 guard !revealed else { return }
                 // Give the initial hidden position a rendered frame before entering.

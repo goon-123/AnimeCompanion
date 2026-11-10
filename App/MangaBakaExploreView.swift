@@ -72,10 +72,9 @@ struct MediaExploreView: View {
             if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
             else if mode == "written" { MangaBakaExploreView() }
             else { ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters) }
-            }.id(design == .classic ? mode : design.rawValue)
-                .transition(AppMotion.replacement(reduceMotion))
-        }.animation(AppMotion.page(reduceMotion), value: mode)
-            .animation(AppMotion.page(reduceMotion), value: design)
+            }.modifier(ContentArrival()).id(design == .classic ? mode : design.rawValue)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.background.ignoresSafeArea())
             .safeAreaInset(edge: .top, spacing: 0) {
             if design == .classic { classicHeader }
         }.mangaBakaNavigation()
@@ -116,10 +115,13 @@ struct MediaExploreView: View {
             .background(Theme.background.opacity(overlaysArtwork ? 0 : 1))
     }
     private func switchMedia() {
-        let state = navigation.explore
-        state.path = NavigationPath(); state.detailPath = NavigationPath()
-        state.animeID = nil; state.column = .sidebar; state.visibility = .all
-        mode = mode == "anime" ? "written" : "anime"
+        var transaction = Transaction(animation: nil); transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            let state = navigation.explore
+            state.path = NavigationPath(); state.detailPath = NavigationPath()
+            state.animeID = nil; state.column = .sidebar; state.visibility = .all
+            mode = mode == "anime" ? "written" : "anime"
+        }
     }
 
 }
@@ -140,8 +142,8 @@ struct MediaLibraryView: View {
                 if mode == "written" { MangaBakaLibraryView() }
                 else if mode == "anime" { LibraryView() }
                 else { CombinedLibraryView() }
-            }.id(mode).transition(AppMotion.replacement(reduceMotion))
-        }.animation(AppMotion.page(reduceMotion), value: mode).background(Theme.background).mangaBakaNavigation()
+            }.modifier(ContentArrival()).id(mode)
+        }.background(Theme.background).mangaBakaNavigation()
             .toolbar { ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() } }
             .onChange(of: mode) { _, value in
                 if let account = TrackingAccount.allCases.first(where: { $0.librarySection == value }) {

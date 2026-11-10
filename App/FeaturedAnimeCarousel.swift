@@ -20,6 +20,9 @@ struct FeaturedAnimeCarousel: View {
     @State private var titles = SpotlightTitlePresentation()
     @State private var prepared: [Int: PreparedSpotlightArtwork] = [:]
     @State private var presented: [Int: PreparedSpotlightArtwork] = [:]
+    @State private var heroArtwork: [Int: SeriesArtwork] = [:]
+    @AppStorage(SeriesArtworkPreferences.bannerKey) private var bannerFallback = false
+    @AppStorage(SeriesArtworkPreferences.posterKey) private var posterFallback = false
     private var items: [Anime] { Array(anime.prefix(5)) }
     private var ids: Set<Int> { Set(items.map(\.id)) }
     private var active: Anime? { items.first { $0.id == selectedID } ?? items.first }
@@ -34,9 +37,12 @@ struct FeaturedAnimeCarousel: View {
                         ForEach(items) { item in
                             FeaturedAnimePanel(anime: item, topInset: topInset,
                                 background: PosterAccent(hex: item.coverImage?.color)?.backdrop ?? background,
-                                artwork: presented[item.id]?.artwork ?? SeriesArtwork(),
+                                artwork: heroArtwork[item.id] ?? presented[item.id]?.artwork ?? SeriesArtwork(),
                                 logo: presented[item.id]?.logo, titlePresentation: titles.title(for: item.id))
                                 .frame(width: viewport.size.width, height: height).id(item.id)
+                                .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                    content.opacity(phase.isIdentity ? 1 : 0.85)
+                                }
                                 .onGeometryChange(for: Bool.self) { page in
                                     let overlap = page.frame(in: .global).intersection(viewport.frame(in: .global))
                                     return !overlap.isNull && overlap.width > 1 && overlap.height > 1
@@ -58,12 +64,15 @@ struct FeaturedAnimeCarousel: View {
                             .accessibilityIdentifier("featured-page-\(index)")
                     }
                 }
-            }.accessibilityElement(children: .contain).accessibilityIdentifier("explore-featured-carousel")
+            }.background(Theme.background)
+                .accessibilityElement(children: .contain).accessibilityIdentifier("explore-featured-carousel")
+                .task(id: prefetchKey(width: viewport.size.width)) { await prefetchImages(width: viewport.size.width) }
         }.frame(height: height + 40)
             .onChange(of: items.map(\.id)) { _, values in
                 visibleIDs.formIntersection(values)
                 titles.retain(Set(values)); prepared = prepared.filter { values.contains($0.key) }
                 presented = presented.filter { values.contains($0.key) }
+                heroArtwork = heroArtwork.filter { values.contains($0.key) }
                 if !values.contains(selectedID ?? -1) { selectedID = values.first }
             }
             .onChange(of: selectedID) { _, _ in revealOffscreen() }
@@ -75,12 +84,41 @@ struct FeaturedAnimeCarousel: View {
                 for (id, value) in prepared { presented[id] = value }
             }
             .task(id: "\(items.map(\.id))-\(pixels)") { await prepareLogos() }
-            .task(id: active) {
-                guard let active else { return }
-                let accent = await PosterColor.accent(for: active)
-                guard !Task.isCancelled, self.active?.id == active.id else { return }
-                withAnimation(AppMotion.content(reduceMotion)) { background = accent.backdrop }
+            .task(id: items.map(\.id)) { await prepareHeroArtwork() }
+    }
+    private func imageURLs(width: CGFloat) -> [URL] {
+        let index = items.firstIndex { $0.id == active?.id } ?? 0
+        let preferences = SeriesArtworkPreferences(banner: bannerFallback, poster: posterFallback)
+        return items.dropFirst(index).prefix(2).compactMap {
+            preferences.spotlightURL(artwork: heroArtwork[$0.id] ?? SeriesArtwork(), anime: $0, landscape: width > height * 1.2)
+        }
+    }
+    private func prefetchKey(width: CGFloat) -> String {
+        "\(ArtworkSizing.pixelLimit(points: Double(max(width, height)), scale: Double(displayScale)))-" + imageURLs(width: width).map(\.absoluteString).joined(separator: "|")
+    }
+    private func prefetchImages(width: CGFloat) async {
+        let urls = imageURLs(width: width)
+        let size = ArtworkSizing.pixelLimit(points: Double(max(width, height)), scale: Double(displayScale))
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls { group.addTask { _ = try? await ArtworkPipeline.shared.image(at: url, pixels: size) } }
+        }
+    }
+    @MainActor private func prepareHeroArtwork() async {
+        let lineup = items, api = store.seriesArtwork
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-") }) { return }
+        #endif
+        await withTaskGroup(of: (Int, SeriesArtwork).self) { group in
+            var remaining = lineup.makeIterator()
+            for _ in 0..<2 {
+                if let item = remaining.next() { group.addTask { (item.id, await api.spotlightArtwork(for: item)) } }
             }
+            for await (id, artwork) in group {
+                guard !Task.isCancelled else { group.cancelAll(); return }
+                if ids.contains(id) { heroArtwork[id] = artwork.fillingMissing(with: heroArtwork[id] ?? SeriesArtwork()) }
+                if let item = remaining.next() { group.addTask { (item.id, await api.spotlightArtwork(for: item)) } }
+            }
+        }
     }
     private func revealOffscreen() {
         titles.revealOffscreen(protected: protectedIDs)
@@ -97,6 +135,7 @@ struct FeaturedAnimeCarousel: View {
         // A cache-only probe reserves the logo slot; a cached logo never flashes text.
         for item in lineup {
             let artwork = await api.cachedArtwork(for: item) ?? SeriesArtwork()
+            heroArtwork[item.id] = (heroArtwork[item.id] ?? SeriesArtwork()).fillingMissing(with: artwork)
             let bitmap: ArtworkBitmap?
             if let url = artwork.logo { bitmap = await ArtworkPipeline.shared.cachedImage(at: url, pixels: pixelCount) }
             else { bitmap = nil }
@@ -119,6 +158,7 @@ struct FeaturedAnimeCarousel: View {
                     let resolved = PreparedSpotlightArtwork(artwork: value.artwork.fillingMissing(with: previous?.artwork ?? SeriesArtwork()),
                         logo: value.logo ?? previous?.logo)
                     prepared[id] = resolved
+                    heroArtwork[id] = (heroArtwork[id] ?? SeriesArtwork()).fillingMissing(with: resolved.artwork)
                     if resolved.logo != nil { titles.preparedLogo(for: id, protected: protectedIDs) }
                     revealOffscreen()
                 }
@@ -154,6 +194,8 @@ private struct FeaturedAnimePanel: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.displayScale) private var displayScale
+    @AppStorage(SeriesArtworkPreferences.bannerKey) private var bannerFallback = false
+    @AppStorage(SeriesArtworkPreferences.posterKey) private var posterFallback = false
     let anime: Anime
     let topInset: CGFloat
     let background: PosterAccent
@@ -172,7 +214,7 @@ private struct FeaturedAnimePanel: View {
                 LinearGradient(stops: [.init(color: .black.opacity(0.34), location: 0), .init(color: .clear, location: 0.28),
                     .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 LinearGradient(stops: [.init(color: .clear, location: 0.30), .init(color: background.color.opacity(0.15), location: 0.46),
-                    .init(color: background.color.opacity(0.80), location: 0.73), .init(color: .black, location: 1)],
+                    .init(color: Theme.background.opacity(0.80), location: 0.73), .init(color: Theme.background, location: 0.98)],
                     startPoint: .top, endPoint: .bottom).allowsHitTesting(false)
                 AnimePosterBadges(anime: anime, identifierPrefix: "featured")
                     .padding(.top, topInset).padding(.bottom, 10)
@@ -185,11 +227,11 @@ private struct FeaturedAnimePanel: View {
             .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
-        let banner = anime.bannerImage.flatMap(URL.init(string:))
-        let url = wide ? (artwork.backdrop ?? banner ?? anime.coverURL) : anime.coverURL
+        let url = SeriesArtworkPreferences(banner: bannerFallback, poster: posterFallback)
+            .spotlightURL(artwork: artwork, anime: anime, landscape: wide)
         return AnimeLink(id: anime.id) {
-            ArtworkImage(url: url, pointSize: max(width, height)) { image in image.resizable().scaledToFill() }
-                placeholder: { background.color }
+            SpotlightHeroImage(url: url, pointSize: max(width, height), alignment: wide ? .center : .top,
+                placeholder: background.color)
                 .frame(width: width, height: height, alignment: wide ? .center : .top).clipped().contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel("View \(anime.displayTitle)")
             .accessibilityHint("Opens series details").accessibilityIdentifier("featured-poster-\(anime.id)")
@@ -217,7 +259,7 @@ private struct FeaturedAnimePanel: View {
                     HStack(spacing: 10) { watchAction; detailsAction; libraryAction }
                     VStack(alignment: .leading, spacing: 8) { watchAction; HStack { detailsAction; libraryAction } }
                 }
-            }.frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
+            }.foregroundStyle(Color.primary).frame(maxWidth: wide ? 740 : .infinity, alignment: .leading)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var title: some View {
@@ -246,6 +288,49 @@ private struct FeaturedAnimePanel: View {
         }.buttonStyle(.plain).accessibilityLabel(store.entry(for: anime.id) == nil ? "Add \(anime.displayTitle) to Library" : "Edit Library tracking for \(anime.displayTitle)")
             .disabled(store.isSignedIn && store.loadingLibrary)
             .accessibilityIdentifier("featured-add-library-\(anime.id)")
+    }
+}
+
+/// Keep the current bitmap until a replacement is decoded. A cached slide is
+/// ready on entry; a cold request fades in without a blank intermediate image.
+private struct SpotlightHeroImage: View {
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let url: URL?
+    let pointSize: CGFloat
+    let alignment: Alignment
+    let placeholder: Color
+    @State private var bitmap: ArtworkBitmap?
+    @State private var shownURL: URL?
+    @State private var shownPixels = 0
+    private var pixels: Int { ArtworkSizing.pixelLimit(points: Double(pointSize), scale: Double(displayScale)) }
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                placeholder
+                if let bitmap {
+                    Image(decorative: bitmap.image, scale: displayScale).resizable().scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: alignment)
+                        .clipped().id(shownURL).transition(.opacity)
+                }
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
+        }.task(id: "\(url?.absoluteString ?? "")-\(pixels)") {
+            guard let url else { bitmap = nil; shownURL = nil; return }
+            if shownURL == url, shownPixels == pixels, bitmap != nil { return }
+            let cached = await ArtworkPipeline.shared.cachedImage(at: url, pixels: pixels)
+            do {
+                let resolved: ArtworkBitmap
+                if let cached { resolved = cached }
+                else { resolved = try await ArtworkPipeline.shared.image(at: url, pixels: pixels) }
+                guard !Task.isCancelled else { return }
+                if cached != nil && bitmap == nil {
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) { bitmap = resolved; shownURL = url; shownPixels = pixels }
+                } else {
+                    withAnimation(AppMotion.content(reduceMotion)) { bitmap = resolved; shownURL = url; shownPixels = pixels }
+                }
+            } catch { /* A failed refresh keeps this series' previously decoded image. */ }
+        }
     }
 }
 

@@ -5,7 +5,7 @@ import AnimeCore
 /// Shared, semantic colors keep browsing, reading and provider screens coherent.
 enum Theme {
     static let accent = adaptive(light: UIColor(red: 0.36, green: 0.27, blue: 0.83, alpha: 1), dark: UIColor(red: 0.76, green: 0.70, blue: 1, alpha: 1))
-    static let background = adaptive(light: UIColor(red: 0.96, green: 0.96, blue: 0.98, alpha: 1), dark: UIColor(red: 0.045, green: 0.045, blue: 0.065, alpha: 1))
+    static let background = adaptive(light: UIColor(red: 0.96, green: 0.96, blue: 0.98, alpha: 1), dark: .black)
     static let surface = adaptive(light: .white, dark: UIColor(red: 0.09, green: 0.09, blue: 0.12, alpha: 1))
     static let secondarySurface = Color(uiColor: .tertiarySystemFill)
     static let border = Color.primary.opacity(0.08)
