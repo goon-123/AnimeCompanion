@@ -19,7 +19,7 @@ final class SpotlightArtworkTests: XCTestCase {
         let anime = try JSONDecoder().decode(Anime.self, from: Data(#"{"id":97940,"bannerImage":"https://anilist.co/banner.jpg","coverImage":{"extraLarge":"https://anilist.co/cover.jpg"}}"#.utf8))
         let poster = URL(string: "https://art.example/poster.jpg")!, backdrop = URL(string: "https://art.example/backdrop.jpg")!
         let defaults = SeriesArtworkPreferences()
-        let art = SeriesArtwork(poster: poster, backdrop: backdrop)
+        let art = SeriesArtwork(backdrop: backdrop, poster: poster)
         XCTAssertEqual(defaults.spotlightURL(artwork: art, anime: anime, landscape: false), poster)
         XCTAssertEqual(defaults.spotlightURL(artwork: art, anime: anime, landscape: true), backdrop)
         XCTAssertNil(defaults.spotlightURL(artwork: SeriesArtwork(), anime: anime, landscape: false))
