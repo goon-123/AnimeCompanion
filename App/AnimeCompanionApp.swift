@@ -333,7 +333,12 @@ struct AppTabs: View {
         switch tab {
         case .home: AnimeTabPane(state: navigation.home, layout: .fullWidth) { HomeView() }
         case .explore:
-            AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
+            // Measure outside navigation: showing/hiding a destination's bar must
+            // not resize Spotlight while pushing or returning to Explore.
+            GeometryReader { viewport in
+                AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
+                    .environment(\.animeBrowseViewportHeight, viewport.size.height + viewport.safeAreaInsets.top)
+            }
         case .library:
             AnimeTabPane(state: navigation.library, layout: librarySection == "anime" ? navigation.tabletLayout : .fullWidth) { MediaLibraryView() }
         case .manga: MangaTabPane(state: navigation.manga)
@@ -436,7 +441,12 @@ private struct AnimeTabPane<Content: View>: View {
 
 private struct AnimeDetailContextKey: EnvironmentKey { static let defaultValue = false }
 private struct AnimeSplitPresentationKey: EnvironmentKey { static let defaultValue = false }
+private struct AnimeBrowseViewportHeightKey: EnvironmentKey { static let defaultValue: CGFloat? = nil }
 extension EnvironmentValues {
+    var animeBrowseViewportHeight: CGFloat? {
+        get { self[AnimeBrowseViewportHeightKey.self] }
+        set { self[AnimeBrowseViewportHeightKey.self] = newValue }
+    }
     var animeSplitPresentation: Bool {
         get { self[AnimeSplitPresentationKey.self] }
         set { self[AnimeSplitPresentationKey.self] = newValue }

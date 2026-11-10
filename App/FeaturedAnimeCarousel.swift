@@ -14,7 +14,7 @@ struct FeaturedAnimeCarousel: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @GestureState private var paging = false
+    @State private var paging = false
     @State private var selectedID: Int?
     @State private var visibleIDs = Set<Int>()
     @State private var titles = SpotlightTitlePresentation()
@@ -47,7 +47,7 @@ struct FeaturedAnimeCarousel: View {
                         }
                     }.scrollTargetLayout()
                 }.scrollTargetBehavior(.paging).scrollPosition(id: $selectedID)
-                    .simultaneousGesture(DragGesture(minimumDistance: 4).updating($paging) { _, state, _ in state = true })
+                    .modifier(SpotlightScrollActivity(paging: $paging))
                 HStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         Button { withAnimation(AppMotion.page(reduceMotion)) { selectedID = item.id } } label: {
@@ -67,7 +67,9 @@ struct FeaturedAnimeCarousel: View {
                 if !values.contains(selectedID ?? -1) { selectedID = values.first }
             }
             .onChange(of: selectedID) { _, _ in revealOffscreen() }
+            .onChange(of: paging) { _, active in if !active { revealOffscreen() } }
             .onDisappear {
+                paging = false
                 visibleIDs = []
                 titles.leaveViewport()
                 for (id, value) in prepared { presented[id] = value }
@@ -122,6 +124,20 @@ struct FeaturedAnimeCarousel: View {
                 }
                 if let item = remaining.next() { group.addTask { await prepareSpotlightLogo(item, api: api, pixels: pixelCount) } }
             }
+        }
+    }
+}
+
+/// Observe the native pager without installing a drag recognizer over its image.
+/// Vertical drags remain available to Explore's enclosing scroll view.
+private struct SpotlightScrollActivity: ViewModifier {
+    @Binding var paging: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollPhaseChange { _, phase in paging = phase != .idle }
+        } else {
+            // On iOS 17, page geometry and selection still protect visible titles.
+            content
         }
     }
 }

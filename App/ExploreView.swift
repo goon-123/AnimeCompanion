@@ -7,6 +7,7 @@ struct ExploreView: View {
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.animeSplitPresentation) private var usesSplit
+    @Environment(\.animeBrowseViewportHeight) private var browseViewportHeight
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
@@ -109,7 +110,7 @@ struct ExploreView: View {
     }
     private func featuredHeight(in geometry: GeometryProxy) -> CGFloat {
         CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
-            viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
+            viewportHeight: Double(browseViewportHeight ?? (geometry.size.height + geometry.safeAreaInsets.top)),
             fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
             splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0)
     }
