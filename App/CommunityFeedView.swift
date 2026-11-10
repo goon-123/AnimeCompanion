@@ -211,8 +211,12 @@ struct HomeCommunityWidget: View {
     @State private var loadedKey = ""
     private var source: CommunityDestination { CommunityDestination(preference: savedSource) }
     private var progress: [Int: Int] { Dictionary(store.entries.map { ($0.mediaId, $0.progressValue) }, uniquingKeysWith: max) }
-    private var libraryIDs: [Int] { store.visibleEntries.compactMap(\.media).map(\.id).sorted() }
-    private var requestKey: String { "\(source)-\(filter)-\(store.includeAdult)-\(store.viewer?.id ?? 0)-\(filter == .myShows ? libraryIDs : [])" }
+    private var libraryIDs: [Int] {
+        var seen = Set<Int>()
+        return store.visibleEntries.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.compactMap(\.media)
+            .map(\.id).filter { seen.insert($0).inserted }
+    }
+    private var requestKey: String { "\(source)-\(filter)-\(SeasonSelection.current().label)-\(store.includeAdult)-\(store.viewer?.id ?? 0)-\(filter == .myShows ? libraryIDs : [])" }
     private var previews: [CommunityThread] {
         guard loadedKey == requestKey else { return [] }
         return Array(threads.filter { store.includeAdult || !$0.media.contains { $0.isAdult == true } }.prefix(2))
@@ -254,11 +258,21 @@ struct HomeCommunityWidget: View {
         loading = true
         defer { if attempt == current { loading = false } }
         do {
-            let ids: [Int]
+            var ids: [Int] = []
             if selected == .myShows { ids = libraryIDs }
             else {
-                let lineup = try await store.homeCatalog.season(.current(), includeAdult: adult, refresh: refreshID != appliedRefreshID)
-                ids = lineup.value.filter { store.isVisible($0) }.map(\.id)
+                if let saved = await store.homeCatalog.cached(.current(), includeAdult: adult) {
+                    ids = saved.value.filter { store.isVisible($0) }.map(\.id)
+                    if let cached = await store.homeCommunity.cached(mediaIDs: ids, includeAdult: adult) {
+                        guard attempt == current, requestKey == key, !Task.isCancelled else { return }
+                        threads = cached.value.threads; loadedKey = key
+                    }
+                }
+                do {
+                    let lineup = try await store.homeCatalog.season(.current(), includeAdult: adult, refresh: refreshID != appliedRefreshID)
+                    ids = lineup.value.filter { store.isVisible($0) }.map(\.id)
+                } catch is CancellationError { return }
+                catch { if ids.isEmpty { throw error }; failed = true }
             }
             try Task.checkCancellation()
             guard attempt == current, requestKey == key else { return }
