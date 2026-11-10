@@ -258,11 +258,14 @@ jobs:
           python3 scripts/check-safari-bundle.py
           npm --prefix Tools/SafariExtension ci --ignore-scripts --no-audit --no-fund
           npm --prefix Tools/SafariExtension test
-      - name: Install WebKit browser
-        working-directory: Tools/SafariExtension
-        run: npx playwright install --with-deps webkit
       - name: Exercise real playback, embedded frames and SPA navigation
-        run: npm --prefix Tools/SafariExtension run test:browser
+        run: |
+          # Match the browser image to package-lock; avoid installing hundreds of
+          # OS packages from a runner mirror before every unrelated app build.
+          node -e "if (require('./Tools/SafariExtension/package.json').devDependencies.playwright !== '1.62.1') throw new Error('Update the pinned Playwright image with the package version')"
+          docker run --rm --init --ipc=host \
+            -v "$GITHUB_WORKSPACE:/work" -w /work/Tools/SafariExtension \
+            mcr.microsoft.com/playwright:v1.62.1-noble npm run test:browser
       - name: Upload Safari browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
