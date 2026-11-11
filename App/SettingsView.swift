@@ -230,15 +230,29 @@ private struct TrackingSettingsView: View {
 }
 
 struct PlayerSettingsView: View {
+    @EnvironmentObject private var playback: PlaybackStore
     var body: some View {
         Form {
             Section {
                 LabeledContent("External player", value: "VidHub")
-                Text("Videos open in VidHub. Supported versions return your playback position so you can resume here.").font(.subheadline).foregroundStyle(.secondary)
+                Text("Videos open in VidHub. Supported versions return your playback position when you come back to AnimeCompanion.").font(.subheadline).foregroundStyle(.secondary)
                 Link("VidHub integration help", destination: URL(string: "https://vidhub.okaapps.com/3rd-party-app-integration/")!)
             }
+            Section {
+                Toggle("Automatically mark episodes watched", isOn: $playback.autoMarkEpisodes)
+                    .accessibilityIdentifier("settings-auto-mark-watched")
+                if playback.autoMarkEpisodes {
+                    Picker("Completion threshold", selection: $playback.completionThreshold) {
+                        ForEach([80, 85, 90, 95, 100], id: \.self) { value in
+                            Text("\(value)%").tag(value)
+                        }
+                    }.accessibilityIdentifier("settings-playback-completion-threshold")
+                }
+            } header: { Text("Episode completion") } footer: {
+                Text("Default: 90% of the actual episode runtime (21:36 for a 24-minute episode). Marking occurs after VidHub returns playback progress. Fast jumps to the ending do not automatically count when detected.")
+            }
             Section("Tracking & privacy") {
-                Text("Native anime playback saves resume on this device; catalog/exact-ID playback does not. Playing never marks an episode watched on AniList.")
+                Text("Native anime Watch saves resume on this device. When connected, completed episodes also sync to AniList. Catalog/exact-ID playback remains untracked.")
                 Text("Playing a TorBox file shares its private playback address with VidHub. Never share that address with anyone else.")
             }.font(.subheadline).foregroundStyle(.secondary)
         }.navigationTitle("Video player").navigationBarTitleDisplayMode(.inline)
