@@ -10,6 +10,7 @@ struct HomeWidgetContent: View {
     var refreshID = 0
     var activationID = 0
     @EnvironmentObject private var anime: AppStore
+    @EnvironmentObject private var playback: PlaybackStore
     @EnvironmentObject private var books: MangaBakaStore
     @EnvironmentObject private var reading: MangaReadingStore
     @EnvironmentObject private var navigation: AppNavigationStore
@@ -26,8 +27,9 @@ struct HomeWidgetContent: View {
     private var cardColumns: [GridItem] {
         [GridItem(sizeClass == .regular && !textSize.isAccessibilitySize ? .adaptive(minimum: visuals.gridMinimum) : .flexible(), spacing: 12, alignment: .top)]
     }
-    private var shows: [LibraryEntry] {
-        Array(anime.watching.filter { $0.media != nil }.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }.prefix(preferences.size(for: .watching).itemLimit))
+    private var shows: [ContinueWatchingItem] {
+        Array(ContinueWatchingItem.items(entries: anime.watching, playback: playback.progress)
+            .prefix(preferences.size(for: .watching).itemLimit))
     }
     private var recent: [MangaReadingRecord] {
         guard !extensions.loading else { return [] }
@@ -137,8 +139,8 @@ struct HomeWidgetContent: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
                         ForEach(shows) { entry in
-                            if let value = entry.media {
-                                HomeContinueWatchingCard(anime: value, entry: entry) { watching = value }
+                            if let value = entry.entry.media {
+                                HomeContinueWatchingCard(anime: value, entry: entry.entry, episode: entry.episode, resume: entry.resume) { watching = value }
                                     .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(visuals.watchingCardLimit, width * 0.90) }
                             }
                         }
