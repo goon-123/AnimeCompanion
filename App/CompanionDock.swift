@@ -213,6 +213,7 @@ private struct CompanionDock: View {
         }.padding(5)
             .glassEffect(.regular, in: .capsule)
             .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isTabBar)
             .accessibilityIdentifier("companion-dock")
     }
 }
