@@ -55,7 +55,7 @@ struct HomeWidgetContent: View {
     var body: some View {
         widget(section)
             .environment(\.posterArtworkBadgesEnabled, false)
-            .animation(AppMotion.content(reduceMotion), value: shows.map(\.mediaId))
+            .animation(AppMotion.content(reduceMotion), value: shows.map(\.id))
             .animation(AppMotion.content(reduceMotion), value: recent.map(\.id))
             .animation(AppMotion.content(reduceMotion), value: trackedBooks.map(\.id))
             .appSettingsSheet(isPresented: $settings)
