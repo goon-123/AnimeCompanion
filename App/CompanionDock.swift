@@ -100,13 +100,13 @@ private struct DockVisibilityBridge: UIViewControllerRepresentable {
 
 private final class DockVisibilityController: UIViewController {
     private let presentation: CompanionDockPresentation
-    private let tab: AppTab
+    private let appTab: AppTab
     private let screen = UUID()
     private var active = false
     private var revision = 0
 
     init(presentation: CompanionDockPresentation, tab: AppTab) {
-        self.presentation = presentation; self.tab = tab
+        self.presentation = presentation; self.appTab = tab
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -122,16 +122,16 @@ private final class DockVisibilityController: UIViewController {
         active = visible; revision += 1
         let currentRevision = revision
         let coordinator = transitionCoordinator
-        presentation.setHidden(visible, screen: screen, tab: tab, coordinator: coordinator)
+        presentation.setHidden(visible, screen: screen, tab: appTab, coordinator: coordinator)
         coordinator?.animate(alongsideTransition: nil) { [weak self] context in
             guard let self, context.isCancelled, self.revision == currentRevision else { return }
             self.active = previous
-            self.presentation.setHidden(previous, screen: self.screen, tab: self.tab)
+            self.presentation.setHidden(previous, screen: self.screen, tab: self.appTab)
         }
     }
     func detach() {
         revision += 1; active = false
-        presentation.setHidden(false, screen: screen, tab: tab)
+        presentation.setHidden(false, screen: screen, tab: appTab)
     }
 }
 
