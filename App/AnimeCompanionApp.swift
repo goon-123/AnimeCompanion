@@ -26,7 +26,11 @@ struct AnimeCompanionApp: App {
     var body: some Scene {
         WindowGroup {
             launchRoot.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
-                .environmentObject(playback).onOpenURL { playback.handle($0) }
+                .environmentObject(playback).onOpenURL { url in
+                    if let completed = playback.handle(url) {
+                        Task { await syncCompletedEpisode(completed) }
+                    }
+                }
                 .environmentObject(seanime)
                 .environmentObject(navigation)
                 .environmentObject(weeklySchedule)
@@ -54,6 +58,12 @@ struct AnimeCompanionApp: App {
                 }
         }
     }
+    @MainActor private func syncCompletedEpisode(_ completed: PlaybackEpisode) async {
+        guard store.isSignedIn, let entry = store.entry(for: completed.animeID),
+              let anime = entry.media, entry.progressValue < completed.episode else { return }
+        do { try await store.markWatched(anime: anime, through: completed.episode) }
+        catch { playback.playerMessage = "Watched locally, but AniList could not sync: \(error.localizedDescription)" }
+    }
     private var skipsLaunch: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-") })
@@ -80,7 +90,7 @@ struct AnimeCompanionApp: App {
             if StartupPresentation.shouldReveal(elapsed: ProcessInfo.processInfo.systemUptime - started,
                 localReady: restored, contentReady: launchContentReady && showsReady && booksReady && weekReady) {
                 let remaining = max(0, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
-                withAnimation(.easeOut(duration: min(reduceMotion ? 0.1 : 0.18, remaining))) { launchFinished = true }
+                withAnimation(.easeInOut(duration: min(reduceMotion ? 0.1 : 0.26, remaining))) { launchFinished = true }
                 return
             }
             let remaining = max(0.001, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
