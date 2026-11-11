@@ -15,7 +15,7 @@ public actor AnimeVisualsClient {
         let complete: Bool
     }
     private struct LiveResult { let images: [AnimeVisual]; let partial: Bool }
-    private let transport: any HTTPTransport
+    private let galleryTransport: any HTTPTransport
     private let mapping: VisualsMappingClient
     private let cacheFile: URL?
     private let minimumRequestInterval: TimeInterval
@@ -26,11 +26,14 @@ public actor AnimeVisualsClient {
     private var blockedUntil: [String: Date] = [:]
 
     public init(transport: any HTTPTransport = AnimeVisualsClient.publicTransport(),
+                galleryTransport: (any HTTPTransport)? = nil,
                 directory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("AnimeCompanion-visuals"),
                 minimumRequestInterval: TimeInterval = 1) {
-        self.transport = transport; self.minimumRequestInterval = max(0, minimumRequestInterval)
+        self.galleryTransport = galleryTransport ?? transport
+        self.minimumRequestInterval = max(0, minimumRequestInterval)
         mapping = VisualsMappingClient(transport: transport, directory: directory)
-        cacheFile = directory?.appendingPathComponent("galleries.json")
+        // Do not reuse old negative results or galleries containing other sources.
+        cacheFile = directory?.appendingPathComponent("livechart-galleries-v2.json")
     }
     public nonisolated static func publicTransport() -> URLSessionTransport {
         let configuration = URLSessionConfiguration.ephemeral
@@ -40,12 +43,11 @@ public actor AnimeVisualsClient {
     }
 
     public func gallery(for anime: Anime, refresh: Bool = false) async -> AnimeVisualGallery {
-        let local = AnimeVisualGallery.aniListImages(anime)
-        guard anime.id > 0 else { return AnimeVisualGallery(images: local) }
+        guard anime.id > 0 else { return AnimeVisualGallery(images: []) }
         restoreCache()
         let key = Key(aniList: anime.id, mal: anime.idMal.flatMap { $0 > 0 ? $0 : nil })
         if !refresh, let record = cache[key], Date().timeIntervalSince(record.fetchedAt) < (record.complete ? 21600 : 300) {
-            return gallery(record, local: local)
+            return gallery(record)
         }
         let record: Record
         let previous = cache[key]
@@ -61,14 +63,14 @@ public actor AnimeVisualsClient {
         // All coalesced callers receive the same saved gallery when a refresh fails.
         if !record.complete, let old = previous, !old.images.isEmpty,
            Date().timeIntervalSince(old.fetchedAt) < 7 * 86400 {
-            return AnimeVisualGallery(images: merged(merged(record.images, old.images), local),
-                notice: "The full gallery could not refresh. Previously loaded artwork has been kept.", isStale: true)
+            return AnimeVisualGallery(images: merged(record.images, old.images),
+                notice: "LiveChart could not refresh. Previously loaded LiveChart artwork has been kept.", isStale: true)
         }
         if ownsRequest { cache[key] = record; saveCache() }
-        return gallery(record, local: local)
+        return gallery(record)
     }
-    private func gallery(_ record: Record, local: [AnimeVisual]) -> AnimeVisualGallery {
-        AnimeVisualGallery(images: merged(record.images, local), notice: record.notice)
+    private func gallery(_ record: Record) -> AnimeVisualGallery {
+        AnimeVisualGallery(images: record.images, notice: record.notice)
     }
     private func merged(_ remote: [AnimeVisual], _ local: [AnimeVisual]) -> [AnimeVisual] {
         var seen = Set<String>()
@@ -76,7 +78,7 @@ public actor AnimeVisualsClient {
     }
     private func fetch(_ key: Key) async -> Record {
         var images: [AnimeVisual] = []
-        var reason = "LiveChart could not load."
+        var reason = "LiveChart artwork could not load. Try refreshing later."
         var complete = false
         do {
             if let id = try await mapping.id(aniListID: key.aniList, malID: key.mal) {
@@ -88,16 +90,14 @@ public actor AnimeVisualsClient {
                         fetchedAt: Date(), complete: complete)
                 }
                 reason = "This title has no LiveChart visuals listed yet."
+                complete = !result.partial
             } else { reason = "No matching LiveChart gallery is available for this title." }
-        } catch { /* A denied/unavailable page falls back without a browser or automatic retry. */ }
-        if let mal = key.mal {
-            do {
-                let url = URL(string: "https://api.jikan.moe/v4/anime/\(mal)/pictures")!
-                let data = try await request(url, accept: "application/json", maximumBytes: 1_000_000)
-                images = try AnimeVisualParser.myAnimeList(data)
-                if !images.isEmpty { reason += " Showing MyAnimeList artwork where available." }
-                else { reason += " MyAnimeList has no additional artwork listed." }
-            } catch { reason += " Additional MyAnimeList artwork is also unavailable."; complete = false }
+        } catch AnimeVisualsError.http(let status) where [401, 403, 429].contains(status) {
+            reason = "LiveChart is temporarily limiting artwork requests. Try refreshing later."
+        } catch AnimeVisualsError.coolingDown {
+            reason = "LiveChart is temporarily limiting artwork requests. Try refreshing later."
+        } catch {
+            // A failed request is different from a confirmed empty gallery.
         }
         return Record(key: key, images: images, notice: reason, fetchedAt: Date(), complete: complete)
     }
@@ -133,15 +133,15 @@ public actor AnimeVisualsClient {
         if let until = blockedUntil[host], until > Date() { throw AnimeVisualsError.coolingDown }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.setValue(accept, forHTTPHeaderField: "Accept")
-        request.setValue("AnimeCompanion/0.25 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await transport.data(for: request)
+        request.setValue("AnimeCompanion/0.57.2 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await galleryTransport.data(for: request)
         try Task.checkCancellation()
         if [401, 403, 429].contains(response.statusCode) {
             let retry = min(86400, max(60, Double(response.value(forHTTPHeaderField: "Retry-After") ?? "900") ?? 900))
             blockedUntil[host] = Date().addingTimeInterval(retry)
         }
         guard response.statusCode == 200 else { throw AnimeVisualsError.http(response.statusCode) }
-        guard response.url == url else { throw AnimeVisualsError.invalidResponse }
+        guard let final = response.url, VisualURL.sameGallery(final, as: url) else { throw AnimeVisualsError.invalidResponse }
         guard data.count <= maximumBytes else { throw AnimeVisualsError.oversized }
         return data
     }
@@ -152,7 +152,7 @@ public actor AnimeVisualsClient {
               let data = try? Data(contentsOf: file), let records = try? JSONDecoder().decode([Record].self, from: data), records.count <= 40 else { return }
         for record in records where Date().timeIntervalSince(record.fetchedAt) >= 0 && Date().timeIntervalSince(record.fetchedAt) < 7 * 86400 {
             guard record.images.count <= 500, record.key.aniList > 0,
-                  record.images.allSatisfy({ VisualURL.image($0.imageURL.absoluteString, source: $0.source) != nil && VisualURL.image($0.thumbnailURL.absoluteString, source: $0.source) != nil }) else { continue }
+                  record.images.allSatisfy({ $0.source == .liveChart && VisualURL.image($0.imageURL.absoluteString, source: .liveChart) != nil && VisualURL.image($0.thumbnailURL.absoluteString, source: .liveChart) != nil }) else { continue }
             cache[record.key] = record
         }
     }

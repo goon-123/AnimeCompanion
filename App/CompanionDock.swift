@@ -159,6 +159,7 @@ struct CompanionDockHost: UIViewControllerRepresentable {
     private var content: AnyView {
         AnyView(CompanionDock(tabs: tabs, selection: $selection)
             .environment(\.colorScheme, colorScheme)
+            .environment(\.accessibilityReduceMotion, reduceMotion)
             .environment(\.dynamicTypeSize, dynamicTypeSize))
     }
 }
@@ -191,19 +192,35 @@ final class CompanionDockController: UIViewController {
 
 @available(iOS 26.0, *)
 private struct CompanionDock: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Namespace private var highlight
     let tabs: [AppTab]
     @Binding var selection: AppTab
     var body: some View {
         HStack(spacing: 2) {
             ForEach(tabs) { tab in
-                Button { selection = tab } label: {
+                Button {
+                    withAnimation(AppMotion.page(reduceMotion)) { selection = tab }
+                } label: {
                     VStack(spacing: 3) {
-                        Image(systemName: tab.symbol).font(.system(size: 21, weight: .semibold))
+                        Image(systemName: tab.symbol).symbolVariant(.fill)
+                            .font(.system(size: textSize.isAccessibilitySize ? 28 : 25, weight: .regular))
+                            .frame(height: textSize.isAccessibilitySize ? 32 : 28)
                         Text(tab.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
                     }.frame(maxWidth: .infinity, minHeight: 48)
                         .padding(.vertical, 2)
                         .foregroundStyle(selection == tab ? Theme.accent : .primary)
-                        .background(selection == tab ? Theme.accent.opacity(0.14) : .clear, in: Capsule())
+                        .background {
+                            if selection == tab {
+                                if reduceMotion {
+                                    Capsule().fill(Theme.accent.opacity(0.18)).transition(.opacity)
+                                } else {
+                                    Capsule().fill(Theme.accent.opacity(0.18))
+                                        .matchedGeometryEffect(id: "selected-tab", in: highlight)
+                                }
+                            }
+                        }
                         .contentShape(Capsule())
                 }.buttonStyle(.plain)
                     .accessibilityLabel(tab.title)
@@ -212,6 +229,9 @@ private struct CompanionDock: View {
             }
         }.padding(5)
             .glassEffect(.regular, in: .capsule)
+            // The separate hosting controller receives a new root value on tab
+            // selection; give that boundary its own animation transaction.
+            .animation(AppMotion.page(reduceMotion), value: selection)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isTabBar)
             .accessibilityIdentifier("companion-dock")

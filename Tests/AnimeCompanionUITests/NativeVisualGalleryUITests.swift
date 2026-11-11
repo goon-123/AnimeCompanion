@@ -9,7 +9,7 @@ final class NativeVisualGalleryUITests: XCTestCase {
         XCTAssertTrue(visuals.waitForExistence(timeout: 10)); visuals.tap()
         let title = app.buttons["anime-visual-1"]
         XCTAssertTrue(title.waitForExistence(timeout: 15)); title.tap()
-        waitForLabel("8 images", on: app.staticTexts["visuals-image-count"])
+        waitForLabel("6 images", on: app.staticTexts["visuals-image-count"])
         XCTAssertEqual(app.webViews.count, 0)
         for (index, name) in ["Roxy", "Sylphiette", "Rudeus", "Eris"].enumerated() {
             let card = app.buttons["visual-card-liveChart-\(index)"]
@@ -19,29 +19,29 @@ final class NativeVisualGalleryUITests: XCTestCase {
         capture("Character-Visuals", app)
         let first = app.buttons["visual-card-liveChart-0"]
         app.revealInContent(first, upward: false); first.tap()
-        waitForLabel("1 of 8", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("1 of 6", on: app.staticTexts["expanded-image-position"])
         XCTAssertEqual(app.staticTexts["expanded-image-caption"].label, "Roxy")
         XCTAssertFalse(app.buttons["expanded-image-previous"].isEnabled)
         app.buttons["expanded-image-next"].tap()
-        waitForLabel("2 of 8", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("2 of 6", on: app.staticTexts["expanded-image-position"])
         XCTAssertEqual(app.staticTexts["expanded-image-caption"].label, "Sylphiette")
         let viewer = app.descendants(matching: .any).matching(identifier: "expanded-anime-image").firstMatch
         viewer.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45)).press(forDuration: 0.05,
             thenDragTo: viewer.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.45)))
-        waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("3 of 6", on: app.staticTexts["expanded-image-position"])
         let enlarged = app.images["Rudeus"]
         XCTAssertTrue(enlarged.waitForExistence(timeout: 10))
         enlarged.pinch(withScale: 2, velocity: 1)
         let zoomed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Zoomed in"), object: enlarged)
         XCTAssertEqual(XCTWaiter.wait(for: [zoomed], timeout: 5), .completed)
         enlarged.swipeLeft()
-        waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("3 of 6", on: app.staticTexts["expanded-image-position"])
         enlarged.doubleTap()
         let fitted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Fit to screen"), object: enlarged)
         XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 5), .completed)
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCUIDevice.shared.orientation = .landscapeLeft
-            waitForLabel("3 of 8", on: app.staticTexts["expanded-image-position"])
+            waitForLabel("3 of 6", on: app.staticTexts["expanded-image-position"])
         }
         capture("Native-Viewer", app)
         app.buttons["Close enlarged image"].tap()
@@ -50,25 +50,23 @@ final class NativeVisualGalleryUITests: XCTestCase {
         app.revealInContent(details, upward: false); details.tap()
         XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 10))
     }
-    @MainActor func testDeniedGalleryFallsBackInsideTheAppAndCanRefresh() {
+    @MainActor func testDeniedLiveChartGalleryExplainsTheLimitAndCanRefreshWithoutOtherSources() {
         let app = launch(denied: true)
         app.appTab("My Library").tap()
         let title = app.buttons["library-entry-1"]
         app.revealInContent(title); title.tap()
         let visuals = app.buttons["Open full artwork gallery"]
         app.revealInContent(visuals); visuals.tap()
-        waitForLabel("4 images", on: app.staticTexts["visuals-image-count"])
-        XCTAssertTrue(app.staticTexts["visuals-notice"].label.contains("MyAnimeList"))
+        waitForLabel("0 images", on: app.staticTexts["visuals-image-count"])
+        XCTAssertTrue(app.staticTexts["visuals-notice"].label.contains("LiveChart is temporarily limiting"))
         let refresh = app.buttons["visuals-refresh"]
         app.revealInContent(refresh); refresh.tap()
         XCTAssertTrue(refresh.waitForExistence(timeout: 10))
-        waitForLabel("4 images", on: app.staticTexts["visuals-image-count"])
-        let card = app.buttons["visual-card-myAnimeList-0"]
-        app.revealInContent(card); card.tap()
-        waitForLabel("1 of 4", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("0 images", on: app.staticTexts["visuals-image-count"])
+        XCTAssertFalse(app.buttons["visual-card-myAnimeList-0"].exists)
+        XCTAssertFalse(app.buttons["visual-card-aniList-0"].exists)
         XCTAssertEqual(app.webViews.count, 0)
-        capture("MAL-Fallback", app)
-        app.buttons["Close enlarged image"].tap()
+        capture("LiveChart-Unavailable", app)
     }
     @MainActor private func launch(denied: Bool = false) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait

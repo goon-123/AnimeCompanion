@@ -49,6 +49,7 @@ final class AppResetCoordinator: ObservableObject {
             // Remove the old UI and cancel its view tasks before clearing data.
             await Task.yield()
             await AppNetworkSessions.shared.cancelAndClear()
+            LiveChartPageTransport.cancelAllForReset()
             await MangaRuntimeBrowser.closeAllForReset()
             let profiles = Array(MangaWebsiteProfiles.stores.values) + [WKWebsiteDataStore.default()]
             MangaWebsiteProfiles.stores.removeAll()

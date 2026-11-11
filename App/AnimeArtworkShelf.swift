@@ -11,7 +11,7 @@ struct AnimeArtworkShelf: View {
     @State private var loading = false
     @State private var preview: AnimeImagePreview?
     private var width: CGFloat { sizeClass == .regular ? 200 : 168 }
-    private var images: [AnimeVisual] { gallery?.images ?? AnimeVisualGallery.aniListImages(anime) }
+    private var images: [AnimeVisual] { gallery?.images ?? [] }
     private var previews: [AnimeImagePreview] { images.map { $0.preview } }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -35,7 +35,7 @@ struct AnimeArtworkShelf: View {
                 .frame(height: width * 1.45 + footerHeight)
             }
             if let notice = gallery?.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-            if images.isEmpty && !loading { Text("No artwork is listed yet.").font(.caption).foregroundStyle(.secondary) }
+            if images.isEmpty && !loading && gallery?.notice == nil { Text("No LiveChart artwork is listed yet.").font(.caption).foregroundStyle(.secondary) }
         }.accessibilityIdentifier("series-anime-artwork")
             .task(id: "\(anime.id)-\(refreshID)") {
                 loading = true

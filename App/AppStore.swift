@@ -93,7 +93,7 @@ final class AppStore: ObservableObject {
         exploreCache = discoveryPreview || phaseTwoPreview ? ExploreCache(directory: nil) : ExploreCache()
         visuals = phaseTwoPreview
             ? AnimeVisualsClient(transport: VisualGalleryPreviewTransport(), directory: nil, minimumRequestInterval: 0)
-            : AnimeVisualsClient()
+            : AnimeVisualsClient(galleryTransport: LiveChartPageTransport())
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-content-preferences") {
             if ProcessInfo.processInfo.arguments.contains("--ui-library-design-preview") {
                 UserDefaults.standard.set("list", forKey: "library.layout")
@@ -140,7 +140,7 @@ final class AppStore: ObservableObject {
         news = NewsClient()
         aniList = AniListClient()
         exploreCache = ExploreCache()
-        visuals = AnimeVisualsClient()
+        visuals = AnimeVisualsClient(galleryTransport: LiveChartPageTransport())
         #endif
         // Freeze the migration once so later AniList changes cannot change MangaBaka.
         UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey)

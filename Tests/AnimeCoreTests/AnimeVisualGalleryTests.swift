@@ -41,6 +41,20 @@ final class AnimeVisualGalleryTests: XCTestCase {
             XCTAssertThrowsError(try AnimeVisualParser.liveChart(data(card + "<a rel='next' href='\(next)'>Next</a>"), pageURL: page, liveChartID: 12735))
         }
     }
+    func testCanonicalRedirectsStayOnTheSameGalleryAndPage() {
+        XCTAssertTrue(VisualURL.sameGallery(URL(string: "https://livechart.me/anime/12735/visuals/")!, as: page))
+        for url in ["https://evil.example/anime/12735/visuals", "https://www.livechart.me/anime/12736/visuals",
+                    "https://www.livechart.me/anime/12735", "https://www.livechart.me/anime/12735/visuals?page=2",
+                    "http://www.livechart.me/anime/12735/visuals"] {
+            XCTAssertFalse(VisualURL.sameGallery(URL(string: url)!, as: page))
+        }
+    }
+    func testLazyThumbnailKeepsTheFullSizeVisualAndAvoidsPlaceholderRequests() throws {
+        let html = "<div data-anime-visual-url-value='https://u.livechart.me/full.jpg'><img src='data:image/gif;base64,AA' data-src='https://u.livechart.me/thumb.jpg' alt='Key visual'></div>"
+        let image = try XCTUnwrap(AnimeVisualParser.liveChart(data(html), pageURL: page, liveChartID: 12735).images.first)
+        XCTAssertEqual(image.imageURL.path, "/full.jpg")
+        XCTAssertEqual(image.thumbnailURL.path, "/thumb.jpg")
+    }
     func testChallengeAndChangedMarkupAreErrorsWhileConfirmedEmptyGalleryIsEmpty() throws {
         for html in ["<h1>Just a moment</h1>", "<html>Log in</html>", "<div data-anime-visual-url-value='https://evil.example/a.jpg'></div>"] {
             XCTAssertThrowsError(try AnimeVisualParser.liveChart(data(html), pageURL: page, liveChartID: 12735))
@@ -74,7 +88,8 @@ final class AnimeVisualGalleryTests: XCTestCase {
         async let a = client.gallery(for: anime)
         async let b = client.gallery(for: anime)
         let results = await [a, b]
-        XCTAssertEqual(results[0].images.count, 8)
+        XCTAssertEqual(results[0].images.count, 6)
+        XCTAssertTrue(results[0].images.allSatisfy { $0.source == .liveChart })
         XCTAssertEqual(results[0].images, results[1].images)
         XCTAssertNil(results[0].notice)
         _ = await client.gallery(for: anime)
@@ -83,17 +98,27 @@ final class AnimeVisualGalleryTests: XCTestCase {
         XCTAssertFalse(requests.contains { $0.url?.host == "api.jikan.moe" })
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil && $0.value(forHTTPHeaderField: "Cookie") == nil })
     }
-    func testDeniedLiveChartUsesMALAndRefreshHonorsHostCooldown() async throws {
+    func testDeniedLiveChartShowsNoOtherSourcesAndRefreshHonorsHostCooldown() async throws {
         let fixture = GalleryTransport(mode: .denied)
         let client = AnimeVisualsClient(transport: fixture, directory: nil, minimumRequestInterval: 0)
         let anime = try anime()
         let first = await client.gallery(for: anime)
-        XCTAssertEqual(first.images.map(\.source), [.myAnimeList, .aniList, .aniList])
-        XCTAssertTrue(first.notice?.contains("LiveChart could not load") == true)
+        XCTAssertTrue(first.images.isEmpty)
+        XCTAssertTrue(first.notice?.contains("LiveChart is temporarily limiting") == true)
         _ = await client.gallery(for: anime, refresh: true)
         let requests = await fixture.requests
         XCTAssertEqual(requests.filter { $0.url?.host == "www.livechart.me" }.count, 1)
-        XCTAssertEqual(requests.filter { $0.url?.host == "api.jikan.moe" }.count, 2)
+        XCTAssertFalse(requests.contains { $0.url?.host == "api.jikan.moe" })
+    }
+    func testPublicMappingAndGalleryCanUseIndependentTransports() async throws {
+        let mapping = GalleryTransport(mode: .live), pages = GalleryTransport(mode: .live)
+        let client = AnimeVisualsClient(transport: mapping, galleryTransport: pages, directory: nil, minimumRequestInterval: 0)
+        let result = await client.gallery(for: try anime())
+        XCTAssertEqual(result.images.count, 6)
+        let mappingRequests = await mapping.requests, pageRequests = await pages.requests
+        XCTAssertEqual(mappingRequests.map { $0.url?.host }, ["raw.githubusercontent.com"])
+        XCTAssertEqual(pageRequests.count, 2)
+        XCTAssertTrue(pageRequests.allSatisfy { $0.url?.host == "www.livechart.me" })
     }
     func testConflictingMappingNeverRequestsWrongLiveChartTitle() async throws {
         let fixture = GalleryTransport(mode: .conflict)
@@ -123,14 +148,34 @@ final class AnimeVisualGalleryTests: XCTestCase {
     func testSecondPageFailureKeepsAlreadyLoadedImagesAndExplainsPartialCollection() async throws {
         let client = AnimeVisualsClient(transport: GalleryTransport(mode: .secondPageFails), directory: nil, minimumRequestInterval: 0)
         let result = await client.gallery(for: try anime())
-        XCTAssertEqual(result.images.count, 6)
+        XCTAssertEqual(result.images.count, 4)
         XCTAssertTrue(result.notice?.contains("Some LiveChart visuals could not load") == true)
     }
-    func testEveryProviderFailingKeepsAniListArtworkAndExplainsTheFailure() async throws {
+    func testUnavailableLiveChartExplainsFailureWithoutAddingAniListOrMALArtwork() async throws {
         let client = AnimeVisualsClient(transport: GalleryTransport(mode: .offline), directory: nil, minimumRequestInterval: 0)
         let result = await client.gallery(for: try anime())
-        XCTAssertEqual(result.images.map(\.source), [.aniList, .aniList])
+        XCTAssertTrue(result.images.isEmpty)
         XCTAssertNotNil(result.notice)
+    }
+    func testLegacyMixedGalleryCacheCannotLeakOtherSourcesIntoTheLiveChartGallery() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("VisualCacheMigration-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
+        _ = await first.gallery(for: try anime())
+        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
+        records[0]["images"] = [["source": "myAnimeList", "imageURL": "https://cdn.myanimelist.net/old.jpg",
+                                  "thumbnailURL": "https://cdn.myanimelist.net/old.jpg", "title": "Legacy artwork"]]
+        let old = try JSONSerialization.data(withJSONObject: records)
+        try old.write(to: directory.appendingPathComponent("galleries.json"))
+        try old.write(to: file)
+        let offline = GalleryTransport(mode: .offline)
+        let second = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
+        let result = await second.gallery(for: try anime())
+        XCTAssertTrue(result.images.isEmpty)
+        XCTAssertNotNil(result.notice)
+        let requests = await offline.requests
+        XCTAssertFalse(requests.contains { $0.url?.host == "api.jikan.moe" })
     }
     func testDefaultPublicSessionDoesNotUseBrowserCookies() {
         let configuration = AnimeVisualsClient.publicTransport().session.configuration

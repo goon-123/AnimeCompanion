@@ -58,7 +58,12 @@ enum VisualURL {
         return url
     }
     static func gallery(_ url: URL, liveChartID: Int) -> Bool {
-        accepts(url, hosts: ["www.livechart.me", "livechart.me"]) && url.path == "/anime/\(liveChartID)/visuals"
+        accepts(url, hosts: ["www.livechart.me", "livechart.me"]) && url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == "anime/\(liveChartID)/visuals"
+    }
+    static func sameGallery(_ final: URL, as requested: URL) -> Bool {
+        let path = requested.path.split(separator: "/")
+        guard path.count == 3, let id = Int(path[1]), gallery(requested, liveChartID: id), gallery(final, liveChartID: id) else { return false }
+        return URLComponents(url: final, resolvingAgainstBaseURL: false)?.queryItems == URLComponents(url: requested, resolvingAgainstBaseURL: false)?.queryItems
     }
 }
 
@@ -90,7 +95,11 @@ public enum AnimeVisualParser {
             let credit = copyrightStart.map { String(text[$0...].prefix(300)) }
             let caption = String((copyrightStart.map { String(text[..<$0]) } ?? text).trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))
             let title = !alt.isEmpty ? String(alt.prefix(180)) : (!caption.isEmpty ? caption : "Visual \(images.count + 1)")
-            let thumbnail = try img.flatMap { VisualURL.image(try $0.attr("src"), source: .liveChart) }
+            let thumbnail = try img.flatMap {
+                let lazy = try $0.attr("data-src")
+                if let url = VisualURL.image(lazy, source: .liveChart) { return url }
+                return VisualURL.image(try $0.attr("src"), source: .liveChart)
+            }
             images.append(AnimeVisual(imageURL: url, thumbnailURL: thumbnail, title: title, copyright: credit, source: .liveChart))
             guard images.count <= 500 else { throw AnimeVisualsError.oversized }
         }
