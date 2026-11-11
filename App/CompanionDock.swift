@@ -157,9 +157,8 @@ struct CompanionDockHost: UIViewControllerRepresentable {
         presentation.configure(selection: selection, reduceMotion: reduceMotion)
     }
     private var content: AnyView {
-        AnyView(CompanionDock(tabs: tabs, selection: $selection)
+        AnyView(CompanionDock(tabs: tabs, selection: $selection, reduceMotion: reduceMotion)
             .environment(\.colorScheme, colorScheme)
-            .environment(\.accessibilityReduceMotion, reduceMotion)
             .environment(\.dynamicTypeSize, dynamicTypeSize))
     }
 }
@@ -192,11 +191,11 @@ final class CompanionDockController: UIViewController {
 
 @available(iOS 26.0, *)
 private struct CompanionDock: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var textSize
     @Namespace private var highlight
     let tabs: [AppTab]
     @Binding var selection: AppTab
+    let reduceMotion: Bool
     var body: some View {
         HStack(spacing: 2) {
             ForEach(tabs) { tab in
