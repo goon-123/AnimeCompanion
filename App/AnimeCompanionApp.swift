@@ -336,6 +336,10 @@ final class AppNavigationStore: ObservableObject {
 struct AppTabs: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var textSize
+    @StateObject private var dock = CompanionDockPresentation()
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
     @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
@@ -378,7 +382,7 @@ struct AppTabs: View {
                 supplementary(destination.kind).animeNavigation().mangaBakaNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
-            }
+            }.environment(\.companionDockPresentation, nil)
         }.onChange(of: navigation.selectedTab) { _, tab in
             Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
@@ -399,18 +403,38 @@ struct AppTabs: View {
         GeometryReader { viewport in
             Group {
                 if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
-                else { destinationTabs }
+                else { destinationTabs(showDock: true) }
             }.environment(\.animeBrowseViewportHeight, viewport.size.height + viewport.safeAreaInsets.top)
         }
     }
-    private var destinationTabs: some View {
+    @ViewBuilder private func destinationTabs(showDock: Bool) -> some View {
+        if #available(iOS 26.0, *), showDock {
+            nativeTabs.toolbar(.hidden, for: .tabBar)
+                // Keep the inset constant during navigation, including canceled
+                // swipes. The dock's opacity never resizes Spotlight or its scroll.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: textSize.isAccessibilitySize ? 88 : 68).allowsHitTesting(false)
+                }
+                .overlay(alignment: .bottom) {
+                    CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
+                                      selection: $navigation.selectedTab, reduceMotion: reduceMotion,
+                                      colorScheme: colorScheme, dynamicTypeSize: textSize)
+                        .frame(maxWidth: 600).frame(height: textSize.isAccessibilitySize ? 80 : 62)
+                        .padding(.horizontal, 14).padding(.bottom, 6)
+                }
+                .environment(\.companionDockPresentation, dock)
+        } else {
+            nativeTabs.toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        }
+    }
+    private var nativeTabs: some View {
         TabView(selection: $navigation.selectedTab) {
             ForEach(navigation.tabPreferences.visible) { tab in
                 pane(tab)
+                    .environment(\.companionDockTab, tab)
                     .tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
     }
     private var sidebar: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility, preferredCompactColumn: $sidebarColumn) {
@@ -441,7 +465,7 @@ struct AppTabs: View {
         } detail: {
             // Keep each destination's navigation/search state alive, with the
             // sidebar owning navigation and the phone tab bar hidden.
-            destinationTabs.toolbar(.hidden, for: .tabBar)
+            destinationTabs(showDock: false).toolbar(.hidden, for: .tabBar)
         }.navigationSplitViewStyle(.balanced)
     }
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {

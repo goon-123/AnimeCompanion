@@ -68,7 +68,7 @@ struct CommunityThreadReader: View {
                 }
             }.padding(16).frame(maxWidth: 860, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Discussion").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .companionDockHidden()
             .task(id: "\(thread.id)-\(sort.rawValue)-\(canLoad)") {
                 if canLoad { await load(reset: true) }
                 else { attempt = UUID(); comments = []; opening = nil; loading = false }

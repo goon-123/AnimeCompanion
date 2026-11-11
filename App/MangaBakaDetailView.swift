@@ -47,7 +47,7 @@ struct MangaBakaDetailView: View {
     var body: some View {
         detailScroll.seriesPosterSizing().ignoresSafeArea(.container, edges: .top)
             .background(Theme.background).navigationTitle(series.displayTitle).navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar).toolbar(.hidden, for: .tabBar)
+            .toolbarBackground(.hidden, for: .navigationBar).companionDockHidden()
             .toolbar { ToolbarItem(placement: .topBarTrailing) { optionsMenu } }
             .navigationDestination(for: MangaBakaAnimeRoute.self) { route in
                 AnimeDetailView(mediaID: route.id).id(route.id)

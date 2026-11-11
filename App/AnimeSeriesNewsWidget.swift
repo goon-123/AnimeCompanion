@@ -67,7 +67,7 @@ struct AnimeSeriesNewsWidget: View {
             Text("Series news").font(.title3.bold()).accessibilityAddTraits(.isHeader)
             if loading { ProgressView().controlSize(.small) }
             Spacer()
-            NavigationLink { NewsView(anime: anime).toolbar(.hidden, for: .tabBar) } label: { Text("View all").font(.caption.weight(.semibold)).frame(minHeight: 44) }
+            NavigationLink { NewsView(anime: anime).companionDockHidden() } label: { Text("View all").font(.caption.weight(.semibold)).frame(minHeight: 44) }
                 .accessibilityIdentifier("series-news-view-all")
         }
     }

@@ -37,6 +37,7 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
 
 struct HomeContinueWatchingCard: View {
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var store: AppStore
     @State private var episodeDetails: AnimeEpisodeMetadata?
     let anime: Anime
@@ -48,7 +49,7 @@ struct HomeContinueWatchingCard: View {
     var body: some View {
         HomeMediaCardLayout {
             AnimeLink(id: anime.id) {
-                ArtworkImage(url: episodeDetails?.imageURL, pointSize: visuals.watchingCover * 1.45) {
+                ArtworkImage(url: episodeDetails?.imageURL, pointSize: visuals.watchingCover * 1.45, animatesCachedImages: true) {
                     $0.resizable().scaledToFill()
                 } placeholder: {
                     // Display the existing poster immediately, then crossfade
@@ -62,6 +63,7 @@ struct HomeContinueWatchingCard: View {
             }.buttonStyle(.plain).accessibilityHidden(true)
         } content: { metadata }
             .companionPanel(padding: visuals.value(12, 16))
+            .animation(AppMotion.content(reduceMotion), value: episodeDetails?.title)
             .task(id: "\(anime.id):\(episode)") { await fetchEpisodeDetails() }
     }
 
@@ -83,7 +85,7 @@ struct HomeContinueWatchingCard: View {
                     .tint(Theme.accent).accessibilityLabel("Watched progress")
             } else { Color.clear.frame(height: 4).accessibilityHidden(true) }
             if let title = episodeDetails?.title, !title.isEmpty {
-                Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1).transition(.opacity)
             }
             if let resume {
                 Text("Resume \(timeLabel(resume.position))" + (resume.duration.flatMap { $0 > 0 ? " / \(timeLabel($0))" : nil } ?? ""))

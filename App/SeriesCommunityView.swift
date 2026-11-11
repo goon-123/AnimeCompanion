@@ -27,7 +27,7 @@ struct SeriesCommunityView: View {
                 SeriesDiscussionsView(anime: anime, requestedEpisode: max(1, store.entry(for: anime.id)?.progressValue ?? 1))
             }
         }.background(Theme.background).navigationTitle("Reviews & Comments").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar).toolbarBackground(.visible, for: .navigationBar)
+            .companionDockHidden().toolbarBackground(.visible, for: .navigationBar)
     }
 }
 

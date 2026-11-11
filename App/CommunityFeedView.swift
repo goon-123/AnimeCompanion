@@ -67,7 +67,7 @@ struct CommunityFeedView: View {
                 }
             }.padding(16).frame(maxWidth: 940, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Community").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .companionDockHidden()
             .task(id: loadKey) {
                 if source == .aniList { await load(reset: true) }
                 else { attempt = UUID(); threads = []; loading = false }
