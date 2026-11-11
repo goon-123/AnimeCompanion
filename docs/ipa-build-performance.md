@@ -38,7 +38,8 @@ wall time is unsuitable as a build-speed baseline.
   sources, headers, patches, fixtures and scripts. Missing libraries rebuild.
   Old cache entries can seed Cargo, but always go through `cargo build`.
 - Save caches after successful validation. Cache service failures allow a normal
-  build. No account data, root Git credentials, IPA or Payload is cached.
+  build; optional cache transfers have five-minute timeouts. No account data,
+  root Git credentials, IPA or Payload is cached.
 - Disable editor indexing during the Release compile, retain optimization and
   device settings, print build timings, and verify ZIP integrity before upload.
   Save the validated Xcode cache before artifact upload, with a three-minute
@@ -47,6 +48,29 @@ wall time is unsuitable as a build-speed baseline.
 Both simulator library architectures, the generic iOS destination, Safari bundle
 and release privacy checks, artifact name/retention and all opt-in UI suites are
 preserved. Unsigned IPAs still need signing before installation.
+
+## Measurement status — November 11, 2026
+
+The [initial optimized run](https://github.com/goon-123/AnimeCompanion/actions/runs/43092039329)
+passed all prerequisite checks, all 221 native regressions, the Release compile,
+Safari/privacy bundle checks and ZIP integrity validation. Its Release compile
+took **10m47s**, versus **12m42s** for the same-app-source main control and
+**16m00s** for the recent 27m08s reference. Hosted-runner variation means these
+single compile measurements cannot establish overall pipeline savings.
+
+The prototype compact native cache occupied **791,203,209 bytes**, compared with
+**1,133,041,140 bytes** for the old cache: **30.2% smaller**. Its first population
+job took 14m41s, including recompilation; this is not a warm-cache timing.
+
+The initial run stalled in IPA artifact upload from 20:24:50 UTC and remained
+active beyond its build job's configured timeout. Subsequent build runs and
+independent cancellation jobs stayed queued. End-to-end optimized and warm-cache
+timings are therefore **not verified**. Incomplete runs must not be presented as
+successful speedups. The PR remains a draft and must stay unmerged until the
+current head succeeds and the repeat benchmark completes. The final workflow
+adds bounded cache/upload transfers and preserves validated Xcode state before
+upload to make retries cheaper. The one-off cancellation workflow is removed
+from the final PR.
 
 ## Reproduce the benchmark
 
@@ -76,6 +100,5 @@ After merging, **Actions → iOS unsigned IPA → Run workflow** offers
 Keep `run_ui_tests` off when comparing with the normal IPA pipeline. The original
 longer simulator suites remain available by turning it on.
 
-References: [Apple incremental builds](https://developer.apple.com/documentation/xcode/improving-the-speed-of-incremental-builds),
-[GitHub cache matching and scope](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching),
-and [artifact compression](https://github.com/actions/upload-artifact#altering-compressions-level-speed-v-size).
+References: [Apple incremental builds](https://developer.apple.com/documentation/xcode/improving-the-speed-of-incremental-builds)
+and [GitHub cache matching and scope](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching).
