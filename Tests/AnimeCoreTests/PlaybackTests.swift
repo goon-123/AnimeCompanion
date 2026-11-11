@@ -159,6 +159,18 @@ final class PlaybackTests: XCTestCase {
         XCTAssertEqual(try VidHubPlayback.outcome(url: callback("cancel", values: [id]), pending: request, now: now), .cancelled)
         XCTAssertEqual(try VidHubPlayback.outcome(url: callback("error", values: [id, URLQueryItem(name: "errorCode", value: "201")]), pending: request, now: now), .failed(code: 201))
     }
+    func testCompletionUsesActualRuntimeAndRejectsQuickSkips() {
+        XCTAssertTrue(PlaybackCompletionPolicy.reachedThreshold(position: 1296, duration: 1440, startedAt: 0, elapsed: 650))
+        XCTAssertFalse(PlaybackCompletionPolicy.reachedThreshold(position: 1295, duration: 1440, startedAt: 0, elapsed: 650))
+        XCTAssertFalse(PlaybackCompletionPolicy.reachedThreshold(position: 1300, duration: 1440, startedAt: 0, elapsed: 30))
+        XCTAssertTrue(PlaybackCompletionPolicy.reachedThreshold(position: 648, duration: 720, startedAt: 0, elapsed: 300))
+        XCTAssertTrue(PlaybackCompletionPolicy.reachedThreshold(position: 2592, duration: 2880, startedAt: 0, elapsed: 1100))
+        XCTAssertFalse(PlaybackCompletionPolicy.reachedThreshold(position: 1296, duration: nil, startedAt: 0, elapsed: 800))
+        XCTAssertFalse(PlaybackCompletionPolicy.reachedThreshold(position: 1296, duration: 1440, startedAt: nil, elapsed: 800))
+        XCTAssertFalse(PlaybackCompletionPolicy.reachedThreshold(position: 1296, duration: 1440, startedAt: 0, elapsed: 800, threshold: 95))
+        XCTAssertTrue(PlaybackCompletionPolicy.reachedThreshold(position: 1380, duration: 1440, startedAt: 1200, elapsed: 100, threshold: 95))
+    }
+
 }
 
 private actor PlaybackTransport: HTTPTransport {
