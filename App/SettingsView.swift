@@ -56,7 +56,7 @@ struct SettingsDirectoryView: View {
                 }
             }
             Section("Preferences") {
-                if matches("Community discussions AniList Fapservice comments sources") {
+                if matches("Community discussions AniList comments sources") {
                     NavigationLink { CommunitySourcesView() } label: {
                         SettingsCategoryLabel(title: "Community sources", detail: "Discussions, readers & access", symbol: "bubble.left.and.bubble.right", tint: Theme.accent)
                     }.accessibilityIdentifier("settings-community")

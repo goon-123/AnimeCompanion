@@ -157,7 +157,7 @@ public actor AnimeEpisodesClient {
     private func mapKey(_ anime: Anime) -> String { "episode-map-v2-\(anime.id)-\(anime.idMal ?? 0)" }
     private func pageKey(_ anime: Anime, _ page: Int) -> String { "episode-page-v2-\(anime.id)-\(anime.idMal ?? 0)-\(page)" }
     public func cached(for anime: Anime, page: Int = 1) async -> AnimeEpisodePage? {
-        guard (1...100).contains(page) else { return nil }
+        guard (1...100).contains(page), !AnimePremiere.defersEpisodes(for: anime) else { return nil }
         let savedPage = await cache.load(AnimeEpisodePage.self, key: pageKey(anime, page))
         if let savedPage { return savedPage.value }
         if let saved = await cache.load([AnimeEpisodeMetadata].self, key: mapKey(anime)), !saved.value.isEmpty {
@@ -171,6 +171,10 @@ public actor AnimeEpisodesClient {
     }
     public func page(for anime: Anime, page: Int = 1, refresh: Bool = false) async throws -> AnimeEpisodePage {
         guard anime.id > 0, (1...100).contains(page) else { throw ServiceError.invalidResponse }
+        guard !AnimePremiere.defersEpisodes(for: anime) else {
+            return AnimeEpisodePage(episodes: [], hasMore: false, source: "Premiere pending",
+                sourceURL: URL(string: "https://anilist.co/anime/\(anime.id)")!)
+        }
         let key = pageKey(anime, page)
         return try await requests.value(for: key) { try await self.fetch(anime, page: page, refresh: refresh) }
     }

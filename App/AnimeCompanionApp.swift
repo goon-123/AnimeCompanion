@@ -4,6 +4,7 @@ import AnimeCore
 
 @main
 struct AnimeCompanionApp: App {
+    private let launchStarted = ProcessInfo.processInfo.systemUptime
     // Declare before all stores: classify fresh vs. upgraded installations before
     // AppStore writes its initialization defaults.
     @StateObject private var firstRun = FirstRunSetupState(showOnLaunch: FirstRunSetupState.prepare())
@@ -69,7 +70,7 @@ struct AnimeCompanionApp: App {
     @MainActor private func revealLaunchWhenReady() async {
         guard !launchFinished else { return }
         if skipsLaunch { launchFinished = true; return }
-        let started = ProcessInfo.processInfo.systemUptime
+        let started = launchStarted
         while !Task.isCancelled {
             let restored = !store.restoring && !mangaBaka.restoring && !mangaReading.loading && !mangaSourceLinks.loading
             let showsReady = !store.loadingLibrary || store.savedAt != nil
@@ -78,10 +79,12 @@ struct AnimeCompanionApp: App {
             let weekReady = !weeklySchedule.snapshot(in: week.window).loading
             if StartupPresentation.shouldReveal(elapsed: ProcessInfo.processInfo.systemUptime - started,
                 localReady: restored, contentReady: launchContentReady && showsReady && booksReady && weekReady) {
-                withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.22)) { launchFinished = true }
+                let remaining = max(0, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
+                withAnimation(.easeOut(duration: min(reduceMotion ? 0.1 : 0.18, remaining))) { launchFinished = true }
                 return
             }
-            do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+            let remaining = max(0.001, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
+            do { try await Task.sleep(for: .seconds(min(0.05, remaining))) } catch { return }
         }
     }
     @MainActor private func warmLaunchContent() async {

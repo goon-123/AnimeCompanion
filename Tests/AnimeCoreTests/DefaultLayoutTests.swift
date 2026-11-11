@@ -53,15 +53,15 @@ final class DefaultLayoutTests: XCTestCase {
         custom.setAllVisible(false)
         XCTAssertTrue(ExplorePreferences(surface: .anime, saved: custom.saved).visible.isEmpty)
     }
-    func testCommunityExposesOnlyTwoAniListCategoriesAndOptionalWebsite() {
+    func testCommunityExposesOnlyAniListAndMigratesRemovedDestinations() {
         XCTAssertEqual(CommunityFilter.feedCases, [.season, .myShows])
         XCTAssertEqual(CommunityFilter.general.feedFilter, .season)
         XCTAssertEqual(CommunityFilter.episodes.feedFilter, .season)
-        XCTAssertEqual(CommunityDestination.allCases, [.aniList, .fapservice])
+        XCTAssertEqual(CommunityDestination.allCases, [.aniList])
         XCTAssertEqual(CommunityDestination(preference: "reddit"), .aniList)
         XCTAssertEqual(CommunityDestination(preference: "myAnimeList"), .aniList)
         XCTAssertNil(CommunityDestination.aniList.websiteURL)
-        XCTAssertEqual(CommunityDestination.fapservice.websiteURL?.absoluteString, "https://fapservice.com/")
+        XCTAssertEqual(CommunityDestination(preference: "fapservice"), .aniList)
     }
     func testCommunityCachesAreScopedByShowsAndAdultPreferences() {
         XCTAssertNotEqual(HomeCommunityClient.cacheKey(mediaIDs: [1], includeAdult: false), HomeCommunityClient.cacheKey(mediaIDs: [2], includeAdult: false))

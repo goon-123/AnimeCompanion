@@ -1,13 +1,13 @@
 import Foundation
 
-/// Native discussion provider and an optional website destination are distinct.
+/// Legacy destination preferences migrate to the only supported native source.
 public enum CommunityDestination: String, CaseIterable, Identifiable, Sendable {
-    case aniList, fapservice
+    case aniList
     public static let storageKey = "community.destination.v1"
     public var id: String { rawValue }
-    public var title: String { self == .aniList ? "AniList" : "Fapservice" }
+    public var title: String { "AniList" }
     public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .aniList }
-    public var websiteURL: URL? { self == .fapservice ? URL(string: "https://fapservice.com/") : nil }
+    public var websiteURL: URL? { nil }
 }
 
 public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendable {

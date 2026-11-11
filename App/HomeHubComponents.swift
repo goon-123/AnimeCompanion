@@ -38,8 +38,6 @@ struct HomeFeatureShortcuts: View {
                 Group {
                     if shortcut == .community {
                         NavigationLink { CommunityFeedView() } label: { tile(shortcut) }
-                    } else if shortcut == .catchUp {
-                        NavigationLink { HomeCatchUpView() } label: { tile(shortcut) }
                     } else {
                         Button { open(shortcut) } label: { tile(shortcut) }
                     }
@@ -71,13 +69,13 @@ struct HomeFeatureShortcuts: View {
     private func open(_ shortcut: HomeShortcut) {
         switch shortcut {
         case .calendar: navigation.openSchedule()
-        case .airing: navigation.openSchedule(page: .airing)
+        case .airing, .catchUp: navigation.openSchedule(page: .airing)
         case .news: navigation.openNews()
         case .library: navigation.open(.library)
         case .explore: navigation.open(.explore)
         case .reading: navigation.open(.manga)
         case .savedNews: navigation.openNews(.saved)
-        case .community, .catchUp: break // Uses the normal navigation stack above.
+        case .community: break // Uses the normal navigation stack above.
         }
     }
 }

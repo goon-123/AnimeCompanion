@@ -33,6 +33,24 @@ public struct SeriesArtworkPreferences: Equatable, Sendable {
     }
 }
 
+/// Only confirmed missing cinematic assets use the series cover/title treatment.
+/// Existing banners/logos and the independent source preferences stay intact.
+public struct CinematicArtworkPresentation: Equatable, Sendable {
+    public let banner: URL?
+    public let poster: URL?
+    public let blurredCover: Bool
+    public let textTitle: Bool
+    public init(artwork: SeriesArtwork, anime: Anime, preferences: SeriesArtworkPreferences = .init(), resolved: Bool = true) {
+        let existingBanner = preferences.bannerURL(artwork: artwork, anime: anime)
+        let missingAssets = resolved && (artwork.backdrop == nil || artwork.logo == nil)
+        let cover = artwork.poster ?? anime.coverURL
+        blurredCover = resolved && existingBanner == nil && cover != nil
+        banner = existingBanner ?? (blurredCover ? cover : nil)
+        poster = preferences.posterURL(artwork: artwork, anime: anime) ?? (missingAssets ? cover : nil)
+        textTitle = resolved && artwork.logo == nil
+    }
+}
+
 public struct SeriesMoreInfoPreferences: Equatable, Sendable {
     public static let storageKey = "series.more-info.layout.v1"
     public static let defaults: [SeriesDetailSection] = [.information, .related, .news, .artwork, .links]

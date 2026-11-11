@@ -46,12 +46,34 @@ struct AnimeEpisodesSection: View {
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            episodeContent(now: context.date)
+            if AnimePremiere.defersEpisodes(for: anime, now: context.date) {
+                premiereCard
+            } else {
+                episodeContent(now: context.date)
+                    .task(id: "\(anime.id)-\(refreshID)") { await load(reset: true, refresh: refreshID != appliedRefreshID) }
+            }
         }.accessibilityIdentifier("anime-episodes")
-            .task(id: "\(anime.id)-\(refreshID)") { await load(reset: true, refresh: refreshID != appliedRefreshID) }
             .onChange(of: activeFilter) { _, _ in resetLimits() }
             .onChange(of: query) { _, _ in resetLimits() }
             .onChange(of: upcomingExpanded) { _, expanded in if !expanded { upcomingLimit = 6 } }
+    }
+    private var premiereCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Episode 1 premiere", systemImage: "calendar.badge.clock").font(.headline)
+            if let date = AnimePremiere.exactAiring(for: anime) {
+                Text(date.formatted(.dateTime.month(.wide).day().year().hour().minute())).font(.title3.bold())
+                HStack(spacing: 4) {
+                    Text("Airs in")
+                    Text(date, style: .relative).monospacedDigit()
+                }.font(.subheadline).foregroundStyle(Theme.accent)
+            } else {
+                Text(AnimePremiere.dateLabel(for: anime)).font(.title3.bold())
+                Text("Exact airing time has not been announced.").font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Episode details will be available when the series begins airing.")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel()
+            .accessibilityElement(children: .combine).accessibilityIdentifier("anime-premiere")
     }
     private func episodeContent(now: Date) -> some View {
         let groups = AnimeEpisodeReleaseGroups(anime: anime, episodes: available, now: now)
@@ -188,6 +210,10 @@ struct AnimeEpisodesSection: View {
         }
     }
     @MainActor private func load(reset: Bool, refresh: Bool = false) async {
+        guard !AnimePremiere.defersEpisodes(for: anime) else {
+            requestID = UUID(); rows = []; more = false; loading = false; error = nil; source = nil
+            appliedRefreshID = refreshID; return
+        }
         guard !loading || reset else { return }
         let attempt = UUID(); requestID = attempt; loading = true; error = nil
         let next = reset ? 1 : page + 1

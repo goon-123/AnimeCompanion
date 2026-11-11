@@ -6,7 +6,7 @@ struct LaunchLoadingView: View {
     var body: some View {
         ZStack {
             Color.black
-            Image("LaunchMark").resizable().scaledToFit().frame(width: 96, height: 96)
+            Image("CinematicLaunch").resizable().scaledToFit().frame(width: 224, height: 224)
         }.ignoresSafeArea()
             .accessibilityElement(children: .ignore).accessibilityLabel("Loading Anime Companion")
             .accessibilityIdentifier("app-startup-logo")

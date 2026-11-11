@@ -280,20 +280,8 @@ struct CommunityWebButton: View {
 struct CommunitySourcePicker: View {
     @AppStorage(CommunityDestination.storageKey) private var saved = CommunityDestination.aniList.rawValue
     var body: some View {
-        Picker("Source", selection: Binding(get: { CommunityDestination(preference: saved) }, set: { saved = $0.rawValue })) {
-            ForEach(CommunityDestination.allCases) { Text($0.title).tag($0) }
-        }.pickerStyle(.menu).accessibilityIdentifier("community-source-switcher")
-    }
-}
-
-struct CommunityWebsitePanel: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Fapservice", systemImage: "globe").font(.headline)
-            Text("Website source · Opens in the in-app browser").font(.caption).foregroundStyle(.secondary)
-            CommunityWebButton(title: "Open Fapservice", url: CommunityDestination.fapservice.websiteURL!)
-        }.frame(maxWidth: .infinity, alignment: .leading).companionPanel(padding: 12)
-            .accessibilityIdentifier("community-website-source")
+        Label("AniList", systemImage: "text.bubble").font(.caption).foregroundStyle(.secondary)
+            .onAppear { if saved != CommunityDestination.aniList.rawValue { saved = CommunityDestination.aniList.rawValue } }
     }
 }
 
@@ -304,7 +292,6 @@ struct CommunitySourcesView: View {
             Section("AniList") {
                 Text("Read discussions, comments and replies for This Season or My Shows. My Shows uses your connected AniList library.")
             }
-            Section("Fapservice") { CommunityWebsitePanel() }
         }.navigationTitle("Community sources").navigationBarTitleDisplayMode(.inline)
     }
 }

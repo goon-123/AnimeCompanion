@@ -272,7 +272,7 @@ private struct FeaturedAnimePanel: View {
             Label("Watch", systemImage: "play.fill").font(.headline)
                 .padding(.horizontal, 24).frame(minHeight: 48)
                 .background(.white, in: Capsule()).foregroundStyle(.black)
-        }.buttonStyle(.plain).accessibilityIdentifier("featured-watch-\(anime.id)")
+        }.buttonStyle(.plain).disabled(AnimePremiere.defersEpisodes(for: anime)).accessibilityIdentifier("featured-watch-\(anime.id)")
     }
     private var detailsAction: some View {
             AnimeLink(id: anime.id) {

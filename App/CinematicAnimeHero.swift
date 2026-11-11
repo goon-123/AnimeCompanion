@@ -10,13 +10,15 @@ struct CinematicAnimeHero: View {
     @AppStorage(SeriesArtworkPreferences.posterKey) private var posterFallback = false
     let anime: Anime
     let artwork: SeriesArtwork
+    var artworkResolved = true
     let trailer: () -> Void
     let expand: (URL) -> Void
     private var bannerHeight: CGFloat { sizeClass == .regular ? 530 : 390 }
     private var posterWidth: CGFloat { sizeClass == .regular ? 186 : 138 }
     private var preferences: SeriesArtworkPreferences { .init(logo: logoFallback, banner: bannerFallback, poster: posterFallback) }
-    private var backgroundURL: URL? { preferences.bannerURL(artwork: artwork, anime: anime) }
-    private var posterURL: URL? { preferences.posterURL(artwork: artwork, anime: anime) }
+    private var presentation: CinematicArtworkPresentation { .init(artwork: artwork, anime: anime, preferences: preferences, resolved: artworkResolved) }
+    private var backgroundURL: URL? { presentation.banner }
+    private var posterURL: URL? { presentation.poster }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             banner
@@ -35,7 +37,8 @@ struct CinematicAnimeHero: View {
             ZStack(alignment: .bottomTrailing) {
                 Button { if let backgroundURL { expand(backgroundURL) } } label: {
                     ArtworkImage(url: backgroundURL, pointSize: max(geometry.size.width, bannerHeight)) {
-                        $0.resizable().scaledToFill()
+                        $0.resizable().scaledToFill().blur(radius: presentation.blurredCover ? 24 : 0)
+                            .scaleEffect(presentation.blurredCover ? 1.08 : 1)
                     } placeholder: {
                         ArtworkImage(url: bannerFallback ? anime.bannerImage.flatMap(URL.init(string:)) ?? anime.coverURL : nil, pointSize: max(geometry.size.width, bannerHeight)) {
                             $0.resizable().scaledToFill()
@@ -97,11 +100,8 @@ struct CinematicAnimeHero: View {
             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail-title")
     }
     @ViewBuilder private var logoPlaceholder: some View {
-        if logoFallback { title }
-        else {
-            Label("Logo unavailable", systemImage: "photo")
-                .font(.caption).foregroundStyle(.secondary).accessibilityLabel("Logo unavailable for " + anime.displayTitle)
-        }
+        if presentation.textTitle || logoFallback { title }
+        else { Color.clear.frame(height: sizeClass == .regular ? 132 : 96).accessibilityHidden(true) }
     }
 }
 
@@ -158,7 +158,7 @@ struct SeriesWatchActions: View {
                         }
                     }.frame(maxWidth: .infinity, minHeight: 60)
                         .foregroundStyle(Theme.background).background(Theme.accent, in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED")
+                }.buttonStyle(.plain).disabled(AnimePremiere.defersEpisodes(for: anime))
                     .accessibilityLabel("Watch Now. " + resumeLabel).accessibilityIdentifier("detail-watch-now")
                 Button(action: edit) {
                     Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")

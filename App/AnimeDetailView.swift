@@ -30,6 +30,7 @@ struct AnimeDetailView: View {
     @State private var episodeAppliedRefreshID = 0
     @State private var selectedTab = SeriesTab.episodes
     @State private var artwork = SeriesArtwork()
+    @State private var artworkResolved = false
     @State private var showingTrailer = false
     @State private var arranging = false
     @State private var appearance = false
@@ -97,7 +98,7 @@ struct AnimeDetailView: View {
         if style == .classic {
             ClassicAnimeDetailHero(anime: anime) { imagePreview = AnimeImagePreview(url: $0, title: anime.displayTitle) }
         } else {
-            CinematicAnimeHero(anime: anime, artwork: artwork, trailer: { showingTrailer = true }) { imagePreview = AnimeImagePreview(url: $0, title: anime.displayTitle) }
+            CinematicAnimeHero(anime: anime, artwork: artwork, artworkResolved: artworkResolved, trailer: { showingTrailer = true }) { imagePreview = AnimeImagePreview(url: $0, title: anime.displayTitle) }
             seriesIntroduction(anime).padding(.horizontal, 20).padding(.bottom, 18).readableContent(width: 1060)
         }
     }
@@ -119,7 +120,7 @@ struct AnimeDetailView: View {
                             Button("Edit Entry", systemImage: "square.and.pencil", action: editEntry)
                                 .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id)).accessibilityIdentifier("detail-edit-entry")
                             Button(resumeLabel(anime), systemImage: "play.fill") { playbackRequest = DetailPlaybackRequest(episode: nil) }
-                                .disabled(anime.status == "NOT_YET_RELEASED").accessibilityIdentifier("watch-in-vidhub")
+                                .disabled(AnimePremiere.defersEpisodes(for: anime)).accessibilityIdentifier("watch-in-vidhub")
                             Button("Find manga / manhwa", systemImage: "book.closed") { navigation.openMangaSearch(for: anime) }.accessibilityIdentifier("detail-find-manga")
                         }
                         Button("Account and settings", systemImage: "person.crop.circle") { showSettings = true }
@@ -127,14 +128,17 @@ struct AnimeDetailView: View {
                         .accessibilityLabel("Series options").accessibilityIdentifier("detail-options")
     }
     private func loadArtwork() async {
-                guard style == .cinematic, let anime, store.isVisible(anime) else { artwork = SeriesArtwork(); return }
+                guard style == .cinematic, let anime, store.isVisible(anime) else { artwork = SeriesArtwork(); artworkResolved = false; return }
                 #if DEBUG
                 // Keep existing offline device fixtures independent of public artwork services.
-                if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { return }
+                if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") { artworkResolved = true; return }
                 #endif
+                if let cached = await store.seriesArtwork.cachedArtwork(for: anime), !Task.isCancelled {
+                    artwork = cached; artworkResolved = true
+                }
                 let result = await store.seriesArtwork.artwork(for: anime, refresh: episodeRefreshID > 0)
                 guard !Task.isCancelled else { return }
-                artwork = result
+                artwork = result; artworkResolved = true
     }
     private func editEntry() { if store.isSignedIn { editing = true } else { showSettings = true } }
     private var tabPicker: some View {

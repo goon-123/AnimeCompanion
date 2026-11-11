@@ -55,9 +55,7 @@ struct CommunityFeedView: View {
                     CompanionSectionHeading(title: "Community", subtitle: "Conversations about this season and your shows")
                     CommunitySourcePicker()
                 }
-                if source == .fapservice {
-                    CommunityWebsitePanel()
-                } else {
+                Group {
                     Picker("Discussions", selection: $filter) {
                         ForEach(CommunityFilter.feedCases) { Text($0.title).tag($0) }
                     }.pickerStyle(.segmented).onChange(of: filter) { _, _ in selectedShow = 0 }
@@ -231,8 +229,7 @@ struct HomeCommunityWidget: View {
                     Image(systemName: "arrow.up.right.circle.fill").font(visuals.circleIconFont).foregroundStyle(Theme.accent).frame(minWidth: 44, minHeight: 44)
                 }.accessibilityLabel("Open Community")
             }
-            if source == .fapservice { CommunityWebsitePanel() }
-            else {
+            Group {
                 Picker("Discussions", selection: $filter) { ForEach(CommunityFilter.feedCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
                 ForEach(previews) { thread in
                     NavigationLink { CommunityThreadReader(thread: thread) } label: {
