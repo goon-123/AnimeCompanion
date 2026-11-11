@@ -13,6 +13,7 @@ public struct HomeContentSnapshot<Value: Codable & Sendable>: Codable, Sendable 
 
 /// Bounded public Home metadata only. Account snapshots use a separate encrypted store.
 public actor HomeContentCache {
+    private let persistence = AppDataSession()
     public static var defaultDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("AnimeCompanion-Home", isDirectory: true)
     }
@@ -41,7 +42,7 @@ public actor HomeContentCache {
         guard let file = file(key), let directory else { return false }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try data.write(to: file, options: .atomic)
+            try persistence.write(data, to: file, options: .atomic)
             let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
                 .filter { $0.pathExtension == "json" }.sorted {
                     ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) >

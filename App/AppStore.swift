@@ -255,6 +255,11 @@ final class AppStore: ObservableObject {
             if generation == attempt { accountError = error.localizedDescription }
         }
     }
+    func prepareForAppReset() {
+        generation = UUID(); libraryRevision += 1
+        authentication.cancel()
+        token = nil; viewer = nil; entries = []; isSignedIn = false
+    }
     func disconnect() {
         do { try KeychainTokenStore.delete() }
         catch { accountError = error.localizedDescription; return }

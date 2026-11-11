@@ -36,6 +36,7 @@ private enum AddonKeychain {
 
 @MainActor
 final class PlaybackStore: ObservableObject {
+    private let lifetime = AppDataSession()
     let client: StremioClient
     @Published private var collection = AddonCollection()
     @Published private(set) var addonRevision = UUID()
@@ -43,6 +44,12 @@ final class PlaybackStore: ObservableObject {
         didSet { defaults.set(enabled, forKey: "playback.enabled") }
     }
     @Published private(set) var progress: [String: PlaybackProgress] = [:]
+    @Published var autoMarkEpisodes = UserDefaults.standard.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true {
+        didSet { defaults.set(autoMarkEpisodes, forKey: "playback.autoMarkEpisodes") }
+    }
+    @Published var completionThreshold = UserDefaults.standard.object(forKey: "playback.completionThreshold") as? Int ?? 90 {
+        didSet { defaults.set(completionThreshold, forKey: "playback.completionThreshold") }
+    }
     @Published private(set) var installing = false
     @Published private(set) var openingPlayer = false
     @Published var setupError: String?
@@ -66,6 +73,8 @@ final class PlaybackStore: ObservableObject {
                 collection = saved
             } else if let addon = try? PlaybackPreviewTransport.addon() { collection.install(addon) }
             enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
+            autoMarkEpisodes = self.defaults.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true
+            completionThreshold = self.defaults.object(forKey: "playback.completionThreshold") as? Int ?? 90
             if ProcessInfo.processInfo.arguments.contains("--ui-playback-stale-resume") {
                 progress["1:1"] = PlaybackProgress(position: 120, duration: 1440, finished: false)
             }
@@ -76,6 +85,8 @@ final class PlaybackStore: ObservableObject {
         #endif
         client = StremioClient()
         enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
+        autoMarkEpisodes = self.defaults.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true
+        completionThreshold = self.defaults.object(forKey: "playback.completionThreshold") as? Int ?? 90
         if let data = defaults.data(forKey: "playback.positions"), let saved = try? JSONDecoder().decode([String: PlaybackProgress].self, from: data) { progress = saved }
         if let data = defaults.data(forKey: "playback.pending"), let saved = try? JSONDecoder().decode(PendingPlayback.self, from: data), Date().timeIntervalSince(saved.createdAt) < 86400 { pending = saved }
         do {
@@ -122,6 +133,7 @@ final class PlaybackStore: ObservableObject {
         catch { setupError = error.localizedDescription }
     }
     private func persist(_ updated: AddonCollection) throws {
+        try lifetime.check()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
             // Only synthetic fixture URLs use this isolated test defaults suite.
@@ -145,10 +157,11 @@ final class PlaybackStore: ObservableObject {
         guard !openingPlayer else { return }
         openingPlayer = true; playerMessage = nil
         defer { openingPlayer = false }
+        let start = restart ? 0 : saved(animeID: anime.id, episode: episode)?.position ?? 0
         let record = PendingPlayback(episode: PlaybackEpisode(animeID: anime.id, episode: episode),
-                                     title: anime.format == "MOVIE" ? anime.displayTitle : "\(anime.displayTitle) · Episode \(episode)")
+                                     title: anime.format == "MOVIE" ? anime.displayTitle : "\(anime.displayTitle) · Episode \(episode)",
+                                     startPosition: start)
         do {
-            let start = restart ? 0 : saved(animeID: anime.id, episode: episode)?.position ?? 0
             let url = try VidHubPlayback.launchURL(stream: stream, pending: record, position: start, subtitle: subtitle)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") || ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
@@ -181,21 +194,31 @@ final class PlaybackStore: ObservableObject {
             }
         } catch { clearPending(); playerMessage = error.localizedDescription }
     }
-    func handle(_ url: URL) {
-        guard let pending else { return }
+    /// Return a completed episode to the application so AniList can be updated.
+    /// A stopped callback with no duration is resume-only, not automatically watched.
+    @discardableResult
+    func handle(_ url: URL) -> PlaybackEpisode? {
+        guard let pending else { return nil }
         do {
-            guard let outcome = try VidHubPlayback.outcome(url: url, pending: pending) else { return }
+            guard let outcome = try VidHubPlayback.outcome(url: url, pending: pending) else { return nil }
+            var completed: PlaybackEpisode?
             switch outcome {
             case .success(let position, let duration, let finished):
-                progress[pending.episode.key] = PlaybackProgress(position: position, duration: duration, finished: finished)
+                let reached = PlaybackCompletionPolicy.reachedThreshold(
+                    position: position, duration: duration, startedAt: pending.startPosition,
+                    elapsed: Date().timeIntervalSince(pending.createdAt), threshold: completionThreshold)
+                let watched = autoMarkEpisodes && (finished || reached)
+                progress[pending.episode.key] = PlaybackProgress(position: position, duration: duration, finished: watched)
                 defaults.set(try JSONEncoder().encode(progress), forKey: "playback.positions")
-                playerMessage = finished ? "Finished \(pending.title). Playback saved on this device." : "Resume position saved for \(pending.title)."
+                playerMessage = watched ? "Episode watched. Progress saved on this device." : "Resume position saved for \(pending.title)."
+                if watched { completed = pending.episode }
             case .cancelled: playerMessage = "Playback cancelled. Your saved position has not changed."
             case .failed(let code):
                 playerMessage = code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "VidHub could not play this video. Check the source connection or try another file."
             }
             clearPending()
-        } catch { playerMessage = error.localizedDescription }
+            return completed
+        } catch { playerMessage = error.localizedDescription; return nil }
     }
     func playUntracked(stream: StremioStream, title: String, subtitle: URL? = nil) async {
         guard !openingPlayer else { return }

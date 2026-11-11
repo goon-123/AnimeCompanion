@@ -51,7 +51,7 @@ struct AnimeDetailView: View {
             .ignoresSafeArea(.container, edges: style == .cinematic ? .top : [])
             .background(Theme.background).navigationTitle(anime?.displayTitle ?? "Anime").navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar(.hidden, for: .tabBar)
+            .companionDockHidden()
             .overlay(alignment: .bottomLeading) { commentsButton }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { optionsMenu } }
             .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }

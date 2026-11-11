@@ -31,6 +31,7 @@ private enum SeanimeKeychain {
 
 @MainActor
 final class SeanimeStore: ObservableObject {
+    private let lifetime = AppDataSession()
     @Published private var saved = SeanimeSavedState()
     @Published private(set) var revision = UUID()
     @Published var error: String?
@@ -124,6 +125,7 @@ final class SeanimeStore: ObservableObject {
     }
     private func persist(_ state: SeanimeSavedState, invalidateSearch: Bool = true) -> Bool {
         do {
+            try lifetime.check()
             guard !loadFailed else { throw ServiceError.message("Saved Seanime settings must be readable before they can be changed. Unlock this device and reopen the app.") }
             var compact = state; compact.installations = state.installations.map(\.storageSnapshot)
             let data = try JSONEncoder().encode(compact)

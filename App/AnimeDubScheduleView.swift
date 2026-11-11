@@ -24,7 +24,7 @@ struct AnimeDubScheduleView: View {
                 }
             }.padding(18).readableContent(width: 940)
         }.background(Theme.background).navigationTitle("English dub").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .companionDockHidden()
             .accessibilityIdentifier("anime-dub-schedule")
             .task(id: "\(anime.id)-\(store.includeAdult)") {
                 if store.isVisible(anime) { await dubs.load(using: store.dubs) }

@@ -49,6 +49,7 @@ public final class MangaSourceCookieJar: @unchecked Sendable {
         }.suffix(256))
     }
     public func clear(source: String) { lock.lock(); sessions.removeValue(forKey: source); lock.unlock() }
+    public func clearAll() { lock.lock(); sessions.removeAll(); lock.unlock() }
     public func header(source: String, url: URL) -> String? {
         guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return nil }
         let encodedPath = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? ""

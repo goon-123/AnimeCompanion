@@ -88,6 +88,7 @@ struct ArtworkPhaseView<Content: View>: View {
     @Environment(\.displayScale) private var displayScale
     let url: URL?
     var pointSize: CGFloat = 320
+    var animatesCachedImages = false
     var retryToken = 0
     var pipeline = ArtworkPipeline.shared
     @ViewBuilder let content: (AsyncImagePhase) -> Content
@@ -108,7 +109,7 @@ struct ArtworkPhaseView<Content: View>: View {
                 guard let url = requested.url else { return }
                 if !refresh, let bitmap = await pipeline.cachedImage(at: url, pixels: requested.pixels) {
                     guard !Task.isCancelled, loaded == requested else { return }
-                    var instant = Transaction(); instant.disablesAnimations = true
+                    var instant = Transaction(); instant.disablesAnimations = !animatesCachedImages
                     withTransaction(instant) { phase = .success(Image(decorative: bitmap.image, scale: displayScale)) }
                     return
                 }
@@ -129,10 +130,11 @@ struct ArtworkImage<Content: View, Placeholder: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let url: URL?
     var pointSize: CGFloat = 320
+    var animatesCachedImages = false
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
     var body: some View {
-        ArtworkPhaseView(url: url, pointSize: pointSize) { phase in
+        ArtworkPhaseView(url: url, pointSize: pointSize, animatesCachedImages: animatesCachedImages) { phase in
             ZStack {
                 placeholder().opacity(phase.image == nil ? 1 : 0)
                 if let image = phase.image { content(image).transition(.opacity) }

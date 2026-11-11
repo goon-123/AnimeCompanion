@@ -211,6 +211,7 @@ public enum MangaReadingStorageError: LocalizedError {
 }
 
 public actor MangaReadingStorage {
+    private let persistence = AppDataSession()
     private let directory: URL
     private var state: MangaReadingState?
     public init(directory: URL) { self.directory = directory }
@@ -233,15 +234,17 @@ public actor MangaReadingStorage {
     }
     @discardableResult
     public func update(_ mutation: @Sendable (inout MangaReadingState) -> Void) throws -> MangaReadingState {
-        var value = try load()
-        mutation(&value); value.preferences.normalize()
-        guard value.revision < UInt64.max, value.records.count <= 5000,
-              value.records.allSatisfy({ $0.positions.count <= 10000 }) else { throw MangaReadingStorageError.tooLarge }
-        value.revision += 1
-        let data = try JSONEncoder().encode(value)
-        guard data.count <= 16_000_000 else { throw MangaReadingStorageError.tooLarge }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: directory.appendingPathComponent("reading.json"), options: .atomic)
-        state = value; return value
+        return try persistence.perform {
+            var value = try load()
+            mutation(&value); value.preferences.normalize()
+            guard value.revision < UInt64.max, value.records.count <= 5000,
+                  value.records.allSatisfy({ $0.positions.count <= 10000 }) else { throw MangaReadingStorageError.tooLarge }
+            value.revision += 1
+            let data = try JSONEncoder().encode(value)
+            guard data.count <= 16_000_000 else { throw MangaReadingStorageError.tooLarge }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try persistence.write(data, to: directory.appendingPathComponent("reading.json"), options: .atomic)
+            state = value; return value
+        }
     }
 }

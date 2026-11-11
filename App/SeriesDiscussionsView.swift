@@ -87,7 +87,7 @@ struct SeriesDiscussionsView: View {
                 }
             }.padding(16).frame(maxWidth: 860, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Discussions").navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .companionDockHidden()
             .task(id: loadKey) { await load(reset: true) }
             .refreshable { await load(reset: true, refresh: true) }
             .sheet(isPresented: $numbering) {

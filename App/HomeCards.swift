@@ -37,18 +37,34 @@ struct HomeMediaCardLayout<Artwork: View, Content: View>: View {
 
 struct HomeContinueWatchingCard: View {
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var store: AppStore
+    @State private var episodeDetails: AnimeEpisodeMetadata?
     let anime: Anime
     let entry: LibraryEntry
-    let resume: () -> Void
-    private var episode: Int { PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil) }
+    let episode: Int
+    let resume: PlaybackProgress?
+    let onResume: () -> Void
 
     var body: some View {
         HomeMediaCardLayout {
             AnimeLink(id: anime.id) {
-                AnimeCover(anime: anime, width: visuals.watchingCover, cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
+                ArtworkImage(url: episodeDetails?.imageURL, pointSize: visuals.watchingCover * 1.45, animatesCachedImages: true) {
+                    $0.resizable().scaledToFill()
+                } placeholder: {
+                    // Display the existing poster immediately, then crossfade
+                    // to an episode-specific still only after that still decodes.
+                    AnimeCover(anime: anime, width: visuals.watchingCover,
+                               cornerRadius: 12, identifierPrefix: "home", badgeStyle: .none)
+                }
+                .frame(width: visuals.watchingCover, height: visuals.watchingCover * 1.45)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityLabel(episodeDetails?.imageURL == nil ? "Anime poster" : "Episode artwork")
             }.buttonStyle(.plain).accessibilityHidden(true)
         } content: { metadata }
             .companionPanel(padding: visuals.value(12, 16))
+            .animation(AppMotion.content(reduceMotion), value: episodeDetails?.title)
+            .task(id: "\(anime.id):\(episode)") { await fetchEpisodeDetails() }
     }
 
     private var metadata: some View {
@@ -56,21 +72,48 @@ struct HomeContinueWatchingCard: View {
             AnimeLink(id: anime.id) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(anime.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true)
-                    Text("Watched \(entry.progressValue)" + (anime.episodes.map { " / \($0)" } ?? " episodes"))
+                    Text("Watched \(entry.progressValue)" + (anime.episodes.map { " / \($0) episodes" } ?? " episodes"))
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("home-anime-\(anime.id)")
                 .accessibilityHint("Open series details")
-            if let total = anime.episodes, total > 0 {
+            if let resume, let duration = resume.duration, duration > 0 {
+                ProgressView(value: min(1, max(0, resume.position / duration)))
+                    .tint(Theme.accent).accessibilityLabel("Episode playback progress")
+            } else if let total = anime.episodes, total > 0 {
                 ProgressView(value: min(1, max(0, Double(entry.progressValue) / Double(total))))
                     .tint(Theme.accent).accessibilityLabel("Watched progress")
             } else { Color.clear.frame(height: 4).accessibilityHidden(true) }
-            // Resume remains outside both detail links and sizes naturally
-            // with the text; no oversized footer or overlapping hit areas.
+            if let title = episodeDetails?.title, !title.isEmpty {
+                Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1).transition(.opacity)
+            }
+            if let resume {
+                Text("Resume \(timeLabel(resume.position))" + (resume.duration.flatMap { $0 > 0 ? " / \(timeLabel($0))" : nil } ?? ""))
+                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) { episodeLabel; Spacer(minLength: 0); continueAction }
                 VStack(alignment: .leading, spacing: 4) { episodeLabel; continueAction }
             }
+        }
+    }
+
+    private func timeLabel(_ seconds: Double) -> String {
+        let value = Int(max(0, min(seconds.isFinite ? seconds : 0, 31_536_000)))
+        return String(format: "%d:%02d", value / 60, value % 60)
+    }
+    @MainActor private func fetchEpisodeDetails() async {
+        episodeDetails = nil
+        guard episode > 0, !AnimePremiere.defersEpisodes(for: anime) else { return }
+        let pageNumber = (episode - 1) / 100 + 1
+        if let cached = await store.episodeMetadata.cached(for: anime, page: pageNumber) {
+            guard !Task.isCancelled else { return }
+            episodeDetails = cached.episodes.first { $0.number == episode }
+            if episodeDetails?.imageURL != nil { return }
+        }
+        if let fresh = try? await store.episodeMetadata.page(for: anime, page: pageNumber) {
+            guard !Task.isCancelled else { return }
+            episodeDetails = fresh.episodes.first { $0.number == episode } ?? episodeDetails
         }
     }
 
@@ -80,8 +123,8 @@ struct HomeContinueWatchingCard: View {
     }
 
     private var continueAction: some View {
-        Button(action: resume) {
-            Label(anime.format == "MOVIE" ? "Watch movie" : "Continue", systemImage: "play.fill")
+        Button(action: onResume) {
+            Label(anime.format == "MOVIE" ? "Watch movie" : (resume == nil ? "Continue" : "Resume"), systemImage: "play.fill")
                 .font(visuals.actionTextFont).imageScale(visuals.enlarged ? .medium : .small)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .foregroundStyle(Theme.accent)

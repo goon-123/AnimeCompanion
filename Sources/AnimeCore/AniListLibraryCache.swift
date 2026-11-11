@@ -19,6 +19,7 @@ import CryptoKit
 
 /// Scoped to the Keychain credential. Tokens and unencrypted tracking data never enter the file.
 public actor AniListLibraryCache {
+    private let persistence = AppDataSession()
     private let directory: URL
     private let context = Data("com.animecompanion.anilist.library.v1".utf8)
     public init(directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -42,9 +43,9 @@ public actor AniListLibraryCache {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             #if os(iOS)
-            try encrypted.write(to: file(credential), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try persistence.write(encrypted, to: file(credential), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             #else
-            try encrypted.write(to: file(credential), options: .atomic)
+            try persistence.write(encrypted, to: file(credential), options: .atomic)
             #endif
             // AniList has one active account; keep this private snapshot bounded.
             // Directory enumeration may return relative/base URLs on Apple platforms.

@@ -36,6 +36,7 @@ private struct MBCachedPayload: Codable {
 }
 
 public actor MangaBakaClient {
+    private let persistence = AppDataSession()
     private let transport: any HTTPTransport
     private let spacing: Double
     private let cacheFile: URL?
@@ -322,7 +323,7 @@ public actor MangaBakaClient {
         cache = kept
         if let file = cacheFile, let data = try? JSONEncoder().encode(Array(kept.values)) {
             try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
+            try? persistence.write(data, to: file, options: .atomic)
         }
     }
     private func request(_ url: URL, method: String = "GET", body: Data? = nil, form: Bool = false, credential: MangaBakaCredential? = nil) async throws -> Data {

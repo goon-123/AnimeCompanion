@@ -11,8 +11,10 @@ public struct PendingPlayback: Codable, Sendable {
     public let episode: PlaybackEpisode
     public let title: String
     public let createdAt: Date
-    public init(episode: PlaybackEpisode, title: String, requestID: UUID = UUID(), createdAt: Date = Date()) {
-        self.episode = episode; self.title = title; self.requestID = requestID; self.createdAt = createdAt
+    /// Optional to keep older saved pending sessions decodable.
+    public let startPosition: Double?
+    public init(episode: PlaybackEpisode, title: String, requestID: UUID = UUID(), createdAt: Date = Date(), startPosition: Double? = nil) {
+        self.episode = episode; self.title = title; self.requestID = requestID; self.createdAt = createdAt; self.startPosition = startPosition
     }
 }
 public struct PlaybackProgress: Codable, Sendable {
@@ -24,6 +26,24 @@ public struct PlaybackProgress: Codable, Sendable {
         self.position = finished ? 0 : position; self.duration = duration; self.finished = finished; self.updatedAt = updatedAt
     }
 }
+/// A conservative estimate for a third-party player's stopped callback.
+/// VidHub reports a position only on return, not continuous watch-time/seek telemetry.
+public enum PlaybackCompletionPolicy {
+    public static let defaultThreshold = 90
+    public static func reachedThreshold(position: Double, duration: Double?, startedAt: Double?, elapsed: TimeInterval, threshold: Int = defaultThreshold) -> Bool {
+        guard let duration, duration >= 60, duration <= VidHubPlayback.maximumPosition,
+              position.isFinite, (0...VidHubPlayback.maximumPosition).contains(position),
+              position <= duration * 1.05, elapsed.isFinite, elapsed >= 0 else { return false }
+        let required = duration * Double(min(100, max(75, threshold))) / 100
+        guard position >= required else { return false }
+        // A callback that jumps from the beginning to the credits in seconds
+        // does not establish that the intervening footage was watched.
+        guard let startedAt, startedAt.isFinite, startedAt >= 0, startedAt <= duration else { return false }
+        let watchedSpan = max(0, required - startedAt)
+        return elapsed >= max(15, watchedSpan / 2.5)
+    }
+}
+
 public enum VidHubOutcome: Equatable, Sendable {
     case success(position: Double, duration: Double?, finished: Bool)
     case failed(code: Int?)

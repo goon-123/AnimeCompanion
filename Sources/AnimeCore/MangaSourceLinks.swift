@@ -43,6 +43,7 @@ public enum MangaSourceLinkError: LocalizedError {
 /// Separate from frequently updated page progress so linking never rewrites or
 /// migrates reading history. Failed reads and writes leave existing data intact.
 public actor MangaSourceLinkStorage {
+    private let persistence = AppDataSession()
     private let directory: URL
     private var cached: MangaSourceLinkState?
     public init(directory: URL) { self.directory = directory }
@@ -65,19 +66,21 @@ public actor MangaSourceLinkStorage {
     }
     @discardableResult
     public func setSource(_ title: MangaTitleReference?, for target: MangaSourceLinkTarget) throws -> MangaSourceLinkState {
-        var value = try load()
-        if let title {
-            let link = MangaSourceLink(library: target, title: title)
-            guard Self.valid(link) else { throw MangaSourceLinkError.invalidLink }
-            value.links[target.id] = link
-        } else { value.links.removeValue(forKey: target.id) }
-        guard value.links.count <= 5000, value.revision < UInt64.max else { throw MangaSourceLinkError.tooLarge }
-        value.revision += 1
-        let data = try JSONEncoder().encode(value)
-        guard data.count <= 16_000_000 else { throw MangaSourceLinkError.tooLarge }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: directory.appendingPathComponent("source-links.json"), options: .atomic)
-        cached = value; return value
+        return try persistence.perform {
+            var value = try load()
+            if let title {
+                let link = MangaSourceLink(library: target, title: title)
+                guard Self.valid(link) else { throw MangaSourceLinkError.invalidLink }
+                value.links[target.id] = link
+            } else { value.links.removeValue(forKey: target.id) }
+            guard value.links.count <= 5000, value.revision < UInt64.max else { throw MangaSourceLinkError.tooLarge }
+            value.revision += 1
+            let data = try JSONEncoder().encode(value)
+            guard data.count <= 16_000_000 else { throw MangaSourceLinkError.tooLarge }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try persistence.write(data, to: directory.appendingPathComponent("source-links.json"), options: .atomic)
+            cached = value; return value
+        }
     }
     private static func valid(_ link: MangaSourceLink) -> Bool {
         !link.library.accountID.isEmpty && link.library.seriesID > 0 &&

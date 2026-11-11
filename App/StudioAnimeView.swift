@@ -36,7 +36,7 @@ struct StudioAnimeView: View {
                 }
             }.padding(16).frame(maxWidth: 1100).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle(studio.name).navigationBarTitleDisplayMode(.inline)
-            .toolbar(.visible, for: .navigationBar).toolbar(.hidden, for: .tabBar).animeNavigation()
+            .toolbar(.visible, for: .navigationBar).companionDockHidden().animeNavigation()
             .task(id: "\(studio.id)-\(sort.rawValue)-\(store.includeAdult)") { await load(reset: true) }
             .refreshable { await load(reset: true, refresh: true) }
             .accessibilityIdentifier("studio-anime-page")

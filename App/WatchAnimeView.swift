@@ -80,7 +80,7 @@ struct WatchAnimeView: View {
                     if let message = playback.playerMessage {
                         StreamPickerCard {
                             Text(message).font(.subheadline).accessibilityIdentifier("playback-player-message")
-                            if playback.saved(animeID: anime.id, episode: episode)?.finished == true && store.isSignedIn {
+                            if playback.saved(animeID: anime.id, episode: episode)?.finished == true && store.isSignedIn && (store.entry(for: anime.id)?.progressValue ?? 0) < episode {
                                 Button("Mark episode watched on AniList") { markWatched() }
                                     .disabled(store.loadingLibrary || store.savingMedia.contains(anime.id))
                             }

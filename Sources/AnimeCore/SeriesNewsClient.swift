@@ -14,6 +14,7 @@ public struct SeriesNewsSnapshot: Sendable {
 /// Searches a publisher's title-specific listings rather than just its latest feed.
 /// Results remain separate from the main News cache and must match a series title locally.
 public actor SeriesNewsClient {
+    private let persistence = AppDataSession()
     private struct Record: Codable, Sendable {
         let key: String
         let articles: [NewsArticle]
@@ -137,7 +138,7 @@ public actor SeriesNewsClient {
     private func persist() {
         guard let directory, let data = try? JSONEncoder().encode(Array(records.values)), data.count <= 2_000_000 else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: directory.appendingPathComponent("series-v1.json"), options: .atomic)
+        try? persistence.write(data, to: directory.appendingPathComponent("series-v1.json"), options: .atomic)
     }
 }
 

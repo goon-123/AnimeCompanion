@@ -107,6 +107,7 @@ private let mangaHTTPCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafeP
 private let mangaHTTPRelease: @convention(c) (UnsafeMutablePointer<CChar>?) -> Void = { free($0) }
 
 private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let lifetime = AppDataSession()
     private struct Request: Decodable { let url: String; let method: String; let headers: [[String]]; let body: String?; let bodyBase64: String? }
     private let networking: Bool
     private let sourceKey: String
@@ -130,11 +131,13 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
         config.timeoutIntervalForRequest = 20; config.timeoutIntervalForResource = 25
         config.httpMaximumConnectionsPerHost = 2
         let value = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        AppNetworkSessions.shared.register(value)
         ownedSession = value; return value
     }
     func finish() { lock.lock(); let value = ownedSession; ownedSession = nil; lock.unlock(); value?.invalidateAndCancel(); browser.finish() }
     func cancel() { lock.lock(); stopped = true; let value = ownedSession; lock.unlock(); value?.invalidateAndCancel(); browser.finish() }
     func checkCancellation() throws {
+        try lifetime.check()
         lock.lock(); let cancelled = stopped; lock.unlock()
         if cancelled { throw CancellationError() }
         if Date() >= deadline { throw URLError(.timedOut) }
@@ -247,7 +250,7 @@ private final class MangaRuntimeHTTP: NSObject, URLSessionDataDelegate, @uncheck
         let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
             if let key = pair.key as? String { result[key] = String(describing: pair.value) }
         }
-        MangaSourceCookieJar.shared.receive(source: sourceKey, url: url, headers: headers)
+        try? lifetime.perform { MangaSourceCookieJar.shared.receive(source: sourceKey, url: url, headers: headers) }
     }
 }
 

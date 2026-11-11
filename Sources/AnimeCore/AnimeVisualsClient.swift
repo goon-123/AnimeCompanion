@@ -5,6 +5,7 @@ import FoundationNetworking
 
 /// Public artwork only. This client has no account tokens, browser cookies or tracking operations.
 public actor AnimeVisualsClient {
+    private let persistence = AppDataSession()
     private struct Key: Hashable, Codable, Sendable { let aniList: Int; let mal: Int? }
     private struct Record: Codable, Sendable {
         let key: Key
@@ -164,7 +165,7 @@ public actor AnimeVisualsClient {
                 cache = Dictionary(uniqueKeysWithValues: records.map { ($0.key, $0) })
                 if let file = cacheFile {
                     try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try? data.write(to: file, options: .atomic)
+                    try? persistence.write(data, to: file, options: .atomic)
                 }
                 return
             }
