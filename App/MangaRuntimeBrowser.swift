@@ -24,6 +24,7 @@ enum MangaBrowserPolicy {
 /// Synchronous worker-side transport. WebKit and its delegates stay on MainActor;
 /// only owned JSON crosses this boundary. Cancelling the VM also closes its views.
 final class MangaRuntimeBrowser: @unchecked Sendable {
+    private let lifetime = AppDataSession()
     private let owner = UUID()
     private let sourceKey: String
     private let documentLoader: (@MainActor (WKWebView, URL) -> Void)?
@@ -40,7 +41,12 @@ final class MangaRuntimeBrowser: @unchecked Sendable {
             for session in sessions.values { await session.close() }
         }
     }
-    private var cancelled: Bool { lock.lock(); defer { lock.unlock() }; return stopped }
+    private var cancelled: Bool { lock.lock(); defer { lock.unlock() }; return stopped || !lifetime.isCurrent }
+    @MainActor static func closeAllForReset() async {
+        let existing = sessions.values.flatMap { $0.values }
+        sessions.removeAll()
+        for session in existing { await session.close() }
+    }
     func request(_ input: Data, remaining: TimeInterval) throws -> Data {
         guard !Thread.isMainThread, !cancelled, input.count <= 1_000_000 else { throw MangaExtensionError.sourceUnavailable }
         let command = try JSONDecoder().decode(MangaBrowserCommand.self, from: input)

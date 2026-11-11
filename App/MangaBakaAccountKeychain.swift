@@ -3,6 +3,7 @@ import Security
 import AnimeCore
 
 struct MangaBakaAccountKeychain {
+    private let lifetime = AppDataSession()
     let service: String
     init(service: String = "com.animecompanion.mangabaka") { self.service = service }
     private func query(_ account: String) -> [String: Any] {
@@ -29,20 +30,22 @@ struct MangaBakaAccountKeychain {
         return (accounts, true)
     }
     func save(_ accounts: MangaBakaAccounts) throws {
-        let bytes = try JSONEncoder().encode(accounts)
-        guard bytes.count <= 2_000_000 else { throw MangaBakaError.message("The saved MangaBaka accounts are too large for this device.") }
-        let base = query("accounts.v1")
-        let updates: [String: Any] = [kSecValueData as String: bytes,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        let status = SecItemUpdate(base as CFDictionary, updates as CFDictionary)
-        if status == errSecItemNotFound {
-            var q = base; q[kSecValueData as String] = bytes
-            q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else {
-                throw MangaBakaError.message("The MangaBaka accounts could not be saved securely.")
-            }
-        } else if status != errSecSuccess { throw MangaBakaError.message("The MangaBaka accounts could not be updated.") }
-        // A successfully saved empty registry also prevents old-account resurrection.
-        SecItemDelete(query("connection") as CFDictionary)
+        try lifetime.perform {
+            let bytes = try JSONEncoder().encode(accounts)
+            guard bytes.count <= 2_000_000 else { throw MangaBakaError.message("The saved MangaBaka accounts are too large for this device.") }
+            let base = query("accounts.v1")
+            let updates: [String: Any] = [kSecValueData as String: bytes,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+            let status = SecItemUpdate(base as CFDictionary, updates as CFDictionary)
+            if status == errSecItemNotFound {
+                var q = base; q[kSecValueData as String] = bytes
+                q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else {
+                    throw MangaBakaError.message("The MangaBaka accounts could not be saved securely.")
+                }
+            } else if status != errSecSuccess { throw MangaBakaError.message("The MangaBaka accounts could not be updated.") }
+            // A successfully saved empty registry also prevents old-account resurrection.
+            SecItemDelete(query("connection") as CFDictionary)
+        }
     }
 }

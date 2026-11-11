@@ -24,6 +24,7 @@ public struct ExploreSnapshot: Codable, Sendable {
 
 /// Disk I/O stays off the main actor. A failed or corrupt cache never prevents live browsing.
 public actor ExploreCache {
+    private let persistence = AppDataSession()
     public static var defaultDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("AnimeCompanion-Explore", isDirectory: true)
@@ -53,7 +54,7 @@ public actor ExploreCache {
             let data = try JSONEncoder().encode(snapshot)
             guard data.count <= 4 * 1024 * 1024 else { return false }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try data.write(to: directory.appendingPathComponent(key), options: .atomic)
+            try persistence.write(data, to: directory.appendingPathComponent(key), options: .atomic)
             let files = try FileManager.default.contentsOfDirectory(at: directory,
                 includingPropertiesForKeys: [.contentModificationDateKey]).filter { $0.lastPathComponent.hasPrefix("explore-v") && $0.pathExtension == "json" }
             let newest = files.sorted {

@@ -4,7 +4,12 @@ import AnimeCore
 
 @main
 struct AnimeCompanionApp: App {
-    private let launchStarted = ProcessInfo.processInfo.systemUptime
+    var body: some Scene {
+        WindowGroup { AppSessionHost() }
+    }
+}
+
+struct AppSessionView: View {
     // Declare before all stores: classify fresh vs. upgraded installations before
     // AppStore writes its initialization defaults.
     @StateObject private var firstRun = FirstRunSetupState(showOnLaunch: FirstRunSetupState.prepare())
@@ -20,12 +25,18 @@ struct AnimeCompanionApp: App {
     @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var reset: AppResetCoordinator
     @State private var launchFinished = false
+    @State private var launchRevealing = false
     @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
-    var body: some Scene {
-        WindowGroup {
+    var body: some View {
             launchRoot.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+                .onAppear {
+                    reset.prepareForReset = { [weak store, weak mangaBaka] in
+                        store?.prepareForAppReset(); mangaBaka?.prepareForAppReset()
+                    }
+                }
                 .environmentObject(playback).onOpenURL { url in
                     if let completed = playback.handle(url) {
                         Task { await syncCompletedEpisode(completed) }
@@ -56,7 +67,6 @@ struct AnimeCompanionApp: App {
                     async let dubbed: Void = store.exploreDubs.keepUpdated(using: store.dubs)
                     _ = await (library, dubbed)
                 }
-        }
     }
     @MainActor private func syncCompletedEpisode(_ completed: PlaybackEpisode) async {
         guard store.isSignedIn, let entry = store.entry(for: completed.animeID),
@@ -73,14 +83,17 @@ struct AnimeCompanionApp: App {
     }
     private var launchRoot: some View {
         ZStack {
-            root.allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
-            if !launchFinished { LaunchLoadingView().transition(.opacity).zIndex(1) }
+            root.opacity(launchRevealing || launchFinished ? 1 : 0)
+                .allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
+            if !launchFinished { LaunchLoadingView().opacity(launchRevealing ? 0 : 1).zIndex(1) }
         }.background(Color.black.ignoresSafeArea())
     }
     @MainActor private func revealLaunchWhenReady() async {
         guard !launchFinished else { return }
-        if skipsLaunch { launchFinished = true; return }
-        let started = launchStarted
+        if skipsLaunch { launchRevealing = true; launchFinished = true; return }
+        // Start after the splash mounts. Store initialization must not consume
+        // the fade's time budget before there is even a visible logo frame.
+        let started = ProcessInfo.processInfo.systemUptime
         while !Task.isCancelled {
             let restored = !store.restoring && !mangaBaka.restoring && !mangaReading.loading && !mangaSourceLinks.loading
             let showsReady = !store.loadingLibrary || store.savedAt != nil
@@ -90,7 +103,12 @@ struct AnimeCompanionApp: App {
             if StartupPresentation.shouldReveal(elapsed: ProcessInfo.processInfo.systemUptime - started,
                 localReady: restored, contentReady: launchContentReady && showsReady && booksReady && weekReady) {
                 let remaining = max(0, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
-                withAnimation(.easeInOut(duration: min(reduceMotion ? 0.1 : 0.26, remaining))) { launchFinished = true }
+                withAnimation(.easeInOut(duration: min(StartupPresentation.revealDuration(reduceMotion: reduceMotion), remaining)),
+                              completionCriteria: .removed) {
+                    launchRevealing = true
+                } completion: {
+                    launchFinished = true
+                }
                 return
             }
             let remaining = max(0.001, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
@@ -339,8 +357,10 @@ struct AppTabs: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var dock = CompanionDockPresentation()
     @State private var loadedLayout = false
+    @State private var visitedTabs = Set<AppTab>()
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
     @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
@@ -384,6 +404,7 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
         }.onChange(of: navigation.selectedTab) { _, tab in
+            visitedTabs.insert(tab)
             Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
@@ -408,24 +429,42 @@ struct AppTabs: View {
         }
     }
     @ViewBuilder private func destinationTabs(showDock: Bool) -> some View {
-        if #available(iOS 26.0, *), showDock {
-            nativeTabs.toolbar(.hidden, for: .tabBar)
-                // Keep the inset constant during navigation, including canceled
-                // swipes. The dock's opacity never resizes Spotlight or its scroll.
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Color.clear.frame(height: textSize.isAccessibilitySize ? 88 : 68).allowsHitTesting(false)
-                }
-                .overlay(alignment: .bottom) {
-                    CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
-                                      selection: $navigation.selectedTab, reduceMotion: reduceMotion,
-                                      colorScheme: colorScheme, dynamicTypeSize: textSize)
-                        .frame(maxWidth: 600).frame(height: textSize.isAccessibilitySize ? 80 : 62)
-                        .padding(.horizontal, 14).padding(.bottom, 6)
-                }
-                .environment(\.companionDockPresentation, dock)
+        if #available(iOS 26.0, *) {
+            if showDock {
+                preservedPanes
+                    // Keep the inset constant during navigation, including canceled
+                    // swipes. The dock's opacity never resizes Spotlight or its scroll.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: textSize.isAccessibilitySize ? 88 : 68).allowsHitTesting(false)
+                    }
+                    .overlay(alignment: .bottom) {
+                        CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
+                                          selection: $navigation.selectedTab, reduceMotion: reduceMotion,
+                                          colorScheme: colorScheme, dynamicTypeSize: textSize)
+                            .frame(maxWidth: 600).frame(height: textSize.isAccessibilitySize ? 80 : 62)
+                            .padding(.horizontal, 14).padding(.bottom, 6)
+                    }
+                    .environment(\.companionDockPresentation, dock)
+            } else { preservedPanes }
         } else {
             nativeTabs.toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
+    }
+    // No native TabView exists underneath the custom dock. A lazy, retained
+    // stack keeps visited panes' search/scroll state and navigation paths alive.
+    private var preservedPanes: some View {
+        ZStack {
+            ForEach(navigation.tabPreferences.visible) { tab in
+                if tab == navigation.selectedTab || visitedTabs.contains(tab) {
+                    pane(tab).environment(\.companionDockTab, tab)
+                        .environment(\.scenePhase, tab == navigation.selectedTab ? scenePhase : .inactive)
+                        .opacity(tab == navigation.selectedTab ? 1 : 0)
+                        .allowsHitTesting(tab == navigation.selectedTab)
+                        .accessibilityHidden(tab != navigation.selectedTab)
+                        .zIndex(tab == navigation.selectedTab ? 1 : 0)
+                }
+            }
+        }.onAppear { visitedTabs.insert(navigation.selectedTab) }
     }
     private var nativeTabs: some View {
         TabView(selection: $navigation.selectedTab) {

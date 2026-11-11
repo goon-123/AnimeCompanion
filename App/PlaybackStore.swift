@@ -36,6 +36,7 @@ private enum AddonKeychain {
 
 @MainActor
 final class PlaybackStore: ObservableObject {
+    private let lifetime = AppDataSession()
     let client: StremioClient
     @Published private var collection = AddonCollection()
     @Published private(set) var addonRevision = UUID()
@@ -132,6 +133,7 @@ final class PlaybackStore: ObservableObject {
         catch { setupError = error.localizedDescription }
     }
     private func persist(_ updated: AddonCollection) throws {
+        try lifetime.check()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
             // Only synthetic fixture URLs use this isolated test defaults suite.

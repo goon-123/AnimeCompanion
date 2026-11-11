@@ -207,6 +207,13 @@ final class MangaBakaStore: ObservableObject {
             try? cache(for: id).clear()
         } catch { accountError = error.localizedDescription }
     }
+    func prepareForAppReset() {
+        connectionID = UUID()
+        refreshTasks.values.forEach { $0.task.cancel() }; refreshTasks.removeAll()
+        recommendationTask?.cancel(); recommendationTask = nil
+        credential = nil; connected = false; accounts = .init(); savedAccounts = []; activeAccountID = nil
+        clearLibrary()
+    }
     func disconnect() { if let id = activeAccountID { removeAccount(id) } }
     private func clearLibrary() {
         recommendationTask?.cancel(); recommendationTask = nil

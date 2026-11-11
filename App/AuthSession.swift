@@ -43,6 +43,7 @@ enum KeychainTokenStore {
 @MainActor
 final class AuthSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
+    func cancel() { session?.cancel(); session = nil }
     func signIn(clientID: String) async throws -> OAuthToken {
         guard session == nil else { throw ServiceError.message("AniList sign-in is already open.") }
         let state = UUID().uuidString

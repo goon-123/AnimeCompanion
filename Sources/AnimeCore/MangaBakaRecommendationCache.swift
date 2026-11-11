@@ -5,6 +5,7 @@ import CryptoKit
 /// A single connection's bounded, encrypted snapshot, separate from public
 /// catalog data. The credential stays in Keychain; it is never written here.
 public struct MangaBakaRecommendationCache {
+    private let persistence = AppDataSession()
     private let file: URL
     private static let context = Data("com.animecompanion.mangabaka.recommendations.v1".utf8)
     private static let maximumBytes = 16_100_000
@@ -38,9 +39,9 @@ public struct MangaBakaRecommendationCache {
         var values = URLResourceValues(); values.isExcludedFromBackup = true
         try excluded.setResourceValues(values)
         #if os(iOS)
-        try encrypted.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try persistence.write(encrypted, to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         #else
-        try encrypted.write(to: file, options: .atomic)
+        try persistence.write(encrypted, to: file, options: .atomic)
         #endif
     }
     public func clear() throws {

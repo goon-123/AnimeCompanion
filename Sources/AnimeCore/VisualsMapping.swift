@@ -33,6 +33,7 @@ public struct VisualsMappingIndex: Sendable {
 }
 
 actor VisualsMappingClient {
+    private let persistence = AppDataSession()
     static let url = URL(string: "https://raw.githubusercontent.com/nattadasu/animeApi/v3/database/animeapi.tsv")!
     private let transport: any HTTPTransport
     private let file: URL?
@@ -59,7 +60,7 @@ actor VisualsMappingClient {
             if let cached, now.timeIntervalSince(cached.date) < 7 * 86400 { return cached.index }
             throw AnimeVisualsError.coolingDown
         }
-        let transport = self.transport, file = self.file
+        let transport = self.transport, file = self.file, persistence = self.persistence
         let task = Task<VisualsMappingIndex, Error> {
             var request = URLRequest(url: Self.url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25)
             request.setValue("text/tab-separated-values", forHTTPHeaderField: "Accept")
@@ -68,7 +69,7 @@ actor VisualsMappingClient {
             let index = try VisualsMappingIndex(tsv: data)
             if let file {
                 try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? data.write(to: file, options: .atomic)
+                try? persistence.write(data, to: file, options: .atomic)
             }
             return index
         }

@@ -5,7 +5,8 @@ import Foundation
 public enum StartupPresentation {
     public static let minimumDuration: TimeInterval = 0.45
     public static let maximumDuration: TimeInterval = 2
+    public static func revealDuration(reduceMotion: Bool = false) -> TimeInterval { reduceMotion ? 0.16 : 0.4 }
     public static func shouldReveal(elapsed: TimeInterval, localReady: Bool, contentReady: Bool) -> Bool {
-        elapsed >= maximumDuration - 0.3 || (elapsed >= minimumDuration && localReady && contentReady)
+        elapsed >= maximumDuration - revealDuration() || (elapsed >= minimumDuration && localReady && contentReady)
     }
 }

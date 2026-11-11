@@ -5,6 +5,7 @@ import AnimeCore
 
 /// Source credentials/settings never share the AniList or add-on Keychain item.
 actor MangaSourceSettingsVault {
+    private let lifetime = AppDataSession()
     private let service: String
     init(service: String = "com.animecompanion.manga-source-settings") { self.service = service }
     private func query(_ sourceID: String) -> [String: Any] {
@@ -26,18 +27,20 @@ actor MangaSourceSettingsVault {
         return try MangaSourceSettings.decode(data)
     }
     func save(_ settings: MangaSourceSettings, sourceID: String) throws {
-        let data = try settings.encoded()
-        let base = query(sourceID)
-        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if status == errSecItemNotFound {
-            var request = base
-            request[kSecValueData as String] = data
-            request[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            guard SecItemAdd(request as CFDictionary, nil) == errSecSuccess else {
+        try lifetime.perform {
+            let data = try settings.encoded()
+            let base = query(sourceID)
+            let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            if status == errSecItemNotFound {
+                var request = base
+                request[kSecValueData as String] = data
+                request[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                guard SecItemAdd(request as CFDictionary, nil) == errSecSuccess else {
+                    throw ServiceError.message("Source settings could not be saved securely. Previous values are unchanged.")
+                }
+            } else if status != errSecSuccess {
                 throw ServiceError.message("Source settings could not be saved securely. Previous values are unchanged.")
             }
-        } else if status != errSecSuccess {
-            throw ServiceError.message("Source settings could not be saved securely. Previous values are unchanged.")
         }
     }
 }

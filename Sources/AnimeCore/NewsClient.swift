@@ -156,6 +156,7 @@ private struct NewsFeedResult: Sendable {
 }
 
 public actor NewsClient {
+    private let persistence = AppDataSession()
     public static let feedURL = NewsSource.animeNewsNetwork.feedURL
     public static var defaultDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -239,7 +240,7 @@ public actor NewsClient {
         cached = (now, result)
         if let directory, let data = try? JSONEncoder().encode(Array(feeds.values)), data.count <= 3_000_000 {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? data.write(to: directory.appendingPathComponent("feeds-v1.json"), options: .atomic)
+            try? persistence.write(data, to: directory.appendingPathComponent("feeds-v1.json"), options: .atomic)
         }
         return result
     }

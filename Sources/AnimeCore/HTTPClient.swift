@@ -22,9 +22,12 @@ public protocol HTTPTransport: Sendable {
 }
 public struct URLSessionTransport: HTTPTransport {
     public let session: URLSession
-    public init(session: URLSession = .shared) { self.session = session }
+    public init(session: URLSession = .shared) { self.session = session; AppNetworkSessions.shared.register(session) }
     public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let lifetime = AppDataSession()
+        try lifetime.check(); try Task.checkCancellation()
         let (data, response) = try await session.data(for: request)
+        try lifetime.check(); try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse else { throw ServiceError.invalidResponse }
         return (data, response)
     }
