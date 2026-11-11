@@ -71,7 +71,7 @@ struct PlaybackSettingsView: View {
                 DisclosureGroup("Compatibility details") {
                 Text("Supports standard HTTPS Stremio manifests with catalogs, metadata, streams and subtitles. Native anime Watch uses AniList/MAL IDs; installed catalogs and exact-ID lookup also support IMDb, Kitsu and provider IDs. Enabled compatible stream sources appear together, with English-audio choices first.")
                 Text("Not every Stremio add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories and legacy/IPFS transports are not supported natively. Supported Seanime torrent-provider scripts run separately in Seanime extensions & TorBox; other plugin types remain unsupported.")
-                Text("Native anime Watch saves resume on this device. Catalog/exact-ID playback does not save resume here. Update AniList using the watched-progress controls.")
+                Text("Native anime Watch saves resume on this device and can automatically mark a returned episode watched. Catalog/exact-ID playback remains untracked.")
                 }
             }.font(.caption).foregroundStyle(.secondary)
         }.navigationTitle("Stremio add-ons").navigationBarTitleDisplayMode(.inline)
