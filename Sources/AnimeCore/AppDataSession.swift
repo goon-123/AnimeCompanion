@@ -11,7 +11,7 @@ public final class AppDataEpoch: @unchecked Sendable {
     private var generation: UInt64 = 0
     private var resetting = false
     public init() {}
-    fileprivate func capture() -> UInt64 { lock.lock(); defer { lock.unlock() }; return generation }
+    fileprivate func capture() -> UInt64? { lock.lock(); defer { lock.unlock() }; return resetting ? nil : generation }
     fileprivate func perform<T>(_ generation: UInt64, _ operation: () throws -> T) throws -> T {
         lock.lock(); defer { lock.unlock() }
         guard !resetting, generation == self.generation else { throw CancellationError() }
@@ -26,11 +26,14 @@ public final class AppDataEpoch: @unchecked Sendable {
 
 public struct AppDataSession: Sendable {
     private let epoch: AppDataEpoch
-    private let generation: UInt64
+    private let generation: UInt64?
     public init(epoch: AppDataEpoch = .shared) { self.epoch = epoch; generation = epoch.capture() }
     public var isCurrent: Bool { do { try check(); return true } catch { return false } }
     public func check() throws { try perform {} }
-    public func perform<T>(_ operation: () throws -> T) throws -> T { try epoch.perform(generation, operation) }
+    public func perform<T>(_ operation: () throws -> T) throws -> T {
+        guard let generation else { throw CancellationError() }
+        return try epoch.perform(generation, operation)
+    }
     public func write(_ data: Data, to url: URL, options: Data.WritingOptions = .atomic) throws {
         try perform { try data.write(to: url, options: options) }
     }
