@@ -52,6 +52,7 @@ jobs:
       # Keep final iOS libraries and host test intermediates, not three copies
       # of cross-compiled Cargo dependency/build directories (previously 1.08 GB).
       - uses: actions/cache/restore@v4
+        timeout-minutes: 5
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
         continue-on-error: true
         id: manga-runtime-cache
@@ -68,6 +69,7 @@ jobs:
       # One-time migration: use the old cache only as Cargo build inputs. A
       # legacy hit MUST go through cargo build; it cannot bypass compilation.
       - uses: actions/cache/restore@v4
+        timeout-minutes: 5
         name: Seed a compact-cache miss from the previous Cargo cache
         if: ${{ (github.event_name != 'workflow_dispatch' || inputs.use_build_cache) && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
@@ -111,6 +113,7 @@ jobs:
         if: ${{ success() && steps.manga-runtime-cache.outputs.cache-primary-key != '' && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v4
+        timeout-minutes: 5
         with:
           path: |
             ~/.cargo/registry
@@ -613,6 +616,7 @@ jobs:
           } | shasum -a 256 | cut -d ' ' -f 1)
           echo "id=$fingerprint" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
+        timeout-minutes: 5
         id: swift-cache
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
         continue-on-error: true
@@ -628,6 +632,7 @@ jobs:
       - name: Record successful Swift package input timestamps
         run: python3 scripts/ci-cache-mtimes.py save .build/.ci-input-mtimes.json Sources Tests/AnimeCoreTests Package.swift Package.resolved
       - uses: actions/cache/save@v4
+        timeout-minutes: 5
         if: ${{ success() && steps.swift-cache.outputs.cache-primary-key != '' && steps.swift-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         with:
@@ -681,6 +686,7 @@ jobs:
           } | shasum -a 256 | cut -d ' ' -f 1)
           echo "id=$fingerprint" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
+        timeout-minutes: 5
         id: xcode-cache
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
         continue-on-error: true
@@ -714,6 +720,7 @@ jobs:
       - name: Record successful Xcode input timestamps
         run: python3 scripts/ci-cache-mtimes.py save build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
       - uses: actions/cache/save@v4
+        timeout-minutes: 5
         if: ${{ success() && steps.xcode-cache.outputs.cache-primary-key != '' && steps.xcode-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         with:
