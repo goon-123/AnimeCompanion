@@ -32,7 +32,7 @@ struct AppSessionHost: View {
 final class AppResetCoordinator: ObservableObject {
     static let pendingKey = "app.reset.inProgress"
     @Published private(set) var isResetting = false
-    @Published private(set) var needsRecovery = UserDefaults.standard.bool(forKey: pendingKey)
+    @Published private(set) var needsRecovery = UserDefaults.standard.bool(forKey: AppResetCoordinator.pendingKey)
     @Published private(set) var error: String?
     private(set) var sessionID = UUID()
     var prepareForReset: (() -> Void)?
