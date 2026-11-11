@@ -29,8 +29,9 @@ wall time is unsuitable as a build-speed baseline.
   when SHA-256 content matches**. Modified files rebuild normally; new/deleted
   files invalidate directory timestamps. Xcode still executes on every build.
 - Key Xcode/SwiftPM caches by platform, architecture, actual toolchain/SDK and
-  configuration. Compatible fallback caches are build inputs, never a reason
-  to skip validation.
+  configuration. A toolchain-compatible fallback also survives version bumps
+  in `project.yml`; Xcode still invalidates changed project settings and inputs.
+  Compatible fallback caches are build inputs, never a reason to skip validation.
 - Cache final native device/simulator libraries plus host-test inputs instead
   of three sets of cross-compiled Cargo intermediates. Native compile bypass
   requires an exact key covering toolchains, Cargo manifests/lockfile, runtime
@@ -39,8 +40,9 @@ wall time is unsuitable as a build-speed baseline.
 - Save caches after successful validation. Cache service failures allow a normal
   build. No account data, root Git credentials, IPA or Payload is cached.
 - Disable editor indexing during the Release compile, retain optimization and
-  device settings, print build timings, and avoid recompressing the IPA during
-  artifact upload. Verify ZIP integrity before upload.
+  device settings, print build timings, and verify ZIP integrity before upload.
+  Save the validated Xcode cache before artifact upload, with a three-minute
+  upload timeout so a stuck transfer can be retried without compiling again.
 
 Both simulator library architectures, the generic iOS destination, Safari bundle
 and release privacy checks, artifact name/retention and all opt-in UI suites are

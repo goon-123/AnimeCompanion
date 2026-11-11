@@ -64,7 +64,7 @@ jobs:
             Tools/MangaRuntime/target/aarch64-apple-ios/release/libanime_manga_runtime.a
             Tools/MangaRuntime/target/aarch64-apple-ios-sim/release/libanime_manga_runtime.a
             Tools/MangaRuntime/target/x86_64-apple-ios/release/libanime_manga_runtime.a
-          key: manga-ios-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-rust-1.99.1-${{ hashFiles('Tools/MangaRuntime/Cargo.toml', 'Tools/MangaRuntime/Cargo.lock', 'Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/include/**', 'Tools/MangaRuntime/support/**', 'Tools/MangaRuntime/test-support/**', 'scripts/build-manga-runtime.sh', 'scripts/prepare-manga-interpreter.py', 'scripts/test-manga-runtime.sh', 'scripts/manga-licenses.py', '.github/workflows/ios-build.yml') }}
+          key: manga-ios-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-rust-1.99.1-${{ hashFiles('Tools/MangaRuntime/Cargo.toml', 'Tools/MangaRuntime/Cargo.lock', 'Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/include/**', 'Tools/MangaRuntime/support/**', 'Tools/MangaRuntime/test-support/**', 'Tests/MangaRuntimeTests/OwnedFixtures/**', 'scripts/build-manga-runtime.sh', 'scripts/prepare-manga-interpreter.py', 'scripts/test-manga-runtime.sh', 'scripts/manga-licenses.py') }}
       # One-time migration: use the old cache only as Cargo build inputs. A
       # legacy hit MUST go through cargo build; it cannot bypass compilation.
       - uses: actions/cache/restore@v4
@@ -694,6 +694,7 @@ jobs:
           key: ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py', '.github/workflows/ios-build.yml') }}-${{ hashFiles('App/**', 'Sources/**', 'SafariExtension/**', 'Tools/SeanimeRuntime/package-lock.json', 'Tools/SeanimeRuntime/build.mjs', 'build/MangaRuntime.xcframework/**') }}
           restore-keys: |
             ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py', '.github/workflows/ios-build.yml') }}-
+            ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Restore only content-matching Xcode input timestamps
         run: python3 scripts/ci-cache-mtimes.py restore build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
       - name: Compile universal iPhone and iPad app
@@ -710,14 +711,6 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
           ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
           unzip -tq AnimeCompanion-unsigned.ipa
-      - name: Upload universal build
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimeCompanion-unsigned-IPA
-          path: AnimeCompanion-unsigned.ipa
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
       - name: Record successful Xcode input timestamps
         run: python3 scripts/ci-cache-mtimes.py save build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
       - uses: actions/cache/save@v4
@@ -730,6 +723,14 @@ jobs:
             build/SourcePackages
             build/.ci-input-mtimes.json
           key: ${{ steps.xcode-cache.outputs.cache-primary-key }}
+      - name: Upload universal build
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-unsigned-IPA
+          path: AnimeCompanion-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
       - name: Check public data providers
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
         continue-on-error: true
