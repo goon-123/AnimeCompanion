@@ -5,6 +5,62 @@ import FoundationNetworking
 #endif
 
 final class SeriesArtworkTests: XCTestCase {
+    func testSpotlightRepairsLegacyMetadataWithoutAPosterAndCachesTheResult() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cache = HomeContentCache(directory: folder)
+        await cache.save(HomeContentSnapshot(SeriesArtwork(logo: URL(string: "https://art.example/logo.png"),
+            backdrop: URL(string: "https://art.example/backdrop.jpg"))), key: "series-art-v1-20458-20785-false")
+        let transport = LogoFirstTransport()
+        let client = SeriesArtworkClient(transport: transport, cache: cache)
+        let art = await client.spotlightArtwork(for: try anime())
+        XCTAssertEqual(art.poster?.lastPathComponent, "poster.jpg")
+        _ = await client.spotlightArtwork(for: try anime())
+        let requests = await transport.fallbacks
+        XCTAssertEqual(requests, 1)
+        let primaries = await transport.primaries
+        XCTAssertEqual(primaries, 0)
+        let cached = await client.cachedArtwork(for: try anime())
+        XCTAssertEqual(cached?.poster, art.poster)
+    }
+    func testLogoDoesNotWaitForBackdropFallbackAndFullDetailsStillResolveIt() async throws {
+        let transport = LogoFirstTransport()
+        let client = SeriesArtworkClient(transport: transport, cache: HomeContentCache(directory: nil))
+        let item = try anime()
+        let logo = await client.logoArtwork(for: item)
+        XCTAssertNotNil(logo.logo); XCTAssertNil(logo.backdrop)
+        let before = await transport.fallbacks
+        XCTAssertEqual(before, 0)
+        let full = await client.artwork(for: item)
+        XCTAssertNotNil(full.logo); XCTAssertNotNil(full.backdrop)
+        let after = await transport.fallbacks
+        XCTAssertEqual(after, 1)
+        let primaries = await transport.primaries
+        XCTAssertEqual(primaries, 1)
+    }
+    func testCachedArtworkLookupDoesNotContactProviders() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let transport = LogoFirstTransport()
+        let first = SeriesArtworkClient(transport: transport, cache: HomeContentCache(directory: folder))
+        _ = await first.logoArtwork(for: try anime())
+        let second = SeriesArtworkClient(transport: transport, cache: HomeContentCache(directory: folder))
+        let cached = await second.cachedArtwork(for: try anime())
+        XCTAssertNotNil(cached?.logo)
+        let count = await transport.primaries
+        XCTAssertEqual(count, 1)
+    }
+    func testConcurrentLogoAndDetailRequestsShareProviderLookup() async throws {
+        let transport = LogoFirstTransport()
+        let client = SeriesArtworkClient(transport: transport, cache: HomeContentCache(directory: nil))
+        let item = try anime()
+        async let logo = client.logoArtwork(for: item)
+        async let full = client.artwork(for: item)
+        let (a, b) = await (logo, full)
+        XCTAssertNotNil(a.logo); XCTAssertNotNil(b.backdrop)
+        let count = await transport.primaries
+        XCTAssertEqual(count, 1)
+    }
     private func anime(_ json: String = #"{"id":20458,"idMal":20785,"format":"TV"}"#) throws -> Anime {
         try JSONDecoder().decode(Anime.self, from: Data(json.utf8))
     }
@@ -75,6 +131,24 @@ final class SeriesArtworkTests: XCTestCase {
         XCTAssertNil(AnimeSeriesContent.nextBroadcast(for: finished, now: now))
         let outsideSeason = try anime(#"{"id":1,"status":"RELEASING","episodes":12,"nextAiringEpisode":{"episode":13,"airingAt":200}}"#)
         XCTAssertNil(AnimeSeriesContent.nextBroadcast(for: outsideSeason, now: now))
+    }
+}
+
+private actor LogoFirstTransport: HTTPTransport {
+    private(set) var primaries = 0
+    private(set) var fallbacks = 0
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let json: String
+        if request.url == SeriesArtworkClient.mappingURL {
+            json = #"[{"anilist_id":20458,"mal_id":20785,"type":"TV","imdb_id":["tt3874528"]}]"#
+        } else if request.url?.host == "v3-cinemeta.strem.io" {
+            primaries += 1
+            json = #"{"meta":{"id":"tt3874528","type":"series","logo":"https://art.example/logo.png"}}"#
+        } else {
+            fallbacks += 1
+            json = #"{"mappings":{"anilist_id":20458,"mal_id":20785,"type":"TV"},"images":[{"coverType":"Fanart","url":"https://art.example/backdrop.jpg"},{"coverType":"Poster","url":"https://art.example/poster.jpg"}]}"#
+        }
+        return (Data(json.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
 }
 

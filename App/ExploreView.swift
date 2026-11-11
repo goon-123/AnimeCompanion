@@ -7,6 +7,8 @@ struct ExploreView: View {
     @EnvironmentObject private var dubFilters: DiscoveryFilterStore
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.animeSplitPresentation) private var usesSplit
+    @Environment(\.animeBrowseViewportHeight) private var browseViewportHeight
+    @State private var spotlightViewportOffset: CGFloat?
     @State private var posterBackground = PosterAccent.fallback.backdrop
     @State private var selection = SeasonSelection.current()
     @StateObject private var catalog = ExploreCatalogModel()
@@ -50,6 +52,14 @@ struct ExploreView: View {
                     .readableContent(width: 1280).frame(maxWidth: .infinity)
             }.accessibilityIdentifier("explore-scroll")
                 .ignoresSafeArea(.container, edges: spotlightLeadsPage ? .top : [])
+        }.onGeometryChange(for: CGFloat?.self) { viewport in
+            guard viewport.size.width > 0, viewport.size.height > 0, let browseViewportHeight else { return nil }
+            let localHeight = viewport.size.height + viewport.safeAreaInsets.top
+            return localHeight - browseViewportHeight
+        } action: { offset in
+            // Keep the initial usable height, including its dock clearance. Only
+            // real window changes should resize the hero after this first layout.
+            if spotlightViewportOffset == nil, let offset { spotlightViewportOffset = offset }
         }.background(Theme.background.ignoresSafeArea())
             .navigationTitle("Explore").navigationBarTitleDisplayMode(.inline).animeNavigation()
             .toolbar(.hidden, for: .navigationBar)
@@ -108,8 +118,14 @@ struct ExploreView: View {
         }
     }
     private func featuredHeight(in geometry: GeometryProxy) -> CGFloat {
-        CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
-            viewportHeight: Double(geometry.size.height + geometry.safeAreaInsets.top),
+        let viewportHeight: CGFloat
+        if let browseViewportHeight, let spotlightViewportOffset {
+            viewportHeight = browseViewportHeight + spotlightViewportOffset
+        } else {
+            viewportHeight = geometry.size.height + geometry.safeAreaInsets.top
+        }
+        return CGFloat(PosterLayout.featuredHeight(preferred: posters.featuredHeight,
+            viewportHeight: Double(viewportHeight),
             fillScreen: posters.fillFeaturedScreen, balanced: posters.balancedFeatured,
             splitColumnWidth: usesSplit ? Double(geometry.size.width) : nil)) + (textSize.isAccessibilitySize ? 240 : 0)
     }

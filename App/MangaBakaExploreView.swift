@@ -50,8 +50,10 @@ struct MediaSectionPicker: View {
 }
 
 struct MediaExploreView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("app.mediaSection") private var mode = "anime"
-    @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.classic.rawValue
     @AppStorage(ExploreSurface.anime.storageKey) private var animeRows = ""
     @State private var designs = false
     @State private var customizing = false
@@ -66,14 +68,15 @@ struct MediaExploreView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            if design == .classic && !overlaysArtwork { classicHeader }
             Group {
             if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
             else if mode == "written" { MangaBakaExploreView() }
             else { ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters) }
-            }
-        }.safeAreaInset(edge: .top, spacing: 0) {
-            if overlaysArtwork { classicHeader }
+            }.modifier(ContentArrival()).id(design == .classic ? mode : design.rawValue)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.background.ignoresSafeArea())
+            .safeAreaInset(edge: .top, spacing: 0) {
+            if design == .classic { classicHeader }
         }.mangaBakaNavigation()
             .appAccountSwitcherSheet(isPresented: $accounts)
             .appSettingsSheet(isPresented: $settings)
@@ -91,32 +94,40 @@ struct MediaExploreView: View {
     }
     private var classicHeader: some View {
         HStack(spacing: 10) {
-            MediaSectionPicker()
+            AccountSwitcherButton()
+            Spacer()
+            Button(action: switchMedia) {
+                Image(systemName: mode == "anime" ? "book.closed" : "play.rectangle")
+                    .font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel(mode == "anime" ? "Switch to Manga & Novels" : "Switch to Anime")
+                .accessibilityValue(mode == "anime" ? "Anime" : "Manga & Novels")
+                .accessibilityIdentifier("explore-media-switch")
             Menu {
-                NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }.accessibilityIdentifier("explore-search")
-                Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
-                Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
-                if mode == "anime" {
-                    Button("Browse seasons", systemImage: "calendar") { seasons = true }
-                    Button("Anime filters", systemImage: "line.3.horizontal.decrease") { filters = true }
-                    Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
-                }
-                Divider()
-                Button("Switch account", systemImage: "person.crop.circle") { accounts = true }
+                NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("explore-search")
+                Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
                 Button("Settings", systemImage: "gearshape") { settings = true }
-            } label: { Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle()).contentShape(Circle()) }
-                .accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
+            } label: {
+                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+            }.accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
         }.padding(.horizontal, 16).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background {
-                ZStack {
-                    if !overlaysArtwork { Theme.background }
-                    Color.clear.contentShape(Rectangle()).onTapGesture { }
-                }
-            }
+            .background(Theme.background.opacity(overlaysArtwork ? 0 : 1))
     }
+    private func switchMedia() {
+        var transaction = Transaction(animation: nil); transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            let state = navigation.explore
+            state.path = NavigationPath(); state.detailPath = NavigationPath()
+            state.animeID = nil; state.column = .sidebar; state.visibility = .all
+            mode = mode == "anime" ? "written" : "anime"
+        }
+    }
+
 }
 
 struct MediaLibraryView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("library.mediaSection") private var mode = "all"
     var body: some View {
@@ -127,9 +138,11 @@ struct MediaLibraryView: View {
                 Text("Manga & Novels").tag("written")
             }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
                 .accessibilityIdentifier("library-media-picker")
-            if mode == "written" { MangaBakaLibraryView() }
-            else if mode == "anime" { LibraryView() }
-            else { CombinedLibraryView() }
+            Group {
+                if mode == "written" { MangaBakaLibraryView() }
+                else if mode == "anime" { LibraryView() }
+                else { CombinedLibraryView() }
+            }.modifier(ContentArrival()).id(mode)
         }.background(Theme.background).mangaBakaNavigation()
             .toolbar { ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() } }
             .onChange(of: mode) { _, value in

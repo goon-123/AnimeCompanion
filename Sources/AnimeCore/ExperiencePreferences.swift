@@ -120,11 +120,12 @@ public enum HomeSection: String, CaseIterable, Identifiable, Sendable {
 }
 
 public enum HomeShortcut: String, CaseIterable, Identifiable, Sendable {
-    case calendar, airing, news, community, library, explore, reading, savedNews
+    case calendar, catchUp, airing, news, community, library, explore, reading, savedNews
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .calendar: return "Calendar"
+        case .catchUp: return "Catch up"
         case .airing: return "Airing Now"
         case .news: return "News"
         case .community: return "Community"
@@ -137,6 +138,7 @@ public enum HomeShortcut: String, CaseIterable, Identifiable, Sendable {
     public var symbol: String {
         switch self {
         case .calendar: return "calendar"
+        case .catchUp: return "play.rectangle.on.rectangle"
         case .airing: return "play.rectangle"
         case .news: return "newspaper"
         case .community: return "bubble.left.and.bubble.right"
@@ -149,6 +151,7 @@ public enum HomeShortcut: String, CaseIterable, Identifiable, Sendable {
     public var detail: String {
         switch self {
         case .calendar: return "Your week"
+        case .catchUp: return "Episodes waiting for you"
         case .airing: return "Catch up"
         case .news: return "Your briefing"
         case .community: return "Join the conversation"
@@ -192,7 +195,7 @@ public struct HomePreferences: Equatable, Sendable {
         var shortcuts: [String]?
     }
     public init(order: [HomeSection] = HomeSection.allCases, hidden: Set<HomeSection> = HomeSection.optionalWidgets,
-                sizes: [HomeSection: HomeWidgetSize] = [:], layouts: [HomeSection: HomeWidgetLayout] = [:], shortcuts: [HomeShortcut?] = [.calendar, .airing, .news]) {
+                sizes: [HomeSection: HomeWidgetSize] = [:], layouts: [HomeSection: HomeWidgetLayout] = [:], shortcuts: [HomeShortcut?] = [.calendar, .catchUp, .news]) {
         var seen = Set<HomeSection>()
         self.order = (order + HomeSection.allCases).filter { seen.insert($0).inserted }
         self.hidden = hidden.union(HomeSection.optionalWidgets.subtracting(order))
@@ -223,8 +226,9 @@ public struct HomePreferences: Equatable, Sendable {
         let layouts = (value.layouts ?? [:]).reduce(into: [HomeSection: HomeWidgetLayout]()) { result, pair in
             if let section = HomeSection(rawValue: pair.key), let layout = HomeWidgetLayout(rawValue: pair.value) { result[section] = layout }
         }
-        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes, layouts: layouts,
-                  shortcuts: value.shortcuts.map { $0.map(HomeShortcut.init(rawValue:)) } ?? [.calendar, .airing, .news])
+        var shortcuts = value.shortcuts.map { $0.map(HomeShortcut.init(rawValue:)) } ?? [.calendar, .catchUp, .news]
+        if (value.version ?? 0) < 5, shortcuts == [.calendar, .airing, .news] { shortcuts = [.calendar, .catchUp, .news] }
+        self.init(order: order, hidden: Set(value.hidden.compactMap(HomeSection.init(rawValue:))), sizes: sizes, layouts: layouts, shortcuts: shortcuts)
     }
     public var visible: [HomeSection] { order.filter { !hidden.contains($0) } }
     public mutating func setVisible(_ section: HomeSection, _ shown: Bool) {
@@ -262,7 +266,7 @@ public struct HomePreferences: Equatable, Sendable {
         let storedSizes = Dictionary(uniqueKeysWithValues: value.sizes.map { ($0.key.rawValue, $0.value.rawValue) })
         let storedLayouts = Dictionary(uniqueKeysWithValues: value.layouts.map { ($0.key.rawValue, $0.value.rawValue) })
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
-        return String(data: try! encoder.encode(Stored(version: 4, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes, layouts: storedLayouts, shortcuts: value.shortcuts.map { $0?.rawValue ?? "" })), encoding: .utf8)!
+        return String(data: try! encoder.encode(Stored(version: 5, order: value.order.map(\.rawValue), hidden: value.order.filter(value.hidden.contains).map(\.rawValue), sizes: storedSizes, layouts: storedLayouts, shortcuts: value.shortcuts.map { $0?.rawValue ?? "" })), encoding: .utf8)!
     }
 }
 

@@ -79,16 +79,32 @@ public actor HomeCommunityClient {
     private let api: AniListClient
     private let cache: HomeContentCache
     private let requests = RequestCoalescer<String, HomeContentSnapshot<CommunityThreadPage>>()
-    private let key = "community-general-v1"
     public init(api: AniListClient, cache: HomeContentCache = HomeContentCache()) { self.api = api; self.cache = cache }
-    public func cached() async -> HomeContentSnapshot<CommunityThreadPage>? { await cache.load(CommunityThreadPage.self, key: key) }
-    public func feed(refresh: Bool = false) async throws -> HomeContentSnapshot<CommunityThreadPage> {
-        if !refresh, let saved = await cached(), !saved.needsRefresh() { return saved }
+    static func scopedIDs(_ values: [Int]) -> [Int] {
+        var seen = Set<Int>()
+        return Array(values.filter { $0 > 0 && seen.insert($0).inserted }.prefix(8))
+    }
+    static func cacheKey(mediaIDs: [Int], includeAdult: Bool) -> String {
+        "community-shows-v2-\(includeAdult)-" + scopedIDs(mediaIDs).sorted().map(String.init).joined(separator: "-")
+    }
+    public func cached(mediaIDs: [Int], includeAdult: Bool) async -> HomeContentSnapshot<CommunityThreadPage>? {
+        guard !Self.scopedIDs(mediaIDs).isEmpty else { return nil }
+        return await cache.load(CommunityThreadPage.self, key: Self.cacheKey(mediaIDs: mediaIDs, includeAdult: includeAdult))
+    }
+    public func feed(mediaIDs: [Int], includeAdult: Bool, refresh: Bool = false) async throws -> HomeContentSnapshot<CommunityThreadPage> {
+        let ids = Self.scopedIDs(mediaIDs)
+        guard !ids.isEmpty else { return HomeContentSnapshot(CommunityThreadPage(threads: [], hasNextPage: false)) }
+        if !refresh, let saved = await cached(mediaIDs: ids, includeAdult: includeAdult), !saved.needsRefresh() { return saved }
+        let key = Self.cacheKey(mediaIDs: ids, includeAdult: includeAdult)
         return try await requests.value(for: key) {
-            // Disk age controls refresh; an expired snapshot must also bypass the public memory cache.
-            let page = try await self.api.communityThreads(refresh: true)
-            let result = HomeContentSnapshot(page)
-            await self.cache.save(result, key: self.key)
+            let page = try await self.api.communityThreads(mediaIDs: ids, refresh: true)
+            let allowed = Set(ids)
+            let filtered = page.threads.filter {
+                $0.source == .aniList && !allowed.isDisjoint(with: $0.media.filter { $0.type == "ANIME" }.map(\.id)) &&
+                    (includeAdult || !$0.media.contains { $0.isAdult == true })
+            }
+            let result = HomeContentSnapshot(CommunityThreadPage(threads: filtered, hasNextPage: page.hasNextPage))
+            await self.cache.save(result, key: key)
             return result
         }
     }

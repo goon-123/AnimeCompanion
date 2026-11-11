@@ -5,6 +5,19 @@ import FoundationNetworking
 #endif
 
 final class AnimeEpisodesTests: XCTestCase {
+    func testUnreleasedSeriesDoesNotRequestProvidersEvenOnRefreshOrPagination() async throws {
+        let transport = EpisodeTransport(mapping: Data("{}".utf8))
+        let client = AnimeEpisodesClient(transport: transport, cache: HomeContentCache(directory: nil), minimumRequestInterval: 0)
+        let upcoming = try JSONDecoder().decode(Anime.self, from: Data(#"{"id":1,"idMal":7,"status":"NOT_YET_RELEASED","episodes":12,"startDate":{"year":2099,"month":1,"day":1}}"#.utf8))
+        let first = try await client.page(for: upcoming)
+        let refreshed = try await client.page(for: upcoming, page: 2, refresh: true)
+        let cached = await client.cached(for: upcoming)
+        XCTAssertTrue(first.episodes.isEmpty); XCTAssertFalse(first.hasMore)
+        XCTAssertTrue(refreshed.episodes.isEmpty); XCTAssertFalse(refreshed.hasMore)
+        XCTAssertNil(cached)
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
     private func anime(_ count: Int = 12, mal: Bool = true) throws -> Anime {
         try JSONDecoder().decode(Anime.self, from: Data("{\"id\":1,\"idMal\":\(mal ? "7" : "null"),\"episodes\":\(count),\"status\":\"FINISHED\"}".utf8))
     }

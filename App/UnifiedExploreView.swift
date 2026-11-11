@@ -175,12 +175,7 @@ struct UnifiedExploreView: View {
                 }
                 Spacer()
                 Menu {
-                    Button("Customize rows & widgets", systemImage: "slider.horizontal.3") { customizing = true }
-                    Button("Explore design", systemImage: "rectangle.stack") { designs = true }.accessibilityIdentifier("explore-designs")
-                    Button("Browse seasons", systemImage: "calendar") { seasons = true }
-                    Button("Anime filters", systemImage: "line.3.horizontal.decrease") { dubFilters = true }
-                    Divider()
-                    Button("Switch account", systemImage: "person.crop.circle") { accounts = true }
+                    Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
                     Button("Settings", systemImage: "gearshape") { settings = true }
                 } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
                     .accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")

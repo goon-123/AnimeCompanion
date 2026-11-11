@@ -8,13 +8,12 @@ struct CatalogEntrance: ViewModifier {
 
     func body(content: Content) -> some View {
         content.opacity(revealed ? 1 : 0)
-            .offset(y: revealed || reduceMotion ? 0 : 14)
             .task {
                 guard !revealed else { return }
                 // Give the initial hidden position a rendered frame before entering.
-                try? await Task.sleep(for: .milliseconds(50))
+                await Task.yield()
                 guard !Task.isCancelled else { return }
-                withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.45).delay(delay)) {
+                withAnimation(AppMotion.content(reduceMotion).delay(reduceMotion ? 0 : min(delay, 0.12))) {
                     revealed = true
                 }
             }

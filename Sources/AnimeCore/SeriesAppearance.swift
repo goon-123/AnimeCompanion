@@ -25,6 +25,30 @@ public struct SeriesArtworkPreferences: Equatable, Sendable {
     public func posterURL(artwork: SeriesArtwork, anime: Anime) -> URL? {
         artwork.poster ?? (poster ? anime.coverURL : nil)
     }
+    public func spotlightURL(artwork: SeriesArtwork, anime: Anime, landscape: Bool) -> URL? {
+        let resolved = landscape ? artwork.backdrop ?? artwork.poster : artwork.poster ?? artwork.backdrop
+        let cover = poster ? anime.coverURL : nil
+        let backdrop = banner ? anime.bannerImage.flatMap(URL.init(string:)) : nil
+        return SeriesArtworkQuality.spotlight(resolved ?? (landscape ? backdrop ?? cover : cover ?? backdrop))
+    }
+}
+
+/// Only confirmed missing cinematic assets use the series cover/title treatment.
+/// Existing banners/logos and the independent source preferences stay intact.
+public struct CinematicArtworkPresentation: Equatable, Sendable {
+    public let banner: URL?
+    public let poster: URL?
+    public let blurredCover: Bool
+    public let textTitle: Bool
+    public init(artwork: SeriesArtwork, anime: Anime, preferences: SeriesArtworkPreferences = .init(), resolved: Bool = true) {
+        let existingBanner = preferences.bannerURL(artwork: artwork, anime: anime)
+        let missingAssets = resolved && (artwork.backdrop == nil || artwork.logo == nil)
+        let cover = artwork.poster ?? anime.coverURL
+        blurredCover = resolved && existingBanner == nil && cover != nil
+        banner = existingBanner ?? (blurredCover ? cover : nil)
+        poster = preferences.posterURL(artwork: artwork, anime: anime) ?? (missingAssets ? cover : nil)
+        textTitle = resolved && artwork.logo == nil
+    }
 }
 
 public struct SeriesMoreInfoPreferences: Equatable, Sendable {

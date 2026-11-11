@@ -2,7 +2,7 @@ import SwiftUI
 import AnimeCore
 
 struct ExploreDesignSettingsView: View {
-    @AppStorage(ExploreDesign.storageKey) private var saved = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var saved = ExploreDesign.classic.rawValue
     private var selected: ExploreDesign { ExploreDesign(preference: saved) }
     var body: some View {
         Form {

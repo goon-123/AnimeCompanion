@@ -79,7 +79,7 @@ final class ExperiencePreferencesTests: XCTestCase {
     }
     func testShortcutMigrationPreservesOldLayoutAndNewBannersStartHidden() {
         let value = HomePreferences(saved: #"{"version":2,"order":["reading","featureLinks"],"hidden":["reading"],"sizes":{"reading":"compact"}}"#)
-        XCTAssertEqual(value.shortcuts, [.calendar, .airing, .news])
+        XCTAssertEqual(value.shortcuts, [.calendar, .catchUp, .news])
         XCTAssertEqual(Array(value.order.prefix(2)), [.reading, .featureLinks])
         XCTAssertTrue(value.hidden.isSuperset(of: [.seasonSpotlight, .nextEpisode, .watchlistBanners]))
         XCTAssertEqual(value.size(for: .reading), .compact)

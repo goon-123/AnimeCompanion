@@ -8,8 +8,8 @@ final class ExploreDesignTests: XCTestCase {
         return try JSONDecoder().decode(MangaBakaSeries.self, from: JSONSerialization.data(withJSONObject: value))
     }
     func testNewAndInvalidPreferencesUseCombinedDiscoveryAndAllChoicesRoundTrip() {
-        XCTAssertEqual(ExploreDesign(preference: nil), .discover)
-        XCTAssertEqual(ExploreDesign(preference: "unknown"), .discover)
+        XCTAssertEqual(ExploreDesign(preference: nil), .classic)
+        XCTAssertEqual(ExploreDesign(preference: "unknown"), .classic)
         for design in ExploreDesign.allCases { XCTAssertEqual(ExploreDesign(preference: design.rawValue), design) }
     }
     func testMixedDiscoveryIncludesEachFormatEarlyAndKeepsAdaptationsDistinct() throws {

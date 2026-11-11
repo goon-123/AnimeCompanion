@@ -6,7 +6,8 @@ final class ExploreLayoutTests: XCTestCase {
         for surface in [ExploreSurface.anime, .discovery, .grid] {
             var value = ExplorePreferences(surface: surface)
             XCTAssertTrue(value.visible.contains(.catalog(.trending)))
-            XCTAssertTrue(value.visible.contains(.catalog(.topTen)))
+            XCTAssertEqual(value.visible.contains(.catalog(.topTen)), surface != .anime)
+            value.setVisible(.catalog(.topTen), true)
             value.setVisible(.catalog(.topTen), false)
             let restored = ExplorePreferences(surface: surface, saved: value.saved)
             XCTAssertTrue(restored.visible.contains(.catalog(.trending)))
@@ -97,7 +98,7 @@ final class ExploreLayoutTests: XCTestCase {
         XCTAssertEqual(restored.hidden, [.widget(.weekly)])
         XCTAssertEqual(restored.order.count, ExploreSurface.anime.catalog.count + 1)
         for value in ["", "{broken", String(repeating: "a", count: 65_537)] {
-            XCTAssertEqual(ExplorePreferences(surface: .anime, saved: value).visible, ExploreSurface.anime.catalog.map(ExploreRow.catalog))
+            XCTAssertEqual(ExplorePreferences(surface: .anime, saved: value).visible, ExploreSurface.anime.defaultRows)
         }
     }
     func testMultipleMovesUseOriginalIndicesAndHiddenNeighborsAreSkipped() {

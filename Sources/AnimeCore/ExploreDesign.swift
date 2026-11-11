@@ -4,7 +4,7 @@ public enum ExploreDesign: String, CaseIterable, Identifiable, Sendable {
     case discover, posterGrid, classic
     public static let storageKey = "explore.design"
     public var id: String { rawValue }
-    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .discover }
+    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .classic }
     public var title: String {
         switch self { case .discover: return "Discovery shelves"; case .posterGrid: return "Mixed poster grid"; case .classic: return "Classic sections" }
     }

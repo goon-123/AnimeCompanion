@@ -6,7 +6,6 @@ import AnimeCore
 @MainActor
 final class AppStore: ObservableObject {
     let aniList: AniListClient
-    let communityMAL = MALCommunityClient()
     let episodeMetadata = AnimeEpisodesClient()
     let seriesArtwork = SeriesArtworkClient()
     let exploreCache: ExploreCache
@@ -29,6 +28,7 @@ final class AppStore: ObservableObject {
     @Published var viewer: Viewer?
     @Published var entries: [LibraryEntry] = []
     @Published var isSignedIn = false
+    @Published private(set) var restoring = true
     @Published var connecting = false
     @Published var loadingLibrary = false
     @Published var libraryError: String?
@@ -153,6 +153,7 @@ final class AppStore: ObservableObject {
 
     func restore() async {
         guard !restored else { return }; restored = true
+        defer { restoring = false }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-phase2-preview") {
             if AccountSwitcherPreview.active && !AccountSwitcherPreview.aniListConnected { return }
@@ -183,7 +184,7 @@ final class AppStore: ObservableObject {
                 viewer = cached.viewer; entries = cached.entries; savedAt = cached.savedAt; lastLibraryFetch = cached.fetchedAt
             }
             guard generation == attempt else { return }
-            isSignedIn = true
+            isSignedIn = true; restoring = false
             if lastLibraryFetch.map({ Date().timeIntervalSince($0) < 300 }) != true {
                 await reloadLibrary(silent: savedAt != nil)
             }

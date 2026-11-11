@@ -4,6 +4,7 @@ import AnimeCore
 
 @main
 struct AnimeCompanionApp: App {
+    private let launchStarted = ProcessInfo.processInfo.systemUptime
     // Declare before all stores: classify fresh vs. upgraded installations before
     // AppStore writes its initialization defaults.
     @StateObject private var firstRun = FirstRunSetupState(showOnLaunch: FirstRunSetupState.prepare())
@@ -18,10 +19,13 @@ struct AnimeCompanionApp: App {
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var launchFinished = false
+    @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     var body: some Scene {
         WindowGroup {
-            root.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+            launchRoot.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .environmentObject(playback).onOpenURL { playback.handle($0) }
                 .environmentObject(seanime)
                 .environmentObject(navigation)
@@ -36,12 +40,108 @@ struct AnimeCompanionApp: App {
                 .preferredColorScheme(Theme.scheme(appearance)).task { if !artworkPreview { await store.restore() } }
                 .task { if !artworkPreview { await mangaBaka.restore() } }
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
+                .task { if !artworkPreview { await mangaReading.load() } }
+                .task {
+                    if !skipsLaunch { await warmLaunchContent() }
+                    launchContentReady = true
+                }
+                .task { await revealLaunchWhenReady() }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
-                    await store.refreshLibraryIfNeeded()
-                    await store.exploreDubs.keepUpdated(using: store.dubs)
+                    async let library: Void = store.refreshLibraryIfNeeded()
+                    async let dubbed: Void = store.exploreDubs.keepUpdated(using: store.dubs)
+                    _ = await (library, dubbed)
                 }
         }
+    }
+    private var skipsLaunch: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-") })
+        #else
+        false
+        #endif
+    }
+    private var launchRoot: some View {
+        ZStack {
+            root.allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
+            if !launchFinished { LaunchLoadingView().transition(.opacity).zIndex(1) }
+        }.background(Color.black.ignoresSafeArea())
+    }
+    @MainActor private func revealLaunchWhenReady() async {
+        guard !launchFinished else { return }
+        if skipsLaunch { launchFinished = true; return }
+        let started = launchStarted
+        while !Task.isCancelled {
+            let restored = !store.restoring && !mangaBaka.restoring && !mangaReading.loading && !mangaSourceLinks.loading
+            let showsReady = !store.loadingLibrary || store.savedAt != nil
+            let booksReady = !mangaBaka.loadingLibrary || !mangaBaka.library.isEmpty
+            let week = ScheduleWeek(containing: ScheduleClock.now, firstWeekday: 1)
+            let weekReady = !weeklySchedule.snapshot(in: week.window).loading
+            if StartupPresentation.shouldReveal(elapsed: ProcessInfo.processInfo.systemUptime - started,
+                localReady: restored, contentReady: launchContentReady && showsReady && booksReady && weekReady) {
+                let remaining = max(0, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
+                withAnimation(.easeOut(duration: min(reduceMotion ? 0.1 : 0.18, remaining))) { launchFinished = true }
+                return
+            }
+            let remaining = max(0.001, StartupPresentation.maximumDuration - (ProcessInfo.processInfo.systemUptime - started))
+            do { try await Task.sleep(for: .seconds(min(0.05, remaining))) } catch { return }
+        }
+    }
+    @MainActor private func warmLaunchContent() async {
+        guard !firstRun.showOnLaunch else { return }
+        async let home: Void = warmHomeContent()
+        async let explore: Void = warmExploreContent()
+        _ = await (home, explore)
+    }
+    @MainActor private func warmHomeContent() async {
+        let preferences = HomePreferences(saved: UserDefaults.standard.string(forKey: HomePreferences.storageKey) ?? "")
+        async let news: Void = warmLaunchNews(enabled: preferences.visible.contains(.news))
+        async let community: Void = warmLaunchCommunity(enabled: preferences.visible.contains(.community))
+        _ = await (news, community)
+    }
+    @MainActor private func warmLaunchNews(enabled: Bool) async {
+        guard enabled else { return }
+        _ = try? await store.news.snapshot()
+    }
+    @MainActor private func warmLaunchCommunity(enabled: Bool) async {
+        guard enabled, CommunityDestination(preference: UserDefaults.standard.string(forKey: CommunityDestination.storageKey) ?? "") == .aniList,
+              let season = try? await store.homeCatalog.season(.current(), includeAdult: store.includeAdult), !Task.isCancelled else { return }
+        _ = try? await store.homeCommunity.feed(mediaIDs: season.value.filter { store.isVisible($0) }.map(\.id), includeAdult: store.includeAdult)
+    }
+    @MainActor private func warmExploreContent() async {
+        let preferences = ExplorePreferences(surface: .anime, saved: UserDefaults.standard.string(forKey: ExploreSurface.anime.storageKey) ?? "")
+        guard preferences.visible.contains(.catalog(.spotlight)) else { return }
+        let selection = SeasonSelection.current(), adult = store.includeAdult
+        let response: ExploreResponse
+        if let saved = await store.exploreCache.load(selection, includeAdult: adult) { response = saved.response }
+        else {
+            guard let fresh = try? await store.aniList.explore(selection, includeAdult: adult), !Task.isCancelled else { return }
+            await store.exploreCache.save(ExploreSnapshot(response: fresh, selection: selection, includeAdult: adult))
+            response = fresh
+        }
+        var seen = Set<Int>()
+        let lineup = Array(((response.trending.media ?? []) + (response.seasonal.media ?? []) + (response.upcoming.media ?? [])).filter {
+            store.isVisible($0) && seen.insert($0.id).inserted && discoveryFilters.includes($0, dubs: store.exploreDubs, library: store)
+        }.prefix(2))
+        let artworkPreferences = SeriesArtworkPreferences(
+            banner: UserDefaults.standard.bool(forKey: SeriesArtworkPreferences.bannerKey),
+            poster: UserDefaults.standard.bool(forKey: SeriesArtworkPreferences.posterKey))
+        let api = store.seriesArtwork
+        await withTaskGroup(of: Void.self) { group in
+            for item in lineup {
+                group.addTask {
+                    let artwork = await api.spotlightArtwork(for: item)
+                    async let logo: Void = Self.warmLaunchImage(artwork.logo, pixels: 1024)
+                    async let poster: Void = Self.warmLaunchImage(artworkPreferences.spotlightURL(artwork: artwork, anime: item, landscape: false), pixels: 2560)
+                    async let backdrop: Void = Self.warmLaunchImage(artworkPreferences.spotlightURL(artwork: artwork, anime: item, landscape: true), pixels: 2560)
+                    _ = await (logo, poster, backdrop)
+                }
+            }
+        }
+    }
+    private static func warmLaunchImage(_ url: URL?, pixels: Int) async {
+        guard let url, !Task.isCancelled else { return }
+        _ = try? await ArtworkPipeline.shared.image(at: url, pixels: pixels)
     }
     private var artworkPreview: Bool {
         #if DEBUG
@@ -228,7 +328,7 @@ struct AppTabs: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @State private var loadedLayout = false
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
-    @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.discover.rawValue
+    @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
     @State private var sidebarSettings = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
@@ -284,13 +384,20 @@ struct AppTabs: View {
         }
     }
     @ViewBuilder private var navigationSurface: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
-        else { destinationTabs }
+        // Series change navigation-bar and bottom-dock visibility. Measure above
+        // those containers so their transitions cannot change Spotlight's height.
+        GeometryReader { viewport in
+            Group {
+                if UIDevice.current.userInterfaceIdiom == .pad && navigation.tabletLayout == .sidebar { sidebar }
+                else { destinationTabs }
+            }.environment(\.animeBrowseViewportHeight, viewport.size.height + viewport.safeAreaInsets.top)
+        }
     }
     private var destinationTabs: some View {
         TabView(selection: $navigation.selectedTab) {
             ForEach(navigation.tabPreferences.visible) { tab in
-                pane(tab).tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
+                pane(tab)
+                    .tabItem { Label(tab.title, systemImage: tab.symbol) }.tag(tab)
             }
         }
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
@@ -434,7 +541,12 @@ private struct AnimeTabPane<Content: View>: View {
 
 private struct AnimeDetailContextKey: EnvironmentKey { static let defaultValue = false }
 private struct AnimeSplitPresentationKey: EnvironmentKey { static let defaultValue = false }
+private struct AnimeBrowseViewportHeightKey: EnvironmentKey { static let defaultValue: CGFloat? = nil }
 extension EnvironmentValues {
+    var animeBrowseViewportHeight: CGFloat? {
+        get { self[AnimeBrowseViewportHeightKey.self] }
+        set { self[AnimeBrowseViewportHeightKey.self] = newValue }
+    }
     var animeSplitPresentation: Bool {
         get { self[AnimeSplitPresentationKey.self] }
         set { self[AnimeSplitPresentationKey.self] = newValue }

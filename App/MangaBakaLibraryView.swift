@@ -277,20 +277,14 @@ struct MangaBakaTrackingView: View {
 
 struct MangaBakaAccountView: View {
     @EnvironmentObject private var account: MangaBakaStore
-    @State private var clientID = UserDefaults.standard.string(forKey: "mangabaka.clientID") ?? ""
-    @State private var apiKey = ""
     var useAccount: (() -> Void)? = nil
     @State private var removingAccount: MangaBakaAccountIdentity?
-    private var effectiveClientID: String {
-        let value = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? account.bundledClientID : value
-    }
     var body: some View {
         Form {
             Section {
                 Label(account.connected ? "Connected to MangaBaka" : "Bring your reading library", systemImage: account.connected ? "checkmark.circle.fill" : "books.vertical")
                     .font(.headline).foregroundStyle(account.connected ? .mint : .primary)
-                if let profile = account.profile { Text(profile.name).foregroundStyle(.secondary).accessibilityIdentifier("mangabaka-active-name") }
+                if let profile = account.profile { Text(profile.name).foregroundStyle(.secondary).privacySensitive().accessibilityIdentifier("mangabaka-active-name") }
                 if account.connected {
                     Text("Your reading library, progress and recommendations belong to the selected account.").font(.subheadline).foregroundStyle(.secondary)
                     if let useAccount {
@@ -328,16 +322,8 @@ struct MangaBakaAccountView: View {
                     Text("Tap a name to switch immediately. Your other MangaBaka accounts stay saved.")
                 }
             }
-            Section(account.connected ? "Add another account" : "Sign in with MangaBaka") {
-                Button(account.connected ? "Add MangaBaka account" : "Sign in with MangaBaka") {
-                    let customClientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if customClientID.isEmpty { UserDefaults.standard.removeObject(forKey: "mangabaka.clientID") }
-                    else { UserDefaults.standard.set(customClientID, forKey: "mangabaka.clientID") }
-                    Task { await account.connect() }
-                }.disabled(effectiveClientID.isEmpty || account.connecting || !account.saving.isEmpty)
-                    .accessibilityIdentifier("mangabaka-add-account")
-                Text("Sign in once for each account. When adding another account, a fresh sign-in session lets you choose a different MangaBaka login.")
-                    .font(.caption).foregroundStyle(.secondary)
+            Section(account.connected ? "Add another account" : "Connect your library") {
+                MangaBakaKeyEntry()
             }
             if let selected = account.savedAccounts.first(where: { $0.id == account.activeAccountID }) {
                 Section {
@@ -346,31 +332,11 @@ struct MangaBakaAccountView: View {
                 }
             }
             Section {
-                DisclosureGroup("Advanced connection settings") {
-                    TextField("Custom OAuth client ID (optional)", text: $clientID)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Text("Leave blank to use Anime Companion's registered MangaBaka application.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if !clientID.isEmpty {
-                        Button("Use Anime Companion's application") {
-                            clientID = ""
-                            UserDefaults.standard.removeObject(forKey: "mangabaka.clientID")
-                        }
-                    }
-                    LabeledContent("Redirect") { Text(MangaBakaOAuth.callback.absoluteString).font(.caption.monospaced()).textSelection(.enabled) }
-                    Link("MangaBaka API & developer information", destination: URL(string: "https://mangabaka.org/data/api")!)
-                    Divider()
-                    SecureField("MangaBaka API key", text: $apiKey).textInputAutocapitalization(.never).autocorrectionDisabled().privacySensitive()
-                    Button("Connect with key") {
-                        let key = apiKey; apiKey = ""
-                        Task { await account.connect(apiKey: key) }
-                    }.disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || account.connecting || !account.saving.isEmpty)
-                    Text("If MangaBaka has issued you a personal key, you can connect with it instead. It needs access to your profile and library. Never enter another person's key or an OAuth app secret.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }.disabled(account.connecting || !account.saving.isEmpty)
-            } footer: { Text("Saved accounts are stored securely in this device's Keychain. Each account keeps separate private recommendations. Removing a saved account leaves its online MangaBaka library intact.") }
+                Label("Stored on this device", systemImage: "lock.shield")
+                Text("Each person connects with their own key. Saved accounts use this device's Keychain and keep separate reading libraries and recommendations.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }.navigationTitle("MangaBaka account").navigationBarTitleDisplayMode(.inline)
-            .onDisappear { apiKey = "" }
             .alert("Remove saved MangaBaka account?", isPresented: Binding(get: { removingAccount != nil }, set: { if !$0 { removingAccount = nil } })) {
                 Button("Remove", role: .destructive) {
                     if let removingAccount { account.removeAccount(removingAccount.id) }

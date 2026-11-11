@@ -78,7 +78,7 @@ struct ExploreCustomizationView: View {
             }
             .confirmationDialog("Restore this Explore layout?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Restore layout") { saved = ExplorePreferences(surface: surface).saved }
-            } message: { Text("This restores catalog rows and removes widgets from this Explore layout.") }
+            } message: { Text("This restores the default order, visibility and widget sizes for this Explore layout.") }
     }
     private func update(_ change: (inout ExplorePreferences) -> Void) { var value = preferences; change(&value); saved = value.saved }
 }

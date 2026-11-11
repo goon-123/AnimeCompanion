@@ -69,7 +69,7 @@ struct HomeFeatureShortcuts: View {
     private func open(_ shortcut: HomeShortcut) {
         switch shortcut {
         case .calendar: navigation.openSchedule()
-        case .airing: navigation.openSchedule(page: .airing)
+        case .airing, .catchUp: navigation.openSchedule(page: .airing)
         case .news: navigation.openNews()
         case .library: navigation.open(.library)
         case .explore: navigation.open(.explore)
@@ -86,6 +86,7 @@ struct HomeNewsSection: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.homeVisuals) private var visuals
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.homeWidgetLayout) private var layout
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("news.reader.v1") private var readerJSON = ""
@@ -95,7 +96,7 @@ struct HomeNewsSection: View {
     @State private var appliedRefreshID = 0
     @State private var snapshot: NewsSnapshot?
     @State private var selected: NewsArticle?
-    @State private var loading = false
+    @State private var loading = true
     @State private var error: String?
     @State private var requestID = UUID()
     private var reader: NewsReaderState { decode(readerJSON) ?? NewsReaderState() }
@@ -138,7 +139,7 @@ struct HomeNewsSection: View {
                     Text("Showing saved headlines · Pull to refresh").font(.caption2).foregroundStyle(.secondary)
                 }
             } else if loading {
-                ProgressView("Loading headlines…").frame(maxWidth: .infinity, minHeight: 72).companionPanel(padding: 12)
+                HomeRowPlaceholder(height: layout == .banner ? visuals.newsBannerHeight : visuals.value(120, 160))
             } else {
                 Button { navigation.openNews() } label: {
                     HStack(spacing: 12) {
@@ -153,7 +154,9 @@ struct HomeNewsSection: View {
                     }.foregroundStyle(.primary).companionPanel(padding: 14)
                 }.buttonStyle(.plain)
             }
-        }.accessibilityIdentifier("home-news-widget")
+        }.animation(AppMotion.content(reduceMotion), value: stories.map(\.id))
+            .animation(AppMotion.content(reduceMotion), value: loading)
+            .accessibilityIdentifier("home-news-widget")
             .task(id: "\(scenePhase)-\(refreshID)") {
                 guard scenePhase == .active else { return }
                 await load(refresh: refreshID != appliedRefreshID)

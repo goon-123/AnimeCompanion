@@ -1,5 +1,15 @@
 import Foundation
 
+/// Legacy destination preferences migrate to the only supported native source.
+public enum CommunityDestination: String, CaseIterable, Identifiable, Sendable {
+    case aniList
+    public static let storageKey = "community.destination.v1"
+    public var id: String { rawValue }
+    public var title: String { "AniList" }
+    public init(preference: String?) { self = preference.flatMap(Self.init(rawValue:)) ?? .aniList }
+    public var websiteURL: URL? { nil }
+}
+
 public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendable {
     case reddit, aniList, myAnimeList
     public var id: String { rawValue }
@@ -11,6 +21,8 @@ public enum CommunitySource: String, CaseIterable, Identifiable, Codable, Sendab
 public enum CommunityFilter: String, CaseIterable, Identifiable, Sendable {
     case general, season, myShows, episodes
     public var id: String { rawValue }
+    public static let feedCases: [Self] = [.season, .myShows]
+    public var feedFilter: Self { Self.feedCases.contains(self) ? self : .season }
     public var title: String {
         switch self { case .general: return "General Anime"; case .season: return "This Season"; case .myShows: return "My Shows"; case .episodes: return "Episode Discussions" }
     }

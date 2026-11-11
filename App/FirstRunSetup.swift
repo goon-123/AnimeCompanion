@@ -20,6 +20,8 @@ final class FirstRunSetupState: ObservableObject {
             defaults.set("inProgress", forKey: lifecycleKey)
             defaults.set(0, forKey: stepKey)
             defaults.removeObject(forKey: resultsKey)
+            defaults.removeObject(forKey: SetupStage.storageKey)
+            defaults.set(false, forKey: "content.includeAdult")
             return true
         }
         // Keep existing UI snapshots and interaction tests at their normal entry point.
@@ -52,400 +54,175 @@ final class FirstRunSetupState: ObservableObject {
     }
 }
 
-private enum SetupPage: Int, CaseIterable {
-    case welcome, aniList, mangaBaka, torrent, torBox, aioStreams, content, finish
-
-    var title: String {
-        switch self {
-        case .welcome: return "Everything you love, together."
-        case .aniList: return "Bring your anime library."
-        case .mangaBaka: return "Pick up where you left off."
-        case .torrent: return "Discover anime sources."
-        case .torBox: return "Connect your cloud playback."
-        case .aioStreams: return "Make stream discovery easier."
-        case .content: return "Make it your space."
-        case .finish: return "You're ready to explore."
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .welcome: return "Track anime, discover manga and novels, and find playback options in one place. Choose only the features you want."
-        case .aniList: return "Connect AniList to sync your watchlist, ratings and episode progress across devices."
-        case .mangaBaka: return "Connect MangaBaka for your manga and novel lists, reading progress, and personalized recommendations."
-        case .torrent: return "Seanime extensions search anime torrent providers. Browse community extensions, review their permissions and install the ones you trust."
-        case .torBox: return "TorBox can resolve supported torrents into cloud-backed playback links and lets you browse cloud files. You can add your API key securely."
-        case .aioStreams: return "AIOStreams combines compatible streaming add-ons into one customizable source. Set up a new configuration or reconnect an existing one."
-        case .content: return "Choose whether adult titles appear in search, browsing and your libraries. The safer option is selected by default."
-        case .finish: return "Here's your setup at a glance. Anything you skipped can be configured later in Settings."
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .welcome: return "sparkles"
-        case .aniList: return "play.rectangle.on.rectangle"
-        case .mangaBaka: return "books.vertical.fill"
-        case .torrent: return "puzzlepiece.extension.fill"
-        case .torBox: return "cloud.fill"
-        case .aioStreams: return "square.stack.3d.up.fill"
-        case .content: return "hand.raised.fill"
-        case .finish: return "checkmark.seal.fill"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .welcome: return .purple
-        case .aniList: return .blue
-        case .mangaBaka: return .teal
-        case .torrent: return .orange
-        case .torBox: return .mint
-        case .aioStreams: return .indigo
-        case .content: return .cyan
-        case .finish: return .green
-        }
-    }
-
-    var summaryLabel: String {
-        switch self {
-        case .aniList: return "AniList"
-        case .mangaBaka: return "MangaBaka"
-        case .torrent: return "Torrent extensions"
-        case .torBox: return "TorBox"
-        case .aioStreams: return "AIOStreams"
-        case .content: return "Content preferences"
-        case .welcome, .finish: return ""
-        }
-    }
-
-    var key: String { String(rawValue) }
-}
-
 struct FirstRunSetupView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
-    @EnvironmentObject private var seanime: SeanimeStore
-    @EnvironmentObject private var playback: PlaybackStore
-
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     let revisiting: Bool
     let onFinish: () -> Void
-    @State private var index: Int
-    @State private var confirmSkip = false
+    @State private var stage: SetupStage
+    private var busy: Bool { store.connecting || mangaBaka.connecting }
 
     init(revisiting: Bool = false, onFinish: @escaping () -> Void) {
-        self.revisiting = revisiting
-        self.onFinish = onFinish
-        let saved = UserDefaults.standard.integer(forKey: FirstRunSetupState.stepKey)
-        _index = State(initialValue: revisiting ? 0 : min(max(saved, 0), SetupPage.allCases.count - 1))
+        self.revisiting = revisiting; self.onFinish = onFinish
+        let defaults = UserDefaults.standard
+        _stage = State(initialValue: revisiting ? .welcome : SetupStage.restoring(
+            savedStep: defaults.object(forKey: SetupStage.storageKey) as? Int,
+            legacyStep: defaults.integer(forKey: FirstRunSetupState.stepKey)))
     }
-
-    private var page: SetupPage { SetupPage(rawValue: index) ?? .welcome }
-
-    private var results: [String: String] {
-        UserDefaults.standard.dictionary(forKey: FirstRunSetupState.resultsKey) as? [String: String] ?? [:]
-    }
-
-    private func detected(_ page: SetupPage) -> Bool {
-        switch page {
-        case .aniList: return store.isSignedIn
-        case .mangaBaka: return mangaBaka.connected
-        case .torrent: return !seanime.installations.isEmpty
-        case .torBox: return seanime.hasTorBoxKey
-        case .aioStreams:
-            return playback.installations.contains { installation in
-                installation.addon.manifest.name.localizedCaseInsensitiveContains("aiostreams") ||
-                installation.addon.endpoint.displayHost.localizedCaseInsensitiveContains("aiostreams")
-            }
-        case .content: return results[page.key] == "completed"
-        case .welcome, .finish: return false
-        }
-    }
-
-    private func status(_ page: SetupPage) -> (label: String, color: Color, icon: String) {
-        if detected(page) {
-            return (page == .content ? "Saved" : page == .torrent ? "Installed" : "Connected", .mint, "checkmark.circle.fill")
-        }
-        if results[page.key] == "skipped" { return ("Skipped", .secondary, "minus.circle") }
-        return ("Not set up", .secondary, "circle.dotted")
-    }
-
-    private func record(_ page: SetupPage, skipped: Bool) {
-        guard page != .welcome && page != .finish else { return }
-        var updated = results
-        updated[page.key] = skipped ? "skipped" : (page == .content || detected(page) ? "completed" : "skipped")
-        UserDefaults.standard.set(updated, forKey: FirstRunSetupState.resultsKey)
-    }
-
-    private func advance(skipped: Bool = false) {
-        record(page, skipped: skipped)
-        guard index < SetupPage.allCases.count - 1 else { finish() ; return }
-        withAnimation(.easeInOut(duration: 0.2)) { index += 1 }
-        if !revisiting { UserDefaults.standard.set(index, forKey: FirstRunSetupState.stepKey) }
-    }
-
-    private func back() {
-        guard index > 0 else { return }
-        withAnimation(.easeInOut(duration: 0.2)) { index -= 1 }
-        if !revisiting { UserDefaults.standard.set(index, forKey: FirstRunSetupState.stepKey) }
-    }
-
-    private func finish() {
-        if !revisiting {
-            var updated = results
-            for step in SetupPage.allCases where step != .welcome && step != .finish {
-                if updated[step.key] == nil {
-                    updated[step.key] = detected(step) ? "completed" : "skipped"
-                }
-            }
-            UserDefaults.standard.set(updated, forKey: FirstRunSetupState.resultsKey)
-            UserDefaults.standard.set(SetupPage.finish.rawValue, forKey: FirstRunSetupState.stepKey)
-        }
-        onFinish()
-    }
-
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-                RadialGradient(colors: [page.tint.opacity(0.08), .clear],
-                               center: .topTrailing, startRadius: 8, endRadius: 460)
-                    .ignoresSafeArea().allowsHitTesting(false)
-                VStack(spacing: 0) {
-                    progressHeader
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 25) {
-                            hero
-                            pageBody
-                        }
-                        .frame(maxWidth: 580, alignment: .leading)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 24).padding(.top, 26).padding(.bottom, 28)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    progress
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(stage.title).font(.largeTitle.bold()).tracking(-0.8)
+                        Text(stage.subtitle).font(.body).foregroundStyle(.secondary)
+                    }.fixedSize(horizontal: false, vertical: true)
+                    pageContent
+                }.padding(24).frame(maxWidth: 660, alignment: .leading).frame(maxWidth: .infinity)
+            }.background(Theme.background.ignoresSafeArea()).scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        if stage != .welcome { Button("Back", systemImage: "chevron.left") { move(-1) }.disabled(busy) }
                     }
-                    footer
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if stage != .ready { Button("Set up later", action: finish).disabled(busy).accessibilityIdentifier("setup-skip-all") }
+                    }
                 }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .confirmationDialog("Skip the rest of setup?", isPresented: $confirmSkip, titleVisibility: .visible) {
-                Button("Start exploring without setup") { finish() }
-                Button("Keep setting up", role: .cancel) {}
-            } message: {
-                Text("No accounts or extensions are required. You can return to the Setup Guide from Settings.")
-            }
-        }
-        .tint(Theme.accent)
-        .accessibilityIdentifier("first-run-setup")
+        }.interactiveDismissDisabled(!revisiting)
     }
-
-    private var progressHeader: some View {
-        VStack(spacing: 13) {
+    private var progress: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                if index > 0 {
-                    Button(action: back) {
-                        Label("Back", systemImage: "chevron.left")
-                            .font(.subheadline.weight(.medium))
-                    }.accessibilityIdentifier("setup-back")
-                } else {
-                    Text("ANIME COMPANION").font(.caption.weight(.bold)).tracking(2)
-                }
+                Text("ANIME COMPANION").font(.caption.bold()).tracking(2).foregroundStyle(Theme.accent)
                 Spacer()
-                Text("\(index + 1) / \(SetupPage.allCases.count)")
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                if revisiting {
-                    Button("Close", action: onFinish)
-                        .font(.subheadline.weight(.semibold)).padding(.leading, 14)
-                        .accessibilityIdentifier("setup-close")
-                } else {
-                    Button("Skip setup") { confirmSkip = true }
-                        .font(.subheadline.weight(.semibold)).padding(.leading, 14)
-                        .accessibilityIdentifier("setup-skip-all")
-                }
+                Text("\(stage.rawValue + 1) of \(SetupStage.allCases.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            HStack(spacing: 5) {
-                ForEach(SetupPage.allCases, id: \.rawValue) { item in
-                    Capsule().fill(item.rawValue <= index ? page.tint : Theme.border)
-                        .frame(height: 4)
+            HStack(spacing: 6) {
+                ForEach(SetupStage.allCases, id: \.rawValue) { item in
+                    Capsule().fill(item.rawValue <= stage.rawValue ? Theme.accent : Theme.secondarySurface).frame(height: 3)
                 }
-            }.accessibilityLabel("Setup step \(index + 1) of \(SetupPage.allCases.count)")
-        }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 12)
-            .frame(maxWidth: 650)
-    }
-
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 27)
-                    .fill(page.tint.opacity(0.16))
-                    .frame(width: 100, height: 100)
-                    .overlay(RoundedRectangle(cornerRadius: 27).stroke(.white.opacity(0.14)))
-                Image(systemName: page.icon)
-                    .font(.system(size: 43, weight: .medium))
-                    .foregroundStyle(page.tint.gradient)
-            }
-            Text(page == .welcome ? "WELCOME" : page == .finish ? "ALL SET" : "PERSONALIZE YOUR EXPERIENCE")
-                .font(.caption.bold()).tracking(2).foregroundStyle(page.tint)
-            Text(page.title)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true)
-            Text(page.subtitle)
-                .font(.body).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            }.accessibilityLabel("Setup step \(stage.rawValue + 1) of \(SetupStage.allCases.count)")
         }
-        .accessibilityElement(children: .contain)
-        .id(page)
     }
-
-    @ViewBuilder private var pageBody: some View {
-        switch page {
+    @ViewBuilder private var pageContent: some View {
+        switch stage {
         case .welcome:
-            VStack(spacing: 12) {
-                feature("One combined library", symbol: "rectangle.stack.fill", detail: "Anime, manga and novels in one app")
-                feature("Better discovery", symbol: "sparkles", detail: "Explore new titles and personalized picks")
-                feature("Your playback choices", symbol: "play.square.stack", detail: "Add providers when you're ready")
+            VStack(alignment: .leading, spacing: 22) {
+                Image(systemName: "sparkles.rectangle.stack.fill").font(.system(size: 72, weight: .light))
+                    .foregroundStyle(Theme.accent).padding(.vertical, 16).accessibilityHidden(true)
+                feature("Find your next favorite", detail: "Anime, manga and novels in one place.", symbol: "sparkles")
+                feature("Keep your place", detail: "Connect your own libraries and continue reading.", symbol: "bookmark.fill")
+                feature("Start with what you need", detail: "Browse right away. Add sources and playback later.", symbol: "slider.horizontal.3")
+                Label("No account is required to explore.", systemImage: "person.crop.circle.badge.checkmark")
+                    .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
             }
-        case .aniList:
-            connectionBadge(page)
-            NavigationLink { AniListSettingsView().toolbar(.visible, for: .navigationBar) } label: {
-                actionCard("Connect or manage AniList", detail: "Secure sign-in and library syncing", symbol: "person.crop.circle.badge.checkmark")
-            }.accessibilityIdentifier("setup-anilist-connect")
-            Text("You can browse anime even without an AniList account.")
-                .font(.caption).foregroundStyle(.secondary)
-        case .mangaBaka:
-            connectionBadge(page)
-            NavigationLink { MangaBakaAccountView().toolbar(.visible, for: .navigationBar) } label: {
-                actionCard("Connect or manage MangaBaka", detail: "Sign in or connect with an API key", symbol: "books.vertical.fill")
-            }.accessibilityIdentifier("setup-mangabaka-connect")
-        case .torrent:
-            connectionBadge(page)
-            NavigationLink { SeanimeSettingsView().toolbar(.visible, for: .navigationBar) } label: {
-                actionCard("Browse & install extensions", detail: "Open the marketplace, review and install providers", symbol: "shippingbox.fill")
-            }.accessibilityIdentifier("setup-torrent-install")
-            Text("Extensions run third-party code. Only install from sources you trust. They can be added or disabled later.")
-                .font(.caption).foregroundStyle(.secondary)
-        case .torBox:
-            connectionBadge(page)
-            NavigationLink { TorBoxSettingsView().toolbar(.visible, for: .navigationBar) } label: {
-                actionCard("Connect TorBox", detail: "Save and verify your API key", symbol: "key.fill")
-            }.accessibilityIdentifier("setup-torbox-connect")
-            Text("A TorBox subscription or account is separate from Anime Companion. You can use the app without TorBox.")
-                .font(.caption).foregroundStyle(.secondary)
-        case .aioStreams:
-            connectionBadge(page)
-            NavigationLink {
-                AddonDirectoryBrowser(startURL: URL(string: "https://aiostreams.elfhosted.com/stremio/configure")!)
-                    .toolbar(.visible, for: .navigationBar)
-            } label: {
-                actionCard("Create or open AIOStreams setup", detail: "Use its configuration site, including existing accounts", symbol: "slider.horizontal.3")
-            }.accessibilityIdentifier("setup-aiostreams-configure")
-            NavigationLink { PlaybackSettingsView().toolbar(.visible, for: .navigationBar) } label: {
-                actionCard("Install an existing manifest", detail: "Paste your private AIOStreams manifest URL", symbol: "link")
-            }.accessibilityIdentifier("setup-aiostreams-install")
-            Text("After configuring AIOStreams, select its manifest install link or paste the URL under Stremio add-ons. It is an optional third-party service.")
-                .font(.caption).foregroundStyle(.secondary)
-        case .content:
-            VStack(alignment: .leading, spacing: 18) {
-                Toggle(isOn: $store.includeAdult) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Allow explicit content (18+)").font(.headline)
-                        Text(store.includeAdult ? "Adult titles may appear in the app." : "Adult titles are hidden from supported catalogs.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                .tint(.cyan)
-                .accessibilityIdentifier("setup-explicit-content")
-                Divider().overlay(.white.opacity(0.1))
-                Label("Off (recommended): filter known adult titles and providers.", systemImage: "checkmark.shield")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Label("On: include adult titles when supported by the source.", systemImage: "eye")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Text("Your online lists aren't deleted. External source websites control their own filters. Change this anytime in Settings → Browsing & content.")
+        case .libraries:
+            VStack(alignment: .leading, spacing: 20) {
+                aniListCard
+                VStack(alignment: .leading, spacing: 16) {
+                    connectionHeading("MangaBaka", symbol: "books.vertical", connected: mangaBaka.connected)
+                    if mangaBaka.connected {
+                        Text(mangaBaka.profile?.name ?? "Your reading library is connected.")
+                            .font(.subheadline).foregroundStyle(.secondary).privacySensitive()
+                        NavigationLink("Manage saved accounts") { MangaBakaAccountView() }
+                    } else { MangaBakaKeyEntry() }
+                }.companionPanel(padding: 18).accessibilityIdentifier("setup-mangabaka-connect")
+                Text("Each person connects their own account. Keys are entered here and stored in this device’s Keychain.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .padding(20)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
-        case .finish:
-            VStack(alignment: .leading, spacing: 13) {
-                ForEach([SetupPage.aniList, .mangaBaka, .torrent, .torBox, .aioStreams, .content], id: \.rawValue) { item in
-                    HStack(spacing: 12) {
-                        Image(systemName: item.icon).frame(width: 26).foregroundStyle(item.tint)
-                        Text(item.summaryLabel).font(.subheadline.weight(.medium))
-                        Spacer(minLength: 8)
-                        let value = status(item)
-                        Label(value.label, systemImage: value.icon)
-                            .font(.caption).foregroundStyle(value.color)
-                    }.padding(.vertical, 9)
-                    if item != .content { Divider().opacity(0.25) }
-                }
-                Text("Manage all connections, add-ons and filters later in Settings → Setup Guide.")
-                    .font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+        case .preferences:
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Appearance", systemImage: "circle.lefthalf.filled").font(.headline)
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { value in Text(value.label).tag(value.rawValue) }
+                    }.pickerStyle(.segmented)
+                }.companionPanel(padding: 18)
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Show adult titles (18+)", isOn: $store.includeAdult)
+                        .accessibilityIdentifier("setup-explicit-content")
+                    Text("Off by default. Your online lists are kept; this controls what appears while browsing.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.companionPanel(padding: 18)
+                feature("Your layout, your choice", detail: "Hide, add and rearrange Home and Explore widgets whenever you like.", symbol: "rectangle.3.group")
             }
-            .padding(18)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
-            .accessibilityIdentifier("setup-summary")
+        case .ready:
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
+                    connectionHeading("AniList", symbol: "play.rectangle", connected: store.isSignedIn)
+                    connectionHeading("MangaBaka", symbol: "books.vertical", connected: mangaBaka.connected)
+                }.companionPanel(padding: 18).accessibilityIdentifier("setup-summary")
+                NavigationLink { SourcesSettingsView() } label: {
+                    feature("Reading & playback", detail: "Optional: add reading sources, TorBox or streaming add-ons.", symbol: "play.rectangle.on.rectangle")
+                        .padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+                }.buttonStyle(.plain).accessibilityIdentifier("setup-optional-playback")
+                Label("Everything here can be changed later in Settings.", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
-
-    private func feature(_ title: String, symbol: String, detail: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: symbol).font(.title3).frame(width: 34).foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+    private var aniListCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            connectionHeading("AniList", symbol: "play.rectangle", connected: store.isSignedIn)
+            if store.isSignedIn {
+                Text(store.viewer?.name ?? "Your anime library is connected.").font(.subheadline).foregroundStyle(.secondary).privacySensitive()
+            } else if AppConfiguration.clientID != nil {
+                Text("Sync your watchlist, ratings and episode progress.").font(.subheadline).foregroundStyle(.secondary)
+                Button("Connect AniList") { Task { await store.connect() } }
+                    .buttonStyle(.borderedProminent).disabled(store.connecting).accessibilityIdentifier("setup-anilist-connect")
+                if store.connecting { ProgressView("Opening AniList…") }
+                if let error = store.accountError { Text(error).font(.caption).foregroundStyle(.orange) }
+            } else {
+                Text("Anime browsing works right away. AniList syncing can be configured in Settings.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                NavigationLink("AniList connection settings") { AniListSettingsView() }
+                    .accessibilityIdentifier("setup-anilist-connect")
             }
-            Spacer(minLength: 0)
-        }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        }.companionPanel(padding: 18)
     }
-
-    private func connectionBadge(_ page: SetupPage) -> some View {
-        let value = status(page)
-        return Label(value.label, systemImage: value.icon)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(value.color)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Theme.surface, in: Capsule())
-            .accessibilityIdentifier("setup-connection-status")
+    private func feature(_ title: String, detail: String, symbol: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent).frame(width: 30).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.foregroundStyle(.primary)
     }
-
-    private func actionCard(_ title: String, detail: String, symbol: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(page.tint).frame(width: 34)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 5)
-            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
-        }.padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
+    private func connectionHeading(_ name: String, symbol: String, connected: Bool) -> some View {
+        HStack(spacing: 10) {
+            Label(name, systemImage: symbol).font(.headline)
+            Spacer()
+            Text(connected ? "Connected" : "Optional").font(.caption.weight(.semibold)).foregroundStyle(connected ? Color.mint : .secondary)
+        }
     }
-
     private var footer: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Button {
-                if page == .finish { finish() }
-                else { advance() }
+                if stage == .ready { finish() } else { move(1) }
             } label: {
-                HStack {
-                    Spacer()
-                    Text(page == .welcome ? "Get Started" : page == .finish ? "Start Exploring" : "Continue")
-                    Image(systemName: page == .finish ? "sparkles" : "arrow.right")
-                    Spacer()
-                }
-                .font(.headline).padding(.vertical, 17)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 17))
-                .foregroundStyle(Theme.background)
+                Text(stage == .ready ? "Start exploring" : stage == .welcome ? "Get started" : "Continue")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
             }
-            .accessibilityIdentifier(page == .finish ? "setup-start-exploring" : "setup-continue")
-            if page != .welcome && page != .finish {
-                Button("Skip for now") { advance(skipped: true) }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
-                    .accessibilityIdentifier("setup-skip-step")
-            }
-        }
-        .frame(maxWidth: 580)
-        .padding(.horizontal, 24).padding(.top, 15).padding(.bottom, 12)
-        .frame(maxWidth: .infinity)
-        .background(Theme.background)
+                .buttonStyle(.borderedProminent).disabled(busy)
+                .accessibilityIdentifier(stage == .ready ? "setup-start-exploring" : "setup-continue")
+            if stage == .libraries { Text("You can continue without connecting an account.").font(.caption2).foregroundStyle(.secondary) }
+        }.padding(.horizontal, 24).padding(.vertical, 12).frame(maxWidth: 660).frame(maxWidth: .infinity)
+            .background(Theme.background)
+    }
+    private func move(_ direction: Int) {
+        guard let next = SetupStage(rawValue: stage.rawValue + direction), !busy else { return }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { stage = next }
+        if !revisiting { UserDefaults.standard.set(next.rawValue, forKey: SetupStage.storageKey) }
+    }
+    private func finish() {
+        guard !busy else { return }
+        if !revisiting { UserDefaults.standard.set(SetupStage.ready.rawValue, forKey: SetupStage.storageKey) }
+        onFinish()
     }
 }

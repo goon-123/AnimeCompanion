@@ -32,6 +32,7 @@ struct SeriesCommunityView: View {
 }
 
 private struct SeriesReviewCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let review: AnimeReview
     @State private var expanded = false
     var body: some View {
@@ -41,7 +42,7 @@ private struct SeriesReviewCard: View {
             if let body = review.body, !body.isEmpty {
                 Text(TextSanitizer.plain(body)).font(.subheadline).foregroundStyle(.secondary)
                     .lineLimit(expanded ? nil : 5).textSelection(.enabled)
-                Button(expanded ? "Show less" : "Read review") { expanded.toggle() }.font(.caption.weight(.semibold))
+                Button(expanded ? "Show less" : "Read review") { withAnimation(AppMotion.content(reduceMotion)) { expanded.toggle() } }.font(.caption.weight(.semibold))
             }
             if let raw = review.siteUrl, let url = URL(string: raw), url.scheme == "https" {
                 Link("View on AniList", destination: url).font(.caption)

@@ -16,6 +16,23 @@ public struct SeriesArtwork: Codable, Equatable, Sendable {
     }
 }
 
+/// Enlarge the provider's own supported artwork variant, without rewriting
+/// arbitrary hosts, signed image queries or logo URLs.
+public enum SeriesArtworkQuality {
+    public static func spotlight(_ url: URL?) -> URL? {
+        guard let url, url.scheme == "https", url.host == "images.metahub.space",
+              url.user == nil, url.password == nil, url.port == nil,
+              url.query == nil, url.fragment == nil,
+              var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var path = parts.path.split(separator: "/").map(String.init)
+        guard path.count == 4, ["poster", "background"].contains(path[0]),
+              ["small", "medium"].contains(path[1]), path[3] == "img" else { return url }
+        path[1] = "large"
+        parts.path = "/" + path.joined(separator: "/")
+        return parts.url ?? url
+    }
+}
+
 /// Resolve by AniList/MAL identity, never by a fuzzy title or guessed season.
 public enum SeriesArtworkDecoding {
     public struct Identity: Codable, Hashable, Sendable {
@@ -60,11 +77,15 @@ public enum SeriesArtworkDecoding {
         guard images.count <= 200 else { throw ServiceError.invalidResponse }
         func first(_ types: [String]) -> URL? {
             for type in types {
-                if let url = images.filter({ ($0["coverType"] as? String)?.lowercased() == type }).compactMap({ image($0["url"]) }).first { return url }
+                if let url = images.filter({ ($0["coverType"] as? String)?.lowercased() == type }).compactMap({ image($0["url"]) }).first(where: {
+                    let host = $0.host?.lowercased() ?? ""
+                    return host != "anilist.co" && !host.hasSuffix(".anilist.co")
+                }) { return url }
             }
             return nil
         }
-        return SeriesArtwork(logo: first(["clearlogo", "logo"]), backdrop: first(["fanart", "background", "banner"]))
+        return SeriesArtwork(logo: first(["clearlogo", "logo"]), backdrop: first(["fanart", "background", "banner"]),
+            poster: first(["poster"]))
     }
     private static func validIMDb(_ value: String) -> Bool {
         value.hasPrefix("tt") && (7...10).contains(value.dropFirst(2).count) && value.dropFirst(2).allSatisfy { $0.isASCII && $0.isNumber }
@@ -84,6 +105,9 @@ public actor SeriesArtworkClient {
     private let transport: any HTTPTransport
     private let cache: HomeContentCache
     private let requests = RequestCoalescer<String, SeriesArtwork>()
+    private let providers = RequestCoalescer<String, SeriesArtwork>()
+    private var primaryCache = BoundedCache<String, SeriesArtwork>(maximumCount: 32, maximumCost: 32)
+    private var fallbackCache = BoundedCache<String, SeriesArtwork>(maximumCount: 32, maximumCost: 32)
     private let indexRequests = RequestCoalescer<String, [SeriesArtworkDecoding.Identity]>()
     private var index: HomeContentSnapshot<[SeriesArtworkDecoding.Identity]>?
     private var indexRetry = Date.distantPast
@@ -97,7 +121,7 @@ public actor SeriesArtworkClient {
         if !refresh, let saved = previous, Date().timeIntervalSince(saved.savedAt) < (saved.value.isEmpty ? 300 : 86400) { return saved.value }
         do {
             return try await requests.value(for: key) {
-                let value = await self.fetch(anime)
+                let value = await self.fetch(anime, refresh: refresh)
                 try Task.checkCancellation()
                 let result = value.fillingMissing(with: previous?.value ?? SeriesArtwork())
                 await self.cache.save(HomeContentSnapshot(result), key: key)
@@ -105,24 +129,94 @@ public actor SeriesArtworkClient {
             }
         } catch { return previous?.value ?? SeriesArtwork() }
     }
-    private func fetch(_ anime: Anime) async -> SeriesArtwork {
-        var result = SeriesArtwork()
+    private func artworkKey(_ anime: Anime) -> String { "series-art-v1-\(anime.id)-\(anime.idMal ?? 0)-\(anime.format == "MOVIE")" }
+    public func cachedArtwork(for anime: Anime) async -> SeriesArtwork? {
+        let spotlight = await cache.load(SeriesArtwork.self, key: "spotlight-" + artworkKey(anime))
+        let full = await cache.load(SeriesArtwork.self, key: artworkKey(anime))
+        let logo = await cache.load(SeriesArtwork.self, key: "logo-" + artworkKey(anime))
+        guard spotlight != nil || full != nil || logo != nil else { return nil }
+        return (spotlight?.value ?? SeriesArtwork()).fillingMissing(with: full?.value ?? SeriesArtwork())
+            .fillingMissing(with: logo?.value ?? SeriesArtwork())
+    }
+    /// Complete hero art independently of the logo-first presentation path.
+    /// Repair older cached records that predate mapped poster support.
+    public func spotlightArtwork(for anime: Anime) async -> SeriesArtwork {
+        guard anime.id > 0 else { return SeriesArtwork() }
+        let key = "spotlight-" + artworkKey(anime)
+        if let saved = await cache.load(SeriesArtwork.self, key: key),
+           Date().timeIntervalSince(saved.savedAt) < (saved.value.poster == nil && saved.value.backdrop == nil ? 300 : 86400) { return saved.value }
         do {
-            let identities = try await identities()
-            if let identity = SeriesArtworkDecoding.identity(for: anime, in: identities) {
-                let type = identity.movie ? "movie" : "series"
-                let url = URL(string: "https://v3-cinemeta.strem.io/meta/\(type)/\(identity.imdb).json")!
-                result = try SeriesArtworkDecoding.cinemeta(await get(url, maximum: 2_000_000), imdb: identity.imdb, movie: identity.movie)
+            return try await requests.value(for: key) {
+                var value = await self.cachedArtwork(for: anime) ?? SeriesArtwork()
+                if value.poster == nil || value.backdrop == nil {
+                    value = (await self.artwork(for: anime)).fillingMissing(with: value)
+                }
+                if value.poster == nil { value = value.fillingMissing(with: await self.fallbackArtwork(anime)) }
+                try Task.checkCancellation()
+                await self.cache.save(HomeContentSnapshot(value), key: key)
+                return value
             }
-        } catch { }
+        } catch { return await cachedArtwork(for: anime) ?? SeriesArtwork() }
+    }
+    /// A usable logo does not wait for an unrelated backdrop fallback.
+    public func logoArtwork(for anime: Anime) async -> SeriesArtwork {
+        guard anime.id > 0 else { return SeriesArtwork() }
+        if let saved = await cachedArtwork(for: anime), saved.logo != nil { return saved }
+        let key = "logo-" + artworkKey(anime)
+        if let saved = await cache.load(SeriesArtwork.self, key: key),
+           Date().timeIntervalSince(saved.savedAt) < 300 { return saved.value }
+        do {
+            return try await requests.value(for: key) {
+                var value = await self.primaryArtwork(anime)
+                if value.logo == nil { value = value.fillingMissing(with: await self.fallbackArtwork(anime)) }
+                try Task.checkCancellation()
+                await self.cache.save(HomeContentSnapshot(value), key: key)
+                return value
+            }
+        } catch { return SeriesArtwork() }
+    }
+    private func fetch(_ anime: Anime, refresh: Bool) async -> SeriesArtwork {
+        var result = await primaryArtwork(anime, refresh: refresh)
         if result.logo == nil || result.backdrop == nil {
-            do {
-                let url = URL(string: "https://api.ani.zip/mappings?anilist_id=\(anime.id)")!
-                let fallback = try SeriesArtworkDecoding.aniZip(await get(url, maximum: 8_000_000), anime: anime)
-                result = result.fillingMissing(with: fallback)
-            } catch { }
+            result = result.fillingMissing(with: await fallbackArtwork(anime, refresh: refresh))
         }
         return result
+    }
+    private func primaryArtwork(_ anime: Anime, refresh: Bool = false) async -> SeriesArtwork {
+        let key = artworkKey(anime)
+        if !refresh, let saved = primaryCache.value(for: key) { return saved }
+        do {
+            let value = try await providers.value(for: key + (refresh ? "-refresh" : "")) {
+                let identities = try await self.identities()
+                guard let identity = SeriesArtworkDecoding.identity(for: anime, in: identities) else {
+                    return await self.rememberPrimary(SeriesArtwork(), key: key)
+                }
+                let type = identity.movie ? "movie" : "series"
+                let url = URL(string: "https://v3-cinemeta.strem.io/meta/\(type)/\(identity.imdb).json")!
+                let value = try SeriesArtworkDecoding.cinemeta(await self.get(url, maximum: 2_000_000), imdb: identity.imdb, movie: identity.movie)
+                return await self.rememberPrimary(value, key: key)
+            }
+            return value
+        } catch { return SeriesArtwork() }
+    }
+    private func rememberPrimary(_ value: SeriesArtwork, key: String) -> SeriesArtwork {
+        primaryCache.insert(value, for: key, cost: 1, expiresAt: Date().addingTimeInterval(value.isEmpty ? 300 : 86400))
+        return value
+    }
+    private func fallbackArtwork(_ anime: Anime, refresh: Bool = false) async -> SeriesArtwork {
+        let key = artworkKey(anime)
+        if !refresh, let saved = fallbackCache.value(for: key) { return saved }
+        do {
+            return try await providers.value(for: "fallback-" + key + (refresh ? "-refresh" : "")) {
+                let url = URL(string: "https://api.ani.zip/mappings?anilist_id=\(anime.id)")!
+                let value = try SeriesArtworkDecoding.aniZip(await self.get(url, maximum: 8_000_000), anime: anime)
+                return await self.rememberFallback(value, key: key)
+            }
+        } catch { return SeriesArtwork() }
+    }
+    private func rememberFallback(_ value: SeriesArtwork, key: String) -> SeriesArtwork {
+        fallbackCache.insert(value, for: key, cost: 1, expiresAt: Date().addingTimeInterval(value.isEmpty ? 300 : 86400))
+        return value
     }
     private func identities() async throws -> [SeriesArtworkDecoding.Identity] {
         if index == nil { index = await cache.load([SeriesArtworkDecoding.Identity].self, key: "series-art-identities-v1") }
