@@ -139,6 +139,7 @@ private struct CompanionTabEnvironment: Equatable {
     let viewport: CGFloat?
     let reduceTransparency: Bool
     let reduceMotion: Bool
+    let interactionReady: Bool
     init(_ environment: EnvironmentValues) {
         scheme = environment.colorScheme; typeSize = environment.dynamicTypeSize
         horizontal = environment.horizontalSizeClass; vertical = environment.verticalSizeClass
@@ -151,6 +152,9 @@ private struct CompanionTabEnvironment: Equatable {
         viewport = environment.animeBrowseViewportHeight
         reduceTransparency = environment.accessibilityReduceTransparency
         reduceMotion = environment.accessibilityReduceMotion
+        // Launch initially hides accessibility and interaction. Refresh the
+        // copied environment once at reveal, never on ordinary tab selection.
+        interactionReady = environment.browseInteractionReady
     }
 }
 @MainActor

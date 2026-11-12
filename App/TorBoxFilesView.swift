@@ -60,8 +60,8 @@ private struct TorBoxFolderView: View {
             } else {
                 Section {
                     if let anime { Text("\(anime.displayTitle) · Episode \(episode)").font(.subheadline) }
-                    Label("Tap a video to play in VidHub", systemImage: "play.rectangle").font(.subheadline)
-                } footer: { Text("Play shares this file’s private WebDAV address with VidHub.") }
+                    Label("Tap a video to play in \(playback.player.label)", systemImage: "play.rectangle").font(.subheadline)
+                } footer: { Text("Play shares this file’s private WebDAV address with \(playback.player.label).") }
                 if loading && entries.isEmpty { ProgressView("Loading TorBox files…").accessibilityIdentifier("torbox-webdav-loading") }
                 if let error { Text(error).foregroundStyle(.orange).accessibilityIdentifier("torbox-webdav-error") }
                 if let refreshNotice { Text(refreshNotice).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("torbox-webdav-refresh-notice") }
@@ -127,7 +127,7 @@ private struct TorBoxFolderView: View {
                 if !entry.isDirectory {
                     HStack {
                         if let size = entry.size { Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
-                        Text(entry.isVideo ? "Play in VidHub" : "Document")
+                        Text(entry.isVideo ? "Play in \(playback.player.label)" : "Document")
                     }.font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -158,7 +158,7 @@ private struct TorBoxFolderView: View {
                 try Task.checkCancellation()
                 if let anime { await playback.play(stream: stream, anime: anime, episode: episode, subtitle: nil, restart: restart) }
                 else { await playback.playUntracked(stream: stream, title: entry.name) }
-                if !Task.isCancelled { message = playback.playerMessage ?? "Opened in VidHub." }
+                if !Task.isCancelled { message = playback.playerMessage ?? "Opened in \(playback.player.label)." }
             } catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
     }

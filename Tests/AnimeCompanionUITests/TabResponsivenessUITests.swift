@@ -23,14 +23,16 @@ final class TabResponsivenessUITests: XCTestCase {
         let firstAnime = app.buttons["featured-poster-1"]
         XCTAssertTrue(firstAnime.waitForExistence(timeout: 20))
         let switcher = app.buttons["explore-media-switch"]
-        switcher.tap()
+        // Exercise the full target, outside the circular glyph/glass content.
+        switcher.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.08)).tap()
         let spotlight = app.descendants(matching: .any).matching(identifier: "reading-spotlight").firstMatch
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Ready"), object: spotlight)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
         let firstFrame = spotlight.frame
         capture("Reading-Spotlight-Ready", app)
-        switcher.tap()
+        switcher.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.92)).tap()
         XCTAssertTrue(firstAnime.isHittable, "Returning to Anime must not recreate an empty catalog")
+        XCTAssertFalse(app.scrollViews["anime-detail-scroll"].exists, "Header taps must not open an entry behind the switch")
         switcher.tap()
         XCTAssertEqual(spotlight.value as? String, "Ready")
         XCTAssertEqual(spotlight.frame.minY, firstFrame.minY, accuracy: 1)

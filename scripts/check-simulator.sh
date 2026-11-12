@@ -251,6 +251,8 @@ if [[ "$test_scope" == dock-gallery ]]; then
     -only-testing:MangaRuntimeTests/SpotlightLogoBitmapTests
     -only-testing:MangaRuntimeTests/CompanionTabTransitionTests
     -only-testing:MangaRuntimeTests/TabResponsivenessTests
+    -only-testing:MangaRuntimeTests/ExternalPlayerStoreTests
+    -only-testing:AnimeCompanionUITests/FirstRunSetupUITests/testPlayerChoiceDuringSetupIsSharedWithSettings
     -only-testing:AnimeCompanionUITests/TabResponsivenessUITests)
 fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)

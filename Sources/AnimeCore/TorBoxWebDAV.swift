@@ -12,7 +12,7 @@ public enum TorBoxWebDAVError: LocalizedError, Equatable {
         switch self {
         case .invalidResponse: return "TorBox WebDAV returned an unreadable folder listing. Try refreshing the folder."
         case .invalidPath: return "This folder or file is not a valid TorBox WebDAV location."
-        case .invalidFile: return "Choose a video file to open in VidHub."
+        case .invalidFile: return "Choose a video file to open in your video player."
         case .unauthorized: return "TorBox WebDAV rejected the saved API key. Check your key and WebDAV access in TorBox settings."
         case .unavailable: return "Could not connect to TorBox WebDAV. Check your connection and try again."
         case .http(404): return "This TorBox folder is no longer available. Go back to TorBox files and refresh the list."

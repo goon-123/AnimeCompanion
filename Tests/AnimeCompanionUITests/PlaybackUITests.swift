@@ -38,7 +38,7 @@ final class PlaybackUITests: XCTestCase {
         XCTAssertTrue(watch.isHittable); watch.tap()
         let episode = app.textFields["playback-episode-number"]
         XCTAssertTrue(episode.waitForExistence(timeout: 10)); XCTAssertEqual(episode.value as? String, "9")
-        XCTAssertTrue(app.buttons["Set up add-on & VidHub"].exists)
+        XCTAssertTrue(app.buttons["Set up add-on & video player"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "VidHub-Episode-Picker"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["detail-options"].waitForExistence(timeout: 10))

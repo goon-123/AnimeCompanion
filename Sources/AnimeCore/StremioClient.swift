@@ -17,9 +17,9 @@ public enum PlaybackError: LocalizedError, Equatable {
             if status == 429 { return "The add-on is busy. Wait a moment before trying again." }
             return "The add-on returned HTTP \(status). Please try again."
         case .unavailable: return "The add-on could not be reached or timed out. Check your connection and try again."
-        case .invalidVideo: return "This source does not provide a direct video URL for VidHub."
-        case .needsProxy: return "This source requires special playback headers. Configure a proxy in your add-on before opening it in VidHub."
-        case .invalidCallback: return "VidHub returned incomplete playback information. Your saved progress has not changed."
+        case .invalidVideo: return "This source does not provide a direct video URL for your video player."
+        case .needsProxy: return "This source requires special playback headers. Configure a proxy in your add-on before opening it in your video player."
+        case .invalidCallback: return "The video player returned incomplete playback information. Your saved progress has not changed."
         }
     }
 }

@@ -21,6 +21,7 @@ extension View { func mangaBakaNavigation() -> some View { modifier(MangaBakaNav
 
 /// The two catalogs share a tab, not identities or tracking credentials.
 struct MediaSectionPicker: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("app.mediaSection") private var mode = "anime"
     var body: some View {
@@ -38,7 +39,7 @@ struct MediaSectionPicker: View {
                 state.path = NavigationPath(); state.detailPath = NavigationPath()
                 state.animeID = nil; state.column = .sidebar; state.visibility = .all
             }
-            mode = value
+            withAnimation(AppMotion.catalogSwitch(reduceMotion)) { mode = value }
         } label: {
             Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
                 .lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, minHeight: 44)
@@ -84,7 +85,8 @@ struct MediaExploreView: View {
                                 .accessibilityHidden(mode != "written")
                                 .environment(\.scenePhase, mode == "written" ? scenePhase : .inactive)
                         }
-                    }.onAppear { visitedCatalogs.insert(mode) }
+                    }.animation(AppMotion.catalogSwitch(reduceMotion), value: mode)
+                        .onAppear { visitedCatalogs.insert(mode) }
                         .onChange(of: mode) { _, value in visitedCatalogs.insert(value) }
                 }
             }
@@ -119,6 +121,7 @@ struct MediaExploreView: View {
             Button(action: switchMedia) {
                 Image(systemName: mode == "anime" ? "book.closed" : "play.rectangle")
                     .font(.headline).frame(width: 44, height: 44).floatingHeaderGlass(in: Circle())
+                    .contentShape(.interaction, Rectangle())
             }.buttonStyle(.plain)
                 .accessibilityLabel(mode == "anime" ? "Switch to Manga & Novels" : "Switch to Anime")
                 .accessibilityValue(mode == "anime" ? "Anime" : "Manga & Novels")
@@ -132,7 +135,10 @@ struct MediaExploreView: View {
                 Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).floatingHeaderGlass(in: Circle())
             }.accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
         }.padding(.horizontal, 16).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background(Color.clear)
+            // Own the header's entire touch region, including the transparent
+            // gaps. Scrolled artwork must never receive a missed header tap.
+            .background { Color.clear.contentShape(Rectangle()).onTapGesture {} }
+            .zIndex(1)
     }
     private func switchMedia() {
         var transaction = Transaction(animation: nil); transaction.disablesAnimations = true
@@ -140,7 +146,13 @@ struct MediaExploreView: View {
             let state = navigation.explore
             state.path = NavigationPath(); state.detailPath = NavigationPath()
             state.animeID = nil; state.column = .sidebar; state.visibility = .all
-            mode = mode == "anime" ? "written" : "anime"
+        }
+        let next = mode == "anime" ? "written" : "anime"
+        // Mount the destination inside the same transaction as its opacity.
+        // Once visited, both catalogs keep their model and scroll identity.
+        withAnimation(AppMotion.catalogSwitch(reduceMotion)) {
+            visitedCatalogs.insert(next)
+            mode = next
         }
     }
 
