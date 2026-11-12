@@ -11,6 +11,53 @@ final class AnimeVisualGalleryTests: XCTestCase {
     }
     private func data(_ text: String) -> Data { Data(text.utf8) }
 
+    func testActualApothecary13226PageLoadsAll31VisualsWithFullCaptionsAndCredits() throws {
+        let fixture = try XCTUnwrap(Bundle.module.url(forResource: "livechart-13226", withExtension: "html"))
+        let url = URL(string: "https://www.livechart.me/anime/13226/visuals")!
+        let result = try AnimeVisualParser.liveChart(Data(contentsOf: fixture), pageURL: url, liveChartID: 13226)
+        XCTAssertEqual(result.images.count, 31)
+        XCTAssertEqual(Set(result.images.map(\.id)).count, 31)
+        XCTAssertEqual(result.images.prefix(3).map(\.title), ["Halloween 2026 Visual 3", "Halloween 2026 Visual 2", "Halloween 2026 Visual 1"])
+        XCTAssertEqual(result.images.last?.title, "July 2025 Seasonal Plant Visual")
+        XCTAssertTrue(result.images.allSatisfy { $0.source == .liveChart && $0.imageURL.host == "u.livechart.me" && $0.thumbnailURL.host == "u.livechart.me" })
+        XCTAssertEqual(result.images.first?.imageURL.absoluteString, "https://u.livechart.me/anime_visuals/local_version/19493/image/f1a4e59081d47aad13bed2f7fe89c6ea.webp/large.jpg")
+        XCTAssertTrue(result.images.first?.thumbnailURL.path.hasSuffix("/small.jpg") == true)
+        XCTAssertTrue(result.images.first?.copyright?.contains("Hyuganatsu") == true)
+        XCTAssertNil(result.nextPage)
+    }
+    func testModernVisualCannotBelongToAnotherAnimeEvenOnTheCorrectCanonicalPage() throws {
+        let html = "<div data-anime-visual-anime-id='13827' data-anime-visual-url='https://u.livechart.me/full.jpg' data-anime-visual-label='Character Visual'></div>"
+        XCTAssertThrowsError(try AnimeVisualParser.liveChart(data(html), pageURL: page, liveChartID: 12735))
+    }
+    func testActual13226PageFlowsThroughTheProductionClientAlongsideAniList() async throws {
+        let fixture = try XCTUnwrap(Bundle.module.url(forResource: "livechart-13226", withExtension: "html"))
+        let transport = CapturedGalleryTransport(html: try Data(contentsOf: fixture))
+        let client = AnimeVisualsClient(transport: transport, directory: nil, minimumRequestInterval: 0)
+        let anime = try JSONDecoder().decode(Anime.self, from: data(#"{"id":195516,"idMal":61987,"title":{"english":"The Apothecary Diaries Season 3"},"coverImage":{"large":"https://s4.anilist.co/poster.jpg"},"bannerImage":"https://s4.anilist.co/banner.jpg"}"#))
+        let result = await client.gallery(for: anime)
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 31)
+        XCTAssertEqual(result.images.filter { $0.source == .aniList }.count, 2)
+        XCTAssertNil(result.notice)
+        let urls = await transport.urls
+        XCTAssertEqual(urls.count, 2)
+        XCTAssertEqual(urls.last?.absoluteString, "https://www.livechart.me/anime/13226/visuals")
+    }
+    func testPositiveV2GalleryMigratesWithoutNetworkOrLosingArtwork() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("VisualPositiveMigration-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let anime = try anime()
+        let first = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
+        let original = await first.gallery(for: anime)
+        try FileManager.default.moveItem(at: directory.appendingPathComponent("livechart-galleries-v3.json"),
+            to: directory.appendingPathComponent("livechart-galleries-v2.json"))
+        let offline = GalleryTransport(mode: .offline)
+        let second = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
+        let restored = await second.gallery(for: anime)
+        XCTAssertEqual(restored.images, original.images)
+        let requests = await offline.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testGalleryReadsAllFourCharacterVisualsAndPreservesCaptionsCreditsAndFullSizeURLs() throws {
         let html = "<html><body>" + ["Roxy", "Sylphiette", "Rudeus", "Eris"].map { name in
             """
@@ -56,10 +103,10 @@ final class AnimeVisualGalleryTests: XCTestCase {
         XCTAssertEqual(image.thumbnailURL.path, "/thumb.jpg")
     }
     func testChallengeAndChangedMarkupAreErrorsWhileConfirmedEmptyGalleryIsEmpty() throws {
-        for html in ["<h1>Just a moment</h1>", "<html>Log in</html>", "<div data-anime-visual-url-value='https://evil.example/a.jpg'></div>"] {
+        for html in ["<link rel='canonical' href='\(page.absoluteString)'><h1>Visuals</h1>", "<h1>Just a moment</h1>", "<html>Log in</html>", "<div data-anime-visual-url-value='https://evil.example/a.jpg'></div>"] {
             XCTAssertThrowsError(try AnimeVisualParser.liveChart(data(html), pageURL: page, liveChartID: 12735))
         }
-        let html = "<link rel='canonical' href='\(page.absoluteString)'><h1>Visuals</h1>"
+        let html = "<link rel='canonical' href='\(page.absoluteString)'><h1>Visuals</h1><p>No visuals yet</p>"
         XCTAssertTrue(try AnimeVisualParser.liveChart(data(html), pageURL: page, liveChartID: 12735).images.isEmpty)
         XCTAssertThrowsError(try AnimeVisualParser.liveChart(Data(repeating: 32, count: 2_000_001), pageURL: page, liveChartID: 12735))
     }
@@ -162,7 +209,7 @@ final class AnimeVisualGalleryTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let first = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
         _ = await first.gallery(for: try anime())
-        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        let file = directory.appendingPathComponent("livechart-galleries-v3.json")
         var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
         records[0]["images"] = [["source": "myAnimeList", "imageURL": "https://cdn.myanimelist.net/old.jpg",
                                   "thumbnailURL": "https://cdn.myanimelist.net/old.jpg", "title": "Legacy artwork"]]
@@ -203,11 +250,13 @@ final class AnimeVisualGalleryTests: XCTestCase {
         _ = await current.gallery(for: anime)
         let cachedRequests = await offline.requests
         XCTAssertTrue(cachedRequests.isEmpty)
-        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        let file = directory.appendingPathComponent("livechart-galleries-v3.json")
         var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
-        records[0].removeValue(forKey: "checkedAt")
         records[0]["complete"] = true
-        try JSONSerialization.data(withJSONObject: records).write(to: file)
+        // Build 125's false-empty records already contain checkedAt. The
+        // upgraded loader must reject those too, without waiting six hours.
+        try JSONSerialization.data(withJSONObject: records).write(to: directory.appendingPathComponent("livechart-galleries-v2.json"))
+        try FileManager.default.removeItem(at: file)
         let repaired = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
         let result = await repaired.gallery(for: anime)
         XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
@@ -229,10 +278,11 @@ final class AnimeVisualGalleryTests: XCTestCase {
         let anime = try anime()
         let first = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
         let original = await first.gallery(for: anime)
-        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        let file = directory.appendingPathComponent("livechart-galleries-v3.json")
         var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
         let savedDate = Date().addingTimeInterval(-7 * 3600).timeIntervalSinceReferenceDate
         records[0]["fetchedAt"] = savedDate
+        records[0]["checkedAt"] = savedDate
         try JSONSerialization.data(withJSONObject: records).write(to: file)
         let offline = GalleryTransport(mode: .offline)
         let second = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
@@ -240,6 +290,7 @@ final class AnimeVisualGalleryTests: XCTestCase {
         XCTAssertTrue(failed.isStale)
         XCTAssertEqual(failed.images, original.images)
         let requestsAfterFailure = await offline.requests.count
+        XCTAssertGreaterThan(requestsAfterFailure, 0)
         _ = await second.gallery(for: anime)
         let third = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
         let restored = await third.gallery(for: anime)
@@ -261,10 +312,24 @@ final class AnimeVisualGalleryTests: XCTestCase {
         loading.cancel()
         _ = await loading.value
         await transport.waitUntilCancelled()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("livechart-galleries-v2.json").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("livechart-galleries-v3.json").path))
         let fresh = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
         let result = await fresh.gallery(for: anime)
         XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
+    }
+}
+
+private actor CapturedGalleryTransport: HTTPTransport {
+    let html: Data
+    private(set) var urls: [URL] = []
+    init(html: Data) { self.html = html }
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let url = request.url!; urls.append(url)
+        let value: Data
+        if url == VisualsMappingClient.url { value = Data("anilist\tlivechart\tmyanimelist\n195516\t13226\t61987\n".utf8) }
+        else if url.absoluteString == "https://www.livechart.me/anime/13226/visuals" { value = html }
+        else { throw URLError(.unsupportedURL) }
+        return (value, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
 }
 

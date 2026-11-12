@@ -19,6 +19,7 @@ public actor AnimeVisualsClient {
     private let galleryTransport: any HTTPTransport
     private let mapping: VisualsMappingClient
     private let cacheFile: URL?
+    private let legacyCacheFile: URL?
     private let minimumRequestInterval: TimeInterval
     private var cache: [Key: Record] = [:]
     private let requests = RequestCoalescer<Key, Record>()
@@ -34,7 +35,8 @@ public actor AnimeVisualsClient {
         self.minimumRequestInterval = max(0, minimumRequestInterval)
         mapping = VisualsMappingClient(transport: transport, directory: directory)
         // Do not reuse old negative results or galleries containing other sources.
-        cacheFile = directory?.appendingPathComponent("livechart-galleries-v2.json")
+        cacheFile = directory?.appendingPathComponent("livechart-galleries-v3.json")
+        legacyCacheFile = directory?.appendingPathComponent("livechart-galleries-v2.json")
     }
     public nonisolated static func publicTransport() -> URLSessionTransport {
         let configuration = URLSessionConfiguration.ephemeral
@@ -154,7 +156,7 @@ public actor AnimeVisualsClient {
         if let until = blockedUntil[host], until > Date() { throw AnimeVisualsError.coolingDown }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.setValue(accept, forHTTPHeaderField: "Accept")
-        request.setValue("AnimeCompanion/0.57.3 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
+        request.setValue("AnimeCompanion/0.57.4 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await pageData(for: request)
         try Task.checkCancellation()
         if [401, 403, 429].contains(response.statusCode) {
@@ -186,13 +188,19 @@ public actor AnimeVisualsClient {
 
     private func restoreCache() {
         guard !restored else { return }; restored = true
-        guard let file = cacheFile, let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 2_000_000,
+        // Import real images from the previous parser, never its false-empty
+        // results. Current v3 records override migrated records for the same ID.
+        restoreCacheFile(legacyCacheFile, positiveOnly: true)
+        restoreCacheFile(cacheFile, positiveOnly: false)
+    }
+    private func restoreCacheFile(_ file: URL?, positiveOnly: Bool) {
+        guard let file, let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 2_000_000,
               let data = try? Data(contentsOf: file), let records = try? JSONDecoder().decode([Record].self, from: data), records.count <= 40 else { return }
         for record in records where Date().timeIntervalSince(record.fetchedAt) >= 0 && Date().timeIntervalSince(record.fetchedAt) < 7 * 86400 {
             // Old builds could classify unfinished browser markup as an empty
             // gallery for six hours. Keep their real images, but retry an old
             // empty result once with the repaired loader after upgrading.
-            guard (!record.images.isEmpty || record.checkedAt != nil),
+            guard (!positiveOnly || !record.images.isEmpty), (!record.images.isEmpty || record.checkedAt != nil),
                   record.images.count <= 500, record.key.aniList > 0,
                   record.images.allSatisfy({ $0.source == .liveChart && VisualURL.image($0.imageURL.absoluteString, source: .liveChart) != nil && VisualURL.image($0.thumbnailURL.absoluteString, source: .liveChart) != nil }) else { continue }
             cache[record.key] = record

@@ -21,7 +21,7 @@ struct VisualGalleryPreviewTransport: HTTPTransport {
                 let cards = names.map { name in
                     let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
                     return """
-                    <article data-anime-visual-url-value="https://u.livechart.me/owned-visuals/\(slug)-large.png">
+                    <article data-controller="anime-visual" data-anime-visual-url="https://u.livechart.me/owned-visuals/\(slug)-large.png" data-anime-visual-label="\(name)" data-anime-visual-copyright-notices="© Owned gallery fixture">
                     <img src="https://u.livechart.me/owned-visuals/\(slug).png" alt="\(name)">
                     <div>\(name)</div><div>© Owned gallery fixture</div></article>
                     """

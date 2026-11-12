@@ -197,20 +197,14 @@ private struct CompanionDock: View {
     @Binding var selection: AppTab
     let reduceMotion: Bool
     var body: some View {
+        // Only the moving lens belongs to the glass container. Text and icons
+        // are a separate foreground overlay: the glass compositor must never
+        // capture/refract the selected label itself.
         GlassEffectContainer(spacing: 12) {
           HStack(spacing: 2) {
             ForEach(tabs) { tab in
-                Button {
-                    withAnimation(selectionMotion) { selection = tab }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.symbol).symbolVariant(.fill)
-                            .font(.system(size: textSize.isAccessibilitySize ? 28 : 25, weight: .regular))
-                            .frame(height: textSize.isAccessibilitySize ? 32 : 28)
-                        Text(tab.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
-                    }.frame(maxWidth: .infinity, minHeight: 48)
+                Color.clear.frame(maxWidth: .infinity, minHeight: 48)
                         .padding(.vertical, 2)
-                        .foregroundStyle(selection == tab ? Theme.accent : .primary)
                         .background {
                             if selection == tab {
                                 if reduceMotion {
@@ -223,19 +217,36 @@ private struct CompanionDock: View {
                                 }
                             }
                         }
-                        .contentShape(Capsule())
-                }.buttonStyle(.plain)
-                    .accessibilityLabel(tab.title)
-                    .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
-                    .accessibilityIdentifier("dock-tab-" + tab.rawValue)
             }
-          }.padding(5)
+          }.padding(5).accessibilityHidden(true)
         }
             // The selection is a real refracting glass lens. Its surrounding
             // material stays outside the glass container so glass never samples
             // another glass surface. Both share one persistent hosting tree.
             .background(.ultraThinMaterial, in: Capsule())
             .overlay { Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.5).allowsHitTesting(false) }
+            .overlay {
+                HStack(spacing: 2) {
+                    ForEach(tabs) { tab in
+                        Button {
+                            withAnimation(selectionMotion) { selection = tab }
+                        } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: tab.symbol).symbolVariant(.fill)
+                                    .font(.system(size: textSize.isAccessibilitySize ? 28 : 25, weight: .regular))
+                                    .frame(height: textSize.isAccessibilitySize ? 32 : 28)
+                                    .accessibilityIdentifier("dock-icon-" + tab.rawValue)
+                                Text(tab.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
+                            }.frame(maxWidth: .infinity, minHeight: 48).padding(.vertical, 2)
+                                .foregroundStyle(selection == tab ? Theme.accent : .primary)
+                                .contentShape(Capsule())
+                        }.buttonStyle(.plain)
+                            .accessibilityLabel(tab.title)
+                            .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
+                            .accessibilityIdentifier("dock-tab-" + tab.rawValue)
+                    }
+                }.padding(5)
+            }
             // The separate hosting controller receives a new root value on tab
             // selection; give that boundary its own animation transaction.
             .animation(selectionMotion, value: selection)

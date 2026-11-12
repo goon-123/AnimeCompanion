@@ -135,10 +135,11 @@ private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
         // Wait briefly for lazy controllers to attach cards before classifying
         // a gallery as empty. This does not scroll or poll the visible UI.
         let script = #"""
-        if (!document.querySelector('[data-anime-visual-url-value]')) {
+        const visualSelector = '[data-anime-visual-url], [data-anime-visual-url-value]';
+        if (!document.querySelector(visualSelector)) {
             await new Promise(resolve => {
                 const observer = new MutationObserver(() => {
-                    if (document.querySelector('[data-anime-visual-url-value]')) finish();
+                    if (document.querySelector(visualSelector)) finish();
                 });
                 const finish = () => { observer.disconnect(); clearTimeout(timer); resolve(); };
                 const timer = setTimeout(finish, 1200);

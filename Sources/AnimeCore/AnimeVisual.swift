@@ -84,17 +84,25 @@ public enum AnimeVisualParser {
             throw AnimeVisualsError.invalidResponse
         }
         let document = try SwiftSoup.parse(html, pageURL.absoluteString)
-        let cards = try document.select("[data-anime-visual-url-value]")
+        // Current LiveChart markup uses plain data attributes; older pages and
+        // integrations used Stimulus *-value attributes. Read both contracts.
+        let cards = try document.select("[data-anime-visual-url], [data-anime-visual-url-value]")
         var images: [AnimeVisual] = [], seen = Set<String>()
         for card in cards {
-            guard let url = VisualURL.image(try card.attr("data-anime-visual-url-value"), source: .liveChart), seen.insert(url.absoluteString).inserted else { continue }
+            let owner = try card.attr("data-anime-visual-anime-id")
+            guard owner.isEmpty || Int(owner) == liveChartID else { throw AnimeVisualsError.invalidResponse }
+            let currentURL = try card.attr("data-anime-visual-url")
+            let rawURL = currentURL.isEmpty ? try card.attr("data-anime-visual-url-value") : currentURL
+            guard let url = VisualURL.image(rawURL, source: .liveChart), seen.insert(url.absoluteString).inserted else { continue }
             let img = card.tagName() == "img" ? card : try card.select("img").first()
             let alt = try img?.attr("alt").trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let text = try card.text().trimmingCharacters(in: .whitespacesAndNewlines)
             let copyrightStart = text.firstIndex(of: "©")
-            let credit = copyrightStart.map { String(text[$0...].prefix(300)) }
+            let suppliedCredit = try card.attr("data-anime-visual-copyright-notices").trimmingCharacters(in: .whitespacesAndNewlines)
+            let credit = suppliedCredit.isEmpty ? copyrightStart.map { String(text[$0...].prefix(300)) } : String(suppliedCredit.prefix(300))
             let caption = String((copyrightStart.map { String(text[..<$0]) } ?? text).trimmingCharacters(in: .whitespacesAndNewlines).prefix(180))
-            let title = !alt.isEmpty ? String(alt.prefix(180)) : (!caption.isEmpty ? caption : "Visual \(images.count + 1)")
+            let suppliedTitle = try card.attr("data-anime-visual-label").trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = !suppliedTitle.isEmpty ? String(suppliedTitle.prefix(180)) : (!alt.isEmpty ? String(alt.prefix(180)) : (!caption.isEmpty ? caption : "Visual \(images.count + 1)"))
             let thumbnail = try img.flatMap {
                 let lazy = try $0.attr("data-src")
                 if let url = VisualURL.image(lazy, source: .liveChart) { return url }
@@ -106,7 +114,14 @@ public enum AnimeVisualParser {
         // A challenge/login/layout change must not be reported as an empty gallery.
         if images.isEmpty {
             let canonical = try document.select("link[rel=canonical]").first()?.attr("href") ?? ""
-            guard let url = URL(string: canonical), VisualURL.gallery(url, liveChartID: liveChartID), cards.isEmpty() else {
+            // A canonical link identifies a page; it does not prove its gallery
+            // is empty. Only an explicit provider message can establish that.
+            let explicitEmpty = try document.select("p, h1, h2, h3, [role=status]").array().contains { element in
+                let message = try element.text().trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return ["no visuals", "no visuals yet", "no visuals have been added yet.",
+                        "no visuals have been added yet", "no visuals available", "no visuals found"].contains(message)
+            }
+            guard let url = URL(string: canonical), VisualURL.gallery(url, liveChartID: liveChartID), cards.isEmpty(), explicitEmpty else {
                 throw AnimeVisualsError.invalidResponse
             }
         }
