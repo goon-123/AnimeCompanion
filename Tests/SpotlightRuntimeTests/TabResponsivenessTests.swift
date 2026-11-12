@@ -19,6 +19,20 @@ final class TabResponsivenessTests: XCTestCase {
         XCTAssertEqual(selectionUpdates, 2, "Repeated selections should not publish again")
     }
 
+    @MainActor func testLeavingThePageDoesNotAbandonTheSharedCatalog() async {
+        let transport = CountingReadingTransport(delay: .milliseconds(80))
+        let api = MangaBakaClient(transport: transport, directory: nil, minimumRequestInterval: 0)
+        let model = MangaBakaHomeModel()
+        let page = Task { await model.load(api: api, contentFilter: .init(ratings: [.safe])) }
+        try? await Task.sleep(for: .milliseconds(20))
+        page.cancel()
+        await page.value
+        XCTAssertEqual(model.items.count, MangaBakaHomeModel.shelves.count)
+        XCTAssertFalse(model.items[.trending, default: []].isEmpty)
+        XCTAssertTrue(model.loading.isEmpty)
+        XCTAssertTrue(model.errors.isEmpty)
+    }
+
     @MainActor func testReadingCatalogReusesTypedRowsAndPublicDiskCacheWithoutLosingFilters() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -55,8 +69,11 @@ final class TabResponsivenessTests: XCTestCase {
 }
 private actor CountingReadingTransport: HTTPTransport {
     private(set) var count = 0
+    let delay: Duration
+    init(delay: Duration = .zero) { self.delay = delay }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         count += 1
+        if delay > .zero { try await Task.sleep(for: delay) }
         return try await UnifiedReadingPreviewTransport().data(for: request)
     }
 }

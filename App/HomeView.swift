@@ -38,7 +38,6 @@ private struct HomeDashboardView: View {
     @State private var settings = false
     @State private var newsRefreshID = 0
     @Environment(\.scenePhase) private var scenePhase
-    @State private var appeared = false
     @State private var homeVisitID = 0
     private var preferences: HomePreferences { HomePreferences(saved: sections) }
     private var recent: [MangaReadingRecord] {
@@ -102,8 +101,6 @@ private struct HomeDashboardView: View {
                 }
             }
             .onAppear {
-                if appeared { homeVisitID += 1 }
-                appeared = true
                 Task { await anime.refreshLibraryIfNeeded() }
             }
             .onChange(of: scenePhase) { previous, current in

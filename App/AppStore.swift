@@ -262,6 +262,7 @@ final class AppStore: ObservableObject {
         }
     }
     func prepareForAppReset() {
+        readingExplore.cancel()
         generation = UUID(); libraryRevision += 1
         authentication.cancel()
         token = nil; viewer = nil; entries = []; isSignedIn = false

@@ -131,6 +131,11 @@ private struct CompanionTabEnvironment: Equatable {
     let scale: CGFloat
     let direction: LayoutDirection
     let locale: String
+    let timeZone: String
+    let calendar: String
+    let legibility: String
+    let contrast: String
+    let differentiateColors: Bool
     let viewport: CGFloat?
     let reduceTransparency: Bool
     let reduceMotion: Bool
@@ -138,7 +143,12 @@ private struct CompanionTabEnvironment: Equatable {
         scheme = environment.colorScheme; typeSize = environment.dynamicTypeSize
         horizontal = environment.horizontalSizeClass; vertical = environment.verticalSizeClass
         scale = environment.displayScale; direction = environment.layoutDirection
-        locale = environment.locale.identifier; viewport = environment.animeBrowseViewportHeight
+        locale = environment.locale.identifier; timeZone = environment.timeZone.identifier
+        calendar = String(describing: environment.calendar.identifier)
+        legibility = String(describing: environment.legibilityWeight)
+        contrast = String(describing: environment.colorSchemeContrast)
+        differentiateColors = environment.accessibilityDifferentiateWithoutColor
+        viewport = environment.animeBrowseViewportHeight
         reduceTransparency = environment.accessibilityReduceTransparency
         reduceMotion = environment.accessibilityReduceMotion
     }

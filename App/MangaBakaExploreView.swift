@@ -281,14 +281,34 @@ final class MangaBakaHomeModel: ObservableObject {
     private var generation = UUID()
     private var contentFilter: MangaBakaContentFilter?
     private var loadedAt: Date?
+    private var flight: (id: UUID, filter: MangaBakaContentFilter, task: Task<Void, Never>)?
+    func cancel() {
+        generation = UUID(); flight?.task.cancel(); flight = nil
+        state = State(); contentFilter = nil; loadedAt = nil
+    }
     func load(api: MangaBakaClient, contentFilter: MangaBakaContentFilter, refresh: Bool = false, now: Date = Date()) async {
         guard !Task.isCancelled else { return }
-        let sameFilter = self.contentFilter == contentFilter
-        if sameFilter, !refresh {
-            if !loading.isEmpty { return }
-            if let loadedAt, now.timeIntervalSince(loadedAt) < 300 { return }
+        if !refresh, let pending = flight, pending.filter == contentFilter {
+            await pending.task.value; return
         }
-        let attempt = UUID(); generation = attempt
+        if !refresh, self.contentFilter == contentFilter, errors.isEmpty,
+           let loadedAt, now.timeIntervalSince(loadedAt) < 300 { return }
+        flight?.task.cancel()
+        let attempt = UUID()
+        // The session owns the request. Disappearing UI may stop awaiting it,
+        // but it must not leave a partially loaded shared catalog stuck forever.
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.fetch(api: api, contentFilter: contentFilter, refresh: refresh, now: now, attempt: attempt)
+        }
+        flight = (attempt, contentFilter, task)
+        await task.value
+        if flight?.id == attempt { flight = nil }
+    }
+    private func fetch(api: MangaBakaClient, contentFilter: MangaBakaContentFilter, refresh: Bool, now: Date, attempt: UUID) async {
+        guard !Task.isCancelled else { return }
+        let sameFilter = self.contentFilter == contentFilter
+        generation = attempt
         if !sameFilter { state = State(); loadedAt = nil }
         self.contentFilter = contentFilter
         var initial = state; initial.loading = Set(Self.shelves); initial.errors = [:]; state = initial
@@ -381,7 +401,7 @@ private struct MangaBakaExploreContent: View {
                     NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain)
                 } else { hero(nil).accessibilityLabel(model.loading.isEmpty ? "No spotlight titles available" : "Loading manga spotlight") }
             }.padding(.horizontal, 20).accessibilityElement(children: .contain).accessibilityIdentifier("reading-spotlight")
-                .accessibilityValue((model.items[.trending] ?? []).isEmpty ? "Loading" : "Ready")
+                .accessibilityValue((model.items[.trending] ?? []).isEmpty ? (model.loading.isEmpty ? "Empty" : "Loading") : "Ready")
         case .personal: if account.connected { MangaBakaPersonalShelf() }
         case .formats: formats
         case .genres: genres
@@ -434,10 +454,10 @@ private struct MangaBakaExploreContent: View {
         HStack(alignment: .center, spacing: 18) {
             VStack(alignment: .leading, spacing: 12) {
                 Label("IN THE SPOTLIGHT", systemImage: "sparkles").font(.caption2.bold()).foregroundStyle(.mint)
-                Text(series?.displayTitle ?? "Loading spotlight").font(.title2.bold()).lineLimit(3, reservesSpace: true)
-                    .redacted(reason: series == nil ? .placeholder : [])
-                Text(series?.synopsis ?? "Finding a story for you.").font(.subheadline).foregroundStyle(.secondary).lineLimit(3, reservesSpace: true)
-                    .redacted(reason: series == nil ? .placeholder : [])
+                Text(series?.displayTitle ?? (model.loading.isEmpty ? "No spotlight titles available" : "Loading spotlight")).font(.title2.bold()).lineLimit(3, reservesSpace: true)
+                    .redacted(reason: series == nil && !model.loading.isEmpty ? .placeholder : [])
+                Text(series?.synopsis ?? (model.loading.isEmpty ? "Adjust your content settings or pull to refresh." : "Finding a story for you.")).font(.subheadline).foregroundStyle(.secondary).lineLimit(3, reservesSpace: true)
+                    .redacted(reason: series == nil && !model.loading.isEmpty ? .placeholder : [])
                 Label("Explore series", systemImage: "arrow.up.right").font(.subheadline.bold())
             }.frame(maxWidth: .infinity, alignment: .leading)
             Group {
