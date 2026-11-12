@@ -7,7 +7,12 @@ import AnimeCore
 final class AppStore: ObservableObject {
     let aniList: AniListClient
     let episodeMetadata = AnimeEpisodesClient()
-    let seriesArtwork = SeriesArtworkClient()
+    let seriesArtwork: SeriesArtworkClient = {
+        #if DEBUG
+        if SpotlightPolishPreview.active { return SeriesArtworkClient(transport: SpotlightPolishPreviewTransport(), cache: HomeContentCache(directory: nil)) }
+        #endif
+        return SeriesArtworkClient()
+    }()
     let exploreCache: ExploreCache
     let visuals: AnimeVisualsClient
     let dubs = DubClient()

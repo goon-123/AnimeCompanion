@@ -26,4 +26,7 @@ public struct SpotlightTitlePresentation: Equatable, Sendable {
     public mutating func leaveViewport() {
         presented.formUnion(prepared); checked = presented
     }
+    /// The caller commits a completely decoded background/logo together while
+    /// the pager is idle. It never promotes an asset during a gesture.
+    public mutating func presentPrepared() { presented.formUnion(prepared.intersection(checked)) }
 }

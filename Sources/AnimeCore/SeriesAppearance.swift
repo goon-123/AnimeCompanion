@@ -26,7 +26,14 @@ public struct SeriesArtworkPreferences: Equatable, Sendable {
         artwork.poster ?? (poster ? anime.coverURL : nil)
     }
     public func spotlightURL(artwork: SeriesArtwork, anime: Anime, landscape: Bool) -> URL? {
-        let resolved = landscape ? artwork.backdrop ?? artwork.poster : artwork.poster ?? artwork.backdrop
+        // Ordinary posters may have a title printed into their pixels. Keep
+        // them for series cards; Spotlight uses a separate textless collection.
+        let clean = landscape ? artwork.spotlightBackdrop ?? artwork.spotlightPoster : artwork.spotlightPoster ?? artwork.spotlightBackdrop
+        let repaired = artwork.poster.flatMap { original -> URL? in
+            let replacement = SeriesArtworkQuality.spotlight(original)
+            return replacement != original && replacement?.host == "image.tmdb.org" ? replacement : nil
+        }
+        let resolved = clean ?? repaired ?? artwork.backdrop
         let cover = poster ? anime.coverURL : nil
         let backdrop = banner ? anime.bannerImage.flatMap(URL.init(string:)) : nil
         return SeriesArtworkQuality.spotlight(resolved ?? (landscape ? backdrop ?? cover : cover ?? backdrop))

@@ -31,13 +31,20 @@ final class SpotlightArtworkTests: XCTestCase {
             XCTAssertEqual(SeriesArtworkQuality.spotlight(url), url)
         }
     }
-    func testSpotlightUsesPortraitAndLandscapeArtWithoutImplicitAniListFallback() throws {
+    func testSpotlightPrefersTextlessArtAndDoesNotUseAnUnverifiedPosterBehindTheLogo() throws {
         let anime = try JSONDecoder().decode(Anime.self, from: Data(#"{"id":97940,"bannerImage":"https://anilist.co/banner.jpg","coverImage":{"extraLarge":"https://anilist.co/cover.jpg"}}"#.utf8))
         let poster = URL(string: "https://art.example/poster.jpg")!, backdrop = URL(string: "https://art.example/backdrop.jpg")!
         let defaults = SeriesArtworkPreferences()
         let art = SeriesArtwork(backdrop: backdrop, poster: poster)
-        XCTAssertEqual(defaults.spotlightURL(artwork: art, anime: anime, landscape: false), poster)
+        XCTAssertEqual(defaults.spotlightURL(artwork: art, anime: anime, landscape: false), backdrop)
         XCTAssertEqual(defaults.spotlightURL(artwork: art, anime: anime, landscape: true), backdrop)
+        let cleanPortrait = URL(string: "https://image.tmdb.org/t/p/original/clean-portrait.jpg")!
+        let cleanLandscape = URL(string: "https://image.tmdb.org/t/p/original/clean-landscape.jpg")!
+        let clean = SeriesArtwork(poster: poster, spotlightPoster: cleanPortrait, spotlightBackdrop: cleanLandscape)
+        XCTAssertEqual(defaults.spotlightURL(artwork: clean, anime: anime, landscape: false), cleanPortrait)
+        XCTAssertEqual(defaults.spotlightURL(artwork: clean, anime: anime, landscape: true), cleanLandscape)
+        XCTAssertNil(defaults.spotlightURL(artwork: SeriesArtwork(poster: poster), anime: anime, landscape: false))
+        XCTAssertEqual(defaults.posterURL(artwork: clean, anime: anime), poster, "Series posters must remain unchanged")
         XCTAssertNil(defaults.spotlightURL(artwork: SeriesArtwork(), anime: anime, landscape: false))
         XCTAssertEqual(SeriesArtworkPreferences(poster: true).spotlightURL(artwork: SeriesArtwork(), anime: anime, landscape: false), anime.coverURL)
         XCTAssertEqual(SeriesArtworkPreferences(banner: true).spotlightURL(artwork: SeriesArtwork(), anime: anime, landscape: true)?.absoluteString, anime.bannerImage)

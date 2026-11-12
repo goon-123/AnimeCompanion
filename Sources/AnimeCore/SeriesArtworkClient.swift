@@ -7,12 +7,17 @@ public struct SeriesArtwork: Codable, Equatable, Sendable {
     public var logo: URL?
     public var backdrop: URL?
     public var poster: URL?
-    public init(logo: URL? = nil, backdrop: URL? = nil, poster: URL? = nil) {
+    public var spotlightPoster: URL?
+    public var spotlightBackdrop: URL?
+    public init(logo: URL? = nil, backdrop: URL? = nil, poster: URL? = nil,
+                spotlightPoster: URL? = nil, spotlightBackdrop: URL? = nil) {
         self.logo = logo; self.backdrop = backdrop; self.poster = poster
+        self.spotlightPoster = spotlightPoster; self.spotlightBackdrop = spotlightBackdrop
     }
-    public var isEmpty: Bool { logo == nil && backdrop == nil && poster == nil }
+    public var isEmpty: Bool { logo == nil && backdrop == nil && poster == nil && spotlightPoster == nil && spotlightBackdrop == nil }
     public func fillingMissing(with other: Self) -> Self {
-        Self(logo: logo ?? other.logo, backdrop: backdrop ?? other.backdrop, poster: poster ?? other.poster)
+        Self(logo: logo ?? other.logo, backdrop: backdrop ?? other.backdrop, poster: poster ?? other.poster,
+             spotlightPoster: spotlightPoster ?? other.spotlightPoster, spotlightBackdrop: spotlightBackdrop ?? other.spotlightBackdrop)
     }
 }
 
@@ -56,6 +61,8 @@ public enum SeriesArtworkDecoding {
         public let mal: Int?
         public let imdb: String
         public let movie: Bool
+        public let tmdb: Int?
+        public let tmdbSeason: Int?
     }
     public static func identities(_ data: Data) throws -> [Identity] {
         guard data.count <= 16_000_000,
@@ -66,7 +73,11 @@ public enum SeriesArtworkDecoding {
             let ids = (row["imdb_id"] as? [String]) ?? (row["imdb_id"] as? String).map { [$0] } ?? []
             let valid = Set(ids.filter(validIMDb))
             guard valid.count == 1, let imdb = valid.first else { return nil }
-            return Identity(aniList: id, mal: integer(row["mal_id"]), imdb: imdb, movie: type.uppercased() == "MOVIE")
+            let movie = type.uppercased() == "MOVIE"
+            let tmdb = (row["themoviedb_id"] as? [String: Any]).flatMap { integer($0[movie ? "movie" : "tv"]) }
+            let season = (row["season"] as? [String: Any]).flatMap { integer($0["tmdb"]) }
+            return Identity(aniList: id, mal: integer(row["mal_id"]), imdb: imdb, movie: movie,
+                            tmdb: tmdb.flatMap { $0 > 0 ? $0 : nil }, tmdbSeason: season.flatMap { $0 >= 0 ? $0 : nil })
         }
     }
     public static func identity(for anime: Anime, in rows: [Identity]) -> Identity? {
@@ -150,29 +161,59 @@ public actor SeriesArtworkClient {
         let spotlight = await cache.load(SeriesArtwork.self, key: "spotlight-" + artworkKey(anime))
         let full = await cache.load(SeriesArtwork.self, key: artworkKey(anime))
         let logo = await cache.load(SeriesArtwork.self, key: "logo-" + artworkKey(anime))
-        guard spotlight != nil || full != nil || logo != nil else { return nil }
+        let clean = await cache.load(SeriesArtwork.self, key: "spotlight-clean-v1-" + artworkKey(anime))
+        guard spotlight != nil || full != nil || logo != nil || clean != nil else { return nil }
         return (spotlight?.value ?? SeriesArtwork()).fillingMissing(with: full?.value ?? SeriesArtwork())
-            .fillingMissing(with: logo?.value ?? SeriesArtwork())
+            .fillingMissing(with: logo?.value ?? SeriesArtwork()).fillingMissing(with: clean?.value ?? SeriesArtwork())
     }
     /// Complete hero art independently of the logo-first presentation path.
     /// Repair older cached records that predate mapped poster support.
     public func spotlightArtwork(for anime: Anime) async -> SeriesArtwork {
         guard anime.id > 0 else { return SeriesArtwork() }
-        let key = "spotlight-" + artworkKey(anime)
+        // A separate version excludes old posters containing a printed title.
+        // Regular series posters and the independently resolved logo are unchanged.
+        let key = "spotlight-clean-v1-" + artworkKey(anime)
         if let saved = await cache.load(SeriesArtwork.self, key: key),
-           Date().timeIntervalSince(saved.savedAt) < (saved.value.poster == nil && saved.value.backdrop == nil ? 300 : 86400) { return saved.value }
+           Date().timeIntervalSince(saved.savedAt) < (saved.value.spotlightPoster == nil && saved.value.spotlightBackdrop == nil ? 300 : 86400) { return saved.value }
         do {
             return try await requests.value(for: key) {
-                var value = await self.cachedArtwork(for: anime) ?? SeriesArtwork()
-                if value.poster == nil || value.backdrop == nil {
-                    value = (await self.artwork(for: anime)).fillingMissing(with: value)
-                }
+                let standard = await self.artwork(for: anime)
+                var value = standard.fillingMissing(with: await self.cachedArtwork(for: anime) ?? SeriesArtwork())
                 if value.poster == nil { value = value.fillingMissing(with: await self.fallbackArtwork(anime)) }
+                if let rows = try? await self.identities(), let identity = SeriesArtworkDecoding.identity(for: anime, in: rows),
+                   let tmdb = identity.tmdb {
+                    let target = SpotlightArtworkTarget(id: tmdb, movie: identity.movie, season: identity.tmdbSeason)
+                    async let poster = self.textlessPoster(target)
+                    async let backdrop = self.textlessImages(target, kind: .backdrops)
+                    let (posters, backdrops) = await (poster, backdrop)
+                    value.spotlightPoster = posters.first ?? value.spotlightPoster
+                    value.spotlightBackdrop = backdrops.first ?? value.spotlightBackdrop
+                }
                 try Task.checkCancellation()
                 await self.cache.save(HomeContentSnapshot(value), key: key)
                 return value
             }
         } catch { return await cachedArtwork(for: anime) ?? SeriesArtwork() }
+    }
+    private func textlessPoster(_ target: SpotlightArtworkTarget) async -> [URL] {
+        let seasonal = await textlessImages(target, kind: .posters)
+        if !seasonal.isEmpty || target.season == nil || Task.isCancelled { return seasonal }
+        // A title-level key visual is still the same exactly mapped series.
+        return await textlessImages(SpotlightArtworkTarget(id: target.id, movie: target.movie), kind: .posters)
+    }
+    private func textlessImages(_ target: SpotlightArtworkTarget, kind: SpotlightArtworkTarget.Kind) async -> [URL] {
+        let target = kind == .backdrops ? SpotlightArtworkTarget(id: target.id, movie: target.movie) : target
+        guard let url = target.pageURL(kind: kind) else { return [] }
+        do {
+            var request = URLRequest(url: url, timeoutInterval: 12)
+            request.setValue("text/html", forHTTPHeaderField: "Accept")
+            request.setValue("AnimeCompanion/0.58.0 (Public Spotlight artwork)", forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await transport.data(for: request)
+            try Task.checkCancellation()
+            guard response.statusCode == 200, let final = response.url,
+                  target.accepts(final, kind: kind) else { return [] }
+            return try SpotlightArtworkParser.images(data, target: target, kind: kind)
+        } catch { return [] }
     }
     /// A usable logo does not wait for an unrelated backdrop fallback.
     public func logoArtwork(for anime: Anime) async -> SeriesArtwork {
@@ -235,7 +276,7 @@ public actor SeriesArtworkClient {
         return value
     }
     private func identities() async throws -> [SeriesArtworkDecoding.Identity] {
-        if index == nil { index = await cache.load([SeriesArtworkDecoding.Identity].self, key: "series-art-identities-v1") }
+        if index == nil { index = await cache.load([SeriesArtworkDecoding.Identity].self, key: "series-art-identities-v2") }
         if let index, Date().timeIntervalSince(index.savedAt) < 86400 { return index.value }
         if indexRetry > Date() { return index?.value ?? [] }
         do {
@@ -244,7 +285,7 @@ public actor SeriesArtworkClient {
             }
             guard !values.isEmpty else { throw ServiceError.invalidResponse }
             let saved = HomeContentSnapshot(values); index = saved
-            await cache.save(saved, key: "series-art-identities-v1")
+            await cache.save(saved, key: "series-art-identities-v2")
             return values
         } catch {
             indexRetry = Date().addingTimeInterval(300)

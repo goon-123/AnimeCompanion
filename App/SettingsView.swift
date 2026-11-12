@@ -299,6 +299,8 @@ private struct AboutSettingsView: View {
             Section("Artwork galleries") {
                 Text("LiveChart visual galleries and AniList artwork. Image copyrights belong to their respective owners.").font(.caption)
                 Link("LiveChart.me", destination: URL(string: "https://www.livechart.me")!)
+                Link("TMDB · textless Spotlight artwork", destination: URL(string: "https://www.themoviedb.org")!)
+                Text("AnimeCompanion is not endorsed or certified by TMDB.").font(.caption).foregroundStyle(.secondary)
                 Link("AnimeAPI · ID mapping data", destination: URL(string: "https://github.com/nattadasu/animeApi")!)
                 Text("Contains information from AnimeAPI, available under ODbL 1.0 and DbCL 1.0. The source mapping data is not modified.").font(.caption).foregroundStyle(.secondary)
                 Link("Mapping database license · ODbL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)

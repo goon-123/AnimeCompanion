@@ -246,7 +246,9 @@ if [[ "$test_scope" == dock-gallery ]]; then
   result_path="build/DockGallery-${device_family}.xcresult"
   screenshot_path="build/dock-gallery-${device_family}-screenshots"
   diagnostic_path="build/dock-gallery-${device_family}-diagnostics"
-  test_arguments=(-only-testing:AnimeCompanionUITests/DockAndGalleryFixUITests)
+  test_arguments=(-only-testing:AnimeCompanionUITests/DockAndGalleryFixUITests
+    -only-testing:AnimeCompanionUITests/SpotlightPolishUITests
+    -only-testing:MangaRuntimeTests/SpotlightLogoBitmapTests)
 fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
 if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes || "$test_scope" == dock-gallery ]]; then
