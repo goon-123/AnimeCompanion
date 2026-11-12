@@ -222,15 +222,21 @@ struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
             hosts.append(host)
         }
         coordinator.environmentStamp = stamp
-        if coordinator.order != tabs {
+        let orderChanged = coordinator.order != tabs
+        if orderChanged {
             controller.setViewControllers(hosts, animated: false)
             coordinator.order = tabs
             coordinator.hosts = coordinator.hosts.filter { tabs.contains($0.key) }
             coordinator.activities = coordinator.activities.filter { tabs.contains($0.key) }
             coordinator.contentKeys = coordinator.contentKeys.filter { tabs.contains($0.key) }
         }
-        if let index = tabs.firstIndex(of: selection), controller.selectedIndex != index {
-            controller.selectedIndex = index
+        // Provider updates may arrive before UIKit's didSelect callback. Only
+        // apply a changed binding, never rewind a native selection in flight.
+        if orderChanged || coordinator.boundSelection != selection {
+            coordinator.boundSelection = selection
+            if let index = tabs.firstIndex(of: selection), controller.selectedIndex != index {
+                controller.selectedIndex = index
+            }
         }
         presentation.mount(controller, selection: selection, reduceMotion: reduceMotion)
         coordinator.scenePhase = context.environment.scenePhase
@@ -245,6 +251,7 @@ struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
         fileprivate var environmentStamp: CompanionTabEnvironment?
         var contentKeys: [AppTab: String] = [:]
         var order: [AppTab] = []
+        var boundSelection: AppTab?
         var scenePhase = ScenePhase.active
         var rootReassignments = 0
         var warmup: Task<Void, Never>?

@@ -11,6 +11,7 @@ final class TabResponsivenessUITests: XCTestCase {
         for tab in ["explore", "library", "home", "explore", "library", "explore"] {
             let button = app.buttons["dock-tab-" + tab]
             XCTAssertTrue(button.isHittable); button.tap()
+            XCTAssertTrue(button.isSelected, "Background content updates must not rewind selection")
             let value = try XCTUnwrap(app.tabBars["companion-dock"].value as? String)
             let metric = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(value.utf8)) as? [String: Double])
             measurements.append(metric)
