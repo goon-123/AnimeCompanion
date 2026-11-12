@@ -50,25 +50,24 @@ final class NativeVisualGalleryUITests: XCTestCase {
         app.revealInContent(details, upward: false); details.tap()
         XCTAssertTrue(app.scrollViews["anime-detail-scroll"].waitForExistence(timeout: 10))
     }
-    @MainActor func testDeniedGalleryFallsBackInsideTheAppAndCanRefresh() {
+    @MainActor func testDeniedLiveChartKeepsAniListArtworkAndCanRefresh() {
         let app = launch(denied: true)
         app.appTab("My Library").tap()
         let title = app.buttons["library-entry-1"]
         app.revealInContent(title); title.tap()
         let visuals = app.buttons["Open full artwork gallery"]
         app.revealInContent(visuals); visuals.tap()
-        waitForLabel("4 images", on: app.staticTexts["visuals-image-count"])
-        XCTAssertTrue(app.staticTexts["visuals-notice"].label.contains("MyAnimeList"))
+        waitForLabel("2 images", on: app.staticTexts["visuals-image-count"])
+        XCTAssertTrue(app.staticTexts["visuals-notice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["visuals-notice"].label.contains("LiveChart is temporarily limiting"))
         let refresh = app.buttons["visuals-refresh"]
         app.revealInContent(refresh); refresh.tap()
         XCTAssertTrue(refresh.waitForExistence(timeout: 10))
-        waitForLabel("4 images", on: app.staticTexts["visuals-image-count"])
-        let card = app.buttons["visual-card-myAnimeList-0"]
-        app.revealInContent(card); card.tap()
-        waitForLabel("1 of 4", on: app.staticTexts["expanded-image-position"])
+        waitForLabel("2 images", on: app.staticTexts["visuals-image-count"])
+        XCTAssertFalse(app.buttons["visual-card-myAnimeList-0"].exists)
+        XCTAssertTrue(app.buttons["visual-card-aniList-0"].exists)
         XCTAssertEqual(app.webViews.count, 0)
-        capture("MAL-Fallback", app)
-        app.buttons["Close enlarged image"].tap()
+        capture("LiveChart-Unavailable", app)
     }
     @MainActor private func launch(denied: Bool = false) -> XCUIApplication {
         continueAfterFailure = false; XCUIDevice.shared.orientation = .portrait

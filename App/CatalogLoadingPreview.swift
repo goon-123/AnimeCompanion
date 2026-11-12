@@ -9,7 +9,7 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
     @MainActor private static var visualCards: [String: Data] = [:]
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url,
-              url.host == "catalog-preview.invalid" || (url.host == "cdn.mangabaka.dev" && url.path.hasPrefix("/owned-preview/")) || (["u.livechart.me", "cdn.myanimelist.net"].contains(url.host ?? "") && url.path.hasPrefix("/owned-visuals/")) else { throw ArtworkError.invalidURL }
+              url.host == "catalog-preview.invalid" || (url.host == "cdn.mangabaka.dev" && url.path.hasPrefix("/owned-preview/")) || (["u.livechart.me", "cdn.myanimelist.net"].contains(url.host ?? "") && url.path.hasPrefix("/owned-visuals/")) || (SpotlightPolishPreview.active && url.host == "image.tmdb.org" && url.path.hasPrefix("/t/p/original/owned-spotlight-")) else { throw ArtworkError.invalidURL }
         try await Task.sleep(for: .milliseconds(350))
         let data = await Self.artwork(url)
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
@@ -17,6 +17,7 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
         return (data, response)
     }
     @MainActor private static func artwork(_ url: URL) -> Data {
+        if SpotlightPolishPreview.active, url.lastPathComponent.hasPrefix("owned-spotlight-") { return spotlight(url) }
         if url.path.hasPrefix("/owned-visuals/") { return visualCard(url) }
         let wide = url.path.contains("banner")
         if let cached = wide ? banner : poster { return cached }
@@ -40,6 +41,29 @@ struct CatalogArtworkPreviewTransport: HTTPTransport {
         }
         if wide { banner = data } else { poster = data }
         return data
+    }
+    @MainActor private static func spotlight(_ url: URL) -> Data {
+        let key = url.lastPathComponent
+        if let data = visualCards[key] { return data }
+        let logo = key.contains("logo")
+        let id = Int(url.deletingPathExtension().lastPathComponent.split(separator: "-").last ?? "1") ?? 1
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = !logo
+        let size = CGSize(width: 800, height: logo ? 310 : 1200)
+        let data = UIGraphicsImageRenderer(size: size, format: format).pngData { context in
+            if logo {
+                ("MOONLIT\nRELAY \(id)" as NSString).draw(in: CGRect(x: 160, y: 32, width: 480, height: 246), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 82, weight: .black), .foregroundColor: UIColor.white,
+                    .strokeColor: UIColor.systemIndigo, .strokeWidth: -3])
+            } else {
+                let color = [UIColor.systemIndigo, .systemTeal, .systemOrange, .systemPurple, .systemBlue][(id - 1) % 5]
+                color.setFill(); context.fill(CGRect(origin: .zero, size: size))
+                UIColor.white.withAlphaComponent(0.16).setFill()
+                context.cgContext.fillEllipse(in: CGRect(x: 120, y: 120, width: 560, height: 560))
+                UIColor.black.withAlphaComponent(0.12).setFill()
+                context.fill(CGRect(x: 0, y: 780, width: 800, height: 420))
+            }
+        }
+        visualCards[key] = data; return data
     }
     @MainActor private static func visualCard(_ url: URL) -> Data {
         let name = url.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "-large", with: "")

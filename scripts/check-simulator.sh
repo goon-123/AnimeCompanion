@@ -10,8 +10,8 @@ result_path="build/SimulatorTests.xcresult"
 screenshot_path="build/screenshots"
 test_class="AppSmokeTests"
 test_scope="${2:-full}"
-if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != schedule && "$test_scope" != presentation && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore && "$test_scope" != explore-fixes ]]; then
-  echo "Expected full, focused, weekly, schedule, presentation, fixes, streams, layout, reader, visuals, customization, news, explore or explore-fixes test scope"
+if [[ "$test_scope" != full && "$test_scope" != focused && "$test_scope" != weekly && "$test_scope" != schedule && "$test_scope" != presentation && "$test_scope" != fixes && "$test_scope" != streams && "$test_scope" != layout && "$test_scope" != reader && "$test_scope" != visuals && "$test_scope" != customization && "$test_scope" != news && "$test_scope" != explore && "$test_scope" != explore-fixes && "$test_scope" != dock-gallery ]]; then
+  echo "Expected full, focused, weekly, schedule, presentation, fixes, streams, layout, reader, visuals, customization, news, explore explore-fixes or dock-gallery test scope"
   exit 2
 fi
 if [[ "$device_family" == ipad ]]; then
@@ -80,6 +80,7 @@ simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
 family=sys.argv[1]
+scope=sys.argv[2]
 candidates=[(runtime,d) for runtime,items in devices.items() if "iOS-18" in runtime or "iOS-26" in runtime
         for d in items if d.get("isAvailable") and
         (d["name"].startswith("iPhone") if family == "iphone" else
@@ -88,11 +89,14 @@ if not candidates:
     raise SystemExit("No available " + family + " simulator (iPad must be an 11-inch Pro)")
 # The hosted iOS 26 runtime has repeatedly stalled before app launch. Exercise
 # the supported iOS 18 runtime when present; builds still use the iOS 26 SDK.
+if scope == "dock-gallery":
+    candidates=[item for item in candidates if "iOS-26" in item[0]]
+    if not candidates: raise SystemExit("The Liquid Glass dock check requires an iOS 26 simulator")
 candidates.sort(key=lambda item: (0 if "iOS-18" in item[0] else 1, item[0], item[1]["name"]))
 runtime,device=candidates[0]
 print("Testing " + device["name"] + " with " + runtime, file=sys.stderr)
 print(device["udid"])
-' "$device_family")"
+' "$device_family" "$test_scope")"
 
 # Bring the iOS 26 device to a ready state before XCTest starts its runner.
 # Bound this separately so a stalled simulator reports a clear startup failure.
@@ -108,6 +112,10 @@ try:
 except subprocess.TimeoutExpired:
     raise SystemExit('Simulator startup timed out; rerun on a fresh runner.')
 PY
+
+if [[ "$test_scope" == dock-gallery ]]; then
+  xcrun simctl ui "$simulator_id" appearance dark
+fi
 
 # iOS 18.5 can omit WebKit's Swift overlay from dyld's default search path
 # (WebKit bug 293831). Resolve the library from this exact simulator runtime,
@@ -234,8 +242,16 @@ if [[ "$test_scope" == explore-fixes ]]; then
   diagnostic_path="build/explore-fixes-${device_family}-diagnostics"
   test_arguments=(-only-testing:AnimeCompanionUITests/ExploreWidgetFixUITests)
 fi
+if [[ "$test_scope" == dock-gallery ]]; then
+  result_path="build/DockGallery-${device_family}.xcresult"
+  screenshot_path="build/dock-gallery-${device_family}-screenshots"
+  diagnostic_path="build/dock-gallery-${device_family}-diagnostics"
+  test_arguments=(-only-testing:AnimeCompanionUITests/DockAndGalleryFixUITests
+    -only-testing:AnimeCompanionUITests/SpotlightPolishUITests
+    -only-testing:MangaRuntimeTests/SpotlightLogoBitmapTests)
+fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
-if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes ]]; then
+if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes || "$test_scope" == dock-gallery ]]; then
   test_retry_arguments=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240)
 fi
 run_tests() {
@@ -246,7 +262,7 @@ xcodebuild test -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
   "${test_retry_arguments[@]}" \
   -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 }
-if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes ]]; then
+if [[ "$test_scope" == fixes || "$test_scope" == streams || "$test_scope" == layout || "$test_scope" == reader || "$test_scope" == visuals || "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes || "$test_scope" == dock-gallery ]]; then
   # XCTest can otherwise spend the whole job waiting for a process that aborted
   # before its first screen. Keep the actual crash, rather than masking a timeout.
   run_tests &

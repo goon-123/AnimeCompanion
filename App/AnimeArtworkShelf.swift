@@ -11,7 +11,7 @@ struct AnimeArtworkShelf: View {
     @State private var loading = false
     @State private var preview: AnimeImagePreview?
     private var width: CGFloat { sizeClass == .regular ? 200 : 168 }
-    private var images: [AnimeVisual] { gallery?.images ?? AnimeVisualGallery.aniListImages(anime) }
+    private var images: [AnimeVisual] { gallery?.images ?? [] }
     private var previews: [AnimeImagePreview] { images.map { $0.preview } }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -33,12 +33,17 @@ struct AnimeArtworkShelf: View {
                 // A horizontal lazy shelf inside the vertical detail scroll must
                 // have a stable height before any asynchronous bitmap arrives.
                 .frame(height: width * 1.45 + footerHeight)
+            } else if loading {
+                Theme.secondarySurface.frame(height: width * 1.45 + footerHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .accessibilityHidden(true)
             }
             if let notice = gallery?.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-            if images.isEmpty && !loading { Text("No artwork is listed yet.").font(.caption).foregroundStyle(.secondary) }
+            if images.isEmpty && !loading && gallery?.notice == nil { Text("No artwork is listed yet.").font(.caption).foregroundStyle(.secondary) }
         }.accessibilityIdentifier("series-anime-artwork")
             .task(id: "\(anime.id)-\(refreshID)") {
                 loading = true
+                if gallery == nil { gallery = await store.visuals.cachedGallery(for: anime) }
                 let value = await store.visuals.gallery(for: anime, refresh: refreshID > 0)
                 guard !Task.isCancelled else { return }
                 gallery = value; loading = false

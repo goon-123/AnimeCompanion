@@ -17,6 +17,75 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  dock-gallery-scope:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: Detect dock and gallery changes
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.scope.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            App/CompanionDock.swift App/LiveChartPageTransport.swift App/VisualGalleryPreview.swift \
+            Sources/AnimeCore/AnimeVisual.swift Sources/AnimeCore/AnimeVisualsClient.swift \
+            App/FeaturedAnimeCarousel.swift App/SpotlightLogoBitmap.swift Sources/AnimeCore/SpotlightArtwork.swift \
+            Sources/AnimeCore/SeriesArtworkClient.swift Sources/AnimeCore/SpotlightLoop.swift \
+            Tests/AnimeCompanionUITests/DockAndGalleryFixUITests.swift Tests/AnimeCompanionUITests/SpotlightPolishUITests.swift; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+  dock-gallery-fixes:
+    if: ${{ github.event_name == 'pull_request' && needs['dock-gallery-scope'].outputs.changed == 'true' }}
+    needs: [manga-runtime, dock-gallery-scope]
+    name: Focused iPhone dock, gallery and Spotlight rendering
+    # Native ARM simulation avoids the repeated iOS 26 Intel startup stalls.
+    # The downloaded simulator framework already contains its arm64 slice.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build bundled on-device JavaScript resources
+        run: npm --prefix Tools/SeanimeRuntime ci --ignore-scripts --no-audit --no-fund && npm --prefix Tools/SeanimeRuntime run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-runtime
+          path: build/MangaRuntime.xcframework
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-licenses
+          path: App
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-manga-fixtures
+          path: Tests/MangaRuntimeTests/Fixtures
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Check dock labels, current gallery and looping Spotlight
+        run: bash scripts/check-simulator.sh iphone dock-gallery
+      - name: Upload focused native screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-dock-gallery-iphone
+          path: |
+            build/dock-gallery-iphone-screenshots
+            build/dock-gallery-iphone-diagnostics
+            build/DockGallery-iphone.xcresult
+          if-no-files-found: ignore
+          retention-days: 30
   mangabaka-contracts:
     name: MangaBaka public discovery contracts
     runs-on: ubuntu-24.04

@@ -135,7 +135,7 @@ struct ExploreRows<Content: View>: View {
         Binding(get: { preferences.widgetOptions.saved }, set: { json in update { $0.widgetOptions = HomePreferences(saved: json) } })
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        LazyVStack(alignment: .leading, spacing: 26) {
             ForEach(preferences.visible) { row in
                 rowContent(row).contextMenu {
                     if case .catalog(let catalog) = row, catalog.supportsCardSize {

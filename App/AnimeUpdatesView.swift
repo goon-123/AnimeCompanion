@@ -56,7 +56,7 @@ struct AnimeVisualsView: View {
             }
     }
     private var previews: [AnimeImagePreview] {
-        (gallery?.images ?? anime.map(AnimeVisualGallery.aniListImages) ?? []).map {
+        (gallery?.images ?? []).map {
             AnimeImagePreview(url: $0.imageURL, title: $0.title, credit: $0.copyright, source: $0.source.label)
         }
     }
@@ -81,7 +81,7 @@ struct AnimeVisualsView: View {
                 Label(notice, systemImage: gallery?.isStale == true ? "clock.arrow.circlepath" : "info.circle")
                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("visuals-notice")
             }
-            let images = gallery?.images ?? AnimeVisualGallery.aniListImages(anime)
+            let images = gallery?.images ?? []
             HStack {
                 Text("\(images.count) images").font(.headline).accessibilityIdentifier("visuals-image-count")
                 Spacer()
@@ -90,7 +90,7 @@ struct AnimeVisualsView: View {
                         .accessibilityLabel("Refresh artwork").accessibilityIdentifier("visuals-refresh")
                 }
             }
-            if images.isEmpty && !loadingGallery { ContentUnavailableView("No artwork available", systemImage: "photo") }
+            if images.isEmpty && !loadingGallery && gallery?.notice == nil { ContentUnavailableView("No artwork available", systemImage: "photo") }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 300), spacing: 16)], alignment: .leading, spacing: 18) {
                 ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
                     artwork(image, index: index)
@@ -112,6 +112,7 @@ struct AnimeVisualsView: View {
         let includeAdult = store.includeAdult
         loadingGallery = true
         defer { loadingGallery = false }
+        if gallery == nil { gallery = await store.visuals.cachedGallery(for: anime) }
         let value = await store.visuals.gallery(for: anime, refresh: refresh)
         guard !Task.isCancelled, store.includeAdult == includeAdult, store.isVisible(details ?? anime) else { return }
         gallery = value

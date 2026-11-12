@@ -142,6 +142,6 @@ public enum ArtworkSizing {
     public static func pixelLimit(points: Double, scale: Double) -> Int {
         guard points.isFinite, scale.isFinite, points > 0, scale > 0 else { return 128 }
         let pixels = min(3200, points * min(scale, 4))
-        return [128, 256, 512, 1024, 1600, 2400, 3200].first { Double($0) >= pixels } ?? 3200
+        return [128, 256, 512, 768, 1024, 1600, 2400, 3200].first { Double($0) >= pixels } ?? 3200
     }
 }

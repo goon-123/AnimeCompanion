@@ -441,8 +441,9 @@ struct AppTabs: View {
                         CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
                                           selection: $navigation.selectedTab, reduceMotion: reduceMotion,
                                           colorScheme: colorScheme, dynamicTypeSize: textSize)
-                            .frame(maxWidth: 600).frame(height: textSize.isAccessibilitySize ? 80 : 62)
-                            .padding(.horizontal, 14).padding(.bottom, 6)
+                            .frame(maxWidth: CGFloat(navigation.tabPreferences.visible.count) * (textSize.isAccessibilitySize ? 112 : 88) + 10)
+                            .frame(height: textSize.isAccessibilitySize ? 80 : 62)
+                            .padding(.horizontal, 14).offset(y: textSize.isAccessibilitySize ? 0 : 8)
                     }
                     .environment(\.companionDockPresentation, dock)
             } else { preservedPanes }
@@ -462,9 +463,12 @@ struct AppTabs: View {
                         .allowsHitTesting(tab == navigation.selectedTab)
                         .accessibilityHidden(tab != navigation.selectedTab)
                         .zIndex(tab == navigation.selectedTab ? 1 : 0)
+                        .transition(.opacity)
                 }
             }
-        }.onAppear { visitedTabs.insert(navigation.selectedTab) }
+        }
+        .animation(AppMotion.page(reduceMotion), value: navigation.selectedTab)
+        .onAppear { visitedTabs.insert(navigation.selectedTab) }
     }
     private var nativeTabs: some View {
         TabView(selection: $navigation.selectedTab) {
