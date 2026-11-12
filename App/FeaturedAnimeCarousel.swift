@@ -55,6 +55,7 @@ struct FeaturedAnimeCarousel: View {
                                     background: PosterAccent(hex: item.coverImage?.color)?.backdrop ?? background,
                                     hero: snapshot?.hero, heroURL: snapshot?.heroURL,
                                     logo: snapshot?.logo, titlePresentation: titles.title(for: item.id))
+                                    .id("spotlight-title-\(item.id)")
                                     .frame(width: viewport.size.width, height: height).id(slot)
                                     .accessibilityHidden(slot != (selectedSlot ?? 0))
                                     .onGeometryChange(for: Bool.self) { page in
