@@ -106,6 +106,7 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - path: Tests/SpotlightRuntimeTests
       - path: Tests/MangaRuntimeTests
         excludes: [Fixtures, OwnedFixtures]
       - path: Tests/MangaRuntimeTests/Fixtures
