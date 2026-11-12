@@ -134,7 +134,9 @@ struct FeaturedAnimeCarousel: View {
         // A cold result appears as one decoded background/logo snapshot, in a
         // short fade with a fixed title slot. Never mutate it during a swipe.
         withAnimation(.easeOut(duration: reduceMotion ? 0.10 : 0.18)) {
-            presented = prepared; titles.presentPrepared()
+            presented = prepared
+            for (id, value) in prepared { titles.checkedCache(for: id, hasLogo: value.logo != nil) }
+            titles.presentPrepared()
         }
     }
     private func preparationKey(width: CGFloat) -> String {
@@ -166,7 +168,7 @@ struct FeaturedAnimeCarousel: View {
             let value = PreparedSpotlightArtwork(artwork: art, logo: cachedLogo, hero: cachedHero, heroURL: cachedHero == nil ? nil : url).retaining(prepared[item.id])
             prepared[item.id] = value
             if !paging { presented[item.id] = value }
-            titles.checkedCache(for: item.id, hasLogo: value.logo != nil)
+            if !paging { titles.checkedCache(for: item.id, hasLogo: value.logo != nil) }
         }
         // Warm the current title and both neighbors, including the wrap in
         // either direction, before the remaining offscreen entries.
