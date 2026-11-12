@@ -26,6 +26,7 @@ struct FeaturedAnimeCarousel: View {
     @State private var paging = false
     @State private var selectedSlot: Int? = 0
     @State private var selectedAnimeID: Int?
+    @State private var anchoredLineup: [Int] = []
     @State private var visibleSlots = Set<Int>()
     @State private var titles = SpotlightTitlePresentation()
     @State private var prepared: [Int: PreparedSpotlightArtwork] = [:]
@@ -42,7 +43,8 @@ struct FeaturedAnimeCarousel: View {
     var body: some View {
         GeometryReader { viewport in
             VStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollViewReader { proxy in
+                  ScrollView(.horizontal, showsIndicators: false) {
                     // At most seven lightweight panels share five decoded asset
                     // snapshots. Both boundary copies have their bitmap on the
                     // very first frame; recycling must not flash a placeholder.
@@ -55,7 +57,6 @@ struct FeaturedAnimeCarousel: View {
                                     background: PosterAccent(hex: item.coverImage?.color)?.backdrop ?? background,
                                     hero: snapshot?.hero, heroURL: snapshot?.heroURL,
                                     logo: snapshot?.logo, titlePresentation: titles.title(for: item.id))
-                                    .id("spotlight-title-\(item.id)")
                                     .frame(width: viewport.size.width, height: height).id(slot)
                                     .accessibilityHidden(slot != (selectedSlot ?? 0))
                                     .onGeometryChange(for: Bool.self) { page in
@@ -73,7 +74,7 @@ struct FeaturedAnimeCarousel: View {
                                         if #unavailable(iOS 18.0), aligned, loop.rebase(slot) != nil {
                                             Task { @MainActor in
                                                 await Task.yield()
-                                                if selectedSlot == slot { settlePage() }
+                                                if selectedSlot == slot { settlePage(using: proxy) }
                                             }
                                         }
                                     }
@@ -83,6 +84,21 @@ struct FeaturedAnimeCarousel: View {
                 }.scrollTargetBehavior(.paging).scrollPosition(id: $selectedSlot, anchor: .center)
                     .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     .modifier(SpotlightScrollActivity(paging: $paging))
+                    .onChange(of: paging) { _, moving in if !moving { settlePage(using: proxy) } }
+                    .task(id: "\(items.map(\.id))-\(viewport.size.width)") {
+                        await Task.yield()
+                        guard !Task.isCancelled, !items.isEmpty, viewport.size.width > 0 else { return }
+                        // A boundary copy precedes real page zero. Resolve its
+                        // anchor after layout, rather than assuming the initial
+                        // scroll-position binding moves an already-built pager.
+                        let target = anchoredLineup.isEmpty ? 0 : (selectedAnimeID.flatMap { id in items.firstIndex { $0.id == id } } ?? 0)
+                        var instant = Transaction(); instant.disablesAnimations = true
+                        withTransaction(instant) {
+                            selectedSlot = target; proxy.scrollTo(target, anchor: .center)
+                            selectedAnimeID = items[target].id; anchoredLineup = items.map(\.id)
+                        }
+                    }
+                }
                 HStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         Button { withAnimation(AppMotion.page(reduceMotion)) { selectedSlot = index } } label: {
@@ -105,7 +121,6 @@ struct FeaturedAnimeCarousel: View {
                 var instant = Transaction(); instant.disablesAnimations = true
                 withTransaction(instant) { selectedSlot = previousID.flatMap { values.firstIndex(of: $0) } ?? 0 }
             }
-            .onChange(of: paging) { _, moving in if !moving { settlePage() } }
             .onChange(of: selectedSlot) { _, _ in
                 selectedAnimeID = active?.id
                 if #unavailable(iOS 18.0) { commitOffscreen() }
@@ -116,10 +131,10 @@ struct FeaturedAnimeCarousel: View {
                 titles.leaveViewport(); presented = prepared
             }
     }
-    @MainActor private func settlePage() {
+    @MainActor private func settlePage(using proxy: ScrollViewProxy) {
         if let real = loop.rebase(selectedSlot) {
             var instant = Transaction(); instant.disablesAnimations = true
-            withTransaction(instant) { selectedSlot = real }
+            withTransaction(instant) { selectedSlot = real; proxy.scrollTo(real, anchor: .center) }
             Task { @MainActor in
                 await Task.yield()
                 commitReady()
@@ -234,9 +249,9 @@ private struct FeaturedAnimePanel: View {
     let heroURL: URL?
     let logo: ArtworkBitmap?
     let titlePresentation: SpotlightTitlePresentation.Title
-    @State private var showTracking = false
+    @State private var trackingAnime: Anime?
     @State private var showSettings = false
-    @State private var showPlayback = false
+    @State private var playbackAnime: Anime?
 
     var body: some View {
         GeometryReader { geometry in
@@ -254,9 +269,9 @@ private struct FeaturedAnimePanel: View {
                     .padding(.horizontal, geometry.size.width >= 700 ? 32 : 20).padding(.bottom, 18)
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.foregroundStyle(.white)
-            .sheet(isPresented: $showTracking) { TrackingEditorView(anime: anime, entry: store.entry(for: anime.id)) }
+            .sheet(item: $trackingAnime) { target in TrackingEditorView(anime: target, entry: store.entry(for: target.id)) }
             .appSettingsSheet(isPresented: $showSettings)
-            .sheet(isPresented: $showPlayback) { WatchAnimeView(anime: anime) }
+            .sheet(item: $playbackAnime) { target in WatchAnimeView(anime: target) }
     }
     private func artwork(width: CGFloat, height: CGFloat, wide: Bool) -> some View {
         return AnimeLink(id: anime.id) {
@@ -310,7 +325,7 @@ private struct FeaturedAnimePanel: View {
             .accessibilityIdentifier("featured-title-\(anime.id)")
     }
     private var watchAction: some View {
-        Button { showPlayback = true } label: {
+        Button { playbackAnime = anime } label: {
             Label("Watch", systemImage: "play.fill").font(.headline)
                 .padding(.horizontal, 24).frame(minHeight: 48)
                 .background(.white, in: Capsule()).foregroundStyle(.black)
@@ -323,7 +338,7 @@ private struct FeaturedAnimePanel: View {
     }
     private var libraryAction: some View {
         Button {
-            if store.isSignedIn { showTracking = true } else { showSettings = true }
+            if store.isSignedIn { trackingAnime = anime } else { showSettings = true }
         } label: {
             Image(systemName: store.entry(for: anime.id) == nil ? "plus" : "checkmark")
                 .font(.headline).frame(width: 48, height: 48).silverGlass(in: Circle())

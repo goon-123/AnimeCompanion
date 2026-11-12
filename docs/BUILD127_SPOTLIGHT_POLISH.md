@@ -53,6 +53,10 @@ matching real page without animation; iOS 17 uses exact page alignment. Logical
 selection and page dots stay the same. Zero/one-title cases do not create boundary
 copies. All copies share the same decoded asset snapshots, so recentering does not
 start a new image task, reveal a placeholder, or reset the data source.
+The initial anchor is explicitly resolved after layout so the leading boundary
+copy cannot be displayed while controls still refer to real page zero. Idle
+rebasing uses the same native scroll proxy. Tracking/playback sheets retain the
+anime tapped, independently of a subsequent catalog-lineup refresh.
 
 Remove the previous per-panel opacity effect. Background, logo and controls move
 together in the native pager; no added zoom, parallax or spring is introduced.

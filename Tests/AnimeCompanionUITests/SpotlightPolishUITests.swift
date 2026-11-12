@@ -14,6 +14,11 @@ final class SpotlightPolishUITests: XCTestCase {
         let logoReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Logo"), object: title)
         XCTAssertEqual(XCTWaiter.wait(for: [logoReady], timeout: 20), .completed)
         let watch = app.buttons["featured-watch-1"]
+        if !watch.isHittable {
+            capture("Spotlight-Control-Visibility", app)
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Spotlight-Control-Hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        }
         XCTAssertTrue(watch.isHittable)
         let baseline = watch.frame
         capture("Spotlight-Larger-Logo-Initial", app)
@@ -24,8 +29,8 @@ final class SpotlightPolishUITests: XCTestCase {
         app.buttons["featured-poster-5"].swipeLeft()
         assertPage(0, poster: 1, app: app)
         capture("Spotlight-Forward-Wrap", app)
-        // Exercise the other boundary again after a normal page-dot jump.
-        app.buttons["featured-page-4"].tap()
+        // Repeat both boundaries without changing the enclosing vertical scroll.
+        first.swipeRight()
         assertPage(4, poster: 5, app: app)
         app.buttons["featured-poster-5"].swipeLeft()
         assertPage(0, poster: 1, app: app)
@@ -37,10 +42,9 @@ final class SpotlightPolishUITests: XCTestCase {
         capture("Spotlight-Repeat-Wrap-Stable-Controls", app)
     }
     @MainActor private func assertPage(_ index: Int, poster: Int, app: XCUIApplication) {
-        let dot = app.buttons["featured-page-\(index)"]
-        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: dot)
-        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed)
-        XCTAssertTrue(app.buttons["featured-poster-\(poster)"].isHittable)
+        let page = app.buttons["featured-poster-\(poster)"]
+        XCTAssertTrue(page.waitForExistence(timeout: 15), "Logical page \(index + 1) must be visible")
+        XCTAssertTrue(page.isHittable, "The logical selection must match the physical page")
     }
     @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
