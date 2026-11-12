@@ -7,8 +7,11 @@ private struct PreparedSpotlightArtwork: Sendable {
     let hero: ArtworkBitmap?
     let heroURL: URL?
     func retaining(_ old: Self?) -> Self {
-        Self(artwork: artwork.fillingMissing(with: old?.artwork ?? SeriesArtwork()),
-             logo: logo ?? old?.logo, hero: hero ?? old?.hero, heroURL: hero == nil ? old?.heroURL : heroURL)
+        // A failed candidate keeps the previous bitmap. No candidate (for
+        // example after disabling fallback artwork) clears it as before.
+        let previousHero = heroURL == nil ? nil : old?.hero
+        return Self(artwork: artwork.fillingMissing(with: old?.artwork ?? SeriesArtwork()),
+             logo: logo ?? old?.logo, hero: hero ?? previousHero, heroURL: hero == nil ? (previousHero == nil ? nil : old?.heroURL) : heroURL)
     }
 }
 
@@ -165,7 +168,7 @@ struct FeaturedAnimeCarousel: View {
                 cachedLogo = await SpotlightLogoBitmap.shared.trim(bitmap)
             } else { cachedLogo = nil }
             guard !Task.isCancelled, ids.contains(item.id) else { return }
-            let value = PreparedSpotlightArtwork(artwork: art, logo: cachedLogo, hero: cachedHero, heroURL: cachedHero == nil ? nil : url).retaining(prepared[item.id])
+            let value = PreparedSpotlightArtwork(artwork: art, logo: cachedLogo, hero: cachedHero, heroURL: url).retaining(prepared[item.id])
             prepared[item.id] = value
             if !paging { presented[item.id] = value }
             if !paging { titles.checkedCache(for: item.id, hasLogo: value.logo != nil) }
@@ -210,7 +213,7 @@ private func prepareSpotlight(_ anime: Anime, api: SeriesArtworkClient, preferen
     let trimmed: ArtworkBitmap?
     if let title { trimmed = await SpotlightLogoBitmap.shared.trim(title) } else { trimmed = nil }
     return (anime.id, PreparedSpotlightArtwork(artwork: art, logo: trimmed,
-        hero: background, heroURL: background == nil ? nil : url))
+        hero: background, heroURL: url))
 }
 private func spotlightBitmap(_ url: URL?, pixels: Int) async -> ArtworkBitmap? {
     guard let url else { return nil }
