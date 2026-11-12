@@ -21,7 +21,10 @@ final class DockAndGalleryFixUITests: XCTestCase {
     }
     @MainActor func testCurrentLiveChartMarkupAppearsInNativeGalleryWithClearSelectedDock() {
         let app = launch()
-        app.appTab("News").tap()
+        // HomeWidgetFrame supplies the widget identifier to its descendants.
+        // Use the actual native shortcut label rather than an overridden ID.
+        let news = app.buttons.matching(NSPredicate(format: "label == %@", "News, Your briefing")).firstMatch
+        XCTAssertTrue(news.waitForExistence(timeout: 20)); news.tap()
         let visuals = app.buttons["news-open-visuals"]
         XCTAssertTrue(visuals.waitForExistence(timeout: 20)); visuals.tap()
         let title = app.buttons["anime-visual-1"]
@@ -40,7 +43,7 @@ final class DockAndGalleryFixUITests: XCTestCase {
     @MainActor private func launch() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-phase2-preview", "--ui-catalog-loading-preview", "--ui-visuals-preview", "--ui-redesign-preview", "--ui-reset-content-preferences"]
+        app.launchArguments = ["--ui-phase2-preview", "--ui-catalog-loading-preview", "--ui-visuals-preview", "--ui-redesign-preview", "--ui-redesign-dark", "--ui-reset-content-preferences"]
         app.launch()
         XCTAssertTrue(app.buttons["dock-tab-home"].waitForExistence(timeout: 25))
         return app
