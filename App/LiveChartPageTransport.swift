@@ -147,7 +147,7 @@ private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
         }
         return document.documentElement.outerHTML;
         """#
-        webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .page) { [weak self] result in
+        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self else { return }
             let html: String?
             switch result {
