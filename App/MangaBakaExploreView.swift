@@ -51,10 +51,13 @@ struct MediaSectionPicker: View {
 
 struct MediaExploreView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var preferences: AppStore
+    @EnvironmentObject private var reading: MangaBakaStore
     @EnvironmentObject private var navigation: AppNavigationStore
+    @State private var visitedCatalogs = Set<String>()
     @AppStorage("app.mediaSection") private var mode = "anime"
     @AppStorage(ExploreDesign.storageKey) private var designValue = ExploreDesign.classic.rawValue
-    @AppStorage(ExploreSurface.anime.storageKey) private var animeRows = ""
     @State private var designs = false
     @State private var customizing = false
     @State private var accounts = false
@@ -63,21 +66,38 @@ struct MediaExploreView: View {
     @State private var filters = false
     @State private var display = false
     private var design: ExploreDesign { ExploreDesign(preference: designValue) }
-    private var overlaysArtwork: Bool {
-        design == .classic && mode == "anime" && ExplorePreferences(surface: .anime, saved: animeRows).visible.first == .catalog(.spotlight)
-    }
     var body: some View {
         VStack(spacing: 0) {
             Group {
-            if design != .classic { UnifiedExploreView(design: design, designs: $designs) }
-            else if mode == "written" { MangaBakaExploreView() }
-            else { ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters) }
-            }.modifier(ContentArrival()).id(design == .classic ? mode : design.rawValue)
+                if design != .classic { UnifiedExploreView(design: design, designs: $designs).id(design.rawValue) }
+                else {
+                    ZStack {
+                        if mode == "anime" || visitedCatalogs.contains("anime") {
+                            ExploreView(showSeasons: $seasons, showDisplay: $display, showDubFilters: $filters)
+                                .opacity(mode == "anime" ? 1 : 0).allowsHitTesting(mode == "anime")
+                                .accessibilityHidden(mode != "anime")
+                                .environment(\.scenePhase, mode == "anime" ? scenePhase : .inactive)
+                        }
+                        if mode == "written" || visitedCatalogs.contains("written") {
+                            MangaBakaExploreView()
+                                .opacity(mode == "written" ? 1 : 0).allowsHitTesting(mode == "written")
+                                .accessibilityHidden(mode != "written")
+                                .environment(\.scenePhase, mode == "written" ? scenePhase : .inactive)
+                        }
+                    }.onAppear { visitedCatalogs.insert(mode) }
+                        .onChange(of: mode) { _, value in visitedCatalogs.insert(value) }
+                }
+            }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.background.ignoresSafeArea())
             .safeAreaInset(edge: .top, spacing: 0) {
             if design == .classic { classicHeader }
         }.mangaBakaNavigation()
+            .task(id: "\(design.rawValue)-\(preferences.mangaBakaContent.saved)", priority: .utility) {
+                guard design == .classic else { return }
+                do { try await Task.sleep(for: .milliseconds(700)) } catch { return }
+                await preferences.readingExplore.load(api: reading.api, contentFilter: preferences.mangaBakaContent)
+            }
             .appAccountSwitcherSheet(isPresented: $accounts)
             .appSettingsSheet(isPresented: $settings)
             .navigationDestination(for: ExploreSearchRoute.self) { _ in
@@ -94,11 +114,11 @@ struct MediaExploreView: View {
     }
     private var classicHeader: some View {
         HStack(spacing: 10) {
-            AccountSwitcherButton()
+            AccountSwitcherButton().floatingHeaderGlass(in: Circle())
             Spacer()
             Button(action: switchMedia) {
                 Image(systemName: mode == "anime" ? "book.closed" : "play.rectangle")
-                    .font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+                    .font(.headline).frame(width: 44, height: 44).floatingHeaderGlass(in: Circle())
             }.buttonStyle(.plain)
                 .accessibilityLabel(mode == "anime" ? "Switch to Manga & Novels" : "Switch to Anime")
                 .accessibilityValue(mode == "anime" ? "Anime" : "Manga & Novels")
@@ -109,10 +129,10 @@ struct MediaExploreView: View {
                 Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
                 Button("Settings", systemImage: "gearshape") { settings = true }
             } label: {
-                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).silverGlass(in: Circle())
+                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44).floatingHeaderGlass(in: Circle())
             }.accessibilityLabel("Explore options").accessibilityIdentifier("explore-customize")
         }.padding(.horizontal, 16).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background(Theme.background.opacity(overlaysArtwork ? 0 : 1))
+            .background(Color.clear)
     }
     private func switchMedia() {
         var transaction = Transaction(animation: nil); transaction.disablesAnimations = true
@@ -131,19 +151,19 @@ struct MediaLibraryView: View {
     @EnvironmentObject private var navigation: AppNavigationStore
     @AppStorage("library.mediaSection") private var mode = "all"
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
+            if mode == "written" { MangaBakaLibraryView() }
+            else if mode == "anime" { LibraryView() }
+            else { CombinedLibraryView() }
+        }.safeAreaInset(edge: .top, spacing: 0) {
             Picker("Library media", selection: $mode) {
                 Text("All").tag("all")
                 Text("Anime").tag("anime")
                 Text("Manga & Novels").tag("written")
             }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
                 .accessibilityIdentifier("library-media-picker")
-            Group {
-                if mode == "written" { MangaBakaLibraryView() }
-                else if mode == "anime" { LibraryView() }
-                else { CombinedLibraryView() }
-            }.modifier(ContentArrival()).id(mode)
         }.background(Theme.background).mangaBakaNavigation()
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar { ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() } }
             .onChange(of: mode) { _, value in
                 if let account = TrackingAccount.allCases.first(where: { $0.librarySection == value }) {
@@ -247,18 +267,32 @@ struct MangaBakaShelfView: View {
 }
 
 @MainActor
-private final class MangaBakaHomeModel: ObservableObject {
+final class MangaBakaHomeModel: ObservableObject {
     static let shelves: [MangaBakaShelf] = [.trending, .rising, .hiddenGems, .popular, .topRated, .newReleases, .recentlyAdded]
-    @Published var items: [MangaBakaShelf: [MangaBakaSeries]] = [:]
-    @Published var errors: [MangaBakaShelf: String] = [:]
-    @Published var loading = Set<MangaBakaShelf>()
+    struct State {
+        var items: [MangaBakaShelf: [MangaBakaSeries]] = [:]
+        var errors: [MangaBakaShelf: String] = [:]
+        var loading = Set<MangaBakaShelf>()
+    }
+    @Published private(set) var state = State()
+    var items: [MangaBakaShelf: [MangaBakaSeries]] { state.items }
+    var errors: [MangaBakaShelf: String] { state.errors }
+    var loading: Set<MangaBakaShelf> { state.loading }
     private var generation = UUID()
     private var contentFilter: MangaBakaContentFilter?
-    func load(api: MangaBakaClient, contentFilter: MangaBakaContentFilter, refresh: Bool = false) async {
+    private var loadedAt: Date?
+    func load(api: MangaBakaClient, contentFilter: MangaBakaContentFilter, refresh: Bool = false, now: Date = Date()) async {
+        guard !Task.isCancelled else { return }
+        let sameFilter = self.contentFilter == contentFilter
+        if sameFilter, !refresh {
+            if !loading.isEmpty { return }
+            if let loadedAt, now.timeIntervalSince(loadedAt) < 300 { return }
+        }
         let attempt = UUID(); generation = attempt
-        if self.contentFilter != contentFilter { items = [:]; errors = [:] }; self.contentFilter = contentFilter
-        loading = Set(Self.shelves)
-        // Each rail can appear as soon as its own request completes.
+        if !sameFilter { state = State(); loadedAt = nil }
+        self.contentFilter = contentFilter
+        var initial = state; initial.loading = Set(Self.shelves); initial.errors = [:]; state = initial
+        defer { if generation == attempt, !state.loading.isEmpty { var final = state; final.loading = []; state = final } }
         await withTaskGroup(of: (MangaBakaShelf, [MangaBakaSeries]?, String?).self) { group in
             for shelf in Self.shelves {
                 group.addTask {
@@ -270,20 +304,35 @@ private final class MangaBakaHomeModel: ObservableObject {
             }
             for await (shelf, records, error) in group {
                 guard generation == attempt, !Task.isCancelled else { continue }
-                if let records { items[shelf] = records }
-                errors[shelf] = error; loading.remove(shelf)
+                // One publication per completed rail, not three whole-page updates.
+                var next = state
+                if let records { next.items[shelf] = records }
+                next.errors[shelf] = error; next.loading.remove(shelf); state = next
             }
         }
+        guard generation == attempt, !Task.isCancelled, errors.isEmpty, Self.shelves.allSatisfy({ items[$0] != nil }) else { return }
+        loadedAt = now
+        // MangaBakaClient already persists public response bytes off-main.
+        // This session keeps the decoded, filtered rows for instant revisits.
     }
 }
 
+/// The session owns the typed catalog snapshot; revisiting the page reuses it.
 struct MangaBakaExploreView: View {
+    var showsNavigationBar = false
+    @EnvironmentObject private var preferences: AppStore
+    var body: some View { MangaBakaExploreContent(showsNavigationBar: showsNavigationBar, model: preferences.readingExplore) }
+}
+private struct MangaBakaExploreContent: View {
     var showsNavigationBar = false
     @EnvironmentObject private var account: MangaBakaStore
     @EnvironmentObject private var preferences: AppStore
     @State private var widgetRefreshID = 0
     @State private var customizing = false
-    @StateObject private var model = MangaBakaHomeModel()
+    @ObservedObject var model: MangaBakaHomeModel
+    init(showsNavigationBar: Bool, model: MangaBakaHomeModel) {
+        self.showsNavigationBar = showsNavigationBar; self.model = model
+    }
     @Environment(\.scenePhase) private var scenePhase
     private var allSeries: [MangaBakaSeries] {
         MangaBakaHomeModel.shelves.flatMap { model.items[$0] ?? [] }.filter { $0.isVisible(contentFilter: preferences.mangaBakaContent) }
@@ -327,9 +376,12 @@ struct MangaBakaExploreView: View {
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
         switch row {
         case .spotlight:
-            if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
-                NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain).padding(.horizontal, 20)
-            }
+            VStack(spacing: 0) {
+                if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {
+                    NavigationLink(value: MangaBakaSeriesRoute(series: featured)) { hero(featured) }.buttonStyle(.plain)
+                } else { hero(nil).accessibilityLabel(model.loading.isEmpty ? "No spotlight titles available" : "Loading manga spotlight") }
+            }.padding(.horizontal, 20).accessibilityElement(children: .contain).accessibilityIdentifier("reading-spotlight")
+                .accessibilityValue((model.items[.trending] ?? []).isEmpty ? "Loading" : "Ready")
         case .personal: if account.connected { MangaBakaPersonalShelf() }
         case .formats: formats
         case .genres: genres
@@ -378,15 +430,20 @@ struct MangaBakaExploreView: View {
             }
         }
     }
-    private func hero(_ series: MangaBakaSeries) -> some View {
+    private func hero(_ series: MangaBakaSeries?) -> some View {
         HStack(alignment: .center, spacing: 18) {
             VStack(alignment: .leading, spacing: 12) {
                 Label("IN THE SPOTLIGHT", systemImage: "sparkles").font(.caption2.bold()).foregroundStyle(.mint)
-                Text(series.displayTitle).font(.title2.bold()).lineLimit(3)
-                Text(series.synopsis).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                Text(series?.displayTitle ?? "Loading spotlight").font(.title2.bold()).lineLimit(3, reservesSpace: true)
+                    .redacted(reason: series == nil ? .placeholder : [])
+                Text(series?.synopsis ?? "Finding a story for you.").font(.subheadline).foregroundStyle(.secondary).lineLimit(3, reservesSpace: true)
+                    .redacted(reason: series == nil ? .placeholder : [])
                 Label("Explore series", systemImage: "arrow.up.right").font(.subheadline.bold())
             }.frame(maxWidth: .infinity, alignment: .leading)
-            MangaBakaCover(series: series, width: 112).rotationEffect(.degrees(5)).shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+            Group {
+                if let series { MangaBakaCover(series: series, width: 112) }
+                else { RoundedRectangle(cornerRadius: 14).fill(Theme.surface).frame(width: 112, height: 112 * 1.45) }
+            }.rotationEffect(.degrees(5)).shadow(color: .black.opacity(0.3), radius: 14, y: 8)
         }.padding(22).background(LinearGradient(colors: [.teal.opacity(0.18), Theme.surface], startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: 26)).overlay(RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.08)))
     }

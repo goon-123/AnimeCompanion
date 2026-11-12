@@ -52,12 +52,17 @@ struct HomeWidgetContent: View {
         Array(anime.watching.compactMap(\.media).filter { ($0.nextAiringEpisode?.date ?? .distantPast) > .now }
             .sorted { ($0.nextAiringEpisode?.date ?? .distantFuture) < ($1.nextAiringEpisode?.date ?? .distantFuture) }.prefix(preferences.size(for: .airing).itemLimit))
     }
+    private var animatedItemIDs: [String] {
+        switch section {
+        case .watching: return shows.map { String($0.id) }
+        case .reading: return recent.map { String(describing: $0.id) } + trackedBooks.map { String($0.id) }
+        default: return []
+        }
+    }
     var body: some View {
         widget(section)
             .environment(\.posterArtworkBadgesEnabled, false)
-            .animation(AppMotion.content(reduceMotion), value: shows.map(\.id))
-            .animation(AppMotion.content(reduceMotion), value: recent.map(\.id))
-            .animation(AppMotion.content(reduceMotion), value: trackedBooks.map(\.id))
+            .animation(AppMotion.content(reduceMotion), value: animatedItemIDs)
             .appSettingsSheet(isPresented: $settings)
             .sheet(item: $watching) { WatchAnimeView(anime: $0) }
     }

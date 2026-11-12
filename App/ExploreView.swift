@@ -102,9 +102,9 @@ struct ExploreView: View {
             if !featured.isEmpty {
                 FeaturedAnimeCarousel(anime: featured, height: featuredHeight(in: geometry),
                     topInset: spotlightLeadsPage ? geometry.safeAreaInsets.top : 0, background: $posterBackground)
-                    .modifier(CatalogEntrance())
+
             } else if loading {
-                RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: min(380, featuredHeight(in: geometry)))
+                RoundedRectangle(cornerRadius: 24).fill(Theme.surface).frame(height: featuredHeight(in: geometry))
                     .overlay { ProgressView("Loading anime…") }
             }
         } else if row == .topTen {

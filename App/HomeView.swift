@@ -58,7 +58,6 @@ private struct HomeDashboardView: View {
                         HomeWidgetFrame(section: section, saved: $sections, editing: $editing, dragging: $dragging) {
                             HomeWidgetContent(section: section, saved: $sections, editing: editing, refreshID: newsRefreshID, activationID: homeVisitID)
                         }.id(section)
-                            .modifier(ContentArrival(delay: Double(preferences.visible.firstIndex(of: section) ?? 0) * 0.018))
                             .transition(AppMotion.replacement(reduceMotion))
                     }
                 }
@@ -71,11 +70,9 @@ private struct HomeDashboardView: View {
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("home-empty-add")
                     }.frame(maxWidth: .infinity).padding(.vertical, 44).accessibilityIdentifier("home-empty-layout")
                 }
-            }.animation(AppMotion.content(reduceMotion), value: anime.restoring || books.restoring || reading.loading)
-                .animation(AppMotion.content(reduceMotion), value: anime.loadingLibrary || books.loadingLibrary)
-                .padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(20).padding(.bottom, 20).frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.background, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { AccountSwitcherButton() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -160,7 +157,7 @@ private struct HomeDashboardView: View {
     private func shouldDisplay(_ section: HomeSection) -> Bool {
         if editing { return true }
         if section == .welcome { return !anime.restoring && !books.restoring && !reading.loading && !anime.isSignedIn && !books.connected && recent.isEmpty }
-        if section == .syncStatus { return anime.loadingLibrary || books.loadingLibrary || anime.libraryError != nil || books.libraryError != nil || reading.error != nil }
+        if section == .syncStatus { return (anime.loadingLibrary && anime.entries.isEmpty) || (books.loadingLibrary && books.library.isEmpty) || anime.libraryError != nil || books.libraryError != nil || reading.error != nil }
         return true
     }
     private var editorBar: some View {

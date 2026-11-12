@@ -87,6 +87,7 @@ struct AppSessionView: View {
                 .allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
             if !launchFinished { LaunchLoadingView().opacity(launchRevealing ? 0 : 1).zIndex(1) }
         }.background(Color.black.ignoresSafeArea())
+            .environment(\.browseInteractionReady, launchFinished)
     }
     @MainActor private func revealLaunchWhenReady() async {
         guard !launchFinished else { return }
@@ -241,10 +242,30 @@ final class TabNavigationState: ObservableObject {
     func open(_ id: Int) { detailPath = NavigationPath(); animeID = id; column = .detail }
 }
 
+/// Selection has its own narrow publisher. Routing consumers elsewhere in the
+/// app should not rebuild entire catalogs whenever the user taps the dock.
+@MainActor
+final class AppTabSelection: ObservableObject {
+    @Published private(set) var value: AppTab = .home
+    func select(_ value: AppTab) {
+        guard self.value != value else { return }
+        self.value = value
+    }
+}
+struct AppTabSelectionReader<Content: View>: View {
+    @ObservedObject var selection: AppTabSelection
+    @ViewBuilder let content: () -> Content
+    var body: some View { let _ = selection.value; content() }
+}
+
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
-    @Published var selectedTab: AppTab = .home
+    let tabSelection = AppTabSelection()
+    var selectedTab: AppTab {
+        get { tabSelection.value }
+        set { tabSelection.select(newValue) }
+    }
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
     func open(_ tab: AppTab) {
@@ -257,7 +278,7 @@ final class AppNavigationStore: ObservableObject {
     func applyTabPreferences() {
         let value = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
         selectedTab = value.selection(for: selectedTab)
-        tabPreferences = value
+        if tabPreferences != value { tabPreferences = value }
     }
     func openSchedule(on day: Date? = nil, page: ScheduleLanding = .weekly) {
         openHomeDestination(.schedule(ScheduleHomeRoute(day: day ?? ScheduleClock.now, page: page)))
@@ -364,7 +385,7 @@ struct AppTabs: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var sidebarColumn: NavigationSplitViewColumn = .detail
     var body: some View {
-        tabs.task {
+        AppTabSelectionReader(selection: navigation.tabSelection) { tabs }.task {
             guard !loadedLayout else { return }
             loadedLayout = true
             #if DEBUG
@@ -400,7 +421,6 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
         }.onChange(of: navigation.selectedTab) { _, tab in
-            Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
             }
@@ -426,7 +446,8 @@ struct AppTabs: View {
     @ViewBuilder private func destinationTabs(showDock: Bool) -> some View {
         if #available(iOS 26.0, *), showDock {
             CompanionNativeTabs(presentation: dock, tabs: navigation.tabPreferences.visible,
-                                selection: $navigation.selectedTab, reduceMotion: reduceMotion) { tab in
+                                selection: $navigation.selectedTab, reduceMotion: reduceMotion,
+                                contentKey: { UIDevice.current.userInterfaceIdiom == .pad ? paneLayout($0).rawValue : "phone" }) { tab in
                 pane(tab)
             }.ignoresSafeArea()
         } else {
@@ -474,13 +495,21 @@ struct AppTabs: View {
             destinationTabs(showDock: false).toolbar(.hidden, for: .tabBar)
         }.navigationSplitViewStyle(.balanced)
     }
+    private func paneLayout(_ tab: AppTab) -> TabletLayout {
+        switch tab {
+        case .explore: return ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth
+        case .library: return librarySection == "anime" ? navigation.tabletLayout : .fullWidth
+        case .schedule: return navigation.tabletLayout
+        default: return .fullWidth
+        }
+    }
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {
         switch tab {
         case .home: AnimeTabPane(state: navigation.home, layout: .fullWidth) { HomeView() }
         case .explore:
-            AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
+            AnimeTabPane(state: navigation.explore, layout: paneLayout(tab)) { MediaExploreView() }
         case .library:
-            AnimeTabPane(state: navigation.library, layout: librarySection == "anime" ? navigation.tabletLayout : .fullWidth) { MediaLibraryView() }
+            AnimeTabPane(state: navigation.library, layout: paneLayout(tab)) { MediaLibraryView() }
         case .manga: MangaTabPane(state: navigation.manga)
         case .schedule: AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
         case .news: AnimeTabPane(state: navigation.news, layout: .fullWidth) { NewsView().animeNavigation() }
