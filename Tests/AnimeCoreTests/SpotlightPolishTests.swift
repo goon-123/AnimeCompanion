@@ -15,7 +15,7 @@ final class SpotlightPolishTests: XCTestCase {
             XCTAssertEqual(urls.count, count); XCTAssertEqual(Set(urls).count, count)
             XCTAssertTrue(urls.allSatisfy { $0.host == "image.tmdb.org" && $0.path.contains("/original/") })
             if name == "mage" { XCTAssertEqual(urls.first?.lastPathComponent, "iRkFny4BWIw5nNkAbfph5UMxw18.jpg") }
-            if name == "returner" { XCTAssertEqual(urls.first?.lastPathComponent, "uZpr4qU212ZPDANwG4y02YozPan.jpg") }
+            if name == "returner" { XCTAssertEqual(urls.first?.lastPathComponent, "2vI6llYWyA2wa5QgvDAq63BxNdI.jpg", "Prefer the 900-pixel clean key visual over the 550-pixel upload") }
         }
     }
     func testWrongSeriesLanguageAndUnverifiedCardsCannotBecomeCleanArtwork() throws {

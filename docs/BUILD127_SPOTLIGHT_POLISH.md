@@ -23,7 +23,9 @@ hosts and source redirects are rejected.
 The three reported collections were inspected: One Piece (TMDB 37854, 49 clean
 posters), Mage (313346, 6), and Returner (230050, 2). The same Mage and Returner
 scenes exist without lettering. The Mage counterpart is preferred while it remains
-listed. One Piece gets actual clean character artwork from its collection instead
+listed. Returner's matching old scene is only 550 pixels wide, so its sharper
+900-pixel clean key visual is preferred. Resolution groups retain provider order;
+small uploads are still available if no larger clean variant exists. One Piece gets actual clean character artwork from its collection instead
 of the branded Metahub poster. Captured cards exercise the production parser.
 
 Clean URLs live in independent Spotlight fields/cache. Series posters and existing

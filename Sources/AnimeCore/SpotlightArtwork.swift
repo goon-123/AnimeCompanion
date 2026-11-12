@@ -38,15 +38,23 @@ public enum SpotlightArtworkParser {
         let expectedKind = kind == .posters ? "poster" : "backdrop"
         let cards = try doc.select("li[data-image-id]")
         guard cards.array().count <= 500 else { throw ServiceError.invalidResponse }
-        var urls: [URL] = [], seen = Set<URL>()
+        var fullSize: [URL] = [], smaller: [URL] = [], seen = Set<URL>()
         for card in cards {
             // Verify every card as well as the selected collection. Never turn
             // the ordinary English/Japanese poster into a supposedly clean one.
             guard try card.select("input[data-language=xx][data-kind=\(expectedKind)]").first() != nil,
                   let raw = try card.select(".image_content a[title='View Original']").first()?.attr("href"),
                   let image = URL(string: raw), validImage(image), seen.insert(image).inserted else { continue }
-            urls.append(image)
+            let size = try card.select(".info a[title='View Original']").first()?.text() ?? ""
+            let dimensions = size.lowercased().split(separator: "x").compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let enoughPixels = dimensions.count == 2 && (kind == .posters
+                ? dimensions[0] >= 780 && dimensions[1] >= 1100
+                : dimensions[0] >= 1280 && dimensions[1] >= 720)
+            if enoughPixels { fullSize.append(image) } else { smaller.append(image) }
         }
+        // Keep provider ordering within each group. A small old upload should
+        // not win over an available sharp textless image of the same title.
+        var urls = fullSize + smaller
         // This verified clean counterpart preserves the reported Mage scene.
         // It is used only while TMDB still lists it in this textless collection.
         if !target.movie, target.id == 313346, kind == .posters,
