@@ -147,11 +147,13 @@ struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
         for tab in tabs {
             // Retain the actual hosting controller for each tab: changing tabs
             // never rebuilds its navigation path, filters or scroll position.
+            // The full environment is outermost. Per-tab overrides then apply
+            // inside it; reversing this order erases the visibility coordinator.
             let root = AnyView(content(tab)
-                .environment(\.self, context.environment)
                 .environment(\.companionDockPresentation, presentation)
                 .environment(\.companionDockTab, tab)
-                .environment(\.scenePhase, tab == selection ? context.environment.scenePhase : .inactive))
+                .environment(\.scenePhase, tab == selection ? context.environment.scenePhase : .inactive)
+                .environment(\.self, context.environment))
             let host = coordinator.hosts[tab] ?? UIHostingController(rootView: root)
             host.rootView = root
             if coordinator.hosts[tab] == nil {
