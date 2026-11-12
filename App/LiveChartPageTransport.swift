@@ -25,6 +25,8 @@ struct LiveChartPageTransport: HTTPTransport {
 @MainActor
 private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
     private static var active: [UUID: LiveChartPageLoad] = [:]
+    private static var profile = WKWebsiteDataStore.nonPersistent()
+    private static var rules: Task<WKContentRuleList?, Never>?
     private let id = UUID()
     private let request: URLRequest
     private let lifetime: AppDataSession
@@ -44,12 +46,19 @@ private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
         try lifetime.check()
         guard !cancelled else { throw CancellationError() }
         guard let url = request.url, accepts(url) else { throw AnimeVisualsError.invalidResponse }
+        let rules = await Self.resourceRules()
+        try Task.checkCancellation()
+        try lifetime.check()
+        guard !cancelled else { throw CancellationError() }
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             Self.active[id] = self
             let configuration = WKWebViewConfiguration()
-            configuration.websiteDataStore = .nonPersistent()
-            let browser = WKWebView(frame: .zero, configuration: configuration)
+            configuration.websiteDataStore = Self.profile
+            if let rules { configuration.userContentController.add(rules) }
+            // Responsive markup gets a viewport; only the native image pipeline
+            // downloads the artwork, without duplicate web image/media decoding.
+            let browser = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
             browser.navigationDelegate = self
             self.browser = browser
             // Never inject the HTTP client's app-only User-Agent or credentials.
@@ -66,8 +75,23 @@ private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
 
     static func cancelAll() {
         for page in Array(active.values) { page.cancel() }
+        profile = .nonPersistent()
     }
     func cancel() { cancelled = true; finish(.failure(CancellationError())) }
+
+    private static func resourceRules() async -> WKContentRuleList? {
+        if let rules { return await rules.value }
+        let task = Task<WKContentRuleList?, Never> {
+            await withCheckedContinuation { continuation in
+                let json = #"[{"trigger":{"url-filter":".*","resource-type":["image","media","font","style-sheet"]},"action":{"type":"block"}}]"#
+                WKContentRuleListStore.default().compileContentRuleList(
+                    forIdentifier: "AnimeCompanion-public-gallery-resources-v1", encodedContentRuleList: json
+                ) { rules, _ in continuation.resume(returning: rules) }
+            }
+        }
+        rules = task
+        return await task.value
+    }
 
     private func accepts(_ url: URL) -> Bool {
         guard url.scheme == "https", url.user == nil, url.password == nil,
@@ -108,10 +132,29 @@ private final class LiveChartPageLoad: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard let response else { finish(.failure(AnimeVisualsError.invalidResponse)); return }
-        webView.evaluateJavaScript("document.documentElement.outerHTML") { [weak self] result, error in
+        // Wait briefly for lazy controllers to attach cards before classifying
+        // a gallery as empty. This does not scroll or poll the visible UI.
+        let script = #"""
+        if (!document.querySelector('[data-anime-visual-url-value]')) {
+            await new Promise(resolve => {
+                const observer = new MutationObserver(() => {
+                    if (document.querySelector('[data-anime-visual-url-value]')) finish();
+                });
+                const finish = () => { observer.disconnect(); clearTimeout(timer); resolve(); };
+                const timer = setTimeout(finish, 1200);
+                observer.observe(document.documentElement, {childList: true, subtree: true, attributes: true});
+            });
+        }
+        return document.documentElement.outerHTML;
+        """#
+        webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .page) { [weak self] result in
             guard let self else { return }
-            if let error { self.finish(.failure(error)); return }
-            guard let html = result as? String, let data = html.data(using: .utf8), data.count <= 2_000_000 else {
+            let html: String?
+            switch result {
+            case .success(let value): html = value as? String
+            case .failure(let error): self.finish(.failure(error)); return
+            }
+            guard let html, let data = html.data(using: .utf8), data.count <= 2_000_000 else {
                 self.finish(.failure(AnimeVisualsError.invalidResponse)); return
             }
             self.finish(.success((data, response)))

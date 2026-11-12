@@ -197,10 +197,11 @@ private struct CompanionDock: View {
     @Binding var selection: AppTab
     let reduceMotion: Bool
     var body: some View {
-        HStack(spacing: 2) {
+        GlassEffectContainer(spacing: 12) {
+          HStack(spacing: 2) {
             ForEach(tabs) { tab in
                 Button {
-                    withAnimation(AppMotion.page(reduceMotion)) { selection = tab }
+                    withAnimation(selectionMotion) { selection = tab }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab.symbol).symbolVariant(.fill)
@@ -215,8 +216,10 @@ private struct CompanionDock: View {
                                 if reduceMotion {
                                     Capsule().fill(Theme.accent.opacity(0.18)).transition(.opacity)
                                 } else {
-                                    Capsule().fill(Theme.accent.opacity(0.18))
-                                        .matchedGeometryEffect(id: "selected-tab", in: highlight)
+                                    Color.clear
+                                        .glassEffect(.regular.tint(Theme.accent.opacity(0.14)).interactive(), in: .capsule)
+                                        .glassEffectID("selected-tab", in: highlight)
+                                        .glassEffectTransition(.matchedGeometry)
                                 }
                             }
                         }
@@ -226,13 +229,21 @@ private struct CompanionDock: View {
                     .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
                     .accessibilityIdentifier("dock-tab-" + tab.rawValue)
             }
-        }.padding(5)
-            .glassEffect(.regular, in: .capsule)
+          }.padding(5)
+        }
+            // The selection is a real refracting glass lens. Its surrounding
+            // material stays outside the glass container so glass never samples
+            // another glass surface. Both share one persistent hosting tree.
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay { Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.5).allowsHitTesting(false) }
             // The separate hosting controller receives a new root value on tab
             // selection; give that boundary its own animation transaction.
-            .animation(AppMotion.page(reduceMotion), value: selection)
+            .animation(selectionMotion, value: selection)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isTabBar)
             .accessibilityIdentifier("companion-dock")
+    }
+    private var selectionMotion: Animation {
+        reduceMotion ? .easeInOut(duration: 0.12) : .spring(duration: 0.38, bounce: 0.12)
     }
 }

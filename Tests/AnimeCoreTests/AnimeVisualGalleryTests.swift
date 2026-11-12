@@ -88,8 +88,8 @@ final class AnimeVisualGalleryTests: XCTestCase {
         async let a = client.gallery(for: anime)
         async let b = client.gallery(for: anime)
         let results = await [a, b]
-        XCTAssertEqual(results[0].images.count, 6)
-        XCTAssertTrue(results[0].images.allSatisfy { $0.source == .liveChart })
+        XCTAssertEqual(results[0].images.filter { $0.source == .liveChart }.count, 6)
+        XCTAssertEqual(results[0].images.filter { $0.source == .aniList }, AnimeVisualGallery.aniListImages(anime))
         XCTAssertEqual(results[0].images, results[1].images)
         XCTAssertNil(results[0].notice)
         _ = await client.gallery(for: anime)
@@ -98,12 +98,12 @@ final class AnimeVisualGalleryTests: XCTestCase {
         XCTAssertFalse(requests.contains { $0.url?.host == "api.jikan.moe" })
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil && $0.value(forHTTPHeaderField: "Cookie") == nil })
     }
-    func testDeniedLiveChartShowsNoOtherSourcesAndRefreshHonorsHostCooldown() async throws {
+    func testDeniedLiveChartKeepsAniListAndRefreshHonorsHostCooldown() async throws {
         let fixture = GalleryTransport(mode: .denied)
         let client = AnimeVisualsClient(transport: fixture, directory: nil, minimumRequestInterval: 0)
         let anime = try anime()
         let first = await client.gallery(for: anime)
-        XCTAssertTrue(first.images.isEmpty)
+        XCTAssertEqual(first.images, AnimeVisualGallery.aniListImages(anime))
         XCTAssertTrue(first.notice?.contains("LiveChart is temporarily limiting") == true)
         _ = await client.gallery(for: anime, refresh: true)
         let requests = await fixture.requests
@@ -114,7 +114,7 @@ final class AnimeVisualGalleryTests: XCTestCase {
         let mapping = GalleryTransport(mode: .live), pages = GalleryTransport(mode: .live)
         let client = AnimeVisualsClient(transport: mapping, galleryTransport: pages, directory: nil, minimumRequestInterval: 0)
         let result = await client.gallery(for: try anime())
-        XCTAssertEqual(result.images.count, 6)
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
         let mappingRequests = await mapping.requests, pageRequests = await pages.requests
         XCTAssertEqual(mappingRequests.map { $0.url?.host }, ["raw.githubusercontent.com"])
         XCTAssertEqual(pageRequests.count, 2)
@@ -148,13 +148,13 @@ final class AnimeVisualGalleryTests: XCTestCase {
     func testSecondPageFailureKeepsAlreadyLoadedImagesAndExplainsPartialCollection() async throws {
         let client = AnimeVisualsClient(transport: GalleryTransport(mode: .secondPageFails), directory: nil, minimumRequestInterval: 0)
         let result = await client.gallery(for: try anime())
-        XCTAssertEqual(result.images.count, 4)
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 4)
         XCTAssertTrue(result.notice?.contains("Some LiveChart visuals could not load") == true)
     }
-    func testUnavailableLiveChartExplainsFailureWithoutAddingAniListOrMALArtwork() async throws {
+    func testUnavailableLiveChartExplainsFailureAndKeepsAniListArtwork() async throws {
         let client = AnimeVisualsClient(transport: GalleryTransport(mode: .offline), directory: nil, minimumRequestInterval: 0)
         let result = await client.gallery(for: try anime())
-        XCTAssertTrue(result.images.isEmpty)
+        XCTAssertEqual(result.images, AnimeVisualGallery.aniListImages(try anime()))
         XCTAssertNotNil(result.notice)
     }
     func testLegacyMixedGalleryCacheCannotLeakOtherSourcesIntoTheLiveChartGallery() async throws {
@@ -172,7 +172,7 @@ final class AnimeVisualGalleryTests: XCTestCase {
         let offline = GalleryTransport(mode: .offline)
         let second = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
         let result = await second.gallery(for: try anime())
-        XCTAssertTrue(result.images.isEmpty)
+        XCTAssertEqual(result.images, AnimeVisualGallery.aniListImages(try anime()))
         XCTAssertNotNil(result.notice)
         let requests = await offline.requests
         XCTAssertFalse(requests.contains { $0.url?.host == "api.jikan.moe" })
@@ -183,10 +183,72 @@ final class AnimeVisualGalleryTests: XCTestCase {
         XCTAssertNil(configuration.httpCookieStorage)
         XCTAssertNil(configuration.urlCredentialStorage)
     }
+    func testAniListArtworkIsAvailableImmediatelyWithoutStartingNetworkWork() async throws {
+        let transport = GalleryTransport(mode: .offline)
+        let client = AnimeVisualsClient(transport: transport, directory: nil)
+        let anime = try anime()
+        let result = await client.cachedGallery(for: anime)
+        XCTAssertEqual(result.images, AnimeVisualGallery.aniListImages(anime))
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+    func testInterruptedPageRecoversOnceWithoutLosingPaginationOrAniList() async throws {
+        let transport = GalleryTransport(mode: .interrupted)
+        let client = AnimeVisualsClient(transport: transport, directory: nil, minimumRequestInterval: 0)
+        let result = await client.gallery(for: try anime())
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
+        XCTAssertEqual(result.images.filter { $0.source == .aniList }.count, 2)
+        XCTAssertNil(result.notice)
+        let pages = await transport.requests.filter { $0.url?.host == "www.livechart.me" }
+        XCTAssertEqual(pages.count, 3)
+    }
+    func testStaleFailureIsRememberedAcrossScrollReturnsAndRestartWithoutExtendingArtworkAge() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("VisualRetryTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let anime = try anime()
+        let first = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
+        let original = await first.gallery(for: anime)
+        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
+        let savedDate = Date().addingTimeInterval(-7 * 3600).timeIntervalSinceReferenceDate
+        records[0]["fetchedAt"] = savedDate
+        try JSONSerialization.data(withJSONObject: records).write(to: file)
+        let offline = GalleryTransport(mode: .offline)
+        let second = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
+        let failed = await second.gallery(for: anime)
+        XCTAssertTrue(failed.isStale)
+        XCTAssertEqual(failed.images, original.images)
+        let requestsAfterFailure = await offline.requests.count
+        _ = await second.gallery(for: anime)
+        let third = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
+        let restored = await third.gallery(for: anime)
+        XCTAssertTrue(restored.isStale)
+        XCTAssertEqual(restored.images, original.images)
+        let requestsAfterReturn = await offline.requests.count
+        XCTAssertEqual(requestsAfterReturn, requestsAfterFailure)
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
+        XCTAssertEqual(saved[0]["fetchedAt"] as? Double, savedDate)
+    }
+    func testLeavingTheLastGalleryCancelsPageAndDoesNotSaveANegativeResult() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("VisualCancelTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = SuspendedGalleryTransport()
+        let client = AnimeVisualsClient(transport: transport, directory: directory, minimumRequestInterval: 0)
+        let anime = try anime()
+        let loading = Task { await client.gallery(for: anime) }
+        await transport.waitUntilPageStarts()
+        loading.cancel()
+        _ = await loading.value
+        await transport.waitUntilCancelled()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("livechart-galleries-v2.json").path))
+        let fresh = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
+        let result = await fresh.gallery(for: anime)
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
+    }
 }
 
 private actor GalleryTransport: HTTPTransport {
-    enum Mode { case live, denied, conflict, offline, secondPageFails }
+    enum Mode { case live, denied, conflict, offline, secondPageFails, interrupted }
     let mode: Mode
     private(set) var requests: [URLRequest] = []
     init(mode: Mode) { self.mode = mode }
@@ -200,6 +262,9 @@ private actor GalleryTransport: HTTPTransport {
         case "raw.githubusercontent.com":
             body = "anilist\tlivechart\tmyanimelist\n178789\t12735\t\(mode == .conflict ? 65077 : 59193)\n"
         case "www.livechart.me":
+            if mode == .interrupted && requests.filter({ $0.url?.host == "www.livechart.me" }).count == 1 {
+                throw URLError(.networkConnectionLost)
+            }
             if mode == .denied || (mode == .secondPageFails && url.query != nil) { status = 403; body = "Denied" }
             else {
                 let names = url.query == nil ? ["Roxy", "Sylphiette", "Rudeus", "Eris"] : ["Key", "Teaser"]
@@ -210,5 +275,39 @@ private actor GalleryTransport: HTTPTransport {
         default: throw URLError(.unsupportedURL)
         }
         return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: ["Retry-After": "900"])!)
+    }
+}
+
+private actor SuspendedGalleryTransport: HTTPTransport {
+    private var page: CheckedContinuation<(Data, HTTPURLResponse), Error>?
+    private var started = false
+    private var cancelled = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var cancelWaiters: [CheckedContinuation<Void, Never>] = []
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let url = request.url!
+        if url.host == "raw.githubusercontent.com" {
+            return (Data("anilist\tlivechart\tmyanimelist\n178789\t12735\t59193\n".utf8),
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if cancelled { continuation.resume(throwing: CancellationError()); return }
+                page = continuation; started = true
+                for waiter in startWaiters { waiter.resume() }; startWaiters = []
+            }
+        } onCancel: { Task { await self.cancel() } }
+    }
+    func waitUntilPageStarts() async {
+        if started { return }
+        await withCheckedContinuation { startWaiters.append($0) }
+    }
+    func waitUntilCancelled() async {
+        if cancelled { return }
+        await withCheckedContinuation { cancelWaiters.append($0) }
+    }
+    private func cancel() {
+        cancelled = true; page?.resume(throwing: CancellationError()); page = nil
+        for waiter in cancelWaiters { waiter.resume() }; cancelWaiters = []
     }
 }

@@ -90,7 +90,7 @@ struct AnimeVisualsView: View {
                         .accessibilityLabel("Refresh artwork").accessibilityIdentifier("visuals-refresh")
                 }
             }
-            if images.isEmpty && !loadingGallery && gallery?.notice == nil { ContentUnavailableView("No LiveChart artwork available", systemImage: "photo") }
+            if images.isEmpty && !loadingGallery && gallery?.notice == nil { ContentUnavailableView("No artwork available", systemImage: "photo") }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 300), spacing: 16)], alignment: .leading, spacing: 18) {
                 ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
                     artwork(image, index: index)
@@ -112,6 +112,7 @@ struct AnimeVisualsView: View {
         let includeAdult = store.includeAdult
         loadingGallery = true
         defer { loadingGallery = false }
+        if gallery == nil { gallery = await store.visuals.cachedGallery(for: anime) }
         let value = await store.visuals.gallery(for: anime, refresh: refresh)
         guard !Task.isCancelled, store.includeAdult == includeAdult, store.isVisible(details ?? anime) else { return }
         gallery = value

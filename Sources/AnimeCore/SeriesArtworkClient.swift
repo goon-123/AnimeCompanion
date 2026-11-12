@@ -20,6 +20,22 @@ public struct SeriesArtwork: Codable, Equatable, Sendable {
 /// arbitrary hosts, signed image queries or logo URLs.
 public enum SeriesArtworkQuality {
     public static func spotlight(_ url: URL?) -> URL? {
+        // This Cinemeta poster has the English title baked into the pixels.
+        // Its verified textless counterpart is the same forest key artwork.
+        // Correct only this asset at presentation time, including cached URLs;
+        // series posters, title logos and every Spotlight layout/effect stay intact.
+        if let url, url.scheme == "https", url.user == nil, url.password == nil,
+           url.port == nil, url.query == nil, url.fragment == nil {
+            let path = url.path.split(separator: "/").map(String.init)
+            let metahub = url.host == "images.metahub.space" && path.count == 4 &&
+                path[0] == "poster" && ["small", "medium", "large"].contains(path[1]) &&
+                path[2] == "tt15483602" && path[3] == "img"
+            let tmdb = url.host == "image.tmdb.org" && path.count == 4 &&
+                path[0] == "t" && path[1] == "p" && path[3] == "yZ3VZVc7iyF7KtIjERBGEedVXqA.jpg"
+            if metahub || tmdb {
+                return URL(string: "https://image.tmdb.org/t/p/original/gyWFWI2ks2OFaWYDS5hnZK4iVLG.jpg")
+            }
+        }
         guard let url, url.scheme == "https", url.host == "images.metahub.space",
               url.user == nil, url.password == nil, url.port == nil,
               url.query == nil, url.fragment == nil,

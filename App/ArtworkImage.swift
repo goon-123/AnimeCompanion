@@ -105,6 +105,9 @@ struct ArtworkPhaseView<Content: View>: View {
             .task(id: id) {
                 let requested = id
                 let refresh = lastRetry != retryToken; lastRetry = retryToken
+                // Lazy containers can restart a task for a retained cell. Keep
+                // its decoded bitmap instead of flashing an empty placeholder.
+                if !refresh, loaded == requested, phase.image != nil { return }
                 loaded = requested; phase = .empty
                 guard let url = requested.url else { return }
                 if !refresh, let bitmap = await pipeline.cachedImage(at: url, pixels: requested.pixels) {

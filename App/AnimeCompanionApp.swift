@@ -443,7 +443,7 @@ struct AppTabs: View {
                                           colorScheme: colorScheme, dynamicTypeSize: textSize)
                             .frame(maxWidth: CGFloat(navigation.tabPreferences.visible.count) * (textSize.isAccessibilitySize ? 112 : 88) + 10)
                             .frame(height: textSize.isAccessibilitySize ? 80 : 62)
-                            .padding(.horizontal, 14).padding(.bottom, 6)
+                            .padding(.horizontal, 14).offset(y: textSize.isAccessibilitySize ? 0 : 8)
                     }
                     .environment(\.companionDockPresentation, dock)
             } else { preservedPanes }

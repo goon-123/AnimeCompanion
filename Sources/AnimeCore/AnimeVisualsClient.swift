@@ -13,6 +13,7 @@ public actor AnimeVisualsClient {
         let notice: String?
         let fetchedAt: Date
         let complete: Bool
+        var checkedAt: Date? = nil
     }
     private struct LiveResult { let images: [AnimeVisual]; let partial: Bool }
     private let galleryTransport: any HTTPTransport
@@ -20,7 +21,7 @@ public actor AnimeVisualsClient {
     private let cacheFile: URL?
     private let minimumRequestInterval: TimeInterval
     private var cache: [Key: Record] = [:]
-    private var pending: [Key: Task<Record, Never>] = [:]
+    private let requests = RequestCoalescer<Key, Record>()
     private var restored = false
     private var nextRequest: [String: Date] = [:]
     private var blockedUntil: [String: Date] = [:]
@@ -43,40 +44,56 @@ public actor AnimeVisualsClient {
     }
 
     public func gallery(for anime: Anime, refresh: Bool = false) async -> AnimeVisualGallery {
-        guard anime.id > 0 else { return AnimeVisualGallery(images: []) }
+        let local = AnimeVisualGallery.aniListImages(anime)
+        guard anime.id > 0 else { return AnimeVisualGallery(images: local) }
         restoreCache()
         let key = Key(aniList: anime.id, mal: anime.idMal.flatMap { $0 > 0 ? $0 : nil })
-        if !refresh, let record = cache[key], Date().timeIntervalSince(record.fetchedAt) < (record.complete ? 21600 : 300) {
-            return gallery(record)
+        if !refresh, let record = cache[key], Date().timeIntervalSince(record.checkedAt ?? record.fetchedAt) < (record.complete ? 21600 : 300) {
+            return gallery(record, local: local)
         }
-        let record: Record
-        let previous = cache[key]
-        let ownsRequest: Bool
-        if let task = pending[key] { ownsRequest = false; record = await task.value }
-        else {
-            ownsRequest = true
-            let task = Task { await self.fetch(key) }
-            pending[key] = task
-            record = await task.value
-            pending[key] = nil
+        do {
+            let record = try await requests.value(for: key) {
+                let record = try await self.fetch(key)
+                try Task.checkCancellation()
+                return await self.remember(record)
+            }
+            return gallery(record, local: local)
+        } catch {
+            // Leaving a lazy shelf releases only that caller; an open full
+            // gallery keeps its shared request. Cancelled work is never cached.
+            return cachedGallery(for: anime)
         }
-        // All coalesced callers receive the same saved gallery when a refresh fails.
-        if !record.complete, let old = previous, !old.images.isEmpty,
-           Date().timeIntervalSince(old.fetchedAt) < 7 * 86400 {
-            return AnimeVisualGallery(images: merged(record.images, old.images),
-                notice: "LiveChart could not refresh. Previously loaded LiveChart artwork has been kept.", isStale: true)
-        }
-        if ownsRequest { cache[key] = record; saveCache() }
-        return gallery(record)
     }
-    private func gallery(_ record: Record) -> AnimeVisualGallery {
-        AnimeVisualGallery(images: record.images, notice: record.notice)
+    /// AniList art and previously loaded LiveChart visuals are usable before a
+    /// network request finishes, including on a cold/offline return visit.
+    public func cachedGallery(for anime: Anime) -> AnimeVisualGallery {
+        restoreCache()
+        let local = AnimeVisualGallery.aniListImages(anime)
+        let key = Key(aniList: anime.id, mal: anime.idMal.flatMap { $0 > 0 ? $0 : nil })
+        guard let record = cache[key] else { return AnimeVisualGallery(images: local) }
+        return gallery(record, local: local)
+    }
+    private func remember(_ record: Record) -> Record {
+        var result = record
+        if !record.complete, let old = cache[record.key], !old.images.isEmpty,
+           Date().timeIntervalSince(old.fetchedAt) < 7 * 86400 {
+            result = Record(key: record.key, images: Array(merged(record.images, old.images).prefix(500)),
+                notice: "LiveChart could not refresh. Previously loaded LiveChart artwork has been kept.",
+                fetchedAt: record.images.isEmpty ? old.fetchedAt : record.fetchedAt, complete: false,
+                checkedAt: Date())
+        }
+        cache[record.key] = result; saveCache()
+        return result
+    }
+    private func gallery(_ record: Record, local: [AnimeVisual]) -> AnimeVisualGallery {
+        AnimeVisualGallery(images: merged(record.images, local), notice: record.notice,
+            isStale: !record.complete && !record.images.isEmpty || Date().timeIntervalSince(record.fetchedAt) >= 21600)
     }
     private func merged(_ remote: [AnimeVisual], _ local: [AnimeVisual]) -> [AnimeVisual] {
         var seen = Set<String>()
         return (remote + local).filter { seen.insert($0.id).inserted }
     }
-    private func fetch(_ key: Key) async -> Record {
+    private func fetch(_ key: Key) async throws -> Record {
         var images: [AnimeVisual] = []
         var reason = "LiveChart artwork could not load. Try refreshing later."
         var complete = false
@@ -92,11 +109,13 @@ public actor AnimeVisualsClient {
                 reason = "This title has no LiveChart visuals listed yet."
                 complete = !result.partial
             } else { reason = "No matching LiveChart gallery is available for this title." }
+        } catch is CancellationError { throw CancellationError()
         } catch AnimeVisualsError.http(let status) where [401, 403, 429].contains(status) {
             reason = "LiveChart is temporarily limiting artwork requests. Try refreshing later."
         } catch AnimeVisualsError.coolingDown {
             reason = "LiveChart is temporarily limiting artwork requests. Try refreshing later."
         } catch {
+            try Task.checkCancellation()
             // A failed request is different from a confirmed empty gallery.
         }
         return Record(key: key, images: images, notice: reason, fetchedAt: Date(), complete: complete)
@@ -114,6 +133,7 @@ public actor AnimeVisualsClient {
                 if images.count > 500 { return LiveResult(images: Array(images.prefix(500)), partial: true) }
                 page = result.nextPage
             } catch {
+                try Task.checkCancellation()
                 if images.isEmpty { throw error }
                 return LiveResult(images: images, partial: true)
             }
@@ -133,8 +153,8 @@ public actor AnimeVisualsClient {
         if let until = blockedUntil[host], until > Date() { throw AnimeVisualsError.coolingDown }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.setValue(accept, forHTTPHeaderField: "Accept")
-        request.setValue("AnimeCompanion/0.57.2 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await galleryTransport.data(for: request)
+        request.setValue("AnimeCompanion/0.57.3 (Artwork gallery)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await pageData(for: request)
         try Task.checkCancellation()
         if [401, 403, 429].contains(response.statusCode) {
             let retry = min(86400, max(60, Double(response.value(forHTTPHeaderField: "Retry-After") ?? "900") ?? 900))
@@ -144,6 +164,23 @@ public actor AnimeVisualsClient {
         guard let final = response.url, VisualURL.sameGallery(final, as: url) else { throw AnimeVisualsError.invalidResponse }
         guard data.count <= maximumBytes else { throw AnimeVisualsError.oversized }
         return data
+    }
+
+    private func pageData(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        for attempt in 0...1 {
+            do {
+                let result = try await galleryTransport.data(for: request)
+                guard attempt == 0, [502, 503, 504].contains(result.1.statusCode),
+                      result.1.value(forHTTPHeaderField: "Retry-After") == nil else { return result }
+            } catch let error as URLError where attempt == 0 &&
+                [.timedOut, .networkConnectionLost, .cannotConnectToHost].contains(error.code) {
+                // One bounded retry for an interrupted public page. Denials,
+                // offline errors and rate limits never take another route.
+            }
+            try await Task.sleep(nanoseconds: UInt64(max(0.3, minimumRequestInterval) * 1_000_000_000))
+            try Task.checkCancellation()
+        }
+        throw AnimeVisualsError.invalidResponse
     }
 
     private func restoreCache() {

@@ -2,6 +2,22 @@ import XCTest
 @testable import AnimeCore
 
 final class SpotlightArtworkTests: XCTestCase {
+    func testOnlyTheReportedBakedInPosterLogoUsesItsVerifiedTextlessArtwork() throws {
+        let clean = "https://image.tmdb.org/t/p/original/gyWFWI2ks2OFaWYDS5hnZK4iVLG.jpg"
+        for size in ["small", "medium", "large"] {
+            let url = try XCTUnwrap(URL(string: "https://images.metahub.space/poster/\(size)/tt15483602/img"))
+            XCTAssertEqual(SeriesArtworkQuality.spotlight(url)?.absoluteString, clean)
+        }
+        XCTAssertEqual(SeriesArtworkQuality.spotlight(URL(string: "https://image.tmdb.org/t/p/original/yZ3VZVc7iyF7KtIjERBGEedVXqA.jpg"))?.absoluteString, clean)
+        for raw in ["https://images.metahub.space/logo/medium/tt15483602/img",
+                    "https://images.metahub.space/background/large/tt15483602/img",
+                    "https://images.metahub.space/poster/large/tt15483602/img?signature=public-test",
+                    "https://images.metahub.space.example/poster/large/tt15483602/img",
+                    "https://image.tmdb.org/t/p/original/another-poster.jpg"] {
+            let url = try XCTUnwrap(URL(string: raw))
+            XCTAssertEqual(SeriesArtworkQuality.spotlight(url), url)
+        }
+    }
     func testEnlargedMetahubArtLeavesLogosSignedRequestsAndOtherHostsIntact() throws {
         for kind in ["poster", "background"] {
             let source = URL(string: "https://images.metahub.space/\(kind)/small/tt7441658/img")!
