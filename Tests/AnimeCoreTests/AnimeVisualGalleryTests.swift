@@ -192,6 +192,27 @@ final class AnimeVisualGalleryTests: XCTestCase {
         let requests = await transport.requests
         XCTAssertTrue(requests.isEmpty)
     }
+    func testUpgradeRetriesLegacyEmptyResultsButKeepsCurrentNegativeCaching() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("VisualEmptyMigration-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let anime = try anime()
+        let first = AnimeVisualsClient(transport: GalleryTransport(mode: .denied), directory: directory, minimumRequestInterval: 0)
+        _ = await first.gallery(for: anime)
+        let offline = GalleryTransport(mode: .offline)
+        let current = AnimeVisualsClient(transport: offline, directory: directory, minimumRequestInterval: 0)
+        _ = await current.gallery(for: anime)
+        let cachedRequests = await offline.requests
+        XCTAssertTrue(cachedRequests.isEmpty)
+        let file = directory.appendingPathComponent("livechart-galleries-v2.json")
+        var records = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
+        records[0].removeValue(forKey: "checkedAt")
+        records[0]["complete"] = true
+        try JSONSerialization.data(withJSONObject: records).write(to: file)
+        let repaired = AnimeVisualsClient(transport: GalleryTransport(mode: .live), directory: directory, minimumRequestInterval: 0)
+        let result = await repaired.gallery(for: anime)
+        XCTAssertEqual(result.images.filter { $0.source == .liveChart }.count, 6)
+        XCTAssertNil(result.notice)
+    }
     func testInterruptedPageRecoversOnceWithoutLosingPaginationOrAniList() async throws {
         let transport = GalleryTransport(mode: .interrupted)
         let client = AnimeVisualsClient(transport: transport, directory: nil, minimumRequestInterval: 0)

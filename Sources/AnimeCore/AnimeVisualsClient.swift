@@ -82,6 +82,7 @@ public actor AnimeVisualsClient {
                 fetchedAt: record.images.isEmpty ? old.fetchedAt : record.fetchedAt, complete: false,
                 checkedAt: Date())
         }
+        result.checkedAt = Date()
         cache[record.key] = result; saveCache()
         return result
     }
@@ -188,7 +189,11 @@ public actor AnimeVisualsClient {
         guard let file = cacheFile, let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 2_000_000,
               let data = try? Data(contentsOf: file), let records = try? JSONDecoder().decode([Record].self, from: data), records.count <= 40 else { return }
         for record in records where Date().timeIntervalSince(record.fetchedAt) >= 0 && Date().timeIntervalSince(record.fetchedAt) < 7 * 86400 {
-            guard record.images.count <= 500, record.key.aniList > 0,
+            // Old builds could classify unfinished browser markup as an empty
+            // gallery for six hours. Keep their real images, but retry an old
+            // empty result once with the repaired loader after upgrading.
+            guard (!record.images.isEmpty || record.checkedAt != nil),
+                  record.images.count <= 500, record.key.aniList > 0,
                   record.images.allSatisfy({ $0.source == .liveChart && VisualURL.image($0.imageURL.absoluteString, source: .liveChart) != nil && VisualURL.image($0.thumbnailURL.absoluteString, source: .liveChart) != nil }) else { continue }
             cache[record.key] = record
         }
