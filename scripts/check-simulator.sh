@@ -80,6 +80,7 @@ simulator_id="$(xcrun simctl list devices available --json | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
 family=sys.argv[1]
+scope=sys.argv[2]
 candidates=[(runtime,d) for runtime,items in devices.items() if "iOS-18" in runtime or "iOS-26" in runtime
         for d in items if d.get("isAvailable") and
         (d["name"].startswith("iPhone") if family == "iphone" else
@@ -88,11 +89,14 @@ if not candidates:
     raise SystemExit("No available " + family + " simulator (iPad must be an 11-inch Pro)")
 # The hosted iOS 26 runtime has repeatedly stalled before app launch. Exercise
 # the supported iOS 18 runtime when present; builds still use the iOS 26 SDK.
+if scope == "dock-gallery":
+    candidates=[item for item in candidates if "iOS-26" in item[0]]
+    if not candidates: raise SystemExit("The Liquid Glass dock check requires an iOS 26 simulator")
 candidates.sort(key=lambda item: (0 if "iOS-18" in item[0] else 1, item[0], item[1]["name"]))
 runtime,device=candidates[0]
 print("Testing " + device["name"] + " with " + runtime, file=sys.stderr)
 print(device["udid"])
-' "$device_family")"
+' "$device_family" "$test_scope")"
 
 # Bring the iOS 26 device to a ready state before XCTest starts its runner.
 # Bound this separately so a stalled simulator reports a clear startup failure.
@@ -108,6 +112,10 @@ try:
 except subprocess.TimeoutExpired:
     raise SystemExit('Simulator startup timed out; rerun on a fresh runner.')
 PY
+
+if [[ "$test_scope" == dock-gallery ]]; then
+  xcrun simctl ui "$simulator_id" appearance dark
+fi
 
 # iOS 18.5 can omit WebKit's Swift overlay from dyld's default search path
 # (WebKit bug 293831). Resolve the library from this exact simulator runtime,
