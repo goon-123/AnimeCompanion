@@ -69,6 +69,9 @@ struct PhaseTwoPreviewTransport: HTTPTransport {
         let result: [String: Any] = ["media": ids.map(Self.media), "pageInfo": ["hasNextPage": page < 2]]
         let payload: [String: Any]
         if query.contains("query Details") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-detail-title-delay") {
+                try await Task.sleep(for: .seconds(2))
+            }
             var details = Self.media(variables["id"] as? Int ?? 1)
             if ProcessInfo.processInfo.arguments.contains("--ui-catalog-loading-preview") {
                 details["trailer"] = ["id": "owned-preview", "site": "youtube"]

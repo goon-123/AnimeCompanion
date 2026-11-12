@@ -355,12 +355,8 @@ struct AppTabs: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dynamicTypeSize) private var textSize
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var dock = CompanionDockPresentation()
     @State private var loadedLayout = false
-    @State private var visitedTabs = Set<AppTab>()
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
     @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
@@ -404,7 +400,6 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
         }.onChange(of: navigation.selectedTab) { _, tab in
-            visitedTabs.insert(tab)
             Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
@@ -429,46 +424,14 @@ struct AppTabs: View {
         }
     }
     @ViewBuilder private func destinationTabs(showDock: Bool) -> some View {
-        if #available(iOS 26.0, *) {
-            if showDock {
-                preservedPanes
-                    // Keep the inset constant during navigation, including canceled
-                    // swipes. The dock's opacity never resizes Spotlight or its scroll.
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        Color.clear.frame(height: textSize.isAccessibilitySize ? 88 : 68).allowsHitTesting(false)
-                    }
-                    .overlay(alignment: .bottom) {
-                        CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
-                                          selection: $navigation.selectedTab, reduceMotion: reduceMotion,
-                                          colorScheme: colorScheme, dynamicTypeSize: textSize)
-                            .frame(maxWidth: CGFloat(navigation.tabPreferences.visible.count) * (textSize.isAccessibilitySize ? 112 : 88) + 10)
-                            .frame(height: textSize.isAccessibilitySize ? 80 : 62)
-                            .padding(.horizontal, 14).offset(y: textSize.isAccessibilitySize ? 0 : 8)
-                    }
-                    .environment(\.companionDockPresentation, dock)
-            } else { preservedPanes }
+        if #available(iOS 26.0, *), showDock {
+            CompanionNativeTabs(presentation: dock, tabs: navigation.tabPreferences.visible,
+                                selection: $navigation.selectedTab, reduceMotion: reduceMotion) { tab in
+                pane(tab)
+            }.ignoresSafeArea()
         } else {
             nativeTabs.toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
-    }
-    // No native TabView exists underneath the custom dock. A lazy, retained
-    // stack keeps visited panes' search/scroll state and navigation paths alive.
-    private var preservedPanes: some View {
-        ZStack {
-            ForEach(navigation.tabPreferences.visible) { tab in
-                if tab == navigation.selectedTab || visitedTabs.contains(tab) {
-                    pane(tab).environment(\.companionDockTab, tab)
-                        .environment(\.scenePhase, tab == navigation.selectedTab ? scenePhase : .inactive)
-                        .opacity(tab == navigation.selectedTab ? 1 : 0)
-                        .allowsHitTesting(tab == navigation.selectedTab)
-                        .accessibilityHidden(tab != navigation.selectedTab)
-                        .zIndex(tab == navigation.selectedTab ? 1 : 0)
-                        .transition(.opacity)
-                }
-            }
-        }
-        .animation(AppMotion.page(reduceMotion), value: navigation.selectedTab)
-        .onAppear { visitedTabs.insert(navigation.selectedTab) }
     }
     private var nativeTabs: some View {
         TabView(selection: $navigation.selectedTab) {

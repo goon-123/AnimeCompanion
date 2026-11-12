@@ -2,56 +2,36 @@ import SwiftUI
 import UIKit
 import AnimeCore
 
-/// The dock stays mounted outside navigation. Only its surface moves, so hiding
-/// a series never changes the browse viewport or waits for iOS to rebuild a bar.
+/// Visibility belongs to the single native tab controller. Navigation keeps its
+/// own delegates and interactive back gesture, including cancellation recovery.
 @MainActor
 final class CompanionDockPresentation: ObservableObject {
     private var hiddenScreens: [AppTab: Set<UUID>] = [:]
     private var selection: AppTab = .home
     private var reduceMotion = false
-    private weak var surface: UIView?
-
+    private weak var controller: UITabBarController?
     private var hidden: Bool { !(hiddenScreens[selection] ?? []).isEmpty }
 
-    func mount(_ view: UIView, selection: AppTab, reduceMotion: Bool) {
-        surface = view; self.selection = selection; self.reduceMotion = reduceMotion
-        applyImmediately()
+    func mount(_ controller: UITabBarController, selection: AppTab, reduceMotion: Bool) {
+        self.controller = controller
+        configure(selection: selection, reduceMotion: reduceMotion)
     }
-
     func configure(selection: AppTab, reduceMotion: Bool) {
-        let changed = self.selection != selection || self.reduceMotion != reduceMotion
         self.selection = selection; self.reduceMotion = reduceMotion
-        if changed { applyImmediately() }
+        apply(animated: false)
     }
-
     func setHidden(_ active: Bool, screen: UUID, tab: AppTab,
                    coordinator: UIViewControllerTransitionCoordinator? = nil) {
         let wasHidden = hidden
         if active { hiddenScreens[tab, default: []].insert(screen) }
         else { hiddenScreens[tab]?.remove(screen) }
-        guard hidden != wasHidden, let surface else { return }
-        surface.isUserInteractionEnabled = !hidden
-        surface.accessibilityElementsHidden = hidden
-        surface.superview?.isUserInteractionEnabled = !hidden
-        let changes = { [weak self] in self?.applyImmediately() }
-        // UIKit drives this animation with the interactive back gesture and
-        // reverses it on cancellation. No navigation delegate is replaced.
-        if !reduceMotion, let coordinator,
-           coordinator.animate(alongsideTransition: { _ in changes() }, completion: { [weak self] _ in
-               self?.applyImmediately()
-           }) { return }
-        UIView.animate(withDuration: reduceMotion ? 0.12 : 0.25, delay: 0,
-                       options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut],
-                       animations: { changes() })
+        guard wasHidden != hidden else { return }
+        apply(animated: coordinator?.isAnimated == true)
     }
-
-    private func applyImmediately() {
-        guard let surface else { return }
-        surface.alpha = hidden ? 0 : 1
-        surface.transform = hidden && !reduceMotion ? CGAffineTransform(translationX: 0, y: 12) : .identity
-        surface.isUserInteractionEnabled = !hidden
-        surface.accessibilityElementsHidden = hidden
-        surface.superview?.isUserInteractionEnabled = !hidden
+    private func apply(animated: Bool) {
+        if #available(iOS 18.0, *), let controller, controller.isTabBarHidden != hidden {
+            controller.setTabBarHidden(hidden, animated: animated && !reduceMotion)
+        }
     }
 }
 
@@ -135,126 +115,103 @@ private final class DockVisibilityController: UIViewController {
     }
 }
 
-/// A separate hosting surface allows the transition coordinator to animate the
-/// glass without animating TabView, changing safe areas, or touching UIKit internals.
+/// Use the same UIKit Liquid Glass tab bar as 0.56.1. We own this controller
+/// and its delegate, so a short content crossfade never replaces SwiftUI's or a
+/// navigation controller's delegate. UIKit alone draws and animates the lens.
 @available(iOS 26.0, *)
-struct CompanionDockHost: UIViewControllerRepresentable {
+struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
     let presentation: CompanionDockPresentation
     let tabs: [AppTab]
     @Binding var selection: AppTab
     let reduceMotion: Bool
-    let colorScheme: ColorScheme
-    let dynamicTypeSize: DynamicTypeSize
+    @ViewBuilder let content: (AppTab) -> Content
 
-    func makeUIViewController(context: Context) -> CompanionDockController {
-        let controller = CompanionDockController(content: content)
-        controller.loadViewIfNeeded()
-        presentation.mount(controller.host.view, selection: selection, reduceMotion: reduceMotion)
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIViewController(context: Context) -> UITabBarController {
+        let controller = UITabBarController()
+        controller.mode = .tabBar
+        controller.delegate = context.coordinator
+        controller.view.backgroundColor = UIColor(Theme.background)
+        controller.view.tintColor = UIColor(Theme.accent)
+        controller.tabBar.accessibilityIdentifier = "companion-dock"
+        update(controller, context: context)
         return controller
     }
-    func updateUIViewController(_ controller: CompanionDockController, context: Context) {
-        controller.host.rootView = content
-        presentation.configure(selection: selection, reduceMotion: reduceMotion)
+    func updateUIViewController(_ controller: UITabBarController, context: Context) {
+        context.coordinator.parent = self
+        update(controller, context: context)
     }
-    private var content: AnyView {
-        AnyView(CompanionDock(tabs: tabs, selection: $selection, reduceMotion: reduceMotion)
-            .environment(\.colorScheme, colorScheme)
-            .environment(\.dynamicTypeSize, dynamicTypeSize))
-    }
-}
-
-@available(iOS 26.0, *)
-final class CompanionDockController: UIViewController {
-    let host: UIHostingController<AnyView>
-    init(content: AnyView) {
-        host = UIHostingController(rootView: content)
-        super.init(nibName: nil, bundle: nil)
-        host.safeAreaRegions = []
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .clear
-        addChild(host)
-        host.view.backgroundColor = .clear
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(host.view)
-        NSLayoutConstraint.activate([
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-        host.didMove(toParent: self)
-    }
-}
-
-@available(iOS 26.0, *)
-private struct CompanionDock: View {
-    @Environment(\.dynamicTypeSize) private var textSize
-    @Namespace private var highlight
-    let tabs: [AppTab]
-    @Binding var selection: AppTab
-    let reduceMotion: Bool
-    var body: some View {
-        // Only the moving lens belongs to the glass container. Text and icons
-        // are a separate foreground overlay: the glass compositor must never
-        // capture/refract the selected label itself.
-        GlassEffectContainer(spacing: 12) {
-          HStack(spacing: 2) {
-            ForEach(tabs) { tab in
-                Color.clear.frame(maxWidth: .infinity, minHeight: 48)
-                        .padding(.vertical, 2)
-                        .background {
-                            if selection == tab {
-                                if reduceMotion {
-                                    Capsule().fill(Theme.accent.opacity(0.18)).transition(.opacity)
-                                } else {
-                                    Color.clear
-                                        .glassEffect(.regular.tint(Theme.accent.opacity(0.14)).interactive(), in: .capsule)
-                                        .glassEffectID("selected-tab", in: highlight)
-                                        .glassEffectTransition(.matchedGeometry)
-                                }
-                            }
-                        }
+    private func update(_ controller: UITabBarController, context: Context) {
+        let coordinator = context.coordinator
+        var hosts: [UIViewController] = []
+        for tab in tabs {
+            // Retain the actual hosting controller for each tab: changing tabs
+            // never rebuilds its navigation path, filters or scroll position.
+            let root = AnyView(content(tab)
+                .environment(\.self, context.environment)
+                .environment(\.companionDockPresentation, presentation)
+                .environment(\.companionDockTab, tab)
+                .environment(\.scenePhase, tab == selection ? context.environment.scenePhase : .inactive))
+            let host = coordinator.hosts[tab] ?? UIHostingController(rootView: root)
+            host.rootView = root
+            if coordinator.hosts[tab] == nil {
+                host.tabBarItem = UITabBarItem(title: tab.title, image: UIImage(systemName: tab.symbol), selectedImage: UIImage(systemName: tab.symbol + ".fill"))
+                host.tabBarItem.accessibilityIdentifier = "dock-tab-" + tab.rawValue
+                coordinator.hosts[tab] = host
             }
-          }.padding(5).accessibilityHidden(true)
+            hosts.append(host)
         }
-            // The selection is a real refracting glass lens. Its surrounding
-            // material stays outside the glass container so glass never samples
-            // another glass surface. Both share one persistent hosting tree.
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay { Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.5).allowsHitTesting(false) }
-            .overlay {
-                HStack(spacing: 2) {
-                    ForEach(tabs) { tab in
-                        Button {
-                            withAnimation(selectionMotion) { selection = tab }
-                        } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: tab.symbol).symbolVariant(.fill)
-                                    .font(.system(size: textSize.isAccessibilitySize ? 28 : 25, weight: .regular))
-                                    .frame(height: textSize.isAccessibilitySize ? 32 : 28)
-                                    .accessibilityIdentifier("dock-icon-" + tab.rawValue)
-                                Text(tab.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
-                            }.frame(maxWidth: .infinity, minHeight: 48).padding(.vertical, 2)
-                                .foregroundStyle(selection == tab ? Theme.accent : .primary)
-                                .contentShape(Capsule())
-                        }.buttonStyle(.plain)
-                            .accessibilityLabel(tab.title)
-                            .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
-                            .accessibilityIdentifier("dock-tab-" + tab.rawValue)
-                    }
-                }.padding(5)
-            }
-            // The separate hosting controller receives a new root value on tab
-            // selection; give that boundary its own animation transaction.
-            .animation(selectionMotion, value: selection)
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isTabBar)
-            .accessibilityIdentifier("companion-dock")
+        if coordinator.order != tabs {
+            controller.setViewControllers(hosts, animated: false)
+            coordinator.order = tabs
+            coordinator.hosts = coordinator.hosts.filter { tabs.contains($0.key) }
+        }
+        if let index = tabs.firstIndex(of: selection), controller.selectedIndex != index {
+            controller.selectedIndex = index
+        }
+        presentation.mount(controller, selection: selection, reduceMotion: reduceMotion)
     }
-    private var selectionMotion: Animation {
-        reduceMotion ? .easeInOut(duration: 0.12) : .spring(duration: 0.38, bounce: 0.12)
+    final class Coordinator: NSObject, UITabBarControllerDelegate {
+        var parent: CompanionNativeTabs
+        var hosts: [AppTab: UIHostingController<AnyView>] = [:]
+        var order: [AppTab] = []
+        init(_ parent: CompanionNativeTabs) { self.parent = parent }
+        func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+            guard let index = tabBarController.viewControllers?.firstIndex(of: viewController), order.indices.contains(index) else { return }
+            let tab = order[index]
+            parent.presentation.configure(selection: tab, reduceMotion: parent.reduceMotion)
+            parent.selection = tab
+        }
+        func tabBarController(_ tabBarController: UITabBarController,
+                              animationControllerForTransitionFrom fromVC: UIViewController,
+                              to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+            CompanionTabTransition(reduceMotion: parent.reduceMotion)
+        }
+    }
+}
+
+/// Only the page content fades. No snapshotting or glass-layer manipulation.
+final class CompanionTabTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    let reduceMotion: Bool
+    init(reduceMotion: Bool) { self.reduceMotion = reduceMotion }
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        reduceMotion ? 0 : 0.18
+    }
+    func animateTransition(using context: UIViewControllerContextTransitioning) {
+        guard let destination = context.view(forKey: .to), let controller = context.viewController(forKey: .to) else {
+            context.completeTransition(false); return
+        }
+        destination.frame = context.finalFrame(for: controller)
+        context.containerView.addSubview(destination)
+        destination.alpha = reduceMotion ? 1 : 0
+        UIView.animate(withDuration: transitionDuration(using: context), delay: 0,
+                       options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            destination.alpha = 1
+        } completion: { _ in
+            let completed = !context.transitionWasCancelled
+            if !completed { destination.removeFromSuperview() }
+            destination.alpha = 1
+            context.completeTransition(completed)
+        }
     }
 }
