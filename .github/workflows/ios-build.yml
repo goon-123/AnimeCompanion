@@ -2,6 +2,10 @@ name: iOS unsigned IPA
 on:
   workflow_dispatch:
     inputs:
+      use_build_cache:
+        description: Reuse compatible build caches (disable for a clean benchmark)
+        type: boolean
+        default: true
       run_ui_tests:
         description: Run the longer iPhone and iPad simulator suites
         type: boolean
@@ -100,19 +104,50 @@ jobs:
     name: Build on-device manga runtime
     runs-on: macos-15-intel
     timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: '1.99.1'
     steps:
       - uses: actions/checkout@v4
+      - name: Fingerprint native toolchain and SDKs
+        id: toolchain
+        run: |
+          fingerprint=$( {
+            sw_vers -productVersion
+            xcodebuild -version
+            xcrun --sdk iphoneos --show-sdk-build-version
+            xcrun --sdk iphonesimulator --show-sdk-build-version
+          } | shasum -a 256 | cut -d ' ' -f 1)
+          echo "id=$fingerprint" >> "$GITHUB_OUTPUT"
+      # Keep final iOS libraries and host test intermediates, not three copies
+      # of cross-compiled Cargo dependency/build directories (previously 1.08 GB).
       - uses: actions/cache/restore@v4
+        timeout-minutes: 5
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
+        continue-on-error: true
         id: manga-runtime-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Tools/MangaRuntime/target/debug
+            Tools/MangaRuntime/target/patched-dexvm
+            Tools/MangaRuntime/target/aarch64-apple-ios/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/aarch64-apple-ios-sim/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/x86_64-apple-ios/release/libanime_manga_runtime.a
+          key: manga-ios-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-rust-1.99.1-${{ hashFiles('Tools/MangaRuntime/Cargo.toml', 'Tools/MangaRuntime/Cargo.lock', 'Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/include/**', 'Tools/MangaRuntime/support/**', 'Tools/MangaRuntime/test-support/**', 'Tests/MangaRuntimeTests/OwnedFixtures/**', 'scripts/build-manga-runtime.sh', 'scripts/prepare-manga-interpreter.py', 'scripts/test-manga-runtime.sh', 'scripts/manga-licenses.py') }}
+      # One-time migration: use the old cache only as Cargo build inputs. A
+      # legacy hit MUST go through cargo build; it cannot bypass compilation.
+      - uses: actions/cache/restore@v4
+        timeout-minutes: 5
+        name: Seed a compact-cache miss from the previous Cargo cache
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.use_build_cache) && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             Tools/MangaRuntime/target
           key: manga-ios-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-${{ hashFiles('Tools/MangaRuntime/src/**', 'Tools/MangaRuntime/support/**', 'scripts/build-manga-runtime.sh', 'scripts/prepare-manga-interpreter.py') }}
-          restore-keys: |
-            manga-ios-${{ runner.arch }}-${{ hashFiles('Tools/MangaRuntime/Cargo.lock') }}-
-            manga-ios-${{ runner.arch }}-
       - name: Build device and universal simulator libraries
         run: |
           libraries=(
@@ -124,8 +159,8 @@ jobs:
           for library in "${libraries[@]}"; do
             if [[ ! -s "$library" ]]; then complete=false; fi
           done
-          # Exact cache hits cover the lockfile, runtime sources, patch and build
-          # scripts. Keep the same pinned Xcode and regenerate both slice groups.
+          # Only a compact EXACT hit covers all native inputs plus the Xcode,
+          # SDK and Rust versions. Repackage both simulator architectures.
           if [[ '${{ steps.manga-runtime-cache.outputs.cache-hit }}' == true && "$complete" == true ]] && command -v rustup >/dev/null; then
             source "$HOME/.cargo/env"
             rustup toolchain install 1.99.1 --profile minimal
@@ -144,14 +179,19 @@ jobs:
       - name: Test real classic and modern APKs through the C bridge
         run: bash scripts/test-manga-runtime.sh
       - name: Preserve compiled runtime for retries
-        if: ${{ always() && steps.manga-runtime-cache.outputs.cache-primary-key != '' && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
+        if: ${{ success() && steps.manga-runtime-cache.outputs.cache-primary-key != '' && steps.manga-runtime-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v4
+        timeout-minutes: 5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            Tools/MangaRuntime/target
+            Tools/MangaRuntime/target/debug
+            Tools/MangaRuntime/target/patched-dexvm
+            Tools/MangaRuntime/target/aarch64-apple-ios/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/aarch64-apple-ios-sim/release/libanime_manga_runtime.a
+            Tools/MangaRuntime/target/x86_64-apple-ios/release/libanime_manga_runtime.a
           key: ${{ steps.manga-runtime-cache.outputs.cache-primary-key }}
       - name: Upload bundled manga runtime
         uses: actions/upload-artifact@v4
@@ -365,6 +405,8 @@ jobs:
         run: |
           env -u DEVELOPER_DIR swift --version
           env -u DEVELOPER_DIR swift test -j 2
+      - name: Check content-guarded build cache timestamps
+        run: python3 -m unittest discover -s scripts/tests -p 'test_ci_cache_mtimes.py'
       - name: Check release privacy guards and source credentials
         run: |
           python3 scripts/test-release-privacy.py
@@ -627,8 +669,48 @@ jobs:
             build/ExploreFixes-iphone.xcresult
           if-no-files-found: ignore
           retention-days: 30
+  apple-cache-tests:
+    name: Apple encrypted startup cache regressions
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fingerprint Apple Swift toolchain
+        id: toolchain
+        run: |
+          fingerprint=$( {
+            sw_vers -productVersion
+            env -u DEVELOPER_DIR xcodebuild -version
+            env -u DEVELOPER_DIR swift --version
+          } | shasum -a 256 | cut -d ' ' -f 1)
+          echo "id=$fingerprint" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        timeout-minutes: 5
+        id: swift-cache
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
+        continue-on-error: true
+        with:
+          path: .build
+          key: apple-swiftpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py') }}-${{ hashFiles('Sources/**', 'Tests/AnimeCoreTests/**') }}
+          restore-keys: |
+            apple-swiftpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py') }}-
+      - name: Restore unchanged Swift package input timestamps
+        run: python3 scripts/ci-cache-mtimes.py restore .build/.ci-input-mtimes.json Sources Tests/AnimeCoreTests Package.swift Package.resolved
+      - name: Verify encrypted AniList startup snapshots on Apple platforms
+        run: env -u DEVELOPER_DIR swift test -j 2 --filter AniListLibraryCacheTests
+      - name: Record successful Swift package input timestamps
+        run: python3 scripts/ci-cache-mtimes.py save .build/.ci-input-mtimes.json Sources Tests/AnimeCoreTests Package.swift Package.resolved
+      - uses: actions/cache/save@v4
+        timeout-minutes: 5
+        if: ${{ success() && steps.swift-cache.outputs.cache-primary-key != '' && steps.swift-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        with:
+          path: .build
+          key: ${{ steps.swift-cache.outputs.cache-primary-key }}
   build:
-    needs: [core, safari-extension, manga-runtime]
+    # These checks run alongside runtime preparation, rather than compiling a
+    # second Swift package serially on the IPA runner. All must pass to ship.
+    needs: [core, safari-extension, manga-runtime, apple-cache-tests, mangabaka-contracts, seanime-runtime]
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
@@ -657,17 +739,45 @@ jobs:
         with:
           name: AnimeCompanion-manga-fixtures
           path: Tests/MangaRuntimeTests/Fixtures
-      - name: Verify encrypted AniList startup snapshots on Apple platforms
-        run: env -u DEVELOPER_DIR swift test -j 2 --filter AniListLibraryCacheTests
       - name: Generate Xcode project
         run: |
-          brew install xcodegen
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
           xcodegen generate
+      - name: Fingerprint Xcode, SDK and project generator
+        id: toolchain
+        run: |
+          fingerprint=$( {
+            sw_vers -productVersion
+            xcodebuild -version
+            xcrun --sdk iphoneos --show-sdk-build-version
+            xcrun swift --version
+            xcodegen --version
+          } | shasum -a 256 | cut -d ' ' -f 1)
+          echo "id=$fingerprint" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        timeout-minutes: 5
+        id: xcode-cache
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.use_build_cache }}
+        continue-on-error: true
+        with:
+          # Do not cache the IPA, Payload, SDK stat caches, logs or test fixtures.
+          path: |
+            build/Build
+            build/ModuleCache.noindex
+            build/SourcePackages
+            build/.ci-input-mtimes.json
+          key: ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py', '.github/workflows/ios-build.yml') }}-${{ hashFiles('App/**', 'Sources/**', 'SafariExtension/**', 'Tools/SeanimeRuntime/package-lock.json', 'Tools/SeanimeRuntime/build.mjs', 'build/MangaRuntime.xcframework/**') }}
+          restore-keys: |
+            ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('project.yml', 'Package.swift', 'Package.resolved', 'scripts/ci-cache-mtimes.py', '.github/workflows/ios-build.yml') }}-
+            ipa-derived-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
+      - name: Restore only content-matching Xcode input timestamps
+        run: python3 scripts/ci-cache-mtimes.py restore build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
       - name: Compile universal iPhone and iPad app
         run: |
           xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
             -configuration Release -destination 'generic/platform=iOS' \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+            -derivedDataPath build -parallelizeTargets -showBuildTimingSummary \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
           python3 scripts/check-safari-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
@@ -675,11 +785,27 @@ jobs:
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
           ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
+          unzip -tq AnimeCompanion-unsigned.ipa
+      - name: Record successful Xcode input timestamps
+        run: python3 scripts/ci-cache-mtimes.py save build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
+      - uses: actions/cache/save@v4
+        timeout-minutes: 5
+        if: ${{ success() && steps.xcode-cache.outputs.cache-primary-key != '' && steps.xcode-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        with:
+          path: |
+            build/Build
+            build/ModuleCache.noindex
+            build/SourcePackages
+            build/.ci-input-mtimes.json
+          key: ${{ steps.xcode-cache.outputs.cache-primary-key }}
       - name: Upload universal build
+        timeout-minutes: 3
         uses: actions/upload-artifact@v4
         with:
           name: AnimeCompanion-unsigned-IPA
           path: AnimeCompanion-unsigned.ipa
+          if-no-files-found: error
           retention-days: 30
       - name: Check public data providers
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests }}
