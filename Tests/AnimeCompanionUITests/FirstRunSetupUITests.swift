@@ -9,9 +9,12 @@ final class FirstRunSetupUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["setup-continue"].waitForExistence(timeout: 20))
         app.buttons["setup-continue"].tap()
+        XCTAssertTrue(app.staticTexts["Bring your libraries."].waitForExistence(timeout: 10))
         app.buttons["setup-continue"].tap()
+        XCTAssertTrue(app.staticTexts["Make yourself at home."].waitForExistence(timeout: 10))
         let picker = app.buttons["video-player-picker"]
-        app.revealInContent(picker)
+        app.swipeUp()
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(picker.isHittable)
         picker.tap(); app.buttons["Outplayer"].firstMatch.tap()
         XCTAssertTrue(picker.label.contains("Outplayer") || (picker.value as? String) == "Outplayer")

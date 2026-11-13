@@ -31,7 +31,11 @@ struct AppSessionView: View {
     @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     var body: some View {
-            launchRoot.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+            launchRoot.environment(\.companionSessionStores, CompanionSessionStores(
+                app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
+                navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions,
+                reading: mangaReading, links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset))
+                .environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .onAppear {
                     reset.prepareForReset = { [weak store, weak mangaBaka] in
                         store?.prepareForAppReset(); mangaBaka?.prepareForAppReset()

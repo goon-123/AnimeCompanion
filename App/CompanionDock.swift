@@ -3,6 +3,41 @@ import UIKit
 import QuartzCore
 import AnimeCore
 
+/// Only app-owned models cross the independent hosting-controller boundary.
+/// Copying EnvironmentValues wholesale also copies SwiftUI's private graph,
+/// accessibility and presentation state, which belongs to its original host.
+struct CompanionSessionStores {
+    let app: AppStore
+    let filters: DiscoveryFilterStore
+    let playback: PlaybackStore
+    let seanime: SeanimeStore
+    let navigation: AppNavigationStore
+    let weekly: WeeklyScheduleStore
+    let extensions: MangaExtensionStore
+    let reading: MangaReadingStore
+    let links: MangaSourceLinkStore
+    let mangaBaka: MangaBakaStore
+    let reset: AppResetCoordinator
+
+    @MainActor func install<V: View>(in view: V) -> some View {
+        view.environmentObject(app).environmentObject(app.exploreDubs)
+            .environmentObject(filters).environmentObject(playback)
+            .environmentObject(seanime).environmentObject(navigation)
+            .environmentObject(weekly).environmentObject(extensions)
+            .environmentObject(reading).environmentObject(links)
+            .environmentObject(mangaBaka).environmentObject(reset)
+    }
+}
+private struct CompanionSessionStoresKey: EnvironmentKey {
+    static let defaultValue: CompanionSessionStores? = nil
+}
+extension EnvironmentValues {
+    var companionSessionStores: CompanionSessionStores? {
+        get { self[CompanionSessionStoresKey.self] }
+        set { self[CompanionSessionStoresKey.self] = newValue }
+    }
+}
+
 /// Visibility belongs to the single native tab controller. Navigation keeps its
 /// own delegates and interactive back gesture, including cancellation recovery.
 @MainActor
@@ -171,6 +206,7 @@ private struct CompanionActivePane<Content: View>: View {
 /// UIKit owns the Liquid Glass bar and lens; only page content crossfades.
 @available(iOS 26.0, *)
 struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
+    @Environment(\.self) private var inheritedEnvironment
     let presentation: CompanionDockPresentation
     let tabs: [AppTab]
     @Binding var selection: AppTab
@@ -207,11 +243,26 @@ struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
             if let existing = coordinator.hosts[tab], !environmentChanged, coordinator.contentKeys[tab] == key {
                 host = existing
             } else {
-                // Whole environment outside, narrow per-tab overrides inside.
-                let root = AnyView(CompanionActivePane(activity: activity, content: content(tab))
+                guard let stores = inheritedEnvironment.companionSessionStores else {
+                    preconditionFailure("Native tabs require the session's app models")
+                }
+                // Forward public preferences and app models explicitly. The new
+                // host owns its accessibility, presentation and interaction graph.
+                let root = AnyView(stores.install(in: CompanionActivePane(activity: activity, content: content(tab)))
+                    .environment(\.colorScheme, inheritedEnvironment.colorScheme)
+                    .environment(\.dynamicTypeSize, inheritedEnvironment.dynamicTypeSize)
+                    .environment(\.horizontalSizeClass, inheritedEnvironment.horizontalSizeClass)
+                    .environment(\.verticalSizeClass, inheritedEnvironment.verticalSizeClass)
+                    .environment(\.displayScale, inheritedEnvironment.displayScale)
+                    .environment(\.layoutDirection, inheritedEnvironment.layoutDirection)
+                    .environment(\.locale, inheritedEnvironment.locale)
+                    .environment(\.calendar, inheritedEnvironment.calendar)
+                    .environment(\.timeZone, inheritedEnvironment.timeZone)
+                    .environment(\.animeBrowseViewportHeight, inheritedEnvironment.animeBrowseViewportHeight)
+                    .environment(\.browseInteractionReady, inheritedEnvironment.browseInteractionReady)
                     .environment(\.companionDockPresentation, presentation)
                     .environment(\.companionDockTab, tab)
-                    .environment(\.self, context.environment))
+                    .tint(Theme.accent))
                 if let existing = coordinator.hosts[tab] {
                     existing.rootView = root; host = existing
                     coordinator.rootReassignments += 1

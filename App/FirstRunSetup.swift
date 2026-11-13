@@ -151,8 +151,9 @@ struct FirstRunSetupView: View {
                 }.companionPanel(padding: 18)
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Playback", systemImage: "play.rectangle").font(.headline)
+                        .accessibilityIdentifier("setup-video-player")
                     VideoPlayerSelection()
-                }.companionPanel(padding: 18).accessibilityIdentifier("setup-video-player")
+                }.companionPanel(padding: 18)
                 feature("Your layout, your choice", detail: "Hide, add and rearrange Home and Explore widgets whenever you like.", symbol: "rectangle.3.group")
             }
         case .ready:

@@ -1,6 +1,6 @@
-## Catalog switching and video players — version 0.58.3 / build 130
+## Catalog switching and video players — version 0.58.4 / build 131
 
-Anime/Manga switching owns the complete header touch area and crossfades the retained catalogs in 0.20 seconds (0.10 with Reduce Motion). Loaded shelves, Spotlight space and scroll positions are retained. Native tabs refresh their copied interaction environment once after the launch reveal so cached roots do not keep the splash screen's hidden/disabled state.
+Anime/Manga switching owns the complete header touch area and crossfades the retained catalogs in 0.20 seconds (0.10 with Reduce Motion). Loaded shelves, Spotlight space and scroll positions are retained. Native tabs receive app models and public display preferences explicitly. Each hosting controller owns its interaction and accessibility graph; opaque SwiftUI environments are never copied between hosts.
 
 Choose VidHub, Outplayer or Infuse in **Settings → Sources & playback → Video player**, or in the setup preferences. The saved choice applies to native Watch, installed add-on catalogs and TorBox files. VidHub remains the default for upgrades. The separate Safari → VidHub extension continues to use VidHub.
 
