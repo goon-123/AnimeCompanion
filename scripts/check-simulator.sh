@@ -248,7 +248,12 @@ if [[ "$test_scope" == dock-gallery ]]; then
   diagnostic_path="build/dock-gallery-${device_family}-diagnostics"
   test_arguments=(-only-testing:AnimeCompanionUITests/DockAndGalleryFixUITests
     -only-testing:AnimeCompanionUITests/SpotlightPolishUITests
-    -only-testing:MangaRuntimeTests/SpotlightLogoBitmapTests)
+    -only-testing:MangaRuntimeTests/SpotlightLogoBitmapTests
+    -only-testing:MangaRuntimeTests/CompanionTabTransitionTests
+    -only-testing:MangaRuntimeTests/TabResponsivenessTests
+    -only-testing:MangaRuntimeTests/ExternalPlayerStoreTests
+    -only-testing:AnimeCompanionUITests/FirstRunSetupUITests/testPlayerChoiceDuringSetupIsSharedWithSettings
+    -only-testing:AnimeCompanionUITests/TabResponsivenessUITests)
 fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)
 if [[ "$test_scope" == customization || "$test_scope" == news || "$test_scope" == explore || "$test_scope" == explore-fixes || "$test_scope" == dock-gallery ]]; then

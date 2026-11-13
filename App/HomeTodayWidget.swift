@@ -30,6 +30,9 @@ struct HomeTodayWidget: View {
     }
     private var refreshKey: String { "\(scenePhase)-\(navigation.selectedTab)-\(week.window.start)-\(!tracked.isEmpty)-\(refreshID)" }
     var body: some View {
+        AppTabSelectionReader(selection: navigation.tabSelection) { selectionAwareContent }
+    }
+    private var selectionAwareContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CompanionSectionHeading(title: "Airing today")

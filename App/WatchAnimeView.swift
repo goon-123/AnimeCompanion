@@ -144,7 +144,7 @@ struct WatchAnimeView: View {
                         let completed = anime.episodes.map { $0 > 0 && entry.progressValue >= $0 } ?? false
                         Text("AniList · \(entry.progressValue) episodes watched\(completed ? " · Completed" : "")").font(.caption).foregroundStyle(.secondary)
                             .accessibilityIdentifier("playback-anilist-progress")
-                    } else { Text(anime.format == "MOVIE" ? "Movie · VidHub" : "Choose an episode · VidHub").font(.caption).foregroundStyle(.secondary) }
+                    } else { Text(anime.format == "MOVIE" ? "Movie · \(playback.player.label)" : "Choose an episode · \(playback.player.label)").font(.caption).foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             if anime.format != "MOVIE" {
@@ -172,7 +172,7 @@ struct WatchAnimeView: View {
                 Label("Streaming add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
                 Text(playback.installations.isEmpty ? "Add a streaming manifest to include direct video sources." : "No compatible streaming add-ons are enabled.")
                     .font(.caption).foregroundStyle(.secondary)
-                NavigationLink("Set up add-on & VidHub") { PlaybackSettingsView() }
+                NavigationLink("Set up add-on & video player") { PlaybackSettingsView() }
             }
         } else {
             StreamPickerHeading(title: "Streaming", count: visibleSources.count, loading: loading, countID: "playback-result-count")

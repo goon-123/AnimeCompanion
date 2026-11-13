@@ -37,6 +37,9 @@ struct AiringThisWeekView: View {
     private var refreshKey: String { "\(scenePhase)-\(navigation.selectedTab)-\(week.window.start)-\(!trackedIDs.isEmpty)" }
 
     var body: some View {
+        AppTabSelectionReader(selection: navigation.tabSelection) { selectionAwareContent }
+    }
+    private var selectionAwareContent: some View {
         weeklyContent
             .task(id: refreshKey) {
                 guard scenePhase == .active, navigation.selectedTab == .home else { return }

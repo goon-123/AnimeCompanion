@@ -133,7 +133,7 @@ struct HomeContinueWatchingCard: View {
                 .frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).disabled(anime.status == "NOT_YET_RELEASED")
             .accessibilityLabel(anime.format == "MOVIE" ? "Watch \(anime.displayTitle)" : "Continue \(anime.displayTitle), episode \(episode)")
-            .accessibilityHint("Choose a stream and open it in VidHub")
+            .accessibilityHint("Choose a stream and open it in your video player")
             .accessibilityIdentifier("home-watch-\(anime.id)")
     }
 }

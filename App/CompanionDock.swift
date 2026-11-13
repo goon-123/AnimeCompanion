@@ -1,57 +1,73 @@
 import SwiftUI
 import UIKit
+import QuartzCore
 import AnimeCore
 
-/// The dock stays mounted outside navigation. Only its surface moves, so hiding
-/// a series never changes the browse viewport or waits for iOS to rebuild a bar.
+/// Only app-owned models cross the independent hosting-controller boundary.
+/// Copying EnvironmentValues wholesale also copies SwiftUI's private graph,
+/// accessibility and presentation state, which belongs to its original host.
+struct CompanionSessionStores {
+    let app: AppStore
+    let filters: DiscoveryFilterStore
+    let playback: PlaybackStore
+    let seanime: SeanimeStore
+    let navigation: AppNavigationStore
+    let weekly: WeeklyScheduleStore
+    let extensions: MangaExtensionStore
+    let reading: MangaReadingStore
+    let links: MangaSourceLinkStore
+    let mangaBaka: MangaBakaStore
+    let reset: AppResetCoordinator
+
+    @MainActor func install<V: View>(in view: V) -> some View {
+        view.environmentObject(app).environmentObject(app.exploreDubs)
+            .environmentObject(filters).environmentObject(playback)
+            .environmentObject(seanime).environmentObject(navigation)
+            .environmentObject(weekly).environmentObject(extensions)
+            .environmentObject(reading).environmentObject(links)
+            .environmentObject(mangaBaka).environmentObject(reset)
+    }
+}
+private struct CompanionSessionStoresKey: EnvironmentKey {
+    static let defaultValue: CompanionSessionStores? = nil
+}
+extension EnvironmentValues {
+    var companionSessionStores: CompanionSessionStores? {
+        get { self[CompanionSessionStoresKey.self] }
+        set { self[CompanionSessionStoresKey.self] = newValue }
+    }
+}
+
+/// Visibility belongs to the single native tab controller. Navigation keeps its
+/// own delegates and interactive back gesture, including cancellation recovery.
 @MainActor
 final class CompanionDockPresentation: ObservableObject {
     private var hiddenScreens: [AppTab: Set<UUID>] = [:]
     private var selection: AppTab = .home
     private var reduceMotion = false
-    private weak var surface: UIView?
-
+    private weak var controller: UITabBarController?
     private var hidden: Bool { !(hiddenScreens[selection] ?? []).isEmpty }
 
-    func mount(_ view: UIView, selection: AppTab, reduceMotion: Bool) {
-        surface = view; self.selection = selection; self.reduceMotion = reduceMotion
-        applyImmediately()
+    func mount(_ controller: UITabBarController, selection: AppTab, reduceMotion: Bool) {
+        self.controller = controller
+        configure(selection: selection, reduceMotion: reduceMotion)
     }
-
     func configure(selection: AppTab, reduceMotion: Bool) {
-        let changed = self.selection != selection || self.reduceMotion != reduceMotion
         self.selection = selection; self.reduceMotion = reduceMotion
-        if changed { applyImmediately() }
+        apply(animated: false)
     }
-
     func setHidden(_ active: Bool, screen: UUID, tab: AppTab,
                    coordinator: UIViewControllerTransitionCoordinator? = nil) {
         let wasHidden = hidden
         if active { hiddenScreens[tab, default: []].insert(screen) }
         else { hiddenScreens[tab]?.remove(screen) }
-        guard hidden != wasHidden, let surface else { return }
-        surface.isUserInteractionEnabled = !hidden
-        surface.accessibilityElementsHidden = hidden
-        surface.superview?.isUserInteractionEnabled = !hidden
-        let changes = { [weak self] in self?.applyImmediately() }
-        // UIKit drives this animation with the interactive back gesture and
-        // reverses it on cancellation. No navigation delegate is replaced.
-        if !reduceMotion, let coordinator,
-           coordinator.animate(alongsideTransition: { _ in changes() }, completion: { [weak self] _ in
-               self?.applyImmediately()
-           }) { return }
-        UIView.animate(withDuration: reduceMotion ? 0.12 : 0.25, delay: 0,
-                       options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut],
-                       animations: { changes() })
+        guard wasHidden != hidden else { return }
+        apply(animated: coordinator?.isAnimated == true)
     }
-
-    private func applyImmediately() {
-        guard let surface else { return }
-        surface.alpha = hidden ? 0 : 1
-        surface.transform = hidden && !reduceMotion ? CGAffineTransform(translationX: 0, y: 12) : .identity
-        surface.isUserInteractionEnabled = !hidden
-        surface.accessibilityElementsHidden = hidden
-        surface.superview?.isUserInteractionEnabled = !hidden
+    private func apply(animated: Bool) {
+        if #available(iOS 18.0, *), let controller, controller.isTabBarHidden != hidden {
+            controller.setTabBarHidden(hidden, animated: animated && !reduceMotion)
+        }
     }
 }
 
@@ -59,7 +75,12 @@ private struct CompanionDockPresentationKey: EnvironmentKey {
     static let defaultValue: CompanionDockPresentation? = nil
 }
 private struct CompanionDockTabKey: EnvironmentKey { static let defaultValue = AppTab.home }
+private struct BrowseInteractionReadyKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
+    var browseInteractionReady: Bool {
+        get { self[BrowseInteractionReadyKey.self] }
+        set { self[BrowseInteractionReadyKey.self] = newValue }
+    }
     var companionDockPresentation: CompanionDockPresentation? {
         get { self[CompanionDockPresentationKey.self] }
         set { self[CompanionDockPresentationKey.self] = newValue }
@@ -135,126 +156,271 @@ private final class DockVisibilityController: UIViewController {
     }
 }
 
-/// A separate hosting surface allows the transition coordinator to animate the
-/// glass without animating TabView, changing safe areas, or touching UIKit internals.
+/// Only actual environment/layout changes replace a hosting root. Data stores
+/// observe their own changes; a tab tap must not reassign every catalog root.
+private struct CompanionTabEnvironment: Equatable {
+    let scheme: ColorScheme
+    let typeSize: DynamicTypeSize
+    let horizontal: UserInterfaceSizeClass?
+    let vertical: UserInterfaceSizeClass?
+    let scale: CGFloat
+    let direction: LayoutDirection
+    let locale: String
+    let timeZone: String
+    let calendar: String
+    let legibility: String
+    let contrast: String
+    let differentiateColors: Bool
+    let viewport: CGFloat?
+    let reduceTransparency: Bool
+    let reduceMotion: Bool
+    let interactionReady: Bool
+    init(_ environment: EnvironmentValues) {
+        scheme = environment.colorScheme; typeSize = environment.dynamicTypeSize
+        horizontal = environment.horizontalSizeClass; vertical = environment.verticalSizeClass
+        scale = environment.displayScale; direction = environment.layoutDirection
+        locale = environment.locale.identifier; timeZone = environment.timeZone.identifier
+        calendar = String(describing: environment.calendar.identifier)
+        legibility = String(describing: environment.legibilityWeight)
+        contrast = String(describing: environment.colorSchemeContrast)
+        differentiateColors = environment.accessibilityDifferentiateWithoutColor
+        viewport = environment.animeBrowseViewportHeight
+        reduceTransparency = environment.accessibilityReduceTransparency
+        reduceMotion = environment.accessibilityReduceMotion
+        // Launch initially hides accessibility and interaction. Refresh the
+        // copied environment once at reveal, never on ordinary tab selection.
+        interactionReady = environment.browseInteractionReady
+    }
+}
+@MainActor
+private final class CompanionTabActivity: ObservableObject {
+    @Published private(set) var phase = ScenePhase.inactive
+    func set(_ phase: ScenePhase) { if self.phase != phase { self.phase = phase } }
+}
+private struct CompanionActivePane<Content: View>: View {
+    @ObservedObject var activity: CompanionTabActivity
+    let content: Content
+    var body: some View { content.environment(\.scenePhase, activity.phase) }
+}
+
+/// UIKit owns the Liquid Glass bar and lens; only page content crossfades.
 @available(iOS 26.0, *)
-struct CompanionDockHost: UIViewControllerRepresentable {
+struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
+    @Environment(\.self) private var inheritedEnvironment
     let presentation: CompanionDockPresentation
     let tabs: [AppTab]
     @Binding var selection: AppTab
     let reduceMotion: Bool
-    let colorScheme: ColorScheme
-    let dynamicTypeSize: DynamicTypeSize
+    let contentKey: (AppTab) -> String
+    @ViewBuilder let content: (AppTab) -> Content
 
-    func makeUIViewController(context: Context) -> CompanionDockController {
-        let controller = CompanionDockController(content: content)
-        controller.loadViewIfNeeded()
-        presentation.mount(controller.host.view, selection: selection, reduceMotion: reduceMotion)
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIViewController(context: Context) -> UITabBarController {
+        let controller = UITabBarController()
+        controller.mode = .tabBar
+        controller.delegate = context.coordinator
+        controller.view.backgroundColor = UIColor(Theme.background)
+        controller.view.tintColor = UIColor(Theme.accent)
+        controller.tabBar.accessibilityIdentifier = "companion-dock"
+        update(controller, context: context)
         return controller
     }
-    func updateUIViewController(_ controller: CompanionDockController, context: Context) {
-        controller.host.rootView = content
-        presentation.configure(selection: selection, reduceMotion: reduceMotion)
+    func updateUIViewController(_ controller: UITabBarController, context: Context) {
+        context.coordinator.parent = self
+        update(controller, context: context)
     }
-    private var content: AnyView {
-        AnyView(CompanionDock(tabs: tabs, selection: $selection, reduceMotion: reduceMotion)
-            .environment(\.colorScheme, colorScheme)
-            .environment(\.dynamicTypeSize, dynamicTypeSize))
-    }
-}
-
-@available(iOS 26.0, *)
-final class CompanionDockController: UIViewController {
-    let host: UIHostingController<AnyView>
-    init(content: AnyView) {
-        host = UIHostingController(rootView: content)
-        super.init(nibName: nil, bundle: nil)
-        host.safeAreaRegions = []
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .clear
-        addChild(host)
-        host.view.backgroundColor = .clear
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(host.view)
-        NSLayoutConstraint.activate([
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-        host.didMove(toParent: self)
-    }
-}
-
-@available(iOS 26.0, *)
-private struct CompanionDock: View {
-    @Environment(\.dynamicTypeSize) private var textSize
-    @Namespace private var highlight
-    let tabs: [AppTab]
-    @Binding var selection: AppTab
-    let reduceMotion: Bool
-    var body: some View {
-        // Only the moving lens belongs to the glass container. Text and icons
-        // are a separate foreground overlay: the glass compositor must never
-        // capture/refract the selected label itself.
-        GlassEffectContainer(spacing: 12) {
-          HStack(spacing: 2) {
-            ForEach(tabs) { tab in
-                Color.clear.frame(maxWidth: .infinity, minHeight: 48)
-                        .padding(.vertical, 2)
-                        .background {
-                            if selection == tab {
-                                if reduceMotion {
-                                    Capsule().fill(Theme.accent.opacity(0.18)).transition(.opacity)
-                                } else {
-                                    Color.clear
-                                        .glassEffect(.regular.tint(Theme.accent.opacity(0.14)).interactive(), in: .capsule)
-                                        .glassEffectID("selected-tab", in: highlight)
-                                        .glassEffectTransition(.matchedGeometry)
-                                }
-                            }
-                        }
+    private func update(_ controller: UITabBarController, context: Context) {
+        let coordinator = context.coordinator
+        let stamp = CompanionTabEnvironment(context.environment)
+        let environmentChanged = stamp != coordinator.environmentStamp
+        var hosts: [UIViewController] = []
+        for tab in tabs {
+            let key = contentKey(tab)
+            let activity = coordinator.activities[tab] ?? CompanionTabActivity()
+            coordinator.activities[tab] = activity
+            activity.set(tab == selection ? context.environment.scenePhase : .inactive)
+            let host: UIHostingController<AnyView>
+            if let existing = coordinator.hosts[tab], !environmentChanged, coordinator.contentKeys[tab] == key {
+                host = existing
+            } else {
+                guard let stores = inheritedEnvironment.companionSessionStores else {
+                    preconditionFailure("Native tabs require the session's app models")
+                }
+                // Forward public preferences and app models explicitly. The new
+                // host owns its accessibility, presentation and interaction graph.
+                let root = AnyView(stores.install(in: CompanionActivePane(activity: activity, content: content(tab)))
+                    .environment(\.colorScheme, inheritedEnvironment.colorScheme)
+                    .environment(\.dynamicTypeSize, inheritedEnvironment.dynamicTypeSize)
+                    .environment(\.horizontalSizeClass, inheritedEnvironment.horizontalSizeClass)
+                    .environment(\.verticalSizeClass, inheritedEnvironment.verticalSizeClass)
+                    .environment(\.displayScale, inheritedEnvironment.displayScale)
+                    .environment(\.layoutDirection, inheritedEnvironment.layoutDirection)
+                    .environment(\.locale, inheritedEnvironment.locale)
+                    .environment(\.calendar, inheritedEnvironment.calendar)
+                    .environment(\.timeZone, inheritedEnvironment.timeZone)
+                    .environment(\.animeBrowseViewportHeight, inheritedEnvironment.animeBrowseViewportHeight)
+                    .environment(\.browseInteractionReady, inheritedEnvironment.browseInteractionReady)
+                    .environment(\.companionDockPresentation, presentation)
+                    .environment(\.companionDockTab, tab)
+                    .tint(Theme.accent))
+                if let existing = coordinator.hosts[tab] {
+                    existing.rootView = root; host = existing
+                    coordinator.rootReassignments += 1
+                } else {
+                    host = UIHostingController(rootView: root)
+                    host.tabBarItem = UITabBarItem(title: tab.title, image: UIImage(systemName: tab.symbol), selectedImage: UIImage(systemName: tab.symbol + ".fill"))
+                    host.tabBarItem.accessibilityIdentifier = "dock-tab-" + tab.rawValue
+                    coordinator.hosts[tab] = host
+                }
+                coordinator.contentKeys[tab] = key
             }
-          }.padding(5).accessibilityHidden(true)
+            hosts.append(host)
         }
-            // The selection is a real refracting glass lens. Its surrounding
-            // material stays outside the glass container so glass never samples
-            // another glass surface. Both share one persistent hosting tree.
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay { Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.5).allowsHitTesting(false) }
-            .overlay {
-                HStack(spacing: 2) {
-                    ForEach(tabs) { tab in
-                        Button {
-                            withAnimation(selectionMotion) { selection = tab }
-                        } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: tab.symbol).symbolVariant(.fill)
-                                    .font(.system(size: textSize.isAccessibilitySize ? 28 : 25, weight: .regular))
-                                    .frame(height: textSize.isAccessibilitySize ? 32 : 28)
-                                    .accessibilityIdentifier("dock-icon-" + tab.rawValue)
-                                Text(tab.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
-                            }.frame(maxWidth: .infinity, minHeight: 48).padding(.vertical, 2)
-                                .foregroundStyle(selection == tab ? Theme.accent : .primary)
-                                .contentShape(Capsule())
-                        }.buttonStyle(.plain)
-                            .accessibilityLabel(tab.title)
-                            .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
-                            .accessibilityIdentifier("dock-tab-" + tab.rawValue)
-                    }
-                }.padding(5)
+        coordinator.environmentStamp = stamp
+        let orderChanged = coordinator.order != tabs
+        if orderChanged {
+            controller.setViewControllers(hosts, animated: false)
+            coordinator.order = tabs
+            coordinator.hosts = coordinator.hosts.filter { tabs.contains($0.key) }
+            coordinator.activities = coordinator.activities.filter { tabs.contains($0.key) }
+            coordinator.contentKeys = coordinator.contentKeys.filter { tabs.contains($0.key) }
+        }
+        // Provider updates may arrive before UIKit's didSelect callback. Only
+        // apply a changed binding, never rewind a native selection in flight.
+        if orderChanged || coordinator.boundSelection != selection {
+            coordinator.boundSelection = selection
+            if let index = tabs.firstIndex(of: selection), controller.selectedIndex != index {
+                controller.selectedIndex = index
             }
-            // The separate hosting controller receives a new root value on tab
-            // selection; give that boundary its own animation transaction.
-            .animation(selectionMotion, value: selection)
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isTabBar)
-            .accessibilityIdentifier("companion-dock")
+        }
+        presentation.mount(controller, selection: selection, reduceMotion: reduceMotion)
+        coordinator.scenePhase = context.environment.scenePhase
+        if context.environment.browseInteractionReady, context.environment.scenePhase == .active {
+            coordinator.prepareIdleTabs(in: controller)
+        } else { coordinator.warmup?.cancel(); coordinator.warmup = nil }
     }
-    private var selectionMotion: Animation {
-        reduceMotion ? .easeInOut(duration: 0.12) : .spring(duration: 0.38, bounce: 0.12)
+    final class Coordinator: NSObject, UITabBarControllerDelegate {
+        var parent: CompanionNativeTabs
+        var hosts: [AppTab: UIHostingController<AnyView>] = [:]
+        fileprivate var activities: [AppTab: CompanionTabActivity] = [:]
+        fileprivate var environmentStamp: CompanionTabEnvironment?
+        var contentKeys: [AppTab: String] = [:]
+        var order: [AppTab] = []
+        var boundSelection: AppTab?
+        var scenePhase = ScenePhase.active
+        var rootReassignments = 0
+        var warmup: Task<Void, Never>?
+        #if DEBUG
+        private var probe: DockSwitchProbe?
+        #endif
+        init(_ parent: CompanionNativeTabs) { self.parent = parent }
+        deinit { warmup?.cancel() }
+        func prepareIdleTabs(in controller: UITabBarController) {
+            guard warmup == nil, hosts.values.contains(where: { !$0.isViewLoaded }) else { return }
+            warmup = Task { @MainActor [weak self, weak controller] in
+                defer { self?.warmup = nil }
+                guard let self else { return }
+                for tab in self.order {
+                    do { try await Task.sleep(for: .milliseconds(600)) } catch { return }
+                    guard !Task.isCancelled, let controller, self.scenePhase == .active else { return }
+                    guard let host = self.hosts[tab], !host.isViewLoaded else { continue }
+                    // Native backing views only. Do not lay out an offscreen
+                    // Spotlight with fake safe areas or start synthetic appearances.
+                    if Self.isScrolling(controller.selectedViewController?.viewIfLoaded) { continue }
+                    host.loadViewIfNeeded()
+                }
+            }
+        }
+        private static func isScrolling(_ view: UIView?) -> Bool {
+            guard let view else { return false }
+            if let scroll = view as? UIScrollView, scroll.isTracking || scroll.isDragging || scroll.isDecelerating { return true }
+            return view.subviews.contains { isScrolling($0) }
+        }
+        func tabBarController(_ controller: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-tab-performance"), viewController !== controller.selectedViewController {
+                probe?.cancel()
+                probe = DockSwitchProbe(rootReassignments: rootReassignments)
+            }
+            #endif
+            return true
+        }
+        func tabBarController(_ controller: UITabBarController, didSelect viewController: UIViewController) {
+            guard let index = controller.viewControllers?.firstIndex(of: viewController), order.indices.contains(index) else { return }
+            let tab = order[index]
+            parent.presentation.configure(selection: tab, reduceMotion: parent.reduceMotion)
+            parent.selection = tab
+        }
+        func tabBarController(_ controller: UITabBarController,
+                              animationControllerForTransitionFrom fromVC: UIViewController,
+                              to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+            CompanionTabTransition(reduceMotion: parent.reduceMotion) { [weak self, weak controller] in
+                #if DEBUG
+                guard let self, let controller else { return }
+                self.probe?.finish(on: controller.tabBar, rootReassignments: self.rootReassignments)
+                self.probe = nil
+                #endif
+            }
+        }
     }
 }
+
+final class CompanionTabTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    let reduceMotion: Bool
+    let completed: () -> Void
+    init(reduceMotion: Bool, completed: @escaping () -> Void = {}) { self.reduceMotion = reduceMotion; self.completed = completed }
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        reduceMotion ? 0 : 0.12
+    }
+    func animateTransition(using context: UIViewControllerContextTransitioning) {
+        guard let destination = context.view(forKey: .to), let controller = context.viewController(forKey: .to) else {
+            context.completeTransition(false); completed(); return
+        }
+        destination.frame = context.finalFrame(for: controller)
+        context.containerView.addSubview(destination)
+        destination.alpha = reduceMotion ? 1 : 0
+        UIView.animate(withDuration: transitionDuration(using: context), delay: 0,
+                       options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            destination.alpha = 1
+        } completion: { _ in
+            let success = !context.transitionWasCancelled
+            if !success { destination.removeFromSuperview() }
+            destination.alpha = 1
+            context.completeTransition(success)
+            self.completed()
+        }
+    }
+}
+
+#if DEBUG
+/// Owned native test measurements, including destination view construction and
+/// main-run-loop frame gaps. Never exposed in Release or used as production data.
+@MainActor
+private final class DockSwitchProbe: NSObject {
+    private let started = CACurrentMediaTime()
+    private let roots: Int
+    private var lastFrame = CACurrentMediaTime()
+    private var largestGap: Double = 0
+    private var link: CADisplayLink?
+    init(rootReassignments: Int) {
+        roots = rootReassignments
+        super.init()
+        let link = CADisplayLink(target: self, selector: #selector(frame))
+        self.link = link; link.add(to: .main, forMode: .common)
+    }
+    @objc private func frame() {
+        let now = CACurrentMediaTime()
+        largestGap = max(largestGap, now - lastFrame); lastFrame = now
+    }
+    func cancel() { link?.invalidate(); link = nil }
+    func finish(on bar: UITabBar, rootReassignments: Int) {
+        cancel()
+        let result: [String: Double] = ["milliseconds": (CACurrentMediaTime() - started) * 1000,
+            "largestFrameGapMS": largestGap * 1000, "rootReassignments": Double(rootReassignments - roots)]
+        if let data = try? JSONSerialization.data(withJSONObject: result), let value = String(data: data, encoding: .utf8) {
+            bar.accessibilityValue = value
+            print("Owned dock switch: " + value)
+        }
+    }
+}
+#endif

@@ -16,7 +16,7 @@ struct StreamPickerOptionsView: View {
             } footer: { Text("Turn off to also inspect unavailable streaming sources. Torrent readiness is checked separately in TorBox.") }
             Section {
                 NavigationLink("Playback help") { StreamPickerHelpView() }
-                NavigationLink("VidHub & resume") { PlayerSettingsView() }
+                NavigationLink("Video player & resume") { PlayerSettingsView() }
             }
         }.navigationTitle("Source options").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

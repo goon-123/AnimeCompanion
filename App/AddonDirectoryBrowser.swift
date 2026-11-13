@@ -112,7 +112,7 @@ struct AddonCompatibilityText: View {
             }
             if !addon.manifest.advertises("stream") { Text("This add-on does not supply video streams. Its catalogs, metadata or subtitles can work with other enabled add-ons.") }
             if addon.manifest.advertises("addon_catalog") { Text("Nested add-on-directory resources are not rendered natively. Browse the website or paste individual manifest links.") }
-            Text("VidHub plays direct HTTP(S) video links. Torrent-only, DRM, YouTube IDs and special playback headers need a compatible service or proxy; JavaScript plugins and legacy/IPFS transports are not supported.")
+            Text("External video players open direct HTTP(S) video links. Torrent-only, DRM, YouTube IDs and special playback headers need a compatible service or proxy; JavaScript plugins and legacy/IPFS transports are not supported.")
         }.font(.caption).foregroundStyle(.secondary)
     }
 }

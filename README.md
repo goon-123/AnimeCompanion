@@ -1,3 +1,11 @@
+## Catalog switching and video players — version 0.58.4 / build 131
+
+Anime/Manga switching owns the complete header touch area and crossfades the retained catalogs in 0.20 seconds (0.10 with Reduce Motion). Loaded shelves, Spotlight space and scroll positions are retained. Native tabs receive app models and public display preferences explicitly. Each hosting controller owns its interaction and accessibility graph; opaque SwiftUI environments are never copied between hosts.
+
+Choose VidHub, Outplayer or Infuse in **Settings → Sources & playback → Video player**, or in the setup preferences. The saved choice applies to native Watch, installed add-on catalogs and TorBox files. VidHub remains the default for upgrades. The separate Safari → VidHub extension continues to use VidHub.
+
+Outplayer uses its documented `x-callback-url/play` API, `subtitle` parameter, finish callback and close callback with position/duration. [Infuse's official API](https://support.firecore.com/hc/en-us/articles/215090997-API-for-Third-Party-Apps-Services) requires 8.4.7+ for callbacks, accepts `sub` and returns a resume position on both completion and early close; it cannot confirm an episode watched. Each pending session remembers its launched player and random callback identity. Catalog and independent-file playback remain untracked. Signed video and subtitle URLs are percent-encoded without changing their contents. External playback and app-return behavior still require checking with the installed players on an iPhone/iPad.
+
 ## Balanced list artwork and Today highlighting — version 0.36.1 / build 92
 
 Raise the phone list-cover default to 128 points in My Library and Explore. Migrate the former 76/90-point defaults once while retaining other custom widths and narrow-window constraints. Both lists now use the same aspect-fill artwork renderer and fill the complete card height, including the genre area. Library ratings, DUB badges, broadcast catch-up/countdowns, card taps and independent genre actions remain intact.

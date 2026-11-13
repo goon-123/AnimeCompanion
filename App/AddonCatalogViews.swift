@@ -314,7 +314,7 @@ private struct AddonSubtitlePicker: View {
                 Button("Play with \(track.lang ?? "track \(index + 1)") subtitles") { play(track.videoURL) }
             }
             if loading { ProgressView("Checking subtitle add-ons…") }
-            if !loading && tracks.isEmpty { Text("No external subtitle tracks returned. Embedded video tracks may still be available in VidHub.").font(.caption).foregroundStyle(.secondary) }
+            if !loading && tracks.isEmpty { Text("No external subtitle tracks returned. Embedded video tracks may still be available in \(playback.player.label).").font(.caption).foregroundStyle(.secondary) }
             ForEach(Array(errors.enumerated()), id: \.offset) { _, error in Text(error).font(.caption).foregroundStyle(.orange) }
         }.navigationTitle("Subtitles").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

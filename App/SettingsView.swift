@@ -45,7 +45,7 @@ struct SettingsDirectoryView: View {
             if query.isEmpty {
                 Section("Your experience") {
                     NavigationLink { SourcesSettingsView() } label: {
-                        SettingsCategoryLabel(title: "Sources & playback", detail: "Extensions, Stremio, AIOStreams, TorBox & VidHub", symbol: "puzzlepiece.extension", tint: Theme.accent)
+                        SettingsCategoryLabel(title: "Sources & playback", detail: "Extensions, Stremio, TorBox & video players", symbol: "puzzlepiece.extension", tint: Theme.accent)
                     }.accessibilityIdentifier("settings-sources")
                     NavigationLink { AppearanceSettingsView() } label: {
                         SettingsCategoryLabel(title: "Appearance & layout", detail: "Theme, Home, navigation & Explore", symbol: "paintpalette", tint: .indigo)
@@ -251,10 +251,10 @@ struct PlayerSettingsView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("External player", value: "VidHub")
-                Text("Videos open in VidHub. Supported versions return your playback position when you come back to AnimeCompanion.").font(.subheadline).foregroundStyle(.secondary)
-                Link("VidHub integration help", destination: URL(string: "https://vidhub.okaapps.com/3rd-party-app-integration/")!)
-            }
+                VideoPlayerSelection()
+                Link("\(playback.player.label) help", destination: playback.player.helpURL)
+            } footer: { Text("Used by native Watch, installed add-on catalogs and TorBox files. The separate Safari → VidHub extension continues to use VidHub.") }
+            if playback.player != .infuse {
             Section {
                 Toggle("Automatically mark episodes watched", isOn: $playback.autoMarkEpisodes)
                     .accessibilityIdentifier("settings-auto-mark-watched")
@@ -266,11 +266,12 @@ struct PlayerSettingsView: View {
                     }.accessibilityIdentifier("settings-playback-completion-threshold")
                 }
             } header: { Text("Episode completion") } footer: {
-                Text("Default: 90% of the actual episode runtime (21:36 for a 24-minute episode). Marking occurs after VidHub returns playback progress. Fast jumps to the ending do not automatically count when detected.")
+                Text("Default: 90% of the actual episode runtime (21:36 for a 24-minute episode). Marking occurs when the player reports completion or returns a position and runtime. Fast jumps to the ending do not automatically count when detected.")
+            }
             }
             Section("Tracking & privacy") {
                 Text("Native anime Watch saves resume on this device. When connected, completed episodes also sync to AniList. Catalog/exact-ID playback remains untracked.")
-                Text("Playing a TorBox file shares its private playback address with VidHub. Never share that address with anyone else.")
+                Text("Playing a TorBox file shares its private playback address with your selected player. Keep that address private.")
             }.font(.subheadline).foregroundStyle(.secondary)
         }.navigationTitle("Video player").navigationBarTitleDisplayMode(.inline)
     }

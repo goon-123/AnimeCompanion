@@ -31,7 +31,11 @@ struct AppSessionView: View {
     @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     var body: some View {
-            launchRoot.environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
+            launchRoot.environment(\.companionSessionStores, CompanionSessionStores(
+                app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
+                navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions,
+                reading: mangaReading, links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset))
+                .environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .onAppear {
                     reset.prepareForReset = { [weak store, weak mangaBaka] in
                         store?.prepareForAppReset(); mangaBaka?.prepareForAppReset()
@@ -87,6 +91,7 @@ struct AppSessionView: View {
                 .allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
             if !launchFinished { LaunchLoadingView().opacity(launchRevealing ? 0 : 1).zIndex(1) }
         }.background(Color.black.ignoresSafeArea())
+            .environment(\.browseInteractionReady, launchFinished)
     }
     @MainActor private func revealLaunchWhenReady() async {
         guard !launchFinished else { return }
@@ -241,10 +246,30 @@ final class TabNavigationState: ObservableObject {
     func open(_ id: Int) { detailPath = NavigationPath(); animeID = id; column = .detail }
 }
 
+/// Selection has its own narrow publisher. Routing consumers elsewhere in the
+/// app should not rebuild entire catalogs whenever the user taps the dock.
+@MainActor
+final class AppTabSelection: ObservableObject {
+    @Published private(set) var value: AppTab = .home
+    func select(_ value: AppTab) {
+        guard self.value != value else { return }
+        self.value = value
+    }
+}
+struct AppTabSelectionReader<Content: View>: View {
+    @ObservedObject var selection: AppTabSelection
+    @ViewBuilder let content: () -> Content
+    var body: some View { let _ = selection.value; content() }
+}
+
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
-    @Published var selectedTab: AppTab = .home
+    let tabSelection = AppTabSelection()
+    var selectedTab: AppTab {
+        get { tabSelection.value }
+        set { tabSelection.select(newValue) }
+    }
     @Published private(set) var tabPreferences = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
     @Published var supplementary: SupplementaryDestination?
     func open(_ tab: AppTab) {
@@ -257,7 +282,7 @@ final class AppNavigationStore: ObservableObject {
     func applyTabPreferences() {
         let value = AppTabPreferences(saved: UserDefaults.standard.string(forKey: AppTabPreferences.storageKey))
         selectedTab = value.selection(for: selectedTab)
-        tabPreferences = value
+        if tabPreferences != value { tabPreferences = value }
     }
     func openSchedule(on day: Date? = nil, page: ScheduleLanding = .weekly) {
         openHomeDestination(.schedule(ScheduleHomeRoute(day: day ?? ScheduleClock.now, page: page)))
@@ -355,12 +380,8 @@ struct AppTabs: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var navigation: AppNavigationStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dynamicTypeSize) private var textSize
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var dock = CompanionDockPresentation()
     @State private var loadedLayout = false
-    @State private var visitedTabs = Set<AppTab>()
     @AppStorage("app.mediaSection") private var mediaSection = "anime"
     @AppStorage(ExploreDesign.storageKey) private var exploreDesign = ExploreDesign.classic.rawValue
     @AppStorage("library.mediaSection") private var librarySection = "all"
@@ -368,7 +389,7 @@ struct AppTabs: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var sidebarColumn: NavigationSplitViewColumn = .detail
     var body: some View {
-        tabs.task {
+        AppTabSelectionReader(selection: navigation.tabSelection) { tabs }.task {
             guard !loadedLayout else { return }
             loadedLayout = true
             #if DEBUG
@@ -404,8 +425,6 @@ struct AppTabs: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
         }.onChange(of: navigation.selectedTab) { _, tab in
-            visitedTabs.insert(tab)
-            Task { await store.refreshLibraryIfNeeded() }
             guard navigation.tabPreferences.visible.contains(tab) else {
                 navigation.selectedTab = navigation.tabPreferences.selection(for: tab); return
             }
@@ -429,46 +448,15 @@ struct AppTabs: View {
         }
     }
     @ViewBuilder private func destinationTabs(showDock: Bool) -> some View {
-        if #available(iOS 26.0, *) {
-            if showDock {
-                preservedPanes
-                    // Keep the inset constant during navigation, including canceled
-                    // swipes. The dock's opacity never resizes Spotlight or its scroll.
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        Color.clear.frame(height: textSize.isAccessibilitySize ? 88 : 68).allowsHitTesting(false)
-                    }
-                    .overlay(alignment: .bottom) {
-                        CompanionDockHost(presentation: dock, tabs: navigation.tabPreferences.visible,
-                                          selection: $navigation.selectedTab, reduceMotion: reduceMotion,
-                                          colorScheme: colorScheme, dynamicTypeSize: textSize)
-                            .frame(maxWidth: CGFloat(navigation.tabPreferences.visible.count) * (textSize.isAccessibilitySize ? 112 : 88) + 10)
-                            .frame(height: textSize.isAccessibilitySize ? 80 : 62)
-                            .padding(.horizontal, 14).offset(y: textSize.isAccessibilitySize ? 0 : 8)
-                    }
-                    .environment(\.companionDockPresentation, dock)
-            } else { preservedPanes }
+        if #available(iOS 26.0, *), showDock {
+            CompanionNativeTabs(presentation: dock, tabs: navigation.tabPreferences.visible,
+                                selection: $navigation.selectedTab, reduceMotion: reduceMotion,
+                                contentKey: { UIDevice.current.userInterfaceIdiom == .pad ? paneLayout($0).rawValue : "phone" }) { tab in
+                pane(tab)
+            }.ignoresSafeArea()
         } else {
             nativeTabs.toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
-    }
-    // No native TabView exists underneath the custom dock. A lazy, retained
-    // stack keeps visited panes' search/scroll state and navigation paths alive.
-    private var preservedPanes: some View {
-        ZStack {
-            ForEach(navigation.tabPreferences.visible) { tab in
-                if tab == navigation.selectedTab || visitedTabs.contains(tab) {
-                    pane(tab).environment(\.companionDockTab, tab)
-                        .environment(\.scenePhase, tab == navigation.selectedTab ? scenePhase : .inactive)
-                        .opacity(tab == navigation.selectedTab ? 1 : 0)
-                        .allowsHitTesting(tab == navigation.selectedTab)
-                        .accessibilityHidden(tab != navigation.selectedTab)
-                        .zIndex(tab == navigation.selectedTab ? 1 : 0)
-                        .transition(.opacity)
-                }
-            }
-        }
-        .animation(AppMotion.page(reduceMotion), value: navigation.selectedTab)
-        .onAppear { visitedTabs.insert(navigation.selectedTab) }
     }
     private var nativeTabs: some View {
         TabView(selection: $navigation.selectedTab) {
@@ -511,13 +499,21 @@ struct AppTabs: View {
             destinationTabs(showDock: false).toolbar(.hidden, for: .tabBar)
         }.navigationSplitViewStyle(.balanced)
     }
+    private func paneLayout(_ tab: AppTab) -> TabletLayout {
+        switch tab {
+        case .explore: return ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth
+        case .library: return librarySection == "anime" ? navigation.tabletLayout : .fullWidth
+        case .schedule: return navigation.tabletLayout
+        default: return .fullWidth
+        }
+    }
     @ViewBuilder private func pane(_ tab: AppTab) -> some View {
         switch tab {
         case .home: AnimeTabPane(state: navigation.home, layout: .fullWidth) { HomeView() }
         case .explore:
-            AnimeTabPane(state: navigation.explore, layout: ExploreDesign(preference: exploreDesign) == .classic && mediaSection != "written" ? navigation.tabletLayout : .fullWidth) { MediaExploreView() }
+            AnimeTabPane(state: navigation.explore, layout: paneLayout(tab)) { MediaExploreView() }
         case .library:
-            AnimeTabPane(state: navigation.library, layout: librarySection == "anime" ? navigation.tabletLayout : .fullWidth) { MediaLibraryView() }
+            AnimeTabPane(state: navigation.library, layout: paneLayout(tab)) { MediaLibraryView() }
         case .manga: MangaTabPane(state: navigation.manga)
         case .schedule: AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
         case .news: AnimeTabPane(state: navigation.news, layout: .fullWidth) { NewsView().animeNavigation() }
