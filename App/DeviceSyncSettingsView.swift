@@ -65,7 +65,8 @@ struct DeviceSyncSettingsView: View {
             }
         }.navigationTitle("Sync & backup").navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $choosingFolder) {
-                SyncFolderPicker { url in choosingFolder = false; Task { await sync.connect(url) } }
+                SyncFolderPicker(picked: { url in choosingFolder = false; Task { await sync.connect(url) } },
+                                 cancelled: { choosingFolder = false })
             }
             .fileExporter(isPresented: $exporting, document: backup, contentType: .json,
                           defaultFilename: "Next-Backup-\(Date().formatted(.iso8601.year().month().day().dateSeparator(.dash)))") { result in
@@ -109,7 +110,8 @@ private struct SyncBackupFile: FileDocument {
 
 private struct SyncFolderPicker: UIViewControllerRepresentable {
     let picked: (URL) -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(picked: picked) }
+    let cancelled: () -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(picked: picked, cancelled: cancelled) }
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         picker.allowsMultipleSelection = false; picker.delegate = context.coordinator
@@ -118,9 +120,11 @@ private struct SyncFolderPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
         let picked: (URL) -> Void
-        init(picked: @escaping (URL) -> Void) { self.picked = picked }
+        let cancelled: () -> Void
+        init(picked: @escaping (URL) -> Void, cancelled: @escaping () -> Void) { self.picked = picked; self.cancelled = cancelled }
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             if let url = urls.first { picked(url) }
         }
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { cancelled() }
     }
 }

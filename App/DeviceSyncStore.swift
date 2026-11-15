@@ -64,10 +64,12 @@ final class DeviceSyncStore: ObservableObject {
         // operations never gate the launch screen or the local reader.
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
-        session.reading.$state.dropFirst().sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
-        session.links.$state.dropFirst().sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
-        session.extensions.$state.dropFirst().sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
-        session.playback.$progress.dropFirst().sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        // @Published delivers in willSet. Queue observation until the new
+        // value is installed, or the change check would see the old state.
+        session.reading.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        session.links.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        session.extensions.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        session.playback.$progress.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
         schedule()
     }
     func runWhileActive() async {

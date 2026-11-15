@@ -282,7 +282,8 @@ public struct DeviceSyncPayload: Sendable {
         } else if key.hasPrefix("link.") {
             let item = try DeviceSyncCoding.decode(MangaSourceLink.self, value)
             guard item.id == (try DeviceSyncCoding.string(parts[1])), !item.library.accountID.isEmpty,
-                  item.library.seriesID > 0, !item.title.manga.url.isEmpty else { throw DeviceSyncError.invalid }
+                  item.library.seriesID > 0, !item.title.manga.url.isEmpty,
+                  !item.title.source.extensionID.isEmpty, !item.title.source.sourceID.isEmpty else { throw DeviceSyncError.invalid }
         } else if key.hasPrefix("book.title.") {
             let item = try DeviceSyncCoding.decode(DeviceSyncMangaTitle.self, value)
             guard item.title.id == (try DeviceSyncCoding.string(parts[2])), !item.title.manga.url.isEmpty,
