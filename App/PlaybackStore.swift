@@ -50,6 +50,9 @@ final class PlaybackStore: ObservableObject {
     @Published var completionThreshold = UserDefaults.standard.object(forKey: "playback.completionThreshold") as? Int ?? 90 {
         didSet { defaults.set(completionThreshold, forKey: "playback.completionThreshold") }
     }
+    @Published var player = ExternalVideoPlayer.vidHub {
+        didSet { defaults.set(player.rawValue, forKey: ExternalVideoPlayer.storageKey) }
+    }
     @Published private(set) var installing = false
     @Published private(set) var openingPlayer = false
     @Published var setupError: String?
@@ -75,6 +78,7 @@ final class PlaybackStore: ObservableObject {
             enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
             autoMarkEpisodes = self.defaults.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true
             completionThreshold = self.defaults.object(forKey: "playback.completionThreshold") as? Int ?? 90
+            player = ExternalVideoPlayer(preference: self.defaults.string(forKey: ExternalVideoPlayer.storageKey))
             if ProcessInfo.processInfo.arguments.contains("--ui-playback-stale-resume") {
                 progress["1:1"] = PlaybackProgress(position: 120, duration: 1440, finished: false)
             }
@@ -87,6 +91,7 @@ final class PlaybackStore: ObservableObject {
         enabled = self.defaults.object(forKey: "playback.enabled") as? Bool ?? true
         autoMarkEpisodes = self.defaults.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true
         completionThreshold = self.defaults.object(forKey: "playback.completionThreshold") as? Int ?? 90
+        player = ExternalVideoPlayer(preference: self.defaults.string(forKey: ExternalVideoPlayer.storageKey))
         if let data = defaults.data(forKey: "playback.positions"), let saved = try? JSONDecoder().decode([String: PlaybackProgress].self, from: data) { progress = saved }
         if let data = defaults.data(forKey: "playback.pending"), let saved = try? JSONDecoder().decode(PendingPlayback.self, from: data), Date().timeIntervalSince(saved.createdAt) < 86400 { pending = saved }
         do {
@@ -160,9 +165,9 @@ final class PlaybackStore: ObservableObject {
         let start = restart ? 0 : saved(animeID: anime.id, episode: episode)?.position ?? 0
         let record = PendingPlayback(episode: PlaybackEpisode(animeID: anime.id, episode: episode),
                                      title: anime.format == "MOVIE" ? anime.displayTitle : "\(anime.displayTitle) · Episode \(episode)",
-                                     startPosition: start)
+                                     startPosition: start, player: player)
         do {
-            let url = try VidHubPlayback.launchURL(stream: stream, pending: record, position: start, subtitle: subtitle)
+            let url = try ExternalPlayerPlayback.launchURL(stream: stream, pending: record, position: start, subtitle: subtitle)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-playback-preview") || ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
                 // Test the production URL builder and tap path without opening a third-party app.
@@ -177,7 +182,7 @@ final class PlaybackStore: ObservableObject {
                     if let returned = callback.url { handle(returned) }
                     return
                 }
-                playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" } ? " · External subtitles" : "")
+                playerMessage = "Preview launch · Episode \(episode)" + (parameters.contains { $0.name == "sub" || $0.name == "subtitle" } ? " · External subtitles" : "")
                 if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") { playerMessage? += " · \(stream.displayName)" }
                 if ProcessInfo.processInfo.arguments.contains("--ui-seanime-preview") { playerMessage? += previewDestination(url) }
                 return
@@ -190,7 +195,7 @@ final class PlaybackStore: ObservableObject {
             }
             if !opened {
                 clearPending()
-                playerMessage = "VidHub could not be opened. Install or update VidHub on this device, then try again."
+                playerMessage = "\(record.destination.label) could not be opened. Install or update \(record.destination.label) on this device, or choose another player in Settings → Sources & playback → Video player."
             }
         } catch { clearPending(); playerMessage = error.localizedDescription }
     }
@@ -200,7 +205,7 @@ final class PlaybackStore: ObservableObject {
     func handle(_ url: URL) -> PlaybackEpisode? {
         guard let pending else { return nil }
         do {
-            guard let outcome = try VidHubPlayback.outcome(url: url, pending: pending) else { return nil }
+            guard let outcome = try ExternalPlayerPlayback.outcome(url: url, pending: pending) else { return nil }
             var completed: PlaybackEpisode?
             switch outcome {
             case .success(let position, let duration, let finished):
@@ -214,7 +219,7 @@ final class PlaybackStore: ObservableObject {
                 if watched { completed = pending.episode }
             case .cancelled: playerMessage = "Playback cancelled. Your saved position has not changed."
             case .failed(let code):
-                playerMessage = code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "VidHub could not play this video. Check the source connection or try another file."
+                playerMessage = pending.destination == .vidHub && code == 201 ? "VidHub is already playing another video. Close that playback and try again." : "\(pending.destination.label) could not play this video. Check the source connection or try another file."
             }
             clearPending()
             return completed
@@ -224,8 +229,9 @@ final class PlaybackStore: ObservableObject {
         guard !openingPlayer else { return }
         openingPlayer = true; playerMessage = nil
         defer { openingPlayer = false }
+        let destination = player
         do {
-            let url = try VidHubPlayback.untrackedLaunchURL(stream: stream, title: title, subtitle: subtitle)
+            let url = try ExternalPlayerPlayback.untrackedLaunchURL(player: destination, stream: stream, title: title, subtitle: subtitle)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-multiple-addons-preview") {
                 playerMessage = "Preview catalog launch · \(title) · \(stream.displayName)"
@@ -239,11 +245,11 @@ final class PlaybackStore: ObservableObject {
             let opened = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 UIApplication.shared.open(url, options: [:]) { continuation.resume(returning: $0) }
             }
-            playerMessage = opened ? "Opened in VidHub. Catalog playback does not change AniList or save a resume position here." : "VidHub could not be opened. Install or update VidHub, then try again."
+            playerMessage = opened ? "Opened in \(destination.label). Catalog playback does not change AniList or save a resume position here." : "\(destination.label) could not be opened. Install or update \(destination.label), or choose another player in Settings → Sources & playback → Video player."
         } catch { playerMessage = error.localizedDescription }
     }
     #if DEBUG
-    /// Inspect the destination encoded by the real VidHub builder, without
+    /// Inspect the destination encoded by the selected player builder, without
     /// launching a player or exposing a signed URL in test screenshots.
     private func previewDestination(_ launch: URL) -> String {
         let raw = URLComponents(url: launch, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "url" }?.value

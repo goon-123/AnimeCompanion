@@ -46,10 +46,18 @@ struct AnimeDetailView: View {
         _selectedTab = State(initialValue: style == .classic ? .info : .episodes)
     }
 
+    // A cold detail has no title yet; a library entry can supply its known title
+    // immediately. Never show a generic word that changes during the push.
+    private var knownNavigationTitle: String {
+        if let anime { return anime.displayTitle }
+        if let media = store.entry(for: mediaID)?.media, store.isVisible(media) { return media.displayTitle }
+        return ""
+    }
+
     var body: some View {
         seriesScroll.seriesPosterSizing()
             .ignoresSafeArea(.container, edges: style == .cinematic ? .top : [])
-            .background(Theme.background).navigationTitle(anime?.displayTitle ?? "Anime").navigationBarTitleDisplayMode(.inline)
+            .background(Theme.background).navigationTitle(knownNavigationTitle).navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .companionDockHidden()
             .overlay(alignment: .bottomLeading) { commentsButton }

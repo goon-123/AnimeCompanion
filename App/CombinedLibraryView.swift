@@ -70,7 +70,7 @@ struct CombinedLibraryView: View {
                 Text("Anime progress syncs with AniList. Reading progress syncs with MangaBaka.")
                     .font(.caption2).foregroundStyle(.secondary)
             }.padding(20).frame(maxWidth: layout == "grid" ? 1180 : 1000).frame(maxWidth: .infinity)
-        }.scrollDismissesKeyboard(.interactively).background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
+        }.scrollDismissesKeyboard(.interactively).background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).toolbarBackground(.hidden, for: .navigationBar)
             .animeNavigation().accessibilityIdentifier("combined-library")
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {

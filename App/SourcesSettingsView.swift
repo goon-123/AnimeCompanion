@@ -35,9 +35,9 @@ struct SourcesSettingsRows: View {
                     SettingsCategoryLabel(title: "TorBox", detail: seanime.hasTorBoxKey ? "Connected · Cloud files & account" : "Connect your cloud account", symbol: "cloud", tint: .teal)
                 }.accessibilityIdentifier("settings-torbox")
             }
-            if matches("VidHub video player playback resume") {
+            if matches("VidHub Outplayer Infuse video player playback resume") {
                 NavigationLink { PlayerSettingsView() } label: {
-                    SettingsCategoryLabel(title: "Video player", detail: "VidHub · Playback & resume", symbol: "play.rectangle", tint: .pink)
+                    SettingsCategoryLabel(title: "Video player", detail: "\(playback.player.label) · Playback & resume", symbol: "play.rectangle", tint: .pink)
                 }.accessibilityIdentifier("settings-player")
             }
             if matches("Safari VidHub extension website videos") {

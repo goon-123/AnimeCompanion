@@ -127,7 +127,7 @@ struct TorBoxPlaybackControls: View {
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                             }.padding(.vertical, 8).contentShape(Rectangle())
                         }.buttonStyle(.plain).disabled(busy || provider == nil)
-                            .accessibilityLabel("Play in VidHub · \(file.name) · \(StreamAudioInfo(texts: [file.name]).label)")
+                            .accessibilityLabel("Play in \(playback.player.label) · \(file.name) · \(StreamAudioInfo(texts: [file.name]).label)")
                             .accessibilityIdentifier("torbox-file-\(file.id)")
                         if file.id != cloud.videoFiles.last?.id { Divider() }
                     }
@@ -227,7 +227,7 @@ struct TorBoxPlaybackControls: View {
     }
     private func play(_ file: TorBoxFile, cloud: TorBoxTorrent) {
         guard !busy, provider != nil else { return }
-        statusWork?.cancel(); busy = true; activity = "Opening VidHub…"; error = nil; let attempt = UUID(); generation = attempt
+        statusWork?.cancel(); busy = true; activity = "Opening \(playback.player.label)…"; error = nil; let attempt = UUID(); generation = attempt
         work = Task {
             defer { if generation == attempt { busy = false } }
             do {

@@ -67,7 +67,7 @@ struct PlaybackSettingsView: View {
                 Text("The URL is visible as requested. It may contain private tokens—avoid including it in screenshots or sharing it.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Playback support") {
-                NavigationLink("VidHub & resume") { PlayerSettingsView() }
+                NavigationLink("Video player & resume") { PlayerSettingsView() }
                 DisclosureGroup("Compatibility details") {
                 Text("Supports standard HTTPS Stremio manifests with catalogs, metadata, streams and subtitles. Native anime Watch uses AniList/MAL IDs; installed catalogs and exact-ID lookup also support IMDb, Kitsu and provider IDs. Enabled compatible stream sources appear together, with English-audio choices first.")
                 Text("Not every Stremio add-on is playable: torrent-only sources, DRM, YouTube IDs and special playback headers require a compatible service or proxy. Nested add-on directories and legacy/IPFS transports are not supported natively. Supported Seanime torrent-provider scripts run separately in Seanime extensions & TorBox; other plugin types remain unsupported.")

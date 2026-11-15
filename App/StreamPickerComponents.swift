@@ -87,7 +87,7 @@ struct StreamPickerHelpView: View {
     var body: some View {
         Form {
             Section("Choose a release") {
-                Text("Streaming sources open directly in VidHub. Torrent releases expand here to show their TorBox status and video files.")
+                Text("Streaming sources open in your selected video player. Torrent releases expand here to show their TorBox status and video files.")
                 Text("English audio appears first. EN/JA badges come from provider descriptions and filenames, not verified audio tracks. English subtitles alone do not mean an English dub.")
             }
             Section("Playback") {
@@ -95,8 +95,8 @@ struct StreamPickerHelpView: View {
                 Text("Choose the correct episode’s file in a batch. Adding or downloading a release requires your action and may use TorBox account limits. Status checks never add it again.")
             }
             Section("Tracking & privacy") {
-                Text("AniList watched progress changes only when you explicitly update it. Supported VidHub versions return resume position for native anime playback; catalog and independent playback remain untracked.")
-                Text("Playing a TorBox file shares its private playback address with VidHub. Keep that address private.")
+                Text("Native anime playback can save resume position when your player returns it. Automatic watched updates follow your Video player settings. Catalog and independent playback remain untracked.")
+                Text("Playing a TorBox file shares its private playback address with your selected player. Keep that address private.")
             }
         }.font(.subheadline).navigationTitle("Playback help").navigationBarTitleDisplayMode(.inline)
     }

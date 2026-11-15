@@ -35,7 +35,7 @@ struct MangaBakaLibraryView: View {
                     Text("Connect MangaBaka to keep manga, manhwa, novels and more in My Library. You can explore without signing in.")
                 } actions: { Button("Connect MangaBaka") { connection = true }.buttonStyle(.borderedProminent) }
             }
-        }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline)
+        }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).toolbarBackground(.hidden, for: .navigationBar)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Menu {

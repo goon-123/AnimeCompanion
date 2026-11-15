@@ -13,8 +13,12 @@ public struct PendingPlayback: Codable, Sendable {
     public let createdAt: Date
     /// Optional to keep older saved pending sessions decodable.
     public let startPosition: Double?
-    public init(episode: PlaybackEpisode, title: String, requestID: UUID = UUID(), createdAt: Date = Date(), startPosition: Double? = nil) {
+    /// Missing on sessions saved before player selection was introduced.
+    public let player: ExternalVideoPlayer?
+    public var destination: ExternalVideoPlayer { player ?? .vidHub }
+    public init(episode: PlaybackEpisode, title: String, requestID: UUID = UUID(), createdAt: Date = Date(), startPosition: Double? = nil, player: ExternalVideoPlayer? = nil) {
         self.episode = episode; self.title = title; self.requestID = requestID; self.createdAt = createdAt; self.startPosition = startPosition
+        self.player = player
     }
 }
 public struct PlaybackProgress: Codable, Sendable {
@@ -44,11 +48,12 @@ public enum PlaybackCompletionPolicy {
     }
 }
 
-public enum VidHubOutcome: Equatable, Sendable {
+public enum PlaybackOutcome: Equatable, Sendable {
     case success(position: Double, duration: Double?, finished: Bool)
     case failed(code: Int?)
     case cancelled
 }
+public typealias VidHubOutcome = PlaybackOutcome
 public enum VidHubPlayback {
     public static let maximumPosition: Double = 31_536_000
     public static func launchURL(stream: StremioStream, pending: PendingPlayback, position: Double = 0, subtitle: URL? = nil) throws -> URL {

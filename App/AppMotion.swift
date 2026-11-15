@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Short, consistent motion; native navigation and reader gestures retain ownership.
 enum AppMotion {
+    static func catalogSwitch(_ reduced: Bool) -> Animation { .easeInOut(duration: reduced ? 0.10 : 0.20) }
     static func page(_ reduced: Bool) -> Animation { .easeInOut(duration: reduced ? 0.12 : 0.28) }
     static func content(_ reduced: Bool) -> Animation { .easeOut(duration: reduced ? 0.12 : 0.30) }
     static func replacement(_ reduced: Bool) -> AnyTransition {

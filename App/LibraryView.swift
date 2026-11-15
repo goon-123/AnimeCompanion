@@ -127,7 +127,7 @@ struct LibraryView: View {
                 }.accessibilityIdentifier("library-scroll").scrollDismissesKeyboard(.interactively).refreshable { await store.reloadLibrary(); await loadDubs(refresh: true) }
               }
             } else { LibraryGuestView(showSettings: $showSettings) }
-        }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).animeNavigation()
+        }.background(Theme.background).navigationTitle("My Library").navigationBarTitleDisplayMode(.inline).toolbarBackground(.hidden, for: .navigationBar).animeNavigation()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

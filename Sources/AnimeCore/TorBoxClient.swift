@@ -27,7 +27,7 @@ public enum TorBoxError: LocalizedError, Equatable {
         case .playbackResponse: return "TorBox's playback-link response could not be read. Refresh the files and try again."
         case .missingPlaybackLink: return "TorBox returned no playback link for this file. Refresh the files and try again."
         case .invalidPlaybackLink: return "TorBox returned an unsupported playback address. Try another file or check your TorBox CDN setting."
-        case .privatePlaybackLink: return "TorBox returned an account link instead of a temporary video link. It could not be sent to VidHub."
+        case .privatePlaybackLink: return "TorBox returned an account link instead of a temporary video link. It could not be sent to your video player."
         case .invalidTorrent: return "This result has no valid BitTorrent v1 magnet or info hash."
         case .notReady: return "TorBox is still preparing this torrent. Check readiness again later; it has not been added a second time."
         case .invalidFile: return "Choose an available video file from this torrent. Archives, infected files and other file types are not playable here."

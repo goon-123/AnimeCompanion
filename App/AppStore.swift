@@ -23,6 +23,7 @@ final class AppStore: ObservableObject {
     private var generation = UUID()
     private var restored = false
     let homeContentCache = HomeContentCache()
+    let readingExplore = MangaBakaHomeModel()
     lazy var homeCatalog = HomeCatalogClient(api: aniList, cache: homeContentCache)
     lazy var homeCommunity = HomeCommunityClient(api: aniList, cache: homeContentCache)
     private let libraryCache = AniListLibraryCache()
@@ -111,7 +112,7 @@ final class AppStore: ObservableObject {
                     UserDefaults.standard.removeObject(forKey: "\(scope).poster.list.fullHeight.v1")
                 }
             }
-            UserDefaults.standard.set((UnifiedExplorePreview.active ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
+            UserDefaults.standard.set((UnifiedExplorePreview.active && !ProcessInfo.processInfo.arguments.contains("--ui-tab-performance") ? ExploreDesign.discover : .classic).rawValue, forKey: ExploreDesign.storageKey)
             UserDefaults.standard.set("list", forKey: "schedule.airing.layout")
             includeAdult = false; automaticallyComplete = true
             mangaBakaContent = .init()
@@ -261,6 +262,7 @@ final class AppStore: ObservableObject {
         }
     }
     func prepareForAppReset() {
+        readingExplore.cancel()
         generation = UUID(); libraryRevision += 1
         authentication.cancel()
         token = nil; viewer = nil; entries = []; isSignedIn = false

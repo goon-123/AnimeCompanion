@@ -33,6 +33,9 @@ struct AiringNowView: View {
     private var visible: [AiringWatchlistItem] { items.filter { !behindOnly || $0.status.state == .behind } }
 
     var body: some View {
+        AppTabSelectionReader(selection: navigation.tabSelection) { selectionAwareContent }
+    }
+    private var selectionAwareContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header

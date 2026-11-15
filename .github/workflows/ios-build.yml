@@ -33,7 +33,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-            App/CompanionDock.swift App/LiveChartPageTransport.swift App/VisualGalleryPreview.swift \
+            App/AnimeCompanionApp.swift App/AnimeDetailView.swift App/CompanionDock.swift App/LiveChartPageTransport.swift App/VisualGalleryPreview.swift \
             Sources/AnimeCore/AnimeVisual.swift Sources/AnimeCore/AnimeVisualsClient.swift \
             App/FeaturedAnimeCarousel.swift App/SpotlightLogoBitmap.swift Sources/AnimeCore/SpotlightArtwork.swift \
             Sources/AnimeCore/SeriesArtworkClient.swift Sources/AnimeCore/SpotlightLoop.swift \

@@ -132,7 +132,7 @@ struct LibraryEntryActions: ViewModifier {
         content.contextMenu {
             Button("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil))", systemImage: "play.fill") { watching = true }
                 .disabled(anime.status == "NOT_YET_RELEASED")
-                .accessibilityLabel("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)) of \(anime.displayTitle) in VidHub")
+                .accessibilityLabel("Watch episode \(PlaybackEpisodeSelection.initial(anime: anime, entry: entry, resumeEpisode: nil)) of \(anime.displayTitle) in your video player")
                 .accessibilityIdentifier("library-watch-\(anime.id)")
             Button("Mark next episode watched", systemImage: "plus") { markNext() }
                 .disabled(!canMarkNext)
