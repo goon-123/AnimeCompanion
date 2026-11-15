@@ -73,6 +73,7 @@ final class DeviceSyncStore: ObservableObject {
         schedule()
     }
     func runWhileActive() async {
+        guard !Task.isCancelled, !stopped else { return }
         active = true
         while !Task.isCancelled, !stopped {
             await syncNow()
@@ -103,6 +104,7 @@ final class DeviceSyncStore: ObservableObject {
     }
     func connect(_ url: URL) async {
         guard !syncing, !stopped else { return }
+        syncing = true
         do {
             try lifetime.check(); try rememberFolder(url)
             // A newly selected folder starts with local seed values. Existing
@@ -111,8 +113,9 @@ final class DeviceSyncStore: ObservableObject {
             journal = DeviceSyncJournal(deviceID: id)
             try await files.saveJournal(journal!)
             folder = url; folderName = url.lastPathComponent; connected = true; error = nil
-            await syncNow()
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription; syncing = false; return }
+        syncing = false
+        await syncNow()
     }
     func disconnect() {
         guard !syncing else { return }
