@@ -102,6 +102,22 @@ final class PlaybackStore: ObservableObject {
         } catch { setupError = error.localizedDescription }
     }
     var installations: [AddonInstallation] { collection.installations }
+    func reloadSyncedPreferences() {
+        enabled = defaults.object(forKey: "playback.enabled") as? Bool ?? true
+        autoMarkEpisodes = defaults.object(forKey: "playback.autoMarkEpisodes") as? Bool ?? true
+        completionThreshold = defaults.object(forKey: "playback.completionThreshold") as? Int ?? 90
+        player = ExternalVideoPlayer(preference: defaults.string(forKey: ExternalVideoPlayer.storageKey))
+    }
+    func applyDeviceSync(expected: [String: Data], desired: [String: Data]) throws {
+        try lifetime.check()
+        var payload = DeviceSyncPayload(); payload.playback = progress
+        let current = try payload.encodedValues().filter { $0.key.hasPrefix("playback.") }
+        let values = DeviceSyncPayload.patch(current: current, expected: expected.filter { $0.key.hasPrefix("playback.") },
+                                              desired: desired.filter { $0.key.hasPrefix("playback.") })
+        let updated = try DeviceSyncPayload(values: values).playback
+        let data = try DeviceSyncCoding.encode(updated)
+        defaults.set(data, forKey: "playback.positions"); progress = updated
+    }
     var enabledAddons: [AddonInstallation] { enabled ? collection.enabled.filter { $0.addon.manifest.behaviorHints?.configurationRequired != true } : [] }
     var activeAddons: [AddonInstallation] { enabledAddons.filter { $0.addon.manifest.advertises("stream") } }
     var ready: Bool { !activeAddons.isEmpty }

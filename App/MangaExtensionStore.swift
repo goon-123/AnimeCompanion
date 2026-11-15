@@ -139,6 +139,43 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
         guard !busy else { return }
         do { state = try await storage.removeRepository(); catalog = nil; lastRefresh = nil } catch { self.error = error.localizedDescription }
     }
+    /// Packages are fetched from the original allowlisted repository and go
+    /// through the same release digest and runtime inspection as a manual
+    /// installation. Synced metadata never supplies executable bytes.
+    func applyDeviceSync(expected: [String: Data], desired: [String: Data], payload: DeviceSyncPayload) async -> String? {
+        guard !busy else { return "Extension changes will retry when the extension manager is free." }
+        var failures: [String] = []
+        var attempted = 0
+        let keys = Set(expected.keys).union(desired.keys).filter { $0.hasPrefix("extension.") }.sorted()
+        for key in keys where expected[key] != desired[key] {
+            if Task.isCancelled { break }
+            guard let id = try? DeviceSyncCoding.string(String(key.dropFirst(10))) else { continue }
+            let current = installed(id).flatMap { try? DeviceSyncCoding.encode(DeviceSyncMangaExtension(descriptor: $0.descriptor, enabled: $0.enabled)) }
+            guard current == expected[key], !busy else { continue }
+            if let item = payload.extensions[id] {
+                if let present = installed(id), present.descriptor == item.descriptor {
+                    await setEnabled(id, item.enabled)
+                    continue
+                }
+                // Bound a pass; remaining packages stay in the durable journal.
+                guard attempted < 3 else { failures.append(item.descriptor.name); continue }
+                attempted += 1
+                do {
+                    try await installPackage(item.descriptor)
+                    await setEnabled(id, item.enabled)
+                } catch is CancellationError { break }
+                catch { failures.append(item.descriptor.name) }
+            } else { await remove(id) }
+        }
+        if expected["extensions.repository"] != desired["extensions.repository"], !busy {
+            let current = try? DeviceSyncCoding.encode(state.repositoryAdded)
+            if current == expected["extensions.repository"] {
+                if payload.repositoryAdded { await refresh() }
+                else { await removeRepository() }
+            }
+        }
+        return failures.isEmpty ? nil : "Still to restore: \(failures.joined(separator: ", ")). Sync again to retry. Older packages that are no longer published need a manual update."
+    }
     func browse(extensionID: String, sourceID: String, mode: String, query: String, page: Int) async throws -> SourceMangaPage {
         #if DEBUG
         if MangaReaderPreview.owns(extensionID) { return try await MangaReaderPreview.browse(query: query, page: page) }

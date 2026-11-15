@@ -1,3 +1,7 @@
+## Device sync and backups — version 0.59.0 / build 132
+
+Open **Settings → Sync & backup** and select the same private folder in iCloud Drive on each device. Settings, Home/Explore layouts, local manga, chapter progress, source links, manga extension setup and video resume positions merge while the app is open. Portable JSON backups can also be exported to Files or AirDrop and merged back with a preview. Account tokens, API keys, private source settings, configured video add-ons and downloads stay on each device. [Setup, merge rules and device checks](docs/device-sync.md).
+
 ## Catalog switching and video players — version 0.58.4 / build 131
 
 Anime/Manga switching owns the complete header touch area and crossfades the retained catalogs in 0.20 seconds (0.10 with Reduce Motion). Loaded shelves, Spotlight space and scroll positions are retained. Native tabs receive app models and public display preferences explicitly. Each hosting controller owns its interaction and accessibility graph; opaque SwiftUI environments are never copied between hosts.

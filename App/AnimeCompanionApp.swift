@@ -23,6 +23,7 @@ struct AppSessionView: View {
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
+    @StateObject private var deviceSync = DeviceSyncStore()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var reset: AppResetCoordinator
@@ -30,14 +31,17 @@ struct AppSessionView: View {
     @State private var launchRevealing = false
     @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
+    private var sessionStores: CompanionSessionStores {
+        CompanionSessionStores(app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
+            navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions, reading: mangaReading,
+            links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset, deviceSync: deviceSync)
+    }
     var body: some View {
-            launchRoot.environment(\.companionSessionStores, CompanionSessionStores(
-                app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
-                navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions,
-                reading: mangaReading, links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset))
+            launchRoot.environment(\.companionSessionStores, sessionStores)
                 .environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .onAppear {
-                    reset.prepareForReset = { [weak store, weak mangaBaka] in
+                    reset.prepareForReset = { [weak store, weak mangaBaka, weak deviceSync] in
+                        deviceSync?.stop()
                         store?.prepareForAppReset(); mangaBaka?.prepareForAppReset()
                     }
                 }
@@ -52,6 +56,7 @@ struct AppSessionView: View {
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
                 .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
+                .environmentObject(deviceSync)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
                     Task { await MangaImagePipeline.shared.clearMemory() }
@@ -65,6 +70,13 @@ struct AppSessionView: View {
                     launchContentReady = true
                 }
                 .task { await revealLaunchWhenReady() }
+                .task(id: scenePhase) {
+                    guard !artworkPreview else { return }
+                    if scenePhase == .active {
+                        await deviceSync.start(session: sessionStores)
+                        await deviceSync.runWhileActive()
+                    } else { await deviceSync.pause() }
+                }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
                     async let library: Void = store.refreshLibraryIfNeeded()
@@ -265,6 +277,7 @@ struct AppTabSelectionReader<Content: View>: View {
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
+    var settingsPresented = false
     let tabSelection = AppTabSelection()
     var selectedTab: AppTab {
         get { tabSelection.value }
