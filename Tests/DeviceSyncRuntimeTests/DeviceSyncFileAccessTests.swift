@@ -2,6 +2,7 @@ import XCTest
 import AnimeCore
 @testable import AnimeCompanion
 
+/// App-owned folder access, independent of the manga interpreter and its APKs.
 final class DeviceSyncFileAccessTests: XCTestCase {
     private func temporaryRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

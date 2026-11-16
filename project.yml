@@ -115,6 +115,7 @@ targets:
     platform: iOS
     sources:
       - path: Tests/SpotlightRuntimeTests
+      - path: Tests/DeviceSyncRuntimeTests
       - path: Tests/MangaRuntimeTests
         excludes: [Fixtures, OwnedFixtures]
       - path: Tests/MangaRuntimeTests/Fixtures
