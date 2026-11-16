@@ -9,7 +9,12 @@ final class DeviceSyncStore: ObservableObject {
     private static let deviceKey = "deviceSync.deviceID.v1"
     private static let vendorKey = "deviceSync.vendorID.v1"
     private static let checkedKey = "deviceSync.lastChecked.v1"
-    @Published private(set) var connected = UserDefaults.standard.data(forKey: DeviceSyncStore.bookmarkKey) != nil
+    private static let locationKey = "deviceSync.location.v1"
+    private static let identityKey = "deviceSync.iCloudIdentity.v1"
+    @Published private(set) var location = DeviceSyncLocation.restored(
+        saved: UserDefaults.standard.string(forKey: DeviceSyncStore.locationKey),
+        hasFolderBookmark: UserDefaults.standard.data(forKey: DeviceSyncStore.bookmarkKey) != nil)
+    var connected: Bool { location != nil }
     @Published private(set) var folderName = ""
     @Published private(set) var syncing = false
     @Published private(set) var ready = false
@@ -17,10 +22,13 @@ final class DeviceSyncStore: ObservableObject {
     @Published private(set) var message: String?
     @Published private(set) var extensionNotice: String?
     @Published var error: String?
+    @Published var setupError: String?
     private let files = DeviceSyncFiles()
     private let lifetime = AppDataSession()
     private var journal: DeviceSyncJournal?
     private var folder: URL?
+    private var cloudIdentity: Data?
+    private var connectionGeneration: UInt64 = 0
     private struct Session {
         let app: AppStore
         let filters: DiscoveryFilterStore
@@ -64,14 +72,17 @@ final class DeviceSyncStore: ObservableObject {
             }
             let id = defaults.string(forKey: Self.deviceKey)!
             journal = try await files.loadJournal(deviceID: id)
-            if let bookmark = defaults.data(forKey: Self.bookmarkKey) {
-                var stale = false
-                let url = try URL(resolvingBookmarkData: bookmark, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
-                folder = url; folderName = url.lastPathComponent
-                if stale { try rememberFolder(url) }
+            if location == .automatic {
+                guard let identity = defaults.data(forKey: Self.identityKey) else { throw SyncFileError.accountChanged }
+                let cloud = try await files.automaticFolder(matching: identity)
+                folder = cloud.url; cloudIdentity = cloud.identity; folderName = "Automatic iCloud"
+            } else if let bookmark = defaults.data(forKey: Self.bookmarkKey) {
+                let resolved = try await files.resolveBookmark(bookmark)
+                folder = resolved.url; folderName = resolved.url.lastPathComponent
+                if resolved.refreshed != bookmark { defaults.set(resolved.refreshed, forKey: Self.bookmarkKey) }
             }
             ready = true
-        } catch { self.error = "Sync could not resume: \(error.localizedDescription) Choose the folder again to reconnect."; ready = true }
+        } catch { self.error = error.localizedDescription; ready = true }
         // Changes are collected even while a folder is offline. File-provider
         // operations never gate the launch screen or the local reader.
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
@@ -82,6 +93,12 @@ final class DeviceSyncStore: ObservableObject {
         session.links.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
         session.extensions.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
         session.playback.$progress.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
+        NotificationCenter.default.publisher(for: .NSUbiquityIdentityDidChange).receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.location == .automatic else { return }
+                self.connectionGeneration &+= 1; self.folder = nil
+                self.scheduler.requestNow()
+            }.store(in: &subscriptions)
         if active && connected { scheduler.activate() }
     }
     func setActive(_ value: Bool) {
@@ -105,52 +122,90 @@ final class DeviceSyncStore: ObservableObject {
         if let session, let journal, let current = try? snapshot(session), current == journal.observed { return }
         scheduler.localChange()
     }
-    func connect(_ url: URL) async {
+    func connect(bookmark: Data) async {
         guard !syncing, !stopped else { return }
         scheduler.deactivate()
-        syncing = true
+        syncing = true; setupError = nil
         do {
-            try lifetime.check(); try rememberFolder(url)
-            // A newly selected folder starts with local seed values. Existing
-            // cloud settings win on first connection; unique local books merge.
-            let id = UserDefaults.standard.string(forKey: Self.deviceKey) ?? UUID().uuidString
-            journal = DeviceSyncJournal(deviceID: id)
-            try await files.saveJournal(journal!)
-            folder = url; folderName = url.lastPathComponent; connected = true; error = nil
+            let resolved = try await files.resolveBookmark(bookmark)
+            try await installConnection(resolved.url, location: .folder, bookmark: resolved.refreshed, identity: nil)
         } catch {
-            self.error = error.localizedDescription; syncing = false
+            self.setupError = error.localizedDescription; syncing = false
             if active && connected { scheduler.activate() }
             return
         }
         syncing = false
         if active { scheduler.activate(); await scheduler.waitForCurrentSync() }
     }
+    func connectAutomatically() async {
+        guard ready, !syncing, !stopped else { return }
+        scheduler.deactivate(); syncing = true; error = nil; setupError = nil
+        message = "Setting up iCloud…"
+        do {
+            // An explicit enable also consents to the currently signed-in
+            // iCloud account, after an account-change pause.
+            let cloud = try await files.automaticFolder()
+            try await installConnection(cloud.url, location: .automatic, bookmark: nil, identity: cloud.identity)
+        } catch {
+            self.setupError = error.localizedDescription; message = nil; syncing = false
+            if active && connected { scheduler.activate() }
+            return
+        }
+        syncing = false
+        if active { scheduler.activate(); await scheduler.waitForCurrentSync() }
+    }
+    private func installConnection(_ url: URL, location: DeviceSyncLocation, bookmark: Data?, identity: Data?) async throws {
+        try lifetime.check()
+        try await files.validateFolder(url, identity: identity)
+        let id = UserDefaults.standard.string(forKey: Self.deviceKey) ?? UUID().uuidString
+        let next = DeviceSyncJournal(deviceID: id)
+        try await files.saveJournal(next)
+        try lifetime.check()
+        // Only commit the new route after directory access and writes succeed.
+        // A rejected selection keeps the previous folder and journal in use.
+        let defaults = UserDefaults.standard
+        defaults.set(bookmark, forKey: Self.bookmarkKey)
+        defaults.set(identity, forKey: Self.identityKey)
+        defaults.set(location.rawValue, forKey: Self.locationKey)
+        self.location = location; folder = url; cloudIdentity = identity; journal = next
+        connectionGeneration &+= 1
+        folderName = location == .automatic ? "Automatic iCloud" : url.lastPathComponent
+        error = nil; setupError = nil; message = nil
+    }
     func disconnect() {
         guard !syncing else { return }
-        scheduler.deactivate(); folder = nil; connected = false; folderName = ""; message = nil; error = nil
+        scheduler.deactivate(); folder = nil; location = nil; cloudIdentity = nil
+        connectionGeneration &+= 1
+        folderName = ""; message = nil; error = nil; setupError = nil
         UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
+        UserDefaults.standard.removeObject(forKey: Self.locationKey)
+        UserDefaults.standard.removeObject(forKey: Self.identityKey)
         // Both local data and shared snapshots remain available for recovery.
-    }
-    private func rememberFolder(_ url: URL) throws {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        let data = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-        UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
     }
     func syncNow() async {
         scheduler.requestNow(); await scheduler.waitForCurrentSync()
     }
     private func performSync() async {
-        guard ready, connected, let folder, let session, journal != nil, !stopped, lifetime.isCurrent else { return }
+        guard ready, connected, let session, journal != nil, !stopped, lifetime.isCurrent else { return }
         guard !syncing, !Task.isCancelled else { return }
         syncing = true; error = nil; message = "Checking sync folder…"
         defer { syncing = false }
         do {
+            let generation = connectionGeneration
+            if location == .automatic {
+                guard let identity = cloudIdentity ?? UserDefaults.standard.data(forKey: Self.identityKey) else { throw SyncFileError.accountChanged }
+                let cloud = try await files.automaticFolder(matching: identity)
+                guard generation == connectionGeneration else { throw CancellationError() }
+                folder = cloud.url; cloudIdentity = cloud.identity; folderName = "Automatic iCloud"
+            }
+            guard let folder else { throw SyncFileError.access }
+            let identity = cloudIdentity
             let before = try snapshot(session)
             journal!.observe(before)
             try await files.saveJournal(journal!)
-            let remote = try await files.readFolder(folder)
+            let remote = try await files.readFolder(folder, identity: identity)
             try lifetime.check(); try Task.checkCancellation()
+            guard generation == connectionGeneration else { throw CancellationError() }
             let baseline = try snapshot(session)
             journal!.observe(baseline)
             for document in remote { try journal!.document.merge(document) }
@@ -160,12 +215,14 @@ final class DeviceSyncStore: ObservableObject {
             // Persist pending remote values before attempting local writes or
             // package downloads, so interruption leaves a retryable journal.
             try await files.saveJournal(journal!)
+            guard generation == connectionGeneration else { throw CancellationError() }
             try await apply(expected: baseline, desired: desired, session: session)
             try lifetime.check()
             let actual = try snapshot(session)
             journal!.acceptApplied(actual, baseline: baseline, desired: desired)
             try await files.saveJournal(journal!)
-            try await files.writeFolder(folder, journal: journal!)
+            guard generation == connectionGeneration else { throw CancellationError() }
+            try await files.writeFolder(folder, journal: journal!, identity: identity)
             try lifetime.check(); try Task.checkCancellation()
             lastChecked = Date(); UserDefaults.standard.set(lastChecked, forKey: Self.checkedKey)
             message = "Changes saved to your sync folder."

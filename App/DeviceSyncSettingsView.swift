@@ -1,11 +1,11 @@
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 import AnimeCore
 
 struct DeviceSyncSettingsView: View {
     @EnvironmentObject private var sync: DeviceSyncStore
-    @State private var choosingFolder = false
+    private enum ImportChoice { case folder, backup }
+    @State private var importChoice = ImportChoice.folder
     @State private var exporting = false
     @State private var importing = false
     @State private var readingBackup = false
@@ -18,29 +18,32 @@ struct DeviceSyncSettingsView: View {
             Section {
                 Label("Your setup, on every device", systemImage: "icloud")
                     .font(.headline)
-                Text("Choose the same folder in iCloud Drive on your iPhone and iPad. Changes merge automatically while the app is open, including changes made offline.")
+                Text("Automatic iCloud creates and reconnects your sync folder for you. If your copy needs Files permission, choose a folder once and the app creates its sync folder inside it.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Section {
                 LabeledContent("Automatic sync", value: "On launch & return")
+                Button { Task { await sync.connectAutomatically() } } label: {
+                    Label(sync.location == .automatic ? "Reconnect Automatic iCloud" : "Enable Automatic iCloud", systemImage: "icloud")
+                }.disabled(!sync.ready || sync.syncing).accessibilityIdentifier("device-sync-automatic")
+                Button { importChoice = .folder; importing = true } label: {
+                    Label(sync.connected ? "Choose a Files Folder Instead" : "Use a Files Folder", systemImage: "folder.badge.plus")
+                }.disabled(!sync.ready || sync.syncing).accessibilityIdentifier("device-sync-choose-folder")
                 if sync.connected {
                     LabeledContent("Folder", value: sync.folderName.isEmpty ? "Reconnect to continue" : sync.folderName)
                     if let date = sync.lastChecked { LabeledContent("Last checked") { Text(date, style: .relative).foregroundStyle(.secondary) } }
                     Button { Task { await sync.syncNow() } } label: {
                         HStack { Label("Sync Now", systemImage: "arrow.triangle.2.circlepath"); Spacer(); if sync.syncing { ProgressView() } }
                     }.disabled(sync.syncing || !sync.ready).accessibilityIdentifier("device-sync-now")
-                    Button("Choose Another Folder") { choosingFolder = true }.disabled(sync.syncing || !sync.ready)
                     Button("Disconnect This Device", role: .destructive) { confirmDisconnect = true }.disabled(sync.syncing)
                         .accessibilityIdentifier("device-sync-disconnect")
-                } else {
-                    Button { choosingFolder = true } label: { Label("Choose iCloud Drive Folder", systemImage: "folder.badge.plus") }
-                        .disabled(!sync.ready || sync.syncing).accessibilityIdentifier("device-sync-choose-folder")
                 }
                 if let message = sync.message { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                if let error = sync.setupError { Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.orange).accessibilityIdentifier("device-sync-setup-error") }
                 if let error = sync.error { Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.orange).accessibilityIdentifier("device-sync-error") }
                 if let notice = sync.extensionNotice { Text(notice).font(.footnote).foregroundStyle(.orange) }
-            } header: { Text("Sync folder") } footer: {
-                Text("In Files, create a folder such as Next Sync in iCloud Drive, then select it on each device. An On My iPhone folder is local only. iCloud Drive controls when files reach your other devices; leave both apps open to sync. Disconnecting keeps your local data and the backup folder.")
+            } header: { Text("Sync connection") } footer: {
+                Text("Use Automatic iCloud on both devices with the same iCloud account. Some sideloaded copies need a one-time Files folder permission instead: select the same writable folder in iCloud Drive on both devices. An On My iPhone folder is local only. Disconnecting keeps your local data and cloud files.")
             }
             Section {
                 Label("Settings, theme, layouts & widgets", systemImage: "slider.horizontal.3")
@@ -58,25 +61,28 @@ struct DeviceSyncSettingsView: View {
                     catch { sync.error = error.localizedDescription }
                 } label: { Label("Export Backup", systemImage: "square.and.arrow.up") }
                     .disabled(!sync.ready || sync.syncing).accessibilityIdentifier("device-sync-export")
-                Button { importing = true } label: {
+                Button { importChoice = .backup; importing = true } label: {
                     HStack { Label("Merge a Backup", systemImage: "square.and.arrow.down"); Spacer(); if readingBackup { ProgressView() } }
                 }.disabled(!sync.ready || sync.syncing || readingBackup).accessibilityIdentifier("device-sync-import")
             } header: { Text("Portable backup") } footer: {
                 Text("Save a separate backup in Files or send it with AirDrop. Importing merges the included settings and titles into this device and, if connected, its sync folder. Other local titles are kept. Backups contain library titles and preferences; choose a private folder.")
             }
         }.navigationTitle("Sync & backup").navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $choosingFolder) {
-                SyncFolderPicker(picked: { url in choosingFolder = false; Task { await sync.connect(url) } },
-                                 cancelled: { choosingFolder = false })
-            }
             .fileExporter(isPresented: $exporting, document: backup, contentType: .json,
                           defaultFilename: "Next-Backup-\(Date().formatted(.iso8601.year().month().day().dateSeparator(.dash)))") { result in
                 if case .failure(let error) = result { sync.error = error.localizedDescription }
             }
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
+            .fileImporter(isPresented: $importing, allowedContentTypes: importChoice == .folder ? [.folder] : [.json], allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):
                     guard let url = urls.first else { return }
+                    if importChoice == .folder {
+                        do {
+                            let bookmark = try DeviceSyncFiles.bookmarkSelection(url)
+                            Task { await sync.connect(bookmark: bookmark) }
+                        } catch { sync.setupError = error.localizedDescription }
+                        return
+                    }
                     readingBackup = true
                     Task {
                         defer { readingBackup = false }
@@ -100,32 +106,10 @@ struct DeviceSyncSettingsView: View {
             } message: { Text("Local data and the files in your sync folder are kept. Other devices can continue syncing.") }
     }
 }
-
 private struct SyncBackupFile: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
     var data = Data()
     init(data: Data = Data()) { self.data = data }
     init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
-}
-
-private struct SyncFolderPicker: UIViewControllerRepresentable {
-    let picked: (URL) -> Void
-    let cancelled: () -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(picked: picked, cancelled: cancelled) }
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
-        picker.allowsMultipleSelection = false; picker.delegate = context.coordinator
-        return picker
-    }
-    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let picked: (URL) -> Void
-        let cancelled: () -> Void
-        init(picked: @escaping (URL) -> Void, cancelled: @escaping () -> Void) { self.picked = picked; self.cancelled = cancelled }
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            if let url = urls.first { picked(url) }
-        }
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { cancelled() }
-    }
 }

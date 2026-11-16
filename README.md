@@ -1,6 +1,6 @@
-## Device sync and backups — version 0.59.1 / build 133
+## Device sync and backups — version 0.59.2 / build 134
 
-Open **Settings → Sync & backup** and select the same private folder in iCloud Drive on each device. The app checks automatically on launch and whenever you return, while your local library remains usable. Settings, Home/Explore layouts, local manga, chapter progress, source links, manga extension setup and video resume positions merge while the app is open. Portable JSON backups can also be exported to Files or AirDrop and merged back with a preview. Account tokens, API keys, private source settings, configured video add-ons and downloads stay on each device. [Setup, merge rules and device checks](docs/device-sync.md).
+Open **Settings → Sync & backup → Enable Automatic iCloud** to create and reconnect the app's iCloud folder without choosing it. This requires signing with a registered iCloud Documents container; an unsigned IPA cannot grant itself that access. If unavailable, **Use a Files Folder** uses the system folder importer and remembers one writable iCloud Drive folder grant. The app creates its own sync subfolder and checks on launch/return while your local library stays usable. Settings, layouts, local manga, progress, source links and manga extension setup merge across devices. Portable backups remain available. [Setup, signing requirements and device checks](docs/device-sync.md).
 
 ## Catalog switching and video players — version 0.58.4 / build 131
 

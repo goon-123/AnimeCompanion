@@ -1,9 +1,21 @@
 # Device sync and portable backups
 
-Open **Settings → Sync & backup**. In Files, create a private folder in iCloud
-Drive (for example `Next Sync`), then select that same folder on each device.
+Open **Settings → Sync & backup → Enable Automatic iCloud** on both devices.
+When the installed signing profile enables iCloud Documents, the app obtains its
+own iCloud container and creates/reuses its sync directory automatically. No
+external folder selection is needed. Use the same iCloud account and app
+container on both devices. The app never substitutes local storage when iCloud
+access is unavailable.
+
+Unsigned distribution and many sideloading profiles do not grant an iCloud
+container. If automatic setup is unavailable, the app explains this and offers
+**Use a Files Folder**. Select the same private, writable iCloud Drive folder on
+both devices. The system may require navigating into or creating a subfolder
+rather than selecting a provider's top-level iCloud Drive location. The app
+creates its own `AnimeCompanion Sync` subfolder. It validates reading and writing
+before saving the connection; failed selections keep the previous connection.
 An `On My iPhone` folder is local storage and cannot sync between devices.
-The app creates its own `AnimeCompanion Sync` subfolder. Avoid editing its files.
+Existing folder connections are retained after upgrading. Avoid editing sync files.
 
 The app checks automatically on launch and each foreground return, after local changes (a two-second debounce)
 and every 30 seconds while active. **Sync Now** requests an immediate check.
@@ -48,11 +60,34 @@ library. Reconnect the same folder after setup to restore synced data.
 
 ## Implementation and limits
 
-Directory access uses the system document picker, minimal security-scoped
-bookmarks and `NSFileCoordinator` off the main actor. This works with file
-providers exposed in Files, without a CloudKit container, special signing
-entitlements or a custom backend. It suits unsigned IPA distribution followed
-by ordinary sideload signing.
+Automatic setup uses `url(forUbiquityContainerIdentifier: nil)` off the main actor
+to obtain the default container granted by the installed signature. It checks
+the archived iCloud account identity on restore and before file writes. Account
+changes invalidate an in-flight pass and require explicitly enabling the new
+account before syncing its data. Temporary iCloud unavailability preserves the
+connection for retry.
+
+Files fallback uses the system SwiftUI folder importer, open-in-place support,
+minimal security-scoped bookmarks captured before importer dismissal, and
+`NSFileCoordinator` off the main actor. It needs a one-time user folder grant
+and does not require the app's own iCloud entitlement. Missing or inaccessible
+storage is reported rather than mistaken for an empty cloud library.
+
+### Signing automatic iCloud builds
+
+The app target declares iCloud Documents in `App/AnimeCompanion.entitlements`
+and publishes the `iCloud.com.animecompanion.ios` Documents container in
+`project.yml`. A developer must register that container in Apple Developer,
+associate it with the app ID, and sign with a provisioning profile granting
+the declared iCloud services and containers. The unsigned CI IPA does not
+contain a provisioning profile and cannot turn those capabilities on. A
+resigning tool may remove or omit them. Do not claim automatic mode works until
+the installed signed copy can obtain its iCloud container on a real device.
+
+If using a different registered container, update both the entitlements and
+`NSUbiquitousContainers` metadata. A source build intended only for the Files
+fallback can override `CODE_SIGN_ENTITLEMENTS` to an empty value when signing.
+No CloudKit database, push-notification permission or custom backend is used.
 
 Each installation writes a separate UUID-named `.nextsync` file. Reads merge all
 device snapshots and unresolved file versions. Individual settings, title
@@ -78,7 +113,10 @@ snapshots or deletion records automatically.
 
 ## Focused device check
 
-1. Connect an iPhone and iPad to the same private iCloud Drive folder.
+1. On an iCloud-enabled signed iPhone/iPad build, tap Enable Automatic iCloud.
+   Verify that no folder picker appears and the app creates/reuses its container.
+   On a copy without that capability, verify the clear unavailable message and
+   use the Files fallback to select the same private iCloud Drive folder.
 2. Change a Home widget order, theme and player on one; save a local manga and
    link a MangaBaka title to a source. Check the other device after delivery.
    Close and reopen the receiving app and verify updates arrive without pressing
@@ -90,3 +128,5 @@ snapshots or deletion records automatically.
    restored setting and preservation of unrelated local titles.
 6. Disconnect or reset one device. Verify the other device and cloud files are
    kept. Reconnect the reset device to restore its setup.
+7. Change the iCloud account with automatic mode enabled. Verify sync pauses
+   until the new account is explicitly enabled, with local data kept.
