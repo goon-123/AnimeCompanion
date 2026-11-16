@@ -219,7 +219,7 @@ final class MangaExtensionTests: XCTestCase {
 
     func testLiveKeiyoushiCatalogWhenExplicitlyEnabled() async throws {
         guard ProcessInfo.processInfo.environment["ANIMECOMPANION_LIVE_MANGA"] == "1" else { throw XCTSkip("Opt-in network check") }
-        let client = MangaRepositoryClient()
+        let client = MangaRepositoryClient(transport: LiveGitHubTestTransport())
         let catalog = try await client.catalog()
         XCTAssertGreaterThan(catalog.extensions.count, 500)
         let mangaPlus = try XCTUnwrap(catalog.extensions.first { $0.packageName == "eu.kanade.tachiyomi.extension.all.mangaplus" })

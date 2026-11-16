@@ -37,6 +37,10 @@ final class MangaSourceLinkStore: ObservableObject {
     private func apply(_ value: MangaSourceLinkState) {
         if value.revision >= state.revision { state = value }
     }
+    func applyDeviceSync(expected: [String: Data], desired: [String: Data]) async throws {
+        guard !loading, !unreadable else { throw MangaSourceLinkError.unreadable }
+        apply(try await storage.applyDeviceSync(expected: expected, desired: desired))
+    }
 }
 
 extension MangaBakaStore {

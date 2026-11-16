@@ -370,6 +370,8 @@ jobs:
           python3 scripts/test-release-privacy.py
           python3 scripts/check-release-privacy.py --source .
       - name: Verify current Keiyoushi repository and package checksums
+        env:
+          ANIMECOMPANION_GITHUB_READ_TOKEN: ${{ github.token }}
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_MANGA=1 swift test -j 2 --filter MangaExtensionTests.testLiveKeiyoushiCatalogWhenExplicitlyEnabled
       - name: Verify previous-season, top-anime and studio queries
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter LiveServiceTests.testAniListExploreShelvesAndStudio

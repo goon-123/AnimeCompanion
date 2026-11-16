@@ -58,6 +58,11 @@ struct SettingsDirectoryView: View {
                 }
             }
             Section("Preferences") {
+                if matches("iCloud sync backup devices restore export import library settings extensions") {
+                    NavigationLink { DeviceSyncSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Sync & backup", detail: "iCloud Drive, devices & portable backups", symbol: "icloud", tint: .blue)
+                    }.accessibilityIdentifier("settings-device-sync")
+                }
                 if matches("Community discussions AniList comments sources") {
                     NavigationLink { CommunitySourcesView() } label: {
                         SettingsCategoryLabel(title: "Community sources", detail: "Discussions, readers & access", symbol: "bubble.left.and.bubble.right", tint: Theme.accent)
@@ -85,7 +90,7 @@ struct SettingsDirectoryView: View {
                         Label("Reset App & Sign Out of Everything", systemImage: "arrow.counterclockwise")
                     }.accessibilityIdentifier("settings-reset-app")
                 } footer: {
-                    Text("Remove saved accounts, keys, extensions, downloads, reading history and settings from this app on this device, then start setup again.")
+                Text("Remove saved accounts, keys, extensions, downloads, reading history and settings from this app on this device, then start setup again. Your sync folder is kept and this device disconnects.")
                 }
             }
             Section {
@@ -106,7 +111,7 @@ struct SettingsDirectoryView: View {
                 Button("Erase Local Data & Restart Setup", role: .destructive) { reset.start() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes every saved account, API key, installed extension, local download, reading position and preference on this device. Your AniList and MangaBaka online libraries will stay intact. This cannot be undone.")
+                Text("This removes every saved account, API key, installed extension, local download, reading position and preference on this device. Your sync folder and AniList and MangaBaka online libraries stay intact. Reconnect your folder after setup to restore synced data. Local erasure cannot be undone.")
             }
     }
 }
@@ -117,11 +122,12 @@ private struct AppSettingsSheet: ViewModifier {
     @State private var selectedAccount: TrackingAccount?
     func body(content: Content) -> some View {
         content.sheet(isPresented: $isPresented, onDismiss: {
+            navigation.settingsPresented = false
             navigation.applyLayoutPreference(); navigation.applyTabPreferences()
             if let selectedAccount { self.selectedAccount = nil; navigation.openAccountLibrary(selectedAccount) }
         }) {
             SettingsView { account in selectedAccount = account; isPresented = false }
-        }
+        }.onChange(of: isPresented) { _, presented in navigation.settingsPresented = presented }
     }
 }
 

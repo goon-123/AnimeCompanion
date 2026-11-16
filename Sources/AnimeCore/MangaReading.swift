@@ -233,10 +233,10 @@ public actor MangaReadingStorage {
         } catch { throw MangaReadingStorageError.unreadable }
     }
     @discardableResult
-    public func update(_ mutation: @Sendable (inout MangaReadingState) -> Void) throws -> MangaReadingState {
+    public func update(_ mutation: @Sendable (inout MangaReadingState) throws -> Void) throws -> MangaReadingState {
         return try persistence.perform {
             var value = try load()
-            mutation(&value); value.preferences.normalize()
+            try mutation(&value); value.preferences.normalize()
             guard value.revision < UInt64.max, value.records.count <= 5000,
                   value.records.allSatisfy({ $0.positions.count <= 10000 }) else { throw MangaReadingStorageError.tooLarge }
             value.revision += 1

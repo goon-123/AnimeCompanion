@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: '5.0'
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
-    MARKETING_VERSION: '0.58.4'
-    CURRENT_PROJECT_VERSION: '131'
+    MARKETING_VERSION: '0.59.2'
+    CURRENT_PROJECT_VERSION: '134'
 packages:
   AnimeCore:
     path: .
@@ -22,6 +22,7 @@ targets:
       - path: App
         excludes:
           - Info.plist
+          - AnimeCompanion.entitlements
           - SeanimeRuntimeResources
       - path: App/SeanimeRuntimeResources
         type: folder
@@ -49,6 +50,12 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         CADisableMinimumFrameDurationOnPhone: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSUbiquitousContainers:
+          iCloud.com.animecompanion.ios:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: Anime Companion
+            NSUbiquitousContainerSupportedFolderLevels: Any
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.animecompanion.ios
@@ -56,6 +63,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: false
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App/AnimeCompanion.entitlements
         OTHER_LDFLAGS: $(inherited) -lc++ -lz -liconv -lresolv
     dependencies:
       - package: AnimeCore
@@ -107,6 +115,7 @@ targets:
     platform: iOS
     sources:
       - path: Tests/SpotlightRuntimeTests
+      - path: Tests/DeviceSyncRuntimeTests
       - path: Tests/MangaRuntimeTests
         excludes: [Fixtures, OwnedFixtures]
       - path: Tests/MangaRuntimeTests/Fixtures

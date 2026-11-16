@@ -8,7 +8,7 @@ final class MangaReadingStore: ObservableObject {
     @Published private(set) var unreadable = false
     @Published var error: String?
     private let storage: MangaReadingStorage
-    private var loaded = false
+    private var loadTask: Task<Void, Never>?
     init() {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MangaReading", isDirectory: true)
@@ -24,10 +24,15 @@ final class MangaReadingStore: ObservableObject {
         storage = MangaReadingStorage(directory: directory)
     }
     func load() async {
-        guard !loaded else { return }; loaded = true
-        do { state = try await storage.load() }
-        catch { unreadable = true; self.error = "Saved reading data could not be opened. Your existing data has been kept." }
-        loading = false
+        guard loading else { return }
+        if let loadTask { await loadTask.value; return }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            defer { loading = false; loadTask = nil }
+            do { state = try await storage.load() }
+            catch { unreadable = true; self.error = "Saved reading data could not be opened. Your existing data has been kept." }
+        }
+        loadTask = task; await task.value
     }
     func record(_ id: String) -> MangaReadingRecord? { state.record(id) }
     func save(_ title: MangaTitleReference, saved: Bool) async { await change { $0.save(title, saved: saved) } }
@@ -50,6 +55,19 @@ final class MangaReadingStore: ObservableObject {
     }
     func preferences(_ preferences: WebtoonPreferences) async { await change { $0.preferences = preferences } }
     func clearHistory() async { await change { $0.clearHistory() } }
+    func applyDeviceSync(expected: [String: Data], desired: [String: Data]) async throws {
+        guard !loading, !unreadable else { throw MangaReadingStorageError.unreadable }
+        let value = try await storage.update { state in
+            // The actor reads its latest state, including reader saves that
+            // arrived while the external file provider was downloading.
+            let current = try DeviceSyncPayload.readingValues(state)
+            let payload = try DeviceSyncPayload(values: DeviceSyncPayload.patch(current: current,
+                expected: expected.filter { Self.isReadingKey($0.key) }, desired: desired.filter { Self.isReadingKey($0.key) }))
+            let revision = state.revision; state = payload.reading; state.revision = revision
+        }
+        if value.revision >= state.revision { state = value }
+    }
+    nonisolated private static func isReadingKey(_ key: String) -> Bool { key.hasPrefix("reader.") || key.hasPrefix("book.") }
     private func change(_ mutation: @escaping @Sendable (inout MangaReadingState) -> Void) async {
         guard !unreadable else { return }
         do {
