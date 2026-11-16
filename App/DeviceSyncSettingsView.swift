@@ -21,7 +21,8 @@ struct DeviceSyncSettingsView: View {
                 Text("Choose the same folder in iCloud Drive on your iPhone and iPad. Changes merge automatically while the app is open, including changes made offline.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
-            Section("Sync folder") {
+            Section {
+                LabeledContent("Automatic sync", value: "On launch & return")
                 if sync.connected {
                     LabeledContent("Folder", value: sync.folderName.isEmpty ? "Reconnect to continue" : sync.folderName)
                     if let date = sync.lastChecked { LabeledContent("Last checked") { Text(date, style: .relative).foregroundStyle(.secondary) } }
@@ -38,20 +39,20 @@ struct DeviceSyncSettingsView: View {
                 if let message = sync.message { Text(message).font(.footnote).foregroundStyle(.secondary) }
                 if let error = sync.error { Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.orange).accessibilityIdentifier("device-sync-error") }
                 if let notice = sync.extensionNotice { Text(notice).font(.footnote).foregroundStyle(.orange) }
-            } footer: {
+            } header: { Text("Sync folder") } footer: {
                 Text("In Files, create a folder such as Next Sync in iCloud Drive, then select it on each device. An On My iPhone folder is local only. iCloud Drive controls when files reach your other devices; leave both apps open to sync. Disconnecting keeps your local data and the backup folder.")
             }
-            Section("Included") {
+            Section {
                 Label("Settings, theme, layouts & widgets", systemImage: "slider.horizontal.3")
                 Label("Local manga library & saved sources", systemImage: "books.vertical")
                 Label("Chapter progress & reader preferences", systemImage: "bookmark")
                 Label("MangaBaka reading-source links", systemImage: "link")
                 Label("Manga extensions & enabled status", systemImage: "puzzlepiece.extension")
                 Label("Video player choice & resume positions", systemImage: "play.rectangle")
-            } footer: {
+            } header: { Text("Included") } footer: {
                 Text("Extensions download again and are verified on each device. Account sign-ins, API keys, private source settings, configured video add-ons, website sessions and offline downloads stay on this device. AniList and MangaBaka continue syncing their online libraries through their own accounts.")
             }
-            Section("Portable backup") {
+            Section {
                 Button {
                     do { backup = SyncBackupFile(data: try sync.makeBackup()); exporting = true }
                     catch { sync.error = error.localizedDescription }
@@ -60,7 +61,7 @@ struct DeviceSyncSettingsView: View {
                 Button { importing = true } label: {
                     HStack { Label("Merge a Backup", systemImage: "square.and.arrow.down"); Spacer(); if readingBackup { ProgressView() } }
                 }.disabled(!sync.ready || sync.syncing || readingBackup).accessibilityIdentifier("device-sync-import")
-            } footer: {
+            } header: { Text("Portable backup") } footer: {
                 Text("Save a separate backup in Files or send it with AirDrop. Importing merges the included settings and titles into this device and, if connected, its sync folder. Other local titles are kept. Backups contain library titles and preferences; choose a private folder.")
             }
         }.navigationTitle("Sync & backup").navigationBarTitleDisplayMode(.inline)

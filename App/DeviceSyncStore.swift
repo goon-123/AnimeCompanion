@@ -31,18 +31,30 @@ final class DeviceSyncStore: ObservableObject {
         let links: MangaSourceLinkStore
     }
     private var session: Session?
+    private var preparation: Task<Void, Never>?
     private var subscriptions: Set<AnyCancellable> = []
-    private var debounce: Task<Void, Never>?
     private var stopped = false
-    private var active = true
-    private var rerun = false
+    private var active = false
+    private lazy var scheduler = DeviceSyncScheduler { [weak self] in await self?.performSync() }
 
-    func start(session: CompanionSessionStores) async {
-        guard self.session == nil, lifetime.isCurrent else { return }
-        self.session = Session(app: session.app, filters: session.filters, playback: session.playback,
-            navigation: session.navigation, extensions: session.extensions, reading: session.reading, links: session.links)
-        await session.reading.load(); await session.links.load(); await session.extensions.load()
-        guard lifetime.isCurrent else { return }
+    func start(session stores: CompanionSessionStores) async {
+        guard !stopped, lifetime.isCurrent else { return }
+        if let preparation { await preparation.value; return }
+        let session = Session(app: stores.app, filters: stores.filters, playback: stores.playback,
+            navigation: stores.navigation, extensions: stores.extensions, reading: stores.reading, links: stores.links)
+        self.session = session
+        // Local preparation survives transient scene changes, so a quick
+        // close/reopen cannot leave sync half-initialized until the next timer.
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.prepare(session)
+        }
+        preparation = task; await task.value
+    }
+    private func prepare(_ session: Session) async {
+        await session.reading.load(); await session.links.load()
+        await session.extensions.load(refreshCatalog: false)
+        guard !stopped, lifetime.isCurrent else { return }
         do {
             let defaults = UserDefaults.standard
             let vendor = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
@@ -70,23 +82,19 @@ final class DeviceSyncStore: ObservableObject {
         session.links.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
         session.extensions.$state.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
         session.playback.$progress.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.schedule() }.store(in: &subscriptions)
-        schedule()
+        if active && connected { scheduler.activate() }
     }
-    func runWhileActive() async {
-        guard !Task.isCancelled, !stopped else { return }
-        active = true
-        while !Task.isCancelled, !stopped {
-            await syncNow()
-            do { try await Task.sleep(for: .seconds(30)) } catch { return }
-        }
+    func setActive(_ value: Bool) {
+        guard !stopped else { return }
+        active = value
+        if value && ready && connected { scheduler.activate() }
+        else { scheduler.deactivate() }
     }
     func stop() {
-        stopped = true; debounce?.cancel(); debounce = nil; subscriptions.removeAll(); session = nil
+        stopped = true; scheduler.stop(); preparation?.cancel(); subscriptions.removeAll(); session = nil
     }
     func pause() async {
-        active = false
-        debounce?.cancel(); debounce = nil
-        guard !syncing, let session, journal != nil, lifetime.isCurrent else { return }
+        guard !active, connected, !syncing, let session, journal != nil, lifetime.isCurrent else { return }
         do {
             journal!.observe(try snapshot(session))
             try await files.saveJournal(journal!)
@@ -95,15 +103,11 @@ final class DeviceSyncStore: ObservableObject {
     private func schedule() {
         guard connected, ready, active, !stopped else { return }
         if let session, let journal, let current = try? snapshot(session), current == journal.observed { return }
-        if syncing { rerun = true; return }
-        debounce?.cancel()
-        debounce = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(2)) } catch { return }
-            await self?.syncNow()
-        }
+        scheduler.localChange()
     }
     func connect(_ url: URL) async {
         guard !syncing, !stopped else { return }
+        scheduler.deactivate()
         syncing = true
         do {
             try lifetime.check(); try rememberFolder(url)
@@ -113,13 +117,17 @@ final class DeviceSyncStore: ObservableObject {
             journal = DeviceSyncJournal(deviceID: id)
             try await files.saveJournal(journal!)
             folder = url; folderName = url.lastPathComponent; connected = true; error = nil
-        } catch { self.error = error.localizedDescription; syncing = false; return }
+        } catch {
+            self.error = error.localizedDescription; syncing = false
+            if active && connected { scheduler.activate() }
+            return
+        }
         syncing = false
-        await syncNow()
+        if active { scheduler.activate(); await scheduler.waitForCurrentSync() }
     }
     func disconnect() {
         guard !syncing else { return }
-        debounce?.cancel(); folder = nil; connected = false; folderName = ""; message = nil; error = nil
+        scheduler.deactivate(); folder = nil; connected = false; folderName = ""; message = nil; error = nil
         UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
         // Both local data and shared snapshots remain available for recovery.
     }
@@ -130,10 +138,13 @@ final class DeviceSyncStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
     }
     func syncNow() async {
+        scheduler.requestNow(); await scheduler.waitForCurrentSync()
+    }
+    private func performSync() async {
         guard ready, connected, let folder, let session, journal != nil, !stopped, lifetime.isCurrent else { return }
-        guard !syncing else { return }
-        syncing = true; rerun = false; error = nil; message = "Checking sync folder…"
-        defer { syncing = false; if rerun { rerun = false; schedule() } }
+        guard !syncing, !Task.isCancelled else { return }
+        syncing = true; error = nil; message = "Checking sync folder…"
+        defer { syncing = false }
         do {
             let before = try snapshot(session)
             journal!.observe(before)
@@ -171,11 +182,13 @@ final class DeviceSyncStore: ObservableObject {
     func restoreBackup(_ backup: DeviceSyncBackup) async {
         guard ready, !syncing, let session, !stopped else { return }
         syncing = true; error = nil
-        defer { syncing = false; schedule() }
+        defer { syncing = false; if active && connected { scheduler.requestNow() } }
         do {
             try lifetime.check()
             let baseline = try snapshot(session)
-            if journal == nil { journal = DeviceSyncJournal() }
+            if journal == nil {
+                journal = DeviceSyncJournal(deviceID: UserDefaults.standard.string(forKey: Self.deviceKey) ?? UUID().uuidString)
+            }
             journal!.observe(baseline)
             try journal!.restore(backup.values)
             let desired = baseline.merging(backup.values) { _, incoming in incoming }

@@ -5,11 +5,15 @@ Drive (for example `Next Sync`), then select that same folder on each device.
 An `On My iPhone` folder is local storage and cannot sync between devices.
 The app creates its own `AnimeCompanion Sync` subfolder. Avoid editing its files.
 
-The app checks on foreground arrival, after local changes (a two-second debounce)
+The app checks automatically on launch and each foreground return, after local changes (a two-second debounce)
 and every 30 seconds while active. **Sync Now** requests an immediate check.
 iCloud Drive controls upload/download delivery; a successful local folder write
 does not prove that another device has downloaded it. There is no continuous
-background execution guarantee. Local reading works without a network.
+background execution guarantee. Sync runs without a blocking overlay and the
+local library stays usable. A return during an in-flight pass queues a fresh
+check immediately after that pass, rather than waiting for the next timer.
+Local preparation is shared across scene changes and does not wait for an
+extension catalog download. Local reading works without a network.
 
 Included data:
 
@@ -77,6 +81,8 @@ snapshots or deletion records automatically.
 1. Connect an iPhone and iPad to the same private iCloud Drive folder.
 2. Change a Home widget order, theme and player on one; save a local manga and
    link a MangaBaka title to a source. Check the other device after delivery.
+   Close and reopen the receiving app and verify updates arrive without pressing
+   Sync Now, while you can still scroll and open locally saved titles.
 3. Read different chapters offline on each. Reconnect and verify both positions.
 4. Unsave a title, unpin a source and remove a source link/extension. Reconnect a
    previously offline device and verify the removals are preserved.

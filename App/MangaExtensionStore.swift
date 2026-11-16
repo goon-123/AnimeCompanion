@@ -23,6 +23,7 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     private var settingsCache: [String: MangaSourceSettings] = [:]
     private var writingSettings = false
     private var loaded = false
+    private var loadTask: Task<Void, Never>?
     init() {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MangaExtensions", isDirectory: true)
@@ -39,11 +40,28 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     func update(for entry: InstalledMangaExtension) -> MangaExtensionDescriptor? {
         catalog?.update(for: entry)
     }
-    func load() async {
-        guard !loaded else { return }; loaded = true
+    func load(refreshCatalog: Bool = true) async {
+        if let loadTask { await loadTask.value }
+        else if !loaded {
+            loaded = true
+            let task = Task { [weak self] in
+                guard let self else { return }
+                await self.loadLocalState()
+            }
+            loadTask = task; await task.value
+        }
+        #if DEBUG
+        if MangaReaderPreview.active { return }
+        #endif
+        // Cloud sync only needs the installed local state. A catalog download
+        // must not delay its initial check or the app's foreground arrival.
+        if refreshCatalog && state.repositoryAdded && !unreadableState && Date().timeIntervalSince(lastRefresh ?? .distantPast) > 6 * 3600 { await refresh() }
+    }
+    private func loadLocalState() async {
+        defer { loading = false; loadTask = nil }
         #if DEBUG
         if MangaReaderPreview.active {
-            state = MangaReaderPreview.extensionState; catalog = MangaReaderPreview.catalog; loading = false; return
+            state = MangaReaderPreview.extensionState; catalog = MangaReaderPreview.catalog; return
         }
         #endif
         do {
@@ -55,8 +73,6 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
             unreadableState = true
             self.error = "Saved manga extensions could not be read. Existing files have been kept. Reopen the app before changing them."
         }
-        loading = false
-        if state.repositoryAdded && !unreadableState && Date().timeIntervalSince(lastRefresh ?? .distantPast) > 6 * 3600 { await refresh() }
     }
     func refresh(link: String = "https://keiyoushi.github.io") async {
         guard !refreshing, installing == nil, !updatingAll, !unreadableState, !loading else { return }

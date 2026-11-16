@@ -70,12 +70,11 @@ struct AppSessionView: View {
                     launchContentReady = true
                 }
                 .task { await revealLaunchWhenReady() }
-                .task(id: scenePhase) {
+                .task { if !artworkPreview { await deviceSync.start(session: sessionStores) } }
+                .onChange(of: scenePhase, initial: true) { _, phase in
                     guard !artworkPreview else { return }
-                    if scenePhase == .active {
-                        await deviceSync.start(session: sessionStores)
-                        await deviceSync.runWhileActive()
-                    } else { await deviceSync.pause() }
+                    deviceSync.setActive(phase == .active)
+                    if phase == .background { Task { await deviceSync.pause() } }
                 }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
