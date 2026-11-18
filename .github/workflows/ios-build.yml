@@ -29,14 +29,27 @@ jobs:
           channel: stable
           cache: true
       - uses: actions/cache@v4
+        id: extension-cache
         with:
           path: |
             ~/.pub-cache
             ~/Library/Caches/CocoaPods
-          key: anymex-pub-pods-${{ runner.arch }}-${{ hashFiles('Tools/ExtensionBridge/pubspec.lock', 'Tools/ExtensionBridge/pubspec.yaml', 'scripts/prepare-anymex.py') }}
-          restore-keys: anymex-pub-pods-${{ runner.arch }}-
+            Tools/ExtensionBridge/.dart_tool/flutter_build
+            Tools/ExtensionBridge/build
+          key: anymex-build-v2-${{ runner.arch }}-3.38.5-${{ hashFiles('Tools/ExtensionBridge/pubspec.lock', 'Tools/ExtensionBridge/pubspec.yaml', 'Tools/ExtensionBridge/lib/**', 'scripts/*anymex*') }}
+          restore-keys: anymex-build-v2-${{ runner.arch }}-3.38.5-
       - name: Build and check all extension backends
         run: bash scripts/build-anymex.sh
+      - name: Preserve extension intermediates for retries
+        if: ${{ failure() && steps.extension-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/Library/Caches/CocoaPods
+            Tools/ExtensionBridge/.dart_tool/flutter_build
+            Tools/ExtensionBridge/build
+          key: ${{ steps.extension-cache.outputs.cache-primary-key }}
       - name: Upload extension frameworks and notices
         uses: actions/upload-artifact@v4
         with:
