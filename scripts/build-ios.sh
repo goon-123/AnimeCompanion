@@ -10,7 +10,8 @@ npm --prefix Tools/SeanimeRuntime test
 npm --prefix Tools/SafariExtension test
 python3 scripts/check-safari-bundle.py
 swift test -j 2
-xcodegen generate
+bash scripts/build-anymex.sh
+xcodegen generate --spec project-anymex.yml
 xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion -configuration Release \
   -destination 'generic/platform=iOS' -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build

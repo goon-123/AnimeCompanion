@@ -3,7 +3,8 @@ import AnimeCore
 
 struct MangaExtensionsView: View {
     @EnvironmentObject private var store: MangaExtensionStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     private enum Mode: String, CaseIterable { case available = "Available", installed = "Installed", updates = "Updates" }
     @State private var repositoryLink = "https://keiyoushi.github.io"
     @State private var query = ""
@@ -28,6 +29,9 @@ struct MangaExtensionsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 header
+                NavigationLink { UnifiedExtensionsView(initialKind: .manga) } label: {
+                    Label("More anime, manga & novel extensions", systemImage: "puzzlepiece.extension")
+                }.buttonStyle(.bordered).accessibilityIdentifier("manga-unified-extensions")
                 repository
                 if store.loading { ProgressView("Loading extensions…").frame(maxWidth: .infinity) }
                 if let notice = store.notice { Label(notice, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(Theme.accent) }
@@ -149,7 +153,7 @@ struct MangaExtensionsView: View {
                 Text("All languages").tag("")
                 ForEach(languages, id: \.self) { Text(Locale.current.localizedString(forLanguageCode: $0) ?? $0.uppercased()).tag($0) }
             }
-            Toggle("Show mature source collections", isOn: $showMature).accessibilityIdentifier("manga-mature-sources")
+            MangaBakaContentButton().accessibilityIdentifier("manga-mature-sources")
         }.companionPanel()
     }
     private func extensionCard(_ descriptor: MangaExtensionDescriptor) -> some View {
@@ -196,7 +200,8 @@ private struct MangaExtensionLabel: View {
 private struct MangaExtensionDetailView: View {
     @ObservedObject var store: MangaExtensionStore
     let descriptor: MangaExtensionDescriptor
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @State private var removing = false
     @State private var sourceLanguage = "en"
     private var installation: InstalledMangaExtension? { store.installed(descriptor.id) }

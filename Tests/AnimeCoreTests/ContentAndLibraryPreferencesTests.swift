@@ -2,6 +2,15 @@ import XCTest
 @testable import AnimeCore
 
 final class ContentAndLibraryPreferencesTests: XCTestCase {
+    func testMatureExtensionAccessUsesTheSavedMangaRatings() {
+        XCTAssertFalse(MangaBakaContentFilter(ratings: [.safe, .suggestive]).allowsMatureSources)
+        XCTAssertFalse(MangaBakaContentFilter(ratings: [.safe], includeUnrated: true).allowsMatureSources)
+        XCTAssertTrue(MangaBakaContentFilter(ratings: [.erotica]).allowsMatureSources)
+        XCTAssertTrue(MangaBakaContentFilter(ratings: [.pornographic]).allowsMatureSources)
+        let saved = MangaBakaContentFilter(ratings: [.safe, .erotica]).saved
+        XCTAssertTrue(MangaBakaContentFilter(saved: saved, legacyIncludeAdult: false).allowsMatureSources)
+        XCTAssertFalse(MangaBakaContentFilter(saved: MangaBakaContentFilter().saved, legacyIncludeAdult: true).allowsMatureSources)
+    }
     private func book(_ id: Int, title: String = "Story", content: String? = "safe", chapter: Double = 4,
                       total: Double? = 10, rating: Int? = nil, updated: String? = nil) throws -> MangaBakaLibraryEntry {
         var series: [String: Any] = ["id": id, "title": title, "type": "manga"]

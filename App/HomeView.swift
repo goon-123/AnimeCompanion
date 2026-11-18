@@ -29,7 +29,8 @@ private struct HomeDashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(HomePreferences.storageKey) private var sections = ""
     @AppStorage(HomeArtworkSize.storageKey) private var artworkSize = HomeArtworkSize.large.rawValue
-    @AppStorage("manga.showMatureSources") private var matureSources = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var matureSources: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @AppStorage(CommunityDestination.storageKey) private var communitySource = CommunityDestination.aniList.rawValue
     @State private var customize = false
     @State private var pickingWidgets = false

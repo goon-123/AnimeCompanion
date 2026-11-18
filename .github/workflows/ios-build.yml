@@ -17,6 +17,36 @@ concurrency:
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 jobs:
+  anymex-runtime:
+    name: Build complete on-device extension framework
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+          channel: stable
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/Library/Caches/CocoaPods
+          key: anymex-pub-pods-${{ runner.arch }}-${{ hashFiles('Tools/ExtensionBridge/pubspec.lock', 'Tools/ExtensionBridge/pubspec.yaml', 'scripts/prepare-anymex.py') }}
+          restore-keys: anymex-pub-pods-${{ runner.arch }}-
+      - name: Build and check all extension backends
+        run: bash scripts/build-anymex.sh
+      - name: Upload extension frameworks and notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-anymex-frameworks
+          path: |
+            build/AnymeXFrameworks/Release
+            build/AnymeXFrameworks/Runtime
+            build/AnymeXDependencies.yml
+            App/ExtensionRuntimeNotices.txt
+          retention-days: 7
   dock-gallery-scope:
     if: ${{ github.event_name == 'pull_request' }}
     name: Detect dock and gallery changes
@@ -630,7 +660,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
-    needs: [core, safari-extension, manga-runtime]
+    needs: [core, safari-extension, manga-runtime, anymex-runtime]
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
@@ -661,10 +691,17 @@ jobs:
           path: Tests/MangaRuntimeTests/Fixtures
       - name: Verify encrypted AniList startup snapshots on Apple platforms
         run: env -u DEVELOPER_DIR swift test -j 2 --filter AniListLibraryCacheTests
+      - name: Download complete extension frameworks
+        uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-anymex-frameworks
+          path: .
+      - name: Verify extension framework manifest
+        run: python3 scripts/anymex-xcode.py
       - name: Generate Xcode project
         run: |
           brew install xcodegen
-          xcodegen generate
+          xcodegen generate --spec project-anymex.yml
       - name: Compile universal iPhone and iPad app
         run: |
           xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \

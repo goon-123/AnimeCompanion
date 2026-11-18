@@ -34,7 +34,8 @@ struct MangaReaderRoute: Identifiable {
 struct MangaTitleDetailView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @EnvironmentObject private var reading: MangaReadingStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @AppStorage("manga.chaptersNewestFirst") private var newestFirst = false
     @AppStorage("series.layout.reader.v1") private var sectionOrder = ""
     let title: MangaTitleReference

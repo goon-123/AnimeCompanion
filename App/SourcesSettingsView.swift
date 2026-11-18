@@ -19,6 +19,13 @@ struct SourcesSettingsRows: View {
     var query = ""
     private func matches(_ text: String) -> Bool { query.isEmpty || text.localizedCaseInsensitiveContains(query) }
     var body: some View {
+        Section("Extensions") {
+            if matches("AnymeX Cloudstream Aniyomi Mangayomi Sora Kotatsu Legado LNReader Tsundoku iReader Nuvio sources plugins novels") {
+                NavigationLink { UnifiedExtensionsView() } label: {
+                    SettingsCategoryLabel(title: "All extension systems", detail: "AnymeX · Anime, manga & novel sources", symbol: "puzzlepiece.extension", tint: Theme.accent)
+                }.accessibilityIdentifier("settings-unified-extensions")
+            }
+        }
         Section("Watch") {
             if matches("Stremio AIOStreams add-ons manifests streaming") {
                 NavigationLink { PlaybackSettingsView() } label: {
