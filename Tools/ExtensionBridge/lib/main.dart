@@ -285,8 +285,9 @@ class CompanionServices {
       }
       final owner = manager(args['manager'] as String);
       final kind = type(args);
-      if (!owner.supportsType(kind))
+      if (!owner.supportsType(kind)) {
         throw const FormatException('Unsupported content type');
+      }
       if (operation == 'addRepo') {
         await owner.addRepo(url.toString(), kind);
       } else {
