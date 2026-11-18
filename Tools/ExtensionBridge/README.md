@@ -19,6 +19,11 @@ reading and video selection. Provider-specific media and episode payloads are
 retained intact across the native boundary. Separate source systems and content
 types use namespaced identities.
 
+Manga and novel content use one shared Content preferences editor. Mature
+reading collections follow the saved MangaBaka ratings, including on Home,
+without a separate extension switch or an anime adult-content requirement.
+Discovery uses those same ratings instead of a second set of checkboxes.
+
 ## Runtime and builds
 
 Use Flutter **3.38.5**, macOS and Xcode, then run `bash scripts/build-anymex.sh`.
@@ -51,7 +56,8 @@ than upstream's bundled shared API key. Cinemeta remains its primary lookup.
 
 ## Current validation
 
-Direct Dart analysis: no issues. The three Swift package contract tests pass,
+Direct Dart analysis: no issues. Four extension contract tests and ten content
+and library preference tests pass,
 covering opaque episode payloads, source identity separation and preserved
 video headers/subtitles. New native source files pass Swift syntax parsing;
 source credential checks and script syntax checks pass. Flutter's widget test,
