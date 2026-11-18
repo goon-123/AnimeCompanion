@@ -36,6 +36,7 @@ properties['MinimumOSVersion'] = '17.0'
 info.write_bytes(plistlib.dumps(properties))
 PY
 # Resolve native dependencies before the more expensive Dart AOT compilation.
+flutter precache --ios
 (cd .ios && pod install)
 flutter build ios-framework --no-debug --no-profile --output=../../build/AnymeXFrameworks
 cd ../..
