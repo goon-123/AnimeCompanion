@@ -122,7 +122,7 @@ class CompanionServices {
       data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
       flush: true,
     );
-    AnymeXRuntimeBridge.controller.setReady(true);
+    await AnymeXRuntimeBridge.checkAndInitialize();
     AnymeXRuntimeBridge.onSolveCloudflare = (url) async {
       final result = await native.invokeMapMethod<String, dynamic>(
         'websiteSession',

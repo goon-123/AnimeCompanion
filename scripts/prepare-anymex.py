@@ -36,7 +36,9 @@ def prepare():
     # Retain every source manager. Exclude the unused TorrServer native engine;
     # AnimeCompanion continues to resolve torrent playback through TorBox.
     pod = UPSTREAM / 'ios/anymex_extension_runtime_bridge.podspec'
-    replace_once(pod, '  s.public_header_files =', "  s.exclude_files = '**/TorrServerBridge.swift'\n  s.public_header_files =")
+    # Device JNI headers are supplied by the vendored OpenJDK framework. The
+    # source tree also has two jni_md.h files, which collide in Copy Headers.
+    replace_once(pod, '  s.public_header_files =', "  s.exclude_files = '**/TorrServerBridge.swift', '**/jdk/**'\n  s.public_header_files =")
     replace_once(pod, "    'anymex_extension_bridge/Frameworks/TorrServerKit.xcframework',", '    # Companion uses TorBox instead of TorrServer.')
     replace_once(pod, "s.prepare_command = 'sh PrepareEmbeddedRuntime.sh && sh PrepareTorrServerRuntime.sh'", "s.prepare_command = 'true' # Companion stages the pinned runtime.")
     plugin = UPSTREAM / 'ios/anymex_extension_bridge/Sources/anymex_extension_bridge/AnymexExtensionRuntimeBridgePlugin.swift'
