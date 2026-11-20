@@ -21,7 +21,7 @@ def main():
         shutil.copytree(framework, destination, dirs_exist_ok=True)
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     subprocess.run([
-        'flutter', 'assemble', '--no-pub',
+        'flutter', 'assemble',
         '-dTargetPlatform=ios', '-dTargetFile=lib/main.dart',
         '-dBuildMode=release', '-dIosArchs=arm64', f'-dSdkRoot={sdk}',
         '-dTreeShakeIcons=true', '-dDartObfuscation=false', '-dTrackWidgetCreation=true',
