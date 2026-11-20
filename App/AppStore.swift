@@ -47,7 +47,12 @@ final class AppStore: ObservableObject {
     @Published var mangaBakaContent = MangaBakaContentFilter(
         saved: UserDefaults.standard.string(forKey: MangaBakaContentFilter.storageKey),
         legacyIncludeAdult: UserDefaults.standard.bool(forKey: "content.includeAdult")) {
-        didSet { UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey) }
+        didSet {
+            UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey)
+            // Compatibility for old app versions/backups; the current UI reads
+            // only the shared manga rating selection.
+            UserDefaults.standard.set(mangaBakaContent.allowsMatureSources, forKey: "manga.showMatureSources")
+        }
     }
     @Published var automaticallyComplete = UserDefaults.standard.object(forKey: "tracking.automaticallyComplete") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticallyComplete, forKey: "tracking.automaticallyComplete") }
@@ -150,6 +155,7 @@ final class AppStore: ObservableObject {
         #endif
         // Freeze the migration once so later AniList changes cannot change MangaBaka.
         UserDefaults.standard.set(mangaBakaContent.saved, forKey: MangaBakaContentFilter.storageKey)
+        UserDefaults.standard.set(mangaBakaContent.allowsMatureSources, forKey: "manga.showMatureSources")
     }
 
     func isVisible(_ anime: Anime) -> Bool { includeAdult || anime.isAdult != true }

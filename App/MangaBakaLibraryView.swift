@@ -40,7 +40,7 @@ struct MangaBakaLibraryView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Display options", systemImage: "rectangle.grid.2x2") { display = true }
-                    Button("Content ratings", systemImage: "eye") { contentRatings = true }
+                    Button("Content preferences", systemImage: "eye") { contentRatings = true }
                     Button("Account & settings", systemImage: "gearshape") { appSettings = true }
                 } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Library options")
             } }

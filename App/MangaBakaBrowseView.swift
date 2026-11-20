@@ -94,6 +94,7 @@ struct MangaBakaBrowseView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query.text, prompt: "Search titles in every format")
             .sheet(isPresented: $showingFilters) { MangaBakaFilterSheet(query: $query) }
+            .onChange(of: preferences.mangaBakaContent) { _, _ in query.contentRatings = [] }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showingFilters = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Genres, tags and content ratings") } }
             .task(id: key) {
                 do { if !query.text.isEmpty { try await Task.sleep(for: .milliseconds(400)) }; try Task.checkCancellation() }

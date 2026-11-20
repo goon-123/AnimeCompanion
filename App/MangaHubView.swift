@@ -4,7 +4,8 @@ import AnimeCore
 struct MangaHubView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @EnvironmentObject private var reading: MangaReadingStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @State private var section = "Library"
     @State private var query = ""
     @State private var language = "en"

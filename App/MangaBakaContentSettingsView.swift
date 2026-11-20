@@ -1,10 +1,14 @@
 import SwiftUI
 import AnimeCore
 
-struct MangaBakaContentSettingsView: View {
+struct ContentPreferencesView: View {
     @EnvironmentObject private var preferences: AppStore
     var body: some View {
         Form {
+            Section {
+                Toggle("Show adult anime (18+)", isOn: $preferences.includeAdult)
+                    .accessibilityIdentifier("settings-adult-content")
+            } header: { Text("Anime & video sources") }
             MangaBakaRatingSection(filter: $preferences.mangaBakaContent)
             Section {
                 Toggle("Show unrated titles", isOn: $preferences.mangaBakaContent.includeUnrated)
@@ -13,12 +17,15 @@ struct MangaBakaContentSettingsView: View {
                 Text("Unrated titles have no recognized content rating and may contain adult content.")
             }
             Section {
-                Text("Applies to MangaBaka in Explore, search, recommendations, libraries, related series and cover galleries. Hidden entries stay in your online library. AniList and external reading websites have separate settings.")
+                Text("One choice for manga and novels across Explore, search, libraries and extensions. Mature extension collections appear when Erotica or Pornographic is enabled. Hidden entries stay in your online library.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
-        }.navigationTitle("MangaBaka content").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Content preferences").navigationBarTitleDisplayMode(.inline)
     }
 }
+
+// Existing manga shortcuts all open the same shared preference editor.
+typealias MangaBakaContentSettingsView = ContentPreferencesView
 
 struct MangaBakaRatingSection: View {
     @Binding var filter: MangaBakaContentFilter
@@ -32,8 +39,8 @@ struct MangaBakaRatingSection: View {
                         .foregroundStyle(rating == .safe ? Color.mint : rating == .suggestive ? .yellow : rating == .erotica ? .orange : .pink)
                 }.accessibilityIdentifier("mangabaka-rating-" + rating.rawValue)
             }
-        } header: { Text("Content rating") } footer: {
-            Text("Enable each rating independently. For example, allow Suggestive while keeping Erotica and Pornographic hidden.")
+        } header: { Text("Manga & novel ratings") } footer: {
+            Text("These are your saved preferences everywhere in the app.")
         }
     }
 }
@@ -42,8 +49,8 @@ struct MangaBakaContentButton: View {
     @EnvironmentObject private var preferences: AppStore
     @State private var presented = false
     var body: some View {
-        Button { presented = true } label: { Label("Content rating", systemImage: "eye") }
-            .accessibilityLabel("MangaBaka content rating").accessibilityValue(preferences.mangaBakaContent.summary)
+        Button { presented = true } label: { Label("Content preferences", systemImage: "eye") }
+            .accessibilityLabel("Content preferences").accessibilityValue(preferences.mangaBakaContent.summary)
             .accessibilityIdentifier("mangabaka-content-settings")
             .sheet(isPresented: $presented) {
                 AppNavigationStack {
