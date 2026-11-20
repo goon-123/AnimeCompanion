@@ -23,8 +23,8 @@ final class ExtensionRepositoryUITests: XCTestCase {
         app.buttons["extensions-paste-repository"].tap()
         let field = app.textFields["extensions-repository-url"]
         let pasted = NSPredicate(format: "value == %@", repository)
-        expectation(for: pasted, evaluatedWith: field)
-        waitForExpectations(timeout: 10)
+        let inserted = XCTNSPredicateExpectation(predicate: pasted, object: field)
+        XCTAssertEqual(XCTWaiter.wait(for: [inserted], timeout: 10), .completed, app.debugDescription)
         let system = app.buttons["extensions-repository-system"]
         XCTAssertTrue(system.label.contains("Sora") || (system.value as? String)?.contains("Sora") == true)
         XCTAssertTrue(app.buttons["extensions-save-repository"].isEnabled)
