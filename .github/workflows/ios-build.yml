@@ -82,6 +82,27 @@ jobs:
           key: ${{ steps.extension-cache.outputs.cache-primary-key }}
       - name: Verify complete extension framework manifest
         run: python3 scripts/anymex-xcode.py
+      - name: Upload extension frameworks and notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-anymex-frameworks
+          path: |
+            build/AnymeXFrameworks/Release
+            build/AnymeXFrameworks/Runtime
+            build/AnymeXDependencies.yml
+            App/ExtensionRuntimeNotices.txt
+          retention-days: 7
+  extension-startup:
+    name: Verify extension storage and system startup
+    needs: anymex-runtime
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: AnimeCompanion-anymex-frameworks
+          path: .
       - name: Exercise the real extension startup
         run: |
           brew install xcodegen
@@ -94,16 +115,7 @@ jobs:
           path: build/ExtensionStartup.xcresult
           if-no-files-found: ignore
           retention-days: 7
-      - name: Upload extension frameworks and notices
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimeCompanion-anymex-frameworks
-          path: |
-            build/AnymeXFrameworks/Release
-            build/AnymeXFrameworks/Runtime
-            build/AnymeXDependencies.yml
-            App/ExtensionRuntimeNotices.txt
-          retention-days: 7
+
   dock-gallery-scope:
     if: ${{ github.event_name == 'pull_request' }}
     name: Detect dock and gallery changes
@@ -717,7 +729,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
-    needs: [core, safari-extension, manga-runtime, anymex-runtime]
+    needs: [core, safari-extension, manga-runtime, anymex-runtime, extension-startup]
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:

@@ -49,8 +49,17 @@ for relative in ['System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib','usr/l
   break
 PY
 simulator_id="$(cat build/extension-startup-device.txt)"
-xcodebuild -project ExtensionStartup.xcodeproj -scheme ExtensionStartup \
-  -destination "platform=iOS Simulator,id=$simulator_id" \
-  -derivedDataPath build/ExtensionStartup -resultBundlePath build/ExtensionStartup.xcresult \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test
+python3 - "$simulator_id" <<'PYTEST'
+import subprocess,sys
+try:
+    result=subprocess.run([
+        'xcodebuild','-project','ExtensionStartup.xcodeproj','-scheme','ExtensionStartup',
+        '-destination','platform=iOS Simulator,id='+sys.argv[1],
+        '-derivedDataPath','build/ExtensionStartup','-resultBundlePath','build/ExtensionStartup.xcresult',
+        '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=NO','test',
+    ],timeout=600)
+    raise SystemExit(result.returncode)
+except subprocess.TimeoutExpired:
+    raise SystemExit('Extension startup test did not complete within 10 minutes.')
+PYTEST
 python3 scripts/check-anymex-bundle.py build/ExtensionStartup/Build/Products/Debug-iphonesimulator/ExtensionStartupHost.app --simulator
