@@ -1,163 +1,441 @@
 import SwiftUI
 import AnimeCore
 
+private enum ExtensionHubTab: String, CaseIterable {
+    case installed = "My sources", browse = "Browse", updates = "Updates"
+}
+
 struct UnifiedExtensionsView: View {
     @StateObject private var store = UnifiedExtensionStore()
     @ObservedObject private var runtime = AnymeXRuntime.shared
+    @EnvironmentObject private var contentPreferences: AppStore
+    @EnvironmentObject private var manga: MangaExtensionStore
     @State private var kind: ExtensionContentKind = .anime
+    @State private var tab = ExtensionHubTab.installed
     @State private var manager = ""
-    @State private var installedOnly = true
     @State private var query = ""
     @State private var language = ""
-    @EnvironmentObject private var contentPreferences: AppStore
-    private var mature: Bool { kind == .anime ? contentPreferences.includeAdult : contentPreferences.mangaBakaContent.allowsMatureSources }
+    @State private var adding = false
+    @State private var filtering = false
+    @State private var activeSource: String?
+    @State private var removing: UnifiedExtensionSource?
+    @State private var notice: String?
+    @State private var started = false
     var initialQuery = ""
     var initialKind: ExtensionContentKind = .anime
-    private var sources: [UnifiedExtensionSource] {
-        (installedOnly ? store.snapshot.installed : store.snapshot.available).filter {
-            $0.kind == kind && (manager.isEmpty || $0.managerId == manager)
-                && (mature || $0.isNsfw != true)
-                && (language.isEmpty || $0.lang == language || $0.lang == "all")
-                && (query.isEmpty || $0.label.localizedCaseInsensitiveContains(query))
+
+    private var managers: [UnifiedExtensionManager] { store.snapshot.managers.filter { $0.types.contains(kind) } }
+    private var installed: [UnifiedExtensionSource] { visible(store.snapshot.installed) }
+    private var available: [UnifiedExtensionSource] { visible(store.snapshot.available) }
+    private var updates: [UnifiedExtensionSource] { installed.filter { $0.hasUpdate == true } }
+    private var rows: [UnifiedExtensionSource] {
+        let entries: [UnifiedExtensionSource]
+        switch tab { case .installed: entries = installed; case .browse: entries = available; case .updates: entries = updates }
+        return entries.filter {
+            (manager.isEmpty || $0.managerId == manager) &&
+            (language.isEmpty || $0.lang == language || $0.lang == "all") &&
+            (query.isEmpty || $0.label.localizedCaseInsensitiveContains(query))
         }.sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
-    private var managers: [UnifiedExtensionManager] { store.snapshot.managers.filter { $0.types.contains(kind) } }
     private var languages: [String] {
-        Array(Set((store.snapshot.available + store.snapshot.installed).filter { $0.kind == kind }
-            .compactMap(\.lang))).filter { !$0.isEmpty && $0 != "all" }.sorted()
+        Array(Set((installed + available).compactMap(\.lang))).filter { !$0.isEmpty && $0 != "all" }.sorted()
     }
+    private var hasFilters: Bool { !manager.isEmpty || !language.isEmpty || !query.isEmpty }
+    private var hasRepositories: Bool { managers.contains { $0.repositories.contains { $0.type == kind } } }
+    private var countLabel: String { "\(rows.count) \(rows.count == 1 ? "source" : "sources")" }
+    private func visible(_ sources: [UnifiedExtensionSource]) -> [UnifiedExtensionSource] {
+        sources.filter { $0.kind == kind && $0.isVisible(includeAdultAnime: contentPreferences.includeAdult, readingContent: contentPreferences.mangaBakaContent) }
+    }
+    private func systemName(_ source: UnifiedExtensionSource) -> String {
+        store.snapshot.managers.first { $0.id == source.managerId }?.name ?? source.managerId.replacingOccurrences(of: "-desktop", with: "").capitalized
+    }
+    private func installedSource(_ source: UnifiedExtensionSource) -> UnifiedExtensionSource? {
+        store.snapshot.installed.first { $0.id == source.id }
+    }
+
     var body: some View {
         List {
             Section {
-                Text("Anime, manga & novels").font(.title2.bold())
-                Text("Choose a source system, add a repository, then install the sources you want.").font(.subheadline).foregroundStyle(.secondary)
-                Picker("Content", selection: $kind) { ForEach(ExtensionContentKind.allCases) { Text($0.label).tag($0) } }.pickerStyle(.segmented)
-                Picker("Show", selection: $installedOnly) { Text("Installed").tag(true); Text("Available").tag(false) }.pickerStyle(.segmented)
-            }
-            Section {
-                Picker("Source system", selection: $manager) {
-                    Text("All systems").tag("")
-                    ForEach(managers) { Text($0.name).tag($0.id) }
-                }
-                Picker("Language", selection: $language) { Text("All languages").tag(""); ForEach(languages, id: \.self) { Text($0.uppercased()).tag($0) } }
-                MangaBakaContentButton()
-                NavigationLink { ExtensionRepositoriesView().environmentObject(store) } label: { Label("Repositories & source systems", systemImage: "shippingbox") }
-            }
-            if store.busy { Section { ProgressView(store.status) } }
-            if let error = store.error { Section { Text(error).foregroundStyle(.orange); Button("Retry") { Task { await store.update(store.snapshot.managers.isEmpty ? "initialize" : "refresh") } } } }
-            Section("\(installedOnly ? "Installed" : "Available") · \(sources.count)") {
-                ForEach(sources) { source in
-                    if installedOnly {
-                        NavigationLink { ExtensionContentAccess(source: source) { ExtensionSourceBrowser(source: source, initialQuery: initialQuery).environmentObject(store) } } label: { ExtensionSourceLabel(source: source) }
-                    } else {
-                        HStack {
-                            ExtensionSourceLabel(source: source)
-                            Spacer()
-                            if store.snapshot.installed.contains(where: { $0.id == source.id }) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.mint) }
-                            else { Button("Install") { Task { await store.mutate("install", source: source) } }.buttonStyle(.bordered).disabled(store.busy) }
-                        }
+                Picker("Content", selection: Binding(get: { kind }, set: { kind = $0; clearFilters(); notice = nil })) {
+                    ForEach(ExtensionContentKind.allCases) { Text($0.label).tag($0) }
+                }.pickerStyle(.segmented).accessibilityIdentifier("extensions-content")
+                Picker("Sources", selection: $tab) {
+                    ForEach(ExtensionHubTab.allCases, id: \.self) { item in
+                        Text(item == .updates && !updates.isEmpty ? "Updates (\(updates.count))" : item.rawValue).tag(item)
+                    }
+                }.pickerStyle(.segmented).accessibilityIdentifier("extensions-tabs")
+            }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+
+            if !manager.isEmpty || !language.isEmpty {
+                Section {
+                    Button { filtering = true } label: {
+                        Label([managers.first { $0.id == manager }?.name, language.isEmpty ? nil : extensionLanguageName(language)].compactMap { $0 }.joined(separator: " · "), systemImage: "line.3.horizontal.decrease.circle")
+                            .font(.subheadline)
                     }
                 }
-                if sources.isEmpty && !store.busy {
-                    ContentUnavailableView(installedOnly ? "No sources installed" : "No sources match", systemImage: "puzzlepiece.extension",
-                        description: Text(installedOnly ? "Add a repository and switch to Available to install sources." : "Add a repository, or change your system, language or search filters."))
-                    if installedOnly { Button("Browse available sources") { installedOnly = false } }
-                    NavigationLink("Add a repository") { ExtensionRepositoriesView().environmentObject(store) }
+            }
+
+            if tab == .installed && !updates.isEmpty {
+                Section {
+                    Button { tab = .updates } label: {
+                        Label("\(updates.count) \(updates.count == 1 ? "update ready" : "updates ready")", systemImage: "arrow.down.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }.accessibilityIdentifier("extensions-updates-ready")
                 }
             }
-            Section { NavigationLink { ExtensionSavedTitlesView().environmentObject(store) } label: { Label("Saved extension titles", systemImage: "bookmark") } }
-        }
-        .navigationTitle("Extensions").navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Find an extension")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Refresh repositories", systemImage: "arrow.clockwise") { Task { await store.update("refresh") } }
-                    Button("Update all extensions", systemImage: "arrow.down.circle") { Task { await store.update("updateAll") } }
-                } label: { Image(systemName: "ellipsis.circle") }.disabled(store.busy)
+            if store.busy { Section { ProgressView(store.status).font(.subheadline) } }
+            if let error = store.error {
+                Section {
+                    Label("Couldn't finish", systemImage: "exclamationmark.triangle").font(.headline).foregroundStyle(.orange)
+                    Text(error).font(.subheadline).foregroundStyle(.secondary)
+                    Button("Try again") { Task { await store.update(store.snapshot.managers.isEmpty ? "initialize" : "refresh") } }.disabled(store.busy)
+                }
+            }
+            if let notice { Section { Label(notice, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Theme.accent) } }
+            if managers.contains(where: { $0.error != nil }) {
+                Section {
+                    NavigationLink { ExtensionRepositoriesView(initialKind: kind).environmentObject(store) } label: {
+                        Label("Some source systems need attention", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                    }
+                }
+            }
+
+            if !rows.isEmpty {
+                Section {
+                    if tab == .updates {
+                        Button { updateVisibleSources() } label: {
+                            Label("Update these sources (\(rows.count))", systemImage: "arrow.down.circle")
+                        }.disabled(store.busy || activeSource != nil).accessibilityIdentifier("extensions-update-all")
+                    }
+                    ForEach(rows) { source in sourceRow(source) }
+                } header: {
+                    HStack {
+                        Text(countLabel)
+                        Spacer()
+                        if hasFilters { Button("Clear filters") { clearFilters() }.textCase(nil) }
+                    }
+                }
+            } else if !store.busy && !store.snapshot.managers.isEmpty {
+                Section { emptyState }.listRowBackground(Color.clear)
+            }
+
+            if kind == .manga && tab == .installed {
+                Section {
+                    NavigationLink { MangaExtensionsView() } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Keiyoushi sources")
+                                Text("\(manga.state.installations.count) installed · Manga & webtoons")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "books.vertical").foregroundStyle(.teal) }
+                    }
+                } footer: { Text("Your existing Keiyoushi sources and reading progress are here.") }
+            }
+            if tab == .installed {
+                Section {
+                    NavigationLink { ExtensionSavedTitlesView().environmentObject(store) } label: {
+                        Label("Saved titles", systemImage: "bookmark")
+                    }
+                }
             }
         }
-        .task { kind = initialKind; await store.load() }
-        .onChange(of: kind) { _, _ in if !managers.contains(where: { $0.id == manager }) { manager = "" }; language = "" }
+        .navigationTitle("Extensions").navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, prompt: "Find a source")
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { filtering = true } label: { Image(systemName: hasFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") }
+                    .accessibilityLabel("Filter sources").accessibilityIdentifier("extensions-filters")
+                Button { adding = true } label: { Label("Add", systemImage: "plus").labelStyle(.titleAndIcon) }
+                    .accessibilityLabel("Add repository").accessibilityIdentifier("extensions-add")
+                Menu {
+                    Button("Refresh sources", systemImage: "arrow.clockwise") { Task { await store.update("refresh") } }.disabled(store.busy)
+                    NavigationLink { ExtensionRepositoriesView(initialKind: kind).environmentObject(store) } label: { Label("Manage repositories", systemImage: "shippingbox") }
+                    NavigationLink { ContentPreferencesView() } label: { Label("Content preferences", systemImage: "eye") }
+                } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Extension options")
+            }
+        }
+        .sheet(isPresented: $filtering) {
+            ExtensionFiltersSheet(managers: managers, languages: languages, manager: $manager, language: $language)
+        }
+        .sheet(isPresented: $adding) {
+            ExtensionAddRepositorySheet(initialKind: kind) { owner, content in
+                kind = content; tab = .browse; query = ""; language = ""; manager = owner
+                notice = "Repository added. Install a source below to get started."
+            }.environmentObject(store)
+        }
+        .confirmationDialog("Remove this source?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { source in
+            Button("Remove \(source.label)", role: .destructive) { perform("uninstall", source: source) }
+        } message: { _ in Text("Saved titles are kept. Reinstall the source to open them again.") }
+        .task {
+            if !started { kind = initialKind; started = true }
+            await store.load(); await manga.load()
+        }
         .refreshable { await store.update("refresh") }
         .fullScreenCover(isPresented: $runtime.showingPlayer, onDismiss: { runtime.stopVideo() }) { AnymeXPlayerContainer().ignoresSafeArea() }
         .sheet(item: $runtime.website, onDismiss: { runtime.finishWebsite() }) { request in ExtensionWebsiteSessionView(request: request) }
         .accessibilityIdentifier("unified-extensions")
     }
+
+    private func sourceRow(_ source: UnifiedExtensionSource) -> some View {
+        let current = installedSource(source)
+        return HStack(spacing: 12) {
+            if let current {
+                NavigationLink {
+                    ExtensionContentAccess(source: current) { ExtensionSourceBrowser(source: current, initialQuery: initialQuery).environmentObject(store) }
+                } label: { ExtensionSourceLabel(source: source, system: systemName(source)) }
+                    .buttonStyle(.plain).accessibilityHint("Browse titles from this source")
+            } else { ExtensionSourceLabel(source: source, system: systemName(source)) }
+            Spacer(minLength: 0)
+            if activeSource == source.id { ProgressView().accessibilityLabel("Working on \(source.label)") }
+            else if let current {
+                if current.hasUpdate == true {
+                    Button("Update") { perform("update", source: current) }.buttonStyle(.bordered).disabled(store.busy || activeSource != nil)
+                } else if tab == .browse {
+                    NavigationLink {
+                        ExtensionContentAccess(source: current) { ExtensionSourceBrowser(source: current, initialQuery: initialQuery).environmentObject(store) }
+                    } label: { Text("Open") }.buttonStyle(.bordered)
+                }
+                Menu {
+                    NavigationLink { ExtensionSourcePreferencesView(source: current).environmentObject(store) } label: { Label("Source settings", systemImage: "slider.horizontal.3") }
+                    Button("Remove source", systemImage: "trash", role: .destructive) { removing = current }
+                } label: { Image(systemName: "ellipsis").frame(minWidth: 32, minHeight: 44).contentShape(Rectangle()) }
+                    .disabled(store.busy || activeSource != nil).accessibilityLabel("Options for \(source.label)")
+            } else {
+                Button("Install") { perform("install", source: source) }.buttonStyle(.borderedProminent)
+                    .disabled(store.busy || activeSource != nil).accessibilityIdentifier("extension-install-" + source.id)
+            }
+        }.padding(.vertical, 6)
+    }
+    private var emptyState: some View {
+        VStack(spacing: 15) {
+            Image(systemName: hasFilters ? "magnifyingglass" : tab == .updates ? "checkmark.circle" : "puzzlepiece.extension")
+                .font(.system(size: 38)).foregroundStyle(Theme.accent).padding(.top, 20)
+            Text(hasFilters ? "No matching sources" : tab == .updates ? "You're up to date" : tab == .installed ? "Add your first source" : "Find your next source")
+                .font(.title3.bold())
+            Text(hasFilters ? "Try another name, language or system." : tab == .updates ? "Available updates will appear here." : hasRepositories ? "Browse your repositories and install a source. Tap an installed source to explore its titles." : "Add a repository link, then choose which sources to install.")
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if hasFilters { Button("Clear filters") { clearFilters() }.buttonStyle(.bordered) }
+            else if tab != .updates {
+                Button(!hasRepositories ? "Add repository" : tab == .installed ? "Browse sources" : "Refresh sources") {
+                    if !hasRepositories { adding = true }
+                    else if tab == .installed { tab = .browse }
+                    else { Task { await store.update("refresh") } }
+                }.buttonStyle(.borderedProminent).disabled(store.busy)
+            }
+        }.frame(maxWidth: .infinity).padding(.vertical, 14)
+    }
+    private func clearFilters() { manager = ""; language = ""; query = "" }
+    private func perform(_ operation: String, source: UnifiedExtensionSource) {
+        guard activeSource == nil, !store.busy else { return }
+        activeSource = source.id; notice = nil
+        Task {
+            defer { activeSource = nil }
+            await store.mutate(operation, source: source)
+            if store.error == nil {
+                notice = operation == "install" ? "\(source.label) installed. Tap it to browse titles." : operation == "update" ? "\(source.label) updated." : "\(source.label) removed."
+            }
+        }
+    }
+    private func updateVisibleSources() {
+        guard activeSource == nil, !store.busy else { return }
+        let targets = rows
+        activeSource = targets.first?.id; notice = nil
+        Task {
+            defer { activeSource = nil }
+            for source in targets {
+                guard !Task.isCancelled else { return }
+                activeSource = source.id
+                await store.mutate("update", source: source)
+                if store.error != nil { return }
+            }
+            notice = "Sources updated."
+        }
+    }
 }
 
 private struct ExtensionSourceLabel: View {
     let source: UnifiedExtensionSource
+    let system: String
     var body: some View {
         HStack(spacing: 12) {
-            ExtensionRemoteImage(url: source.iconUrl).frame(width: 38, height: 38).clipShape(RoundedRectangle(cornerRadius: 9))
+            ExtensionRemoteImage(url: source.iconUrl).frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 4) {
-                Text(source.label).font(.headline)
-                Text([source.managerId.replacingOccurrences(of: "-desktop", with: ""), source.lang?.uppercased(), source.version.map { "v\($0)" }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-                if source.hasUpdate == true { Text("Update available").font(.caption).foregroundStyle(.mint) }
-            }
+                Text(source.label).font(.headline).foregroundStyle(.primary)
+                Text([system, source.lang.map(extensionLanguageName)].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private func extensionLanguageName(_ code: String) -> String {
+    code == "all" ? "Multilingual" : Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()
+}
+
+private struct ExtensionFiltersSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let managers: [UnifiedExtensionManager]
+    let languages: [String]
+    @Binding var manager: String
+    @Binding var language: String
+    var body: some View {
+        AppNavigationStack {
+            Form {
+                Section {
+                    Picker("Language", selection: $language) {
+                        Text("All languages").tag("")
+                        ForEach(languages, id: \.self) { Text(extensionLanguageName($0)).tag($0) }
+                    }
+                    Picker("Source system", selection: $manager) {
+                        Text("All systems").tag("")
+                        ForEach(managers) { Text($0.name).tag($0.id) }
+                    }
+                }
+                Section { Button("Reset filters") { manager = ""; language = "" } }
+            }.navigationTitle("Filter sources").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }.presentationDetents([.medium, .large])
     }
 }
 
 struct ExtensionRepositoriesView: View {
     @EnvironmentObject private var store: UnifiedExtensionStore
-    @State private var managerID = ""
-    @State private var kind: ExtensionContentKind = .anime
-    @State private var url = ""
-    @State private var validation: String?
-    private var selected: UnifiedExtensionManager? { store.snapshot.managers.first { $0.id == managerID } }
+    @State private var adding = false
+    @State private var removing: RepositoryRemoval?
+    var initialKind: ExtensionContentKind = .anime
+    private var configured: [UnifiedExtensionManager] { store.snapshot.managers.filter { !$0.repositories.isEmpty || $0.error != nil } }
     var body: some View {
-        Form {
-            Section("Add a repository") {
-                Picker("System", selection: $managerID) { Text("Choose a system").tag(""); ForEach(store.snapshot.managers) { Text($0.name).tag($0.id) } }
-                if let selected { Picker("Content", selection: $kind) { ForEach(selected.types) { Text($0.label).tag($0) } } }
-                TextField("HTTPS repository URL", text: $url).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                Button("Add repository") { add() }.disabled(store.busy || selected == nil || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                if let validation { Text(validation).foregroundStyle(.orange) }
-                Link("Find repository URLs", destination: URL(string: "https://github.com/Shebyyy/AnymeX-Guides")!)
-            }
+        List {
+            Section {
+                Button { adding = true } label: { Label("Add repository", systemImage: "plus.circle.fill") }.disabled(store.busy)
+            } footer: { Text("Repositories provide the sources shown in Browse. Removing a repository keeps installed sources.") }
             if store.busy { Section { ProgressView(store.status) } }
             if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
-            ForEach(store.snapshot.managers) { owner in
+            if configured.isEmpty && !store.busy {
+                ContentUnavailableView("No repositories yet", systemImage: "shippingbox", description: Text("Add a link to start browsing sources."))
+            }
+            ForEach(configured) { owner in
                 Section(owner.name) {
-                    Text(owner.types.map(\.label).joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                     if let error = owner.error {
-                        Text(error).foregroundStyle(.orange)
-                        Button("Retry \(owner.name)") { Task { await store.update("retry", ["manager": owner.id]) } }.disabled(store.busy)
+                        Text(error).font(.subheadline).foregroundStyle(.orange)
+                        Button("Retry") { Task { await store.update("retry", ["manager": owner.id]) } }.disabled(store.busy)
                     }
                     ForEach(Array(owner.repositories.enumerated()), id: \.offset) { _, repository in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(repository.name ?? owner.name)
-                            // Configured URLs can contain private tokens. Display only
-                            // the host; do not expose paths in screenshots or logs.
-                            Text("\(URL(string: repository.url)?.host ?? "Repository") · \(repository.type.label)").font(.caption).foregroundStyle(.secondary)
-                        }.swipeActions {
-                            Button("Remove", role: .destructive) { Task { await store.update("removeRepo", ["manager": owner.id, "type": repository.type.rawValue, "url": repository.url]) } }.disabled(store.busy)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(repository.name ?? owner.name)
+                                Text("\(URL(string: repository.url)?.host ?? "Repository") · \(repository.type.label)").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button { removing = RepositoryRemoval(owner: owner, repository: repository) } label: { Image(systemName: "trash") }
+                                .foregroundStyle(.red).disabled(store.busy).accessibilityLabel("Remove repository")
                         }
                     }
-                    if owner.repositories.isEmpty { Text("No repositories added").font(.subheadline).foregroundStyle(.secondary) }
                 }
             }
             Section {
-                Text("All source systems are included. Source availability depends on each repository and website.").font(.footnote).foregroundStyle(.secondary)
                 NavigationLink("Extension runtime notices") {
                     ScrollView {
-                        Text((Bundle.main.url(forResource: "ExtensionRuntimeNotices", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "Runtime notices are included in the AnymeX-enabled release.")
+                        Text((Bundle.main.url(forResource: "ExtensionRuntimeNotices", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "Runtime notices are unavailable in this build.")
                             .font(.footnote).textSelection(.enabled).padding()
                     }.navigationTitle("Runtime notices")
                 }
             }
         }.navigationTitle("Repositories").navigationBarTitleDisplayMode(.inline)
-            .onChange(of: managerID) { _, _ in kind = selected?.types.first ?? .anime }
+            .sheet(isPresented: $adding) { ExtensionAddRepositorySheet(initialKind: initialKind) { _, _ in }.environmentObject(store) }
+            .confirmationDialog("Remove repository?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { target in
+                Button("Remove repository", role: .destructive) {
+                    Task { await store.update("removeRepo", ["manager": target.owner.id, "type": target.repository.type.rawValue, "url": target.repository.url]) }
+                }
+            } message: { _ in Text("Installed sources and saved titles are kept.") }
+    }
+    private struct RepositoryRemoval { let owner: UnifiedExtensionManager; let repository: UnifiedExtensionRepository }
+}
+
+private struct ExtensionAddRepositorySheet: View {
+    @EnvironmentObject private var store: UnifiedExtensionStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var managerID: String?
+    @State private var kind: ExtensionContentKind = .anime
+    @State private var url = ""
+    @State private var validation: String?
+    let initialKind: ExtensionContentKind
+    let added: (String, ExtensionContentKind) -> Void
+    private var selected: UnifiedExtensionManager? { store.snapshot.managers.first { $0.id == managerID } }
+    private var systems: [UnifiedExtensionManager] {
+        store.snapshot.managers.sorted { lhs, rhs in
+            let first = lhs.types.contains(initialKind), second = rhs.types.contains(initialKind)
+            return first != second ? first : lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+    var body: some View {
+        AppNavigationStack {
+            Form {
+                if let selected {
+                    Section {
+                        LabeledContent("System", value: selected.name)
+                        if selected.types.count > 1 {
+                            Picker("Content", selection: $kind) { ForEach(selected.types) { Text($0.label).tag($0) } }
+                        } else { LabeledContent("Content", value: kind.label) }
+                    }
+                    Section {
+                        TextField("Paste repository link", text: $url).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                            .accessibilityIdentifier("extensions-repository-url")
+                        if let validation { Text(validation).font(.subheadline).foregroundStyle(.orange) }
+                        if let error = store.error { Text(error).font(.subheadline).foregroundStyle(.orange) }
+                        if store.busy { ProgressView("Adding repository…") }
+                        Button("Add repository") { add() }.disabled(store.busy || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityIdentifier("extensions-save-repository")
+                    } header: { Text("Repository link") } footer: { Text("Paste the HTTPS link provided by the repository's maintainer. After adding it, choose a source in Browse and tap Install.") }
+                    Section { Link("Find repository links", destination: URL(string: "https://github.com/Shebyyy/AnymeX-Guides")!) }
+                } else {
+                    Section {
+                        Text("Which system is the repository for?").font(.headline)
+                        Text("Choose the name supplied with your repository link. Systems for \(initialKind.label.lowercased()) appear first.").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    if systems.isEmpty {
+                        if store.busy { ProgressView("Loading source systems…") }
+                        else {
+                            Text(store.error ?? "Source systems couldn't load.").foregroundStyle(.orange)
+                            Button("Try again") { Task { await store.load() } }.disabled(store.busy)
+                        }
+                    }
+                    ForEach(systems) { owner in
+                        Button {
+                            managerID = owner.id; kind = owner.types.contains(initialKind) ? initialKind : owner.types.first ?? .anime
+                            url = ""; validation = nil; store.error = nil
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(owner.name).foregroundStyle(.primary)
+                                    Text(owner.types.map(\.label).joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                            }.padding(.vertical, 3)
+                        }.disabled(store.busy)
+                    }
+                }
+            }.navigationTitle(selected == nil ? "Choose a system" : "Add repository").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        if selected != nil { Button("Back") { managerID = nil }.disabled(store.busy) }
+                        else { Button("Cancel") { dismiss() } }
+                    }
+                    if selected != nil { ToolbarItem(placement: .confirmationAction) { Button("Cancel") { dismiss() }.disabled(store.busy) } }
+                }
+                .interactiveDismissDisabled(store.busy)
+                .onChange(of: url) { _, _ in validation = nil }
+        }
     }
     private func add() {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let parts = URLComponents(string: trimmed), parts.scheme?.lowercased() == "https", parts.host?.isEmpty == false,
-              parts.user == nil, parts.password == nil else { validation = "Enter a complete HTTPS repository URL."; return }
-        validation = nil
-        Task { await store.update("addRepo", ["manager": managerID, "type": kind.rawValue, "url": trimmed]); if store.error == nil { url = "" } }
+        guard let managerID, let parts = URLComponents(string: trimmed), parts.scheme?.lowercased() == "https", parts.host?.isEmpty == false,
+              parts.user == nil, parts.password == nil else { validation = "Enter a complete HTTPS repository link."; return }
+        Task {
+            await store.update("addRepo", ["manager": managerID, "type": kind.rawValue, "url": trimmed])
+            if store.error == nil { added(managerID, kind); dismiss() }
+        }
     }
 }
 

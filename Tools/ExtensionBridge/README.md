@@ -54,16 +54,23 @@ and library; the new extension runtime's private Isar/configuration is local.
 Nuvio's optional TMDB fallback uses a user-entered source preference rather
 than upstream's bundled shared API key. Cinemeta remains its primary lookup.
 
-## Current validation
+## Extension hub
 
-Direct Dart analysis: no issues. Four extension contract tests and ten content
-and library preference tests pass,
-covering opaque episode payloads, source identity separation and preserved
-video headers/subtitles. New native source files pass Swift syntax parsing;
-source credential checks and script syntax checks pass. Flutter's widget test,
-the full Xcode device build, IPA bundle validation and physical-device source
-execution remain pending. Publishing the branch and running GitHub Actions
-will run the remaining build checks before an IPA is delivered.
+My sources opens installed sources directly; Browse installs new ones and Updates
+shows pending updates. Languages and system filters are in the filter sheet.
+Add opens a guided system/link flow and returns to Browse after success. Source
+rows provide settings and confirmed removal. The bulk update action updates only
+the displayed sources, so language/system/search filters also define its scope.
+Existing Keiyoushi sources remain available under their own clearly named entry.
+
+## Validation
+
+The release workflow checks Dart analysis and the headless startup widget test,
+Swift package regressions, the native runtime frameworks, the full iPhone/iPad
+Release build and release bundle privacy. Physical-device testing remains needed
+for source website compatibility and playback; the simulator JVM is a stub.
+Native UI-only edits can reuse the prior verified runtime when all runtime source
+inputs and the pinned toolchain match; otherwise the workflow rebuilds it.
 
 ## Licensing
 
@@ -75,7 +82,7 @@ modifications are public alongside the app source.
 
 ## Device check
 
-1. Open Settings → Sources & playback → All extension systems.
+1. Open Settings → Sources & playback → Extensions.
 2. Add a repository for the desired system and content type, install a source,
    then browse/search and open a title. Repeat with a script-based system and
    a JVM-based system.

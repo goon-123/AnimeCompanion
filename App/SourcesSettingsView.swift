@@ -22,7 +22,7 @@ struct SourcesSettingsRows: View {
         Section("Extensions") {
             if matches("AnymeX Cloudstream Aniyomi Mangayomi Sora Kotatsu Legado LNReader Tsundoku iReader Nuvio sources plugins novels") {
                 NavigationLink { UnifiedExtensionsView() } label: {
-                    SettingsCategoryLabel(title: "All extension systems", detail: "AnymeX · Anime, manga & novel sources", symbol: "puzzlepiece.extension", tint: Theme.accent)
+                    SettingsCategoryLabel(title: "Extensions", detail: "Browse, install & update anime, manga & novel sources", symbol: "puzzlepiece.extension", tint: Theme.accent)
                 }.accessibilityIdentifier("settings-unified-extensions")
             }
         }
@@ -56,7 +56,7 @@ struct SourcesSettingsRows: View {
         Section("Read") {
             if matches("Manga manhwa webtoon source extensions Keiyoushi") {
                 NavigationLink { MangaExtensionsView() } label: {
-                    SettingsCategoryLabel(title: "Reading extensions", detail: "\(manga.state.installations.count) installed · Manga & webtoon sources", symbol: "book.closed", tint: .teal)
+                    SettingsCategoryLabel(title: "Keiyoushi sources", detail: "\(manga.state.installations.count) installed · Manga & webtoons", symbol: "book.closed", tint: .teal)
                 }.accessibilityIdentifier("settings-manga-extensions")
             }
         }

@@ -11,11 +11,13 @@ on:
   pull_request:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+  ANYMEX_FLUTTER_VERSION: '3.38.5'
 jobs:
   anymex-runtime:
     name: Build complete on-device extension framework
@@ -23,12 +25,37 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      # Reuse the verified runtime for native UI-only edits. Its build inputs
+      # and toolchain must match exactly; expiry/download failure rebuilds it.
+      - name: Check verified extension runtime inputs
+        id: runtime-inputs
+        run: |
+          if [[ "$RUNNER_ARCH" == X64 && "$ANYMEX_FLUTTER_VERSION" == 3.38.5 && "$DEVELOPER_DIR" == /Applications/Xcode_26.0.1.app/Contents/Developer ]] && \
+             git fetch --depth=1 origin c7ad6b48877bbb88ef06bdb6319531f383edc45f && \
+             git diff --quiet c7ad6b48877bbb88ef06bdb6319531f383edc45f HEAD -- \
+               Tools/ExtensionBridge/lib Tools/ExtensionBridge/test \
+               Tools/ExtensionBridge/pubspec.yaml Tools/ExtensionBridge/pubspec.lock \
+               scripts/prepare-anymex.py scripts/build-anymex.sh scripts/anymex-xcode.py; then
+            echo 'match=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Restore verified extension frameworks
+        id: verified-runtime
+        if: steps.runtime-inputs.outputs.match == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          flutter-version: '3.38.5'
+          name: AnimeCompanion-anymex-frameworks
+          run-id: 44409993221
+          github-token: ${{ github.token }}
+          path: .
+      - uses: subosito/flutter-action@v2
+        if: steps.verified-runtime.outcome != 'success'
+        with:
+          flutter-version: ${{ env.ANYMEX_FLUTTER_VERSION }}
           channel: stable
           cache: true
       - uses: actions/cache@v4
+        if: steps.verified-runtime.outcome != 'success'
         id: extension-cache
         with:
           path: |
@@ -39,9 +66,10 @@ jobs:
           key: anymex-build-v2-${{ runner.arch }}-3.38.5-${{ hashFiles('Tools/ExtensionBridge/pubspec.lock', 'Tools/ExtensionBridge/pubspec.yaml', 'Tools/ExtensionBridge/lib/**', 'scripts/*anymex*') }}
           restore-keys: anymex-build-v2-${{ runner.arch }}-3.38.5-
       - name: Build and check all extension backends
+        if: steps.verified-runtime.outcome != 'success'
         run: bash scripts/build-anymex.sh
       - name: Preserve extension intermediates for retries
-        if: ${{ failure() && steps.extension-cache.outputs.cache-hit != 'true' }}
+        if: ${{ failure() && steps.extension-cache.outputs.cache-primary-key != '' && steps.extension-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
@@ -50,6 +78,8 @@ jobs:
             Tools/ExtensionBridge/.dart_tool/flutter_build
             Tools/ExtensionBridge/build
           key: ${{ steps.extension-cache.outputs.cache-primary-key }}
+      - name: Verify complete extension framework manifest
+        run: python3 scripts/anymex-xcode.py
       - name: Upload extension frameworks and notices
         uses: actions/upload-artifact@v4
         with:

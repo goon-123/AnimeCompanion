@@ -128,7 +128,15 @@ final class UnifiedExtensionStore: ObservableObject {
     func update(_ operation: String, _ arguments: [String: Any] = [:]) async {
         guard !busy else { return }
         busy = true; error = nil
-        status = operation == "initialize" ? "Starting extension systems…" : "Updating extensions…"
+        switch operation {
+        case "initialize": status = "Loading your sources…"
+        case "install": status = "Installing source…"
+        case "uninstall": status = "Removing source…"
+        case "addRepo": status = "Adding repository…"
+        case "removeRepo": status = "Removing repository…"
+        case "refresh", "retry": status = "Checking sources…"
+        default: status = "Updating sources…"
+        }
         defer { busy = false; status = "" }
         do { snapshot = try await runtime.call(operation, arguments) }
         catch is CancellationError {} catch { self.error = error.localizedDescription }
