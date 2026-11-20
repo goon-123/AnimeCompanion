@@ -8,6 +8,15 @@ if [[ ! -d .ios ]]; then
   flutter create --template=module --project-name=companion_extensions --org=com.animecompanion --no-pub .
 fi
 flutter pub get
+# A restored Flutter build result can refer to native hook outputs that were
+# not present in older caches. Force native-asset discovery to run again;
+# retain the expensive Dart AOT intermediates.
+python3 - <<'PY'
+import pathlib
+for filename in ['dart_build_result.json', 'dart_build.d', 'install_code_assets.d', 'native_assets.json']:
+    for path in pathlib.Path('.dart_tool/flutter_build').rglob(filename):
+        path.unlink()
+PY
 flutter analyze --no-pub
 flutter test --no-pub
 if [[ "${1:-}" == '--check' ]]; then exit 0; fi
