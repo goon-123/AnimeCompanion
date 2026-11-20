@@ -31,11 +31,12 @@ jobs:
         id: runtime-inputs
         run: |
           if [[ "$RUNNER_ARCH" == X64 && "$ANYMEX_FLUTTER_VERSION" == 3.38.5 && "$DEVELOPER_DIR" == /Applications/Xcode_26.0.1.app/Contents/Developer ]] && \
-             git fetch --depth=1 origin c7ad6b48877bbb88ef06bdb6319531f383edc45f && \
-             git diff --quiet c7ad6b48877bbb88ef06bdb6319531f383edc45f HEAD -- \
+             git fetch --depth=1 origin 44e4c8e1122fc6f665bc455b1fde0416c5ddd4bb && \
+             git diff --quiet 44e4c8e1122fc6f665bc455b1fde0416c5ddd4bb HEAD -- \
                Tools/ExtensionBridge/lib Tools/ExtensionBridge/test \
                Tools/ExtensionBridge/pubspec.yaml Tools/ExtensionBridge/pubspec.lock \
-               scripts/prepare-anymex.py scripts/build-anymex.sh scripts/anymex-xcode.py; then
+               scripts/prepare-anymex.py scripts/build-anymex.sh scripts/anymex-xcode.py \
+               scripts/anymex-native-assets.py scripts/check-anymex-bundle.py; then
             echo 'match=true' >> "$GITHUB_OUTPUT"
           fi
       - name: Restore verified extension frameworks
@@ -45,7 +46,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: AnimeCompanion-anymex-frameworks
-          run-id: 44409993221
+          run-id: 44764190005
           github-token: ${{ github.token }}
           path: .
       - uses: subosito/flutter-action@v2
@@ -96,13 +97,20 @@ jobs:
     name: Verify extension storage and system startup
     needs: anymex-runtime
     runs-on: macos-15
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: AnimeCompanion-anymex-frameworks
           path: .
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.ANYMEX_FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Prepare the simulator Dart bundle
+        run: bash scripts/prepare-extension-simulator.sh
       - name: Exercise the real extension startup
         run: |
           brew install xcodegen

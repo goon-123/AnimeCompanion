@@ -5,6 +5,11 @@ import FlutterPluginRegistrant
 final class ExtensionStartupTests: XCTestCase {
     @MainActor
     func testRealEngineCanOpenStorageAndLoadAllSourceSystems() async throws {
+        let snapshotPath = Bundle.main.bundleURL.appendingPathComponent("Frameworks/App.framework/flutter_assets/kernel_blob.bin").path
+        guard FileManager.default.fileExists(atPath: snapshotPath) else {
+            XCTFail("The simulator Dart snapshot is missing from the startup test host.")
+            return
+        }
         let engine = FlutterEngine(name: "extension-startup-test", project: nil, allowHeadlessExecution: true)
         XCTAssertTrue(engine.run())
         GeneratedPluginRegistrant.register(with: engine)
