@@ -1,5 +1,5 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import UIKit
 import AnimeCore
 
 /// Keep the draft in one form. Editing and pasting never submit or dismiss it.
@@ -31,20 +31,15 @@ struct ExtensionAddRepositorySheet: View {
                         .keyboardType(.URL).submitLabel(.done).focused($editingURL)
                         .onSubmit { editingURL = false }
                         .accessibilityIdentifier("extensions-repository-url")
-                    PasteButton(supportedContentTypes: [.plainText, .url]) { providers in
-                        guard let provider = providers.first else { return }
-                        if provider.canLoadObject(ofClass: NSString.self) {
-                            provider.loadObject(ofClass: NSString.self) { value, _ in
-                                guard let value = value as? String else { return }
-                                Task { @MainActor in acceptPaste(value) }
-                            }
-                        } else if provider.canLoadObject(ofClass: NSURL.self) {
-                            provider.loadObject(ofClass: NSURL.self) { value, _ in
-                                guard let value = value as? URL else { return }
-                                Task { @MainActor in acceptPaste(value.absoluteString) }
-                            }
-                        }
-                    }.accessibilityIdentifier("extensions-paste-repository")
+                    Button {
+                        // Read the clipboard only after this explicit user action.
+                        if let value = UIPasteboard.general.string ?? UIPasteboard.general.url?.absoluteString {
+                            acceptPaste(value)
+                        } else { validation = "Copy a repository link, then tap Paste." }
+                    } label: {
+                        Label("Paste", systemImage: "doc.on.clipboard")
+                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }.buttonStyle(.borderless).accessibilityIdentifier("extensions-paste-repository")
                 } header: { Text("Repository link") }
                 footer: { Text("Paste the HTTPS link from the repository's maintainer, then tap Add repository.") }
                 .disabled(saving)
