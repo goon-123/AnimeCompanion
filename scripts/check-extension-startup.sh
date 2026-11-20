@@ -9,17 +9,22 @@ project={
  'name':'ExtensionStartup',
  'options':{'bundleIdPrefix':'com.animecompanion','deploymentTarget':{'iOS':'17.0'}},
  'settings':{'base':{'SWIFT_VERSION':'5.0','CODE_SIGNING_ALLOWED':'NO','TARGETED_DEVICE_FAMILY':'1,2'}},
+ 'packages':{'AnimeCore':{'path':'.'}},
  'targets':{
   'ExtensionStartupHost':{
    'type':'application','platform':'iOS',
-   'sources':[{'path':'Tests/ExtensionStartupHost.swift'}, {'path':'build/AnymeXFrameworks/Runtime','type':'folder','buildPhase':'resources'}],
-   'dependencies':dependencies,
+   'sources':[{'path':'Tests/ExtensionStartupHost.swift'}, {'path':'App/AnymeXRuntime.swift'}, {'path':'App/ExtensionAddRepositorySheet.swift'}, {'path':'build/AnymeXFrameworks/Runtime','type':'folder','buildPhase':'resources'}],
+   'dependencies':dependencies+[{'package':'AnimeCore','product':'AnimeCore'}],
    'settings':{'base':{'PRODUCT_BUNDLE_IDENTIFIER':'com.animecompanion.extension-startup','GENERATE_INFOPLIST_FILE':'YES','OTHER_LDFLAGS':'$(inherited) -ObjC'}}},
   'ExtensionStartupTests':{
    'type':'bundle.unit-test','platform':'iOS','sources':[{'path':'Tests/ExtensionStartupTests'}],
    'dependencies':[{'target':'ExtensionStartupHost'}]+[{**d,'embed':False} for d in dependencies],
-   'settings':{'base':{'GENERATE_INFOPLIST_FILE':'YES','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/ExtensionStartupHost.app/ExtensionStartupHost','BUNDLE_LOADER':'$(TEST_HOST)'}}}},
- 'schemes':{'ExtensionStartup':{'build':{'targets':{'ExtensionStartupHost':'all'}},'test':{'targets':['ExtensionStartupTests']}}}}
+   'settings':{'base':{'GENERATE_INFOPLIST_FILE':'YES','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/ExtensionStartupHost.app/ExtensionStartupHost','BUNDLE_LOADER':'$(TEST_HOST)'}}},
+  'ExtensionRepositoryUITests':{
+   'type':'bundle.ui-testing','platform':'iOS','sources':[{'path':'Tests/ExtensionRepositoryUITests'}],
+   'dependencies':[{'target':'ExtensionStartupHost'}],
+   'settings':{'base':{'GENERATE_INFOPLIST_FILE':'YES','TEST_TARGET_NAME':'ExtensionStartupHost'}}}},
+ 'schemes':{'ExtensionStartup':{'build':{'targets':{'ExtensionStartupHost':'all'}},'test':{'targets':['ExtensionStartupTests','ExtensionRepositoryUITests']}}}}
 # Write at the repository root so all source/framework paths remain relative.
 pathlib.Path('ExtensionStartup.yml').write_text(json.dumps(project,indent=2))
 PY
@@ -57,9 +62,9 @@ try:
         '-destination','platform=iOS Simulator,id='+sys.argv[1],
         '-derivedDataPath','build/ExtensionStartup','-resultBundlePath','build/ExtensionStartup.xcresult',
         '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=NO','test',
-    ],timeout=600)
+    ],timeout=900)
     raise SystemExit(result.returncode)
 except subprocess.TimeoutExpired:
-    raise SystemExit('Extension startup test did not complete within 10 minutes.')
+    raise SystemExit('Extension startup and paste checks did not complete within 15 minutes.')
 PYTEST
 python3 scripts/check-anymex-bundle.py build/ExtensionStartup/Build/Products/Debug-iphonesimulator/ExtensionStartupHost.app --simulator

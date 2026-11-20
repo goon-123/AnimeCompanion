@@ -125,8 +125,9 @@ final class UnifiedExtensionStore: ObservableObject {
     let runtime = AnymeXRuntime.shared
     private var loaded = false
     func load() async { guard !loaded else { return }; await update("initialize"); loaded = !snapshot.managers.isEmpty }
-    func update(_ operation: String, _ arguments: [String: Any] = [:]) async {
-        guard !busy else { return }
+    @discardableResult
+    func update(_ operation: String, _ arguments: [String: Any] = [:]) async -> Bool {
+        guard !busy else { return false }
         busy = true; error = nil
         switch operation {
         case "initialize": status = "Loading your sources…"
@@ -138,8 +139,11 @@ final class UnifiedExtensionStore: ObservableObject {
         default: status = "Updating sources…"
         }
         defer { busy = false; status = "" }
-        do { snapshot = try await runtime.call(operation, arguments) }
-        catch is CancellationError {} catch { self.error = error.localizedDescription }
+        do {
+            snapshot = try await runtime.call(operation, arguments)
+            return true
+        } catch is CancellationError { return false }
+        catch { self.error = error.localizedDescription; return false }
     }
     func mutate(_ operation: String, source: UnifiedExtensionSource) async { await update(operation, source.arguments) }
     func request<T: Decodable>(_ operation: String, source: UnifiedExtensionSource, arguments: [String: Any] = [:], as: T.Type = T.self) async throws -> T {
