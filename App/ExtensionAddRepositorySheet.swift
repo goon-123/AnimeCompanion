@@ -103,13 +103,27 @@ struct ExtensionAddRepositorySheet: View {
             return
         }
         let owner = managerID, content = kind
+        // Stremio stores its canonical manifest URL even when a user supplies
+        // the add-on's base URL. Other systems retain the supplied link.
+        var canonical = parts
+        canonical.fragment = nil
+        if owner == "stremio" {
+            var path = canonical.path
+            while path.hasSuffix("/") { path.removeLast() }
+            if !path.lowercased().hasSuffix("/manifest.json") { path += "/manifest.json" }
+            canonical.path = path
+        }
+        let acceptedURL = owner == "stremio" ? canonical.string : trimmed
         validation = nil; saving = true; editingURL = false
         Task {
             defer { saving = false }
             let succeeded = await store.update("addRepo", ["manager": owner, "type": content.rawValue, "url": trimmed])
-            guard succeeded else { return }
+            guard succeeded else {
+                if store.error == nil { validation = "The repository wasn't added. Please try again." }
+                return
+            }
             guard store.snapshot.managers.first(where: { $0.id == owner })?.repositories.contains(where: {
-                $0.type == content && $0.url == trimmed
+                $0.type == content && ($0.url == trimmed || $0.url == acceptedURL)
             }) == true else {
                 validation = "The repository wasn't saved. Check the system and link, then try again."
                 return
