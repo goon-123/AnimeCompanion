@@ -40,6 +40,7 @@ flutter precache --ios
 (cd .ios && pod install)
 flutter build ios-framework --no-debug --no-profile --output=../../build/AnymeXFrameworks
 cd ../..
+python3 scripts/anymex-native-assets.py
 ditto build/AnymeXBridge/ios/anymex_extension_bridge/Frameworks/OpenJDKRuntime.xcframework \
   build/AnymeXFrameworks/Release/OpenJDKRuntime.xcframework
 ditto build/AnymeXBridge/ios/anymex_extension_bridge/Sources/anymex_embedded_jvm/Runtime \

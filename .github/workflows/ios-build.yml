@@ -22,7 +22,7 @@ jobs:
   anymex-runtime:
     name: Build complete on-device extension framework
     runs-on: macos-15-intel
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       # Reuse the verified runtime for native UI-only edits. Its build inputs
@@ -80,6 +80,18 @@ jobs:
           key: ${{ steps.extension-cache.outputs.cache-primary-key }}
       - name: Verify complete extension framework manifest
         run: python3 scripts/anymex-xcode.py
+      - name: Exercise the real extension startup
+        run: |
+          brew install xcodegen
+          bash scripts/check-extension-startup.sh
+      - name: Upload extension startup result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeCompanion-extension-startup
+          path: build/ExtensionStartup.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload extension frameworks and notices
         uses: actions/upload-artifact@v4
         with:
@@ -752,6 +764,7 @@ jobs:
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
+          python3 scripts/check-anymex-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           python3 scripts/check-safari-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           python3 scripts/check-release-privacy.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           mkdir -p Payload

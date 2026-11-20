@@ -43,6 +43,11 @@ void main() {
         return null;
       }
       return await services.handle(call.method, args);
+    } on ExtensionStartupFailure catch (failure) {
+      throw PlatformException(
+        code: 'extension_startup_${failure.stage}',
+        message: failure.message,
+      );
     } catch (_) {
       // Error text from a source may contain passwords or signed URLs.
       throw PlatformException(
@@ -53,6 +58,22 @@ void main() {
     }
   });
   runApp(const ExtensionPlayerApp());
+}
+
+/// Only static stage labels cross the native channel, never source exceptions.
+class ExtensionStartupFailure implements Exception {
+  ExtensionStartupFailure(this.stage);
+  final String stage;
+  String get message => switch (stage) {
+    'storage' =>
+      'The extension storage could not open. Close and reopen the app. If this continues, update to the latest build.',
+    'assets' =>
+      'The bundled extension files could not load. Reinstall the latest app build.',
+    'bridge' =>
+      'The extension runtime could not start. Close and reopen the app, then retry.',
+    _ =>
+      'The source systems could not start. Close and reopen the app, then retry.',
+  };
 }
 
 Future<void> stopVideo() async {
@@ -102,65 +123,73 @@ class CompanionServices {
       });
 
   Future<void> _initialize() async {
-    await AnymeXExtensionBridge.init(
-      projectName: 'CompanionExtensions',
-      getDirectory: AnymeXExtensionBridge.defaultGetDirectory(
-        appFolderName: 'CompanionExtensions',
-      ),
-    );
-    // Logger.init replaces onLog; suppress logs after initialization too.
-    AnymeXExtensionBridge.onLog = (_, _) {};
-    _manager = ExtensionManager(automaticallyInitialize: false);
-    Get.replace<ExtensionManager>(_manager);
-    final bridgePath = await RuntimePaths().bridgePath;
-    // The backend is bundled and versioned with the app. Opening the hub never
-    // downloads an unpinned runtime or asks the user to set up a server.
-    final data = await rootBundle.load('assets/anymex_desktop_runtime.jar');
-    final bridge = File(bridgePath);
-    await bridge.parent.create(recursive: true);
-    await bridge.writeAsBytes(
-      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-      flush: true,
-    );
-    await AnymeXRuntimeBridge.checkAndInitialize();
-    AnymeXRuntimeBridge.onSolveCloudflare = (url) async {
-      final result = await native.invokeMapMethod<String, dynamic>(
-        'websiteSession',
-        {'url': url},
+    var stage = 'storage';
+    try {
+      await AnymeXExtensionBridge.init(
+        projectName: 'CompanionExtensions',
+        getDirectory: AnymeXExtensionBridge.defaultGetDirectory(
+          appFolderName: 'CompanionExtensions',
+        ),
       );
-      if (result == null) return false;
-      await AnymeXRuntimeBridge.setCookies(
-        url,
-        result['cookies'] as String? ?? '',
+      // Logger.init replaces onLog; suppress logs after initialization too.
+      AnymeXExtensionBridge.onLog = (_, _) {};
+      stage = 'systems';
+      _manager = ExtensionManager(automaticallyInitialize: false);
+      Get.replace<ExtensionManager>(_manager);
+      stage = 'assets';
+      final bridgePath = await RuntimePaths().bridgePath;
+      // The backend is bundled and versioned with the app. Opening the hub never
+      // downloads an unpinned runtime or asks the user to set up a server.
+      final data = await rootBundle.load('assets/anymex_desktop_runtime.jar');
+      final bridge = File(bridgePath);
+      await bridge.parent.create(recursive: true);
+      await bridge.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
       );
-      await AnymeXRuntimeBridge.setUserAgent(
-        url,
-        result['userAgent'] as String? ?? '',
-      );
-      return result['solved'] == true;
-    };
-    // Keep the full upstream ecosystem, including Nuvio and Stremio. TorrServer
-    // is not initialized: torrent links remain with the app's TorBox flow.
-    final managers = <Extension>[
-      DesktopCloudStreamExtensions(),
-      DesktopAniyomiExtensions(),
-      DesktopKotatsuExtensions(),
-      DesktopTsundokuExtensions(),
-      DesktopIReaderExtensions(),
-      MangayomiExtensions(),
-      SoraExtensions(),
-      LegadoExtensions(),
-      LnReaderExtensions(),
-      StremioExtensions(),
-      NuvioPluginExtensions(),
-    ];
-    _manager.managers.assignAll(managers);
-    for (final manager in managers) {
-      try {
-        await manager.initialize();
-      } catch (_) {
-        _errors[manager.id] = 'Could not start. Tap Retry.';
+      stage = 'bridge';
+      await AnymeXRuntimeBridge.checkAndInitialize();
+      AnymeXRuntimeBridge.onSolveCloudflare = (url) async {
+        final result = await native.invokeMapMethod<String, dynamic>(
+          'websiteSession',
+          {'url': url},
+        );
+        if (result == null) return false;
+        await AnymeXRuntimeBridge.setCookies(
+          url,
+          result['cookies'] as String? ?? '',
+        );
+        await AnymeXRuntimeBridge.setUserAgent(
+          url,
+          result['userAgent'] as String? ?? '',
+        );
+        return result['solved'] == true;
+      };
+      // Keep the full upstream ecosystem, including Nuvio and Stremio. TorrServer
+      // is not initialized: torrent links remain with the app's TorBox flow.
+      final managers = <Extension>[
+        DesktopCloudStreamExtensions(),
+        DesktopAniyomiExtensions(),
+        DesktopKotatsuExtensions(),
+        DesktopTsundokuExtensions(),
+        DesktopIReaderExtensions(),
+        MangayomiExtensions(),
+        SoraExtensions(),
+        LegadoExtensions(),
+        LnReaderExtensions(),
+        StremioExtensions(),
+        NuvioPluginExtensions(),
+      ];
+      _manager.managers.assignAll(managers);
+      for (final manager in managers) {
+        try {
+          await manager.initialize();
+        } catch (_) {
+          _errors[manager.id] = 'Could not start. Tap Retry.';
+        }
       }
+    } catch (_) {
+      throw ExtensionStartupFailure(stage);
     }
   }
 

@@ -21,3 +21,7 @@ Tools/ExtensionBridge/.ios/
 Tools/ExtensionBridge/.android/
 Tools/ExtensionBridge/build/
 Tools/ExtensionBridge/assets/*.jar
+
+ExtensionStartup.yml
+ExtensionStartup.xcodeproj/
+scripts/__pycache__/

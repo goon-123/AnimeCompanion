@@ -69,6 +69,10 @@ The release workflow checks Dart analysis and the headless startup widget test,
 Swift package regressions, the native runtime frameworks, the full iPhone/iPad
 Release build and release bundle privacy. Physical-device testing remains needed
 for source website compatibility and playback; the simulator JVM is a stub.
+The native-asset manifest is checked against the actual embedded frameworks and
+Mach-O platform metadata. A focused iOS Simulator host starts the real engine,
+opens storage and verifies all 11 systems before release packaging. Flutter
+native assets are packaged with separate device and simulator slices.
 Native UI-only edits can reuse the prior verified runtime when all runtime source
 inputs and the pinned toolchain match; otherwise the workflow rebuilds it.
 
