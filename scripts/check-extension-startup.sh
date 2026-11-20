@@ -7,7 +7,7 @@ root=pathlib.Path('build/AnymeXDependencies.yml')
 dependencies=json.loads(root.read_text())['targets']['AnimeCompanion']['dependencies']
 project={
  'name':'ExtensionStartup',
- 'options':{'deploymentTarget':{'iOS':'17.0'}},
+ 'options':{'bundleIdPrefix':'com.animecompanion','deploymentTarget':{'iOS':'17.0'}},
  'settings':{'base':{'SWIFT_VERSION':'5.0','CODE_SIGNING_ALLOWED':'NO','TARGETED_DEVICE_FAMILY':'1,2'}},
  'targets':{
   'ExtensionStartupHost':{
