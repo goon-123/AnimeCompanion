@@ -67,8 +67,9 @@ final class ExtensionStreamModel: ObservableObject {
         results[result.id] = result
     }
     var englishDirect: Int {
-        results.values.flatMap(\.videos).filter { !$0.isMagnet && $0.canPlay && ((try? $0.stream(sourceName: "" )).map { StreamSourceMetadata(stream: $0).audio.english } ?? false) }.count
+        results.values.flatMap(\.videos).filter { !$0.isMagnet && $0.canPlay && $0.audio.english }.count
     }
+    var englishTorrents: Int { results.values.flatMap(\.videos).filter { $0.isMagnet && $0.audio.english }.count }
 }
 
 struct ExtensionStreamSources: View {
@@ -91,8 +92,7 @@ struct ExtensionStreamSources: View {
         videos.indices.filter { index in
             let video = videos[index]
             guard kind == "all" || (kind == "torrents" ? video.isMagnet : !video.isMagnet),
-                  !playableOnly || video.canPlay, let stream = try? video.stream(sourceName: source.label),
-                  audio.includes(StreamSourceMetadata(stream: stream).audio) else { return false }
+                  !playableOnly || video.canPlay, audio.includes(video.audio) else { return false }
             let text = [source.label, video.title ?? "", video.quality].joined(separator: " ")
             return query.isEmpty || text.localizedCaseInsensitiveContains(query)
         }
@@ -152,7 +152,7 @@ struct ExtensionStreamSources: View {
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text([video.title, video.quality].compactMap { $0 }.joined(separator: " · ")).font(.subheadline.weight(.semibold))
-                if let stream = try? video.stream(sourceName: source.label) { PlaybackAudioBadge(audio: StreamSourceMetadata(stream: stream).audio) }
+                PlaybackAudioBadge(audio: video.audio)
                 if video.headers?.isEmpty == false { Text("Plays in the app with this source’s video headers.").font(.caption).foregroundStyle(.secondary) }
                 Button { Task { await play(video, source: source) } } label: {
                     Label(video.headers?.isEmpty == false ? "Play here" : "Play in \(playback.player.label)", systemImage: "play.fill")

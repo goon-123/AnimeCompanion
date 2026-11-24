@@ -54,7 +54,7 @@ struct WatchAnimeView: View {
     private var englishDirect: Int {
         streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count + extensions.englishDirect
     }
-    private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count }
+    private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count + extensions.englishTorrents }
     private var hasEnglishReports: Bool {
         if sourceKind == "streaming" { return englishDirect > 0 }
         if sourceKind == "torrents" { return englishTorrents > 0 }

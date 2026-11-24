@@ -79,6 +79,7 @@ public enum ExtensionStreamLookup {
 public extension ExtensionVideo {
     var isMagnet: Bool { url.lowercased().hasPrefix("magnet:") }
     var canPlay: Bool { isMagnet || StremioStream.networkURL(url) != nil }
+    var audio: StreamAudioInfo { .init(texts: [title ?? "", quality]) }
     /// Headers remain on ExtensionVideo for the native extension player.
     func stream(sourceName: String) throws -> StremioStream {
         var object: [String: Any] = ["name": sourceName, "title": [title, quality].compactMap { $0 }.joined(separator: " · "), "url": url]
