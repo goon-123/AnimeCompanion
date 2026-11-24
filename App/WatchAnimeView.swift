@@ -174,15 +174,15 @@ struct WatchAnimeView: View {
         let visibleSources = choices
         if !playback.ready {
             StreamPickerCard {
-                Label("Streaming add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
+                Label("Stremio add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
                 Text(playback.installations.isEmpty ? "Add a streaming manifest to include direct video sources." : "No compatible streaming add-ons are enabled.")
                     .font(.caption).foregroundStyle(.secondary)
                 NavigationLink("Set up add-on & video player") { PlaybackSettingsView() }
             }
         } else {
-            StreamPickerHeading(title: "Streaming", count: visibleSources.count, loading: loading, countID: "playback-result-count")
+            StreamPickerHeading(title: "Stremio", count: visibleSources.count, loading: loading, countID: "playback-result-count")
             if loading && streams.isEmpty {
-                ProgressView("Checking streaming add-ons…").font(.caption).padding(12).accessibilityIdentifier("playback-loading")
+                ProgressView("Checking Stremio add-ons…").font(.caption).padding(12).accessibilityIdentifier("playback-loading")
             }
             if let error {
                 StreamPickerCard {
@@ -199,7 +199,7 @@ struct WatchAnimeView: View {
                 }
             }
             if searched && streams.isEmpty && !loading {
-                StreamPickerEmptyState(title: "No streaming sources", message: "Try another episode or check your enabled add-ons.", symbol: "play.slash")
+                StreamPickerEmptyState(title: "No Stremio streams", message: "Try another episode or check your enabled add-ons.", symbol: "play.slash")
                     .accessibilityIdentifier("playback-empty-results")
             }
             if !streams.isEmpty && visibleSources.isEmpty {

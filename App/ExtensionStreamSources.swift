@@ -141,8 +141,8 @@ struct ExtensionStreamSources: View {
                     model.accept(result, generation: attempt); matching = nil
                 } generation: { model.generation }
             }
-            .fullScreenCover(isPresented: $runtime.showingPlayer, onDismiss: { runtime.stopVideo() }) { AnymeXPlayerContainer().ignoresSafeArea() }
-            .sheet(item: Binding(get: { matching == nil ? runtime.website : nil }, set: { runtime.website = $0 }), onDismiss: { runtime.finishWebsite() }) { request in
+            .fullScreenCover(isPresented: Binding(get: { !managing && runtime.showingPlayer }, set: { runtime.showingPlayer = $0 }), onDismiss: { runtime.stopVideo() }) { AnymeXPlayerContainer().ignoresSafeArea() }
+            .sheet(item: Binding(get: { matching == nil && !managing ? runtime.website : nil }, set: { runtime.website = $0 }), onDismiss: { runtime.finishWebsite() }) { request in
                 ExtensionWebsiteSessionView(request: request)
             }
     }
@@ -203,6 +203,7 @@ private struct ExtensionStreamMatchView: View {
                 if let detail {
                     Section(detail.title) {
                         Button("Choose another title") { self.detail = nil }
+                        if !busy && detail.episodes.isEmpty { Text("This source returned no episodes for this title.").foregroundStyle(.secondary) }
                         ForEach(Array(detail.episodes.enumerated()), id: \.offset) { _, item in
                             Button(item.label) { selected = item }.disabled(busy)
                         }
