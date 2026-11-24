@@ -158,7 +158,8 @@ struct UnifiedExtensionsView: View {
         .sheet(isPresented: $filtering) {
             ExtensionFiltersSheet(managers: managers, languages: languages, manager: $manager, language: $language)
         }
-        .sheet(isPresented: $adding) {
+        .interactiveDismissDisabled(adding)
+        .navigationDestination(isPresented: $adding) {
             ExtensionAddRepositorySheet(initialKind: kind) { owner, content in
                 kind = content; tab = .browse; query = ""; language = ""; manager = owner
                 notice = "Repository added. Install a source below to get started."
@@ -343,7 +344,8 @@ struct ExtensionRepositoriesView: View {
                 }
             }
         }.navigationTitle("Repositories").navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $adding) { ExtensionAddRepositorySheet(initialKind: initialKind) { _, _ in }.environmentObject(store) }
+            .interactiveDismissDisabled(adding)
+        .navigationDestination(isPresented: $adding) { ExtensionAddRepositorySheet(initialKind: initialKind) { _, _ in }.environmentObject(store) }
             .confirmationDialog("Remove repository?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { target in
                 Button("Remove repository", role: .destructive) {
                     Task { await store.update("removeRepo", ["manager": target.owner.id, "type": target.repository.type.rawValue, "url": target.repository.url]) }

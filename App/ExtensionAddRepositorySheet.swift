@@ -12,6 +12,8 @@ struct ExtensionAddRepositorySheet: View {
     @State private var url = ""
     @State private var validation: String?
     @State private var saving = false
+    @State private var savedOwner: String?
+    @State private var savedContent: ExtensionContentKind?
     let initialKind: ExtensionContentKind
     let added: (String, ExtensionContentKind) -> Void
 
@@ -21,10 +23,20 @@ struct ExtensionAddRepositorySheet: View {
     }
 
     var body: some View {
-        // The global back-swipe bridge closes a sheet at its root. An editor
-        // instead stays open until Cancel or a confirmed successful save.
-        NavigationStack {
+        Group {
             Form {
+                if let savedOwner, let savedContent {
+                    Section {
+                        Label("Repository added", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green).accessibilityIdentifier("extensions-repository-saved")
+                        Text("Your repository is saved. Open Browse to install a source.")
+                        ForEach(store.snapshot.available.filter { $0.managerId == savedOwner && $0.kind == savedContent }.prefix(5)) { source in
+                            Text(source.label).font(.subheadline)
+                        }
+                        Button("Browse sources") { added(savedOwner, savedContent); dismiss() }
+                            .accessibilityIdentifier("extensions-repository-browse")
+                    }
+                }
                 Section {
                     TextField("Paste repository link", text: $url)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -42,7 +54,7 @@ struct ExtensionAddRepositorySheet: View {
                     }.buttonStyle(.borderless).accessibilityIdentifier("extensions-paste-repository")
                 } header: { Text("Repository link") }
                 footer: { Text("Paste the HTTPS link from the repository's maintainer, then tap Add repository.") }
-                .disabled(saving)
+                .disabled(saving || savedOwner != nil)
 
                 Section {
                     Picker("System", selection: $managerID) {
@@ -56,7 +68,7 @@ struct ExtensionAddRepositorySheet: View {
                             }
                         } else { LabeledContent("Content", value: kind.label) }
                     }
-                }.disabled(saving || store.busy)
+                }.disabled(saving || store.busy || savedOwner != nil)
 
                 if let validation { Section { Text(validation).foregroundStyle(.orange).accessibilityIdentifier("extensions-repository-error") } }
                 if let error = store.error { Section { Text(error).foregroundStyle(.orange).accessibilityIdentifier("extensions-repository-error") } }
@@ -66,16 +78,17 @@ struct ExtensionAddRepositorySheet: View {
                 }
                 Section {
                     Button("Add repository") { add() }
-                        .disabled(saving || store.busy || selected == nil || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(saving || store.busy || savedOwner != nil || selected == nil || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("extensions-save-repository")
                 } footer: { Text("After adding a repository, choose a source in Browse and tap Install.") }
             }
             .navigationTitle("Add repository").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(saving)
+                    Button(savedOwner == nil ? "Cancel" : "Done") { dismiss() }.disabled(saving)
                 }
             }
+            .navigationBarBackButtonHidden(saving)
             .scrollDismissesKeyboard(.interactively)
             .onAppear { kind = initialKind }
             .onChange(of: url) { _, _ in
@@ -138,8 +151,10 @@ struct ExtensionAddRepositorySheet: View {
                 validation = "The repository wasn't saved. Check the system and link, then try again."
                 return
             }
-            added(owner, content)
-            dismiss()
+            // Keep the editor and the stored result visible. Only an explicit
+            // Done/Browse action leaves this page, never a request callback.
+            savedOwner = owner
+            savedContent = content
         }
     }
 }
