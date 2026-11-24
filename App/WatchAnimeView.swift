@@ -7,6 +7,7 @@ struct WatchAnimeView: View {
     @EnvironmentObject private var seanime: SeanimeStore
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var torrents = SeanimeSearchModel()
+    @StateObject private var extensions = ExtensionStreamModel()
     @Environment(\.dismiss) private var dismiss
     let anime: Anime
     var requestedEpisode: Int? = nil
@@ -51,7 +52,7 @@ struct WatchAnimeView: View {
         StreamSourceSelection.indices(in: streams, audio: audioFilter, playableOnly: playableOnly, search: filter)
     }
     private var englishDirect: Int {
-        streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count
+        streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count + extensions.englishDirect
     }
     private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count }
     private var hasEnglishReports: Bool {
@@ -61,8 +62,8 @@ struct WatchAnimeView: View {
     }
     private var englishSummary: String? {
         if playback.ready && sourceKind != "torrents" && !searched { return nil }
-        guard searched || torrents.searched else { return nil }
-        if sourceKind == "torrents" || !playback.ready {
+        guard searched || torrents.searched || extensions.searched else { return nil }
+        if sourceKind == "torrents" {
             return englishTorrents > 0 ? "English audio · \(englishTorrents) TorBox \(englishTorrents == 1 ? "release" : "releases")" : "No English audio listed yet"
         }
         if sourceKind == "all" && !torrents.providers.isEmpty {
@@ -87,6 +88,9 @@ struct WatchAnimeView: View {
                             if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("playback-tracking-error") }
                         }
                     }
+                    ExtensionStreamSources(model: extensions, anime: anime, episode: episode, restart: restart, kind: sourceKind, query: filter,
+                        audio: audioFilter, playableOnly: playableOnly, reload: { loadSources() })
+                        .id("\(anime.id)-\(episode)")
                     if sourceKind != "torrents" { streamingSources }
                     if initialized && sourceKind != "streaming" {
                         SeanimeSourcesSections(search: torrents, anime: anime, episode: episode, restart: restart,
@@ -99,7 +103,7 @@ struct WatchAnimeView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { loadSources(); torrents.search() } label: { Image(systemName: "arrow.clockwise") }
-                            .disabled(!initialized || loading || playback.openingPlayer).accessibilityLabel("Reload sources")
+                            .disabled(!initialized || playback.openingPlayer).accessibilityLabel("Reload sources")
                             .accessibilityIdentifier("reload-playback-sources")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -119,12 +123,13 @@ struct WatchAnimeView: View {
                 .task(id: initializationKey) { initializeEpisode() }
                 .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
-                .sheet(isPresented: $options) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
+                .sheet(isPresented: $options, onDismiss: { loadSources() }) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
                 .sheet(isPresented: $help) { AppNavigationStack { StreamPickerHelpView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { help = false } } } } }
+                .onChange(of: store.includeAdult) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
-                    searchTask?.cancel(); torrents.stop()
+                    searchTask?.cancel(); extensions.cancel(); torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -265,10 +270,13 @@ struct WatchAnimeView: View {
     }
     private func commitEpisode() { episodeFocused = false; selectEpisode(Int(episodeText) ?? episode) }
     private func resetSources() {
+        extensions.cancel(clear: true)
         searchTask?.cancel(); lookupID = UUID(); sourceResults = nil; searched = false; loading = false; error = nil; trackingError = nil; filter = ""
     }
     private func loadSources() {
-        guard initialized, playback.ready else { return }
+        guard initialized else { return }
+        extensions.search(anime: anime, episode: episode, includeAdult: store.includeAdult)
+        guard playback.ready else { searched = true; return }
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
         let requestedEpisode = episode

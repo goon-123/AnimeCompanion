@@ -191,11 +191,14 @@ struct ExtensionRemoteImage: View {
     }
 }
 
-private struct ExtensionTorBoxVideo: View {
+struct ExtensionTorBoxVideo: View {
     @EnvironmentObject private var seanime: SeanimeStore
     @EnvironmentObject private var playback: PlaybackStore
     let video: ExtensionVideo
     let title: String
+    var anime: Anime? = nil
+    var episode: Int = 1
+    var restart = false
     @State private var torrent: TorBoxTorrent?
     @State private var job: TorBoxJob?
     @State private var busy = false
@@ -216,7 +219,9 @@ private struct ExtensionTorBoxVideo: View {
                         do {
                             let url = try await seanime.torBox().download(torrent: torrent, fileID: file.id)
                             let data = try JSONSerialization.data(withJSONObject: ["url": url.absoluteString, "name": "TorBox"])
-                            await playback.playUntracked(stream: try JSONDecoder().decode(StremioStream.self, from: data), title: title)
+                            let stream = try JSONDecoder().decode(StremioStream.self, from: data)
+                            if let anime { await playback.play(stream: stream, anime: anime, episode: episode, restart: restart) }
+                            else { await playback.playUntracked(stream: stream, title: title) }
                         } catch { self.error = error.localizedDescription }
                     } }
                 }
