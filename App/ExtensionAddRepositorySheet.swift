@@ -31,6 +31,9 @@ struct ExtensionAddRepositorySheet: View {
                         Label("Repository added", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green).accessibilityIdentifier("extensions-repository-saved")
                         Text("Your repository is saved. Open Browse to install a source.")
+                        Text(url.trimmingCharacters(in: .whitespacesAndNewlines))
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("extensions-repository-saved-url")
                         ForEach(store.snapshot.available.filter { $0.managerId == savedOwner && $0.kind == savedContent }.prefix(5)) { source in
                             Text(source.label).font(.subheadline)
                         }

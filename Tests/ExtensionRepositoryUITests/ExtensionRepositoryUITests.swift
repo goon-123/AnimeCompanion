@@ -65,11 +65,11 @@ final class ExtensionRepositoryUITests: XCTestCase {
         app.buttons["extensions-save-repository"].tap()
         let confirmation = app.descendants(matching: .any)["extensions-repository-saved"].firstMatch
         XCTAssertTrue(confirmation.waitForExistence(timeout: 130), app.debugDescription)
-        XCTAssertTrue(app.otherElements["extensions-repository-editor"].exists, "A successful request must keep the saved result visible.")
+        XCTAssertTrue(app.navigationBars["Add repository"].exists, "A successful request must keep the setup page visible.")
+        let savedURL = app.staticTexts["extensions-repository-saved-url"]
+        XCTAssertTrue(savedURL.exists, app.debugDescription)
+        XCTAssertEqual(savedURL.label, repository)
         XCTAssertTrue(app.staticTexts["Jormungandr (Beta) - Recommended"].exists, app.debugDescription)
-        if !field.exists { app.swipeUp() }
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        XCTAssertEqual(field.value as? String, repository)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts[repository].waitForExistence(timeout: 10))
         app.terminate()
