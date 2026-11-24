@@ -34,8 +34,6 @@ struct ExtensionAddRepositorySheet: View {
                         ForEach(store.snapshot.available.filter { $0.managerId == savedOwner && $0.kind == savedContent }.prefix(5)) { source in
                             Text(source.label).font(.subheadline)
                         }
-                        Button("Browse sources") { added(savedOwner, savedContent); dismiss() }
-                            .accessibilityIdentifier("extensions-repository-browse")
                     }
                 }
                 Section {
@@ -77,19 +75,25 @@ struct ExtensionAddRepositorySheet: View {
                 if systems.isEmpty && !store.busy {
                     Section { Button("Reload source systems") { Task { await store.load() } } }
                 }
-                Section {
-                    Button("Add repository") { add() }
-                        .disabled(saving || store.busy || savedOwner != nil || selected == nil || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("extensions-save-repository")
-                } footer: { Text("After adding a repository, choose a source in Browse and tap Install.") }
+
             }
             .navigationTitle("Add repository").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(savedOwner == nil ? "Cancel" : "Done") { dismiss() }.disabled(saving)
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    if let savedOwner, let savedContent {
+                        Button("Browse") { added(savedOwner, savedContent); dismiss() }
+                            .accessibilityIdentifier("extensions-repository-browse")
+                    } else {
+                        Button("Add") { add() }
+                            .disabled(saving || store.busy || selected == nil || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityLabel("Add repository").accessibilityIdentifier("extensions-save-repository")
+                    }
+                }
             }
-            .navigationBarBackButtonHidden(saving)
+            .navigationBarBackButtonHidden(true)
             .scrollDismissesKeyboard(.interactively)
             .onAppear { if !started { kind = initialKind; started = true } }
             .onChange(of: url) { _, _ in
