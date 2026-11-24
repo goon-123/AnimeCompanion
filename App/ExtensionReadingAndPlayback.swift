@@ -220,7 +220,7 @@ struct ExtensionTorBoxVideo: View {
                             let url = try await seanime.torBox().download(torrent: torrent, fileID: file.id)
                             let data = try JSONSerialization.data(withJSONObject: ["url": url.absoluteString, "name": "TorBox"])
                             let stream = try JSONDecoder().decode(StremioStream.self, from: data)
-                            if let anime { await playback.play(stream: stream, anime: anime, episode: episode, restart: restart) }
+                            if let anime { await playback.play(stream: stream, anime: anime, episode: episode, subtitle: nil, restart: restart) }
                             else { await playback.playUntracked(stream: stream, title: title) }
                         } catch { self.error = error.localizedDescription }
                     } }
