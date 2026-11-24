@@ -14,6 +14,7 @@ struct ExtensionAddRepositorySheet: View {
     @State private var saving = false
     @State private var savedOwner: String?
     @State private var savedContent: ExtensionContentKind?
+    @State private var started = false
     let initialKind: ExtensionContentKind
     let added: (String, ExtensionContentKind) -> Void
 
@@ -90,7 +91,7 @@ struct ExtensionAddRepositorySheet: View {
             }
             .navigationBarBackButtonHidden(saving)
             .scrollDismissesKeyboard(.interactively)
-            .onAppear { kind = initialKind }
+            .onAppear { if !started { kind = initialKind; started = true } }
             .onChange(of: url) { _, _ in
                 validation = nil
                 suggestSystem()
