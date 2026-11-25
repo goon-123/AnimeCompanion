@@ -13,7 +13,7 @@ final class MangaProgressSyncModel: ObservableObject {
     private var pending: Attempt?
     private var retryAttempt: Attempt?
     private var task: Task<Void, Never>?
-    func completed(_ title: MangaTitleReference, chapter: SourceMangaChapter, account: MangaBakaStore, links: MangaSourceLinkStore) {
+    func completed(title: MangaTitleReference, chapter: SourceMangaChapter, account: MangaBakaStore, links: MangaSourceLinkStore) {
         let all = Array(links.state.links.values)
         let enabled = Set(all.filter { UserDefaults.standard.bool(forKey: MangaProgressPolicy.consentKey(for: $0)) }.map(MangaProgressPolicy.consentKey))
         guard let link = MangaProgressPolicy.automaticLink(for: title.id, accountID: account.profile?.id, links: all, enabledKeys: enabled) else { return }
@@ -135,7 +135,7 @@ struct MangaProgressSettingsView: View {
                 let suggested = max(entry.chapter ?? 0, (known + stored).max() ?? 0)
                 chapterText = suggested > 0 ? String(format: "%g", suggested) : ""
             }
-        } catch is CancellationError {} catch { if loadToken == token { error = error.localizedDescription } }
+        } catch is CancellationError {} catch { if loadToken == token { self.error = error.localizedDescription } }
     }
     private func update() {
         guard let chapter, linked, correctAccount, !saving else { return }
@@ -148,7 +148,7 @@ struct MangaProgressSettingsView: View {
                 guard linked, connection == account.connectionID else { return }
                 remoteChapter = value; chapterText = String(format: "%g", value)
                 notice = "MangaBaka progress is up to date."
-            } catch is CancellationError {} catch { error = error.localizedDescription }
+            } catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
     }
 }
