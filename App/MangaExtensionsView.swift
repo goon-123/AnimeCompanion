@@ -70,11 +70,8 @@ struct MangaExtensionsView: View {
                         if mode == .installed { Button("Browse sources") { mode = .available } }
                     }
                 }
-                NavigationLink { UnifiedExtensionsView(initialKind: .manga) } label: {
-                    Label("Other source systems", systemImage: "puzzlepiece.extension")
-                }.buttonStyle(.bordered).accessibilityIdentifier("manga-unified-extensions")
             }.frame(maxWidth: 940, alignment: .leading).padding(18).frame(maxWidth: .infinity)
-        }.background(Theme.background).navigationTitle("Keiyoushi sources").navigationBarTitleDisplayMode(.inline)
+        }.background(Theme.background).navigationTitle("Manga extensions").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Find a manga source")
             .task {
                 await store.load()

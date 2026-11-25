@@ -6,7 +6,6 @@ struct StreamPickerOptionsView: View {
     var body: some View {
         Form {
             Section("Sources") {
-                NavigationLink { UnifiedExtensionsView(initialKind: .anime) } label: { Label("Anime extensions", systemImage: "puzzlepiece.extension") }
                 NavigationLink { PlaybackSettingsView() } label: { Label("Stremio add-ons", systemImage: "puzzlepiece.extension") }
                 NavigationLink { SeanimeSettingsView() } label: { Label("Seanime extensions", systemImage: "shippingbox") }
                 NavigationLink { TorBoxSettingsView() } label: { Label("TorBox connection", systemImage: "cloud") }

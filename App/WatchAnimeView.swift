@@ -7,7 +7,6 @@ struct WatchAnimeView: View {
     @EnvironmentObject private var seanime: SeanimeStore
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var torrents = SeanimeSearchModel()
-    @StateObject private var extensions = ExtensionStreamModel()
     @Environment(\.dismiss) private var dismiss
     let anime: Anime
     var requestedEpisode: Int? = nil
@@ -52,9 +51,9 @@ struct WatchAnimeView: View {
         StreamSourceSelection.indices(in: streams, audio: audioFilter, playableOnly: playableOnly, search: filter)
     }
     private var englishDirect: Int {
-        streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count + extensions.englishDirect
+        streams.filter { $0.unavailableReason == nil && StreamSourceMetadata(stream: $0).audio.english }.count
     }
-    private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count + extensions.englishTorrents }
+    private var englishTorrents: Int { torrents.results.filter { $0.audio.english }.count }
     private var hasEnglishReports: Bool {
         if sourceKind == "streaming" { return englishDirect > 0 }
         if sourceKind == "torrents" { return englishTorrents > 0 }
@@ -62,8 +61,8 @@ struct WatchAnimeView: View {
     }
     private var englishSummary: String? {
         if playback.ready && sourceKind != "torrents" && !searched { return nil }
-        guard searched || torrents.searched || extensions.searched else { return nil }
-        if sourceKind == "torrents" {
+        guard searched || torrents.searched else { return nil }
+        if sourceKind == "torrents" || !playback.ready {
             return englishTorrents > 0 ? "English audio · \(englishTorrents) TorBox \(englishTorrents == 1 ? "release" : "releases")" : "No English audio listed yet"
         }
         if sourceKind == "all" && !torrents.providers.isEmpty {
@@ -88,9 +87,6 @@ struct WatchAnimeView: View {
                             if let trackingError { Text(trackingError).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("playback-tracking-error") }
                         }
                     }
-                    ExtensionStreamSources(model: extensions, anime: anime, episode: episode, restart: restart, kind: sourceKind, query: filter,
-                        audio: audioFilter, playableOnly: playableOnly, reload: { loadSources() })
-                        .id("\(anime.id)-\(episode)")
                     if sourceKind != "torrents" { streamingSources }
                     if initialized && sourceKind != "streaming" {
                         SeanimeSourcesSections(search: torrents, anime: anime, episode: episode, restart: restart,
@@ -103,7 +99,7 @@ struct WatchAnimeView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { loadSources(); torrents.search() } label: { Image(systemName: "arrow.clockwise") }
-                            .disabled(!initialized || playback.openingPlayer).accessibilityLabel("Reload sources")
+                            .disabled(!initialized || loading || playback.openingPlayer).accessibilityLabel("Reload sources")
                             .accessibilityIdentifier("reload-playback-sources")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -123,13 +119,12 @@ struct WatchAnimeView: View {
                 .task(id: initializationKey) { initializeEpisode() }
                 .sheet(item: $sourceInformation) { source in SourceInformationView(stream: source.stream, addonName: source.addonName) }
                 .sheet(isPresented: $torBoxFiles) { TorBoxFilesView(anime: anime, episode: episode, restart: restart) }
-                .sheet(isPresented: $options, onDismiss: { loadSources() }) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
+                .sheet(isPresented: $options) { AppNavigationStack { StreamPickerOptionsView(playableOnly: $playableOnly) } }
                 .sheet(isPresented: $help) { AppNavigationStack { StreamPickerHelpView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { help = false } } } } }
-                .onChange(of: store.includeAdult) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.enabled) { _, _ in resetSources(); loadSources() }
                 .onChange(of: playback.addonRevision) { _, _ in resetSources(); loadSources() }
                 .onDisappear {
-                    searchTask?.cancel(); extensions.cancel(); torrents.stop()
+                    searchTask?.cancel(); torrents.stop()
                     if loading { lookupID = UUID(); loading = false }
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -174,15 +169,15 @@ struct WatchAnimeView: View {
         let visibleSources = choices
         if !playback.ready {
             StreamPickerCard {
-                Label("Stremio add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
+                Label("Streaming add-ons", systemImage: "play.rectangle").font(.subheadline.weight(.semibold))
                 Text(playback.installations.isEmpty ? "Add a streaming manifest to include direct video sources." : "No compatible streaming add-ons are enabled.")
                     .font(.caption).foregroundStyle(.secondary)
                 NavigationLink("Set up add-on & video player") { PlaybackSettingsView() }
             }
         } else {
-            StreamPickerHeading(title: "Stremio", count: visibleSources.count, loading: loading, countID: "playback-result-count")
+            StreamPickerHeading(title: "Streaming", count: visibleSources.count, loading: loading, countID: "playback-result-count")
             if loading && streams.isEmpty {
-                ProgressView("Checking Stremio add-ons…").font(.caption).padding(12).accessibilityIdentifier("playback-loading")
+                ProgressView("Checking streaming add-ons…").font(.caption).padding(12).accessibilityIdentifier("playback-loading")
             }
             if let error {
                 StreamPickerCard {
@@ -199,7 +194,7 @@ struct WatchAnimeView: View {
                 }
             }
             if searched && streams.isEmpty && !loading {
-                StreamPickerEmptyState(title: "No Stremio streams", message: "Try another episode or check your enabled add-ons.", symbol: "play.slash")
+                StreamPickerEmptyState(title: "No streaming sources", message: "Try another episode or check your enabled add-ons.", symbol: "play.slash")
                     .accessibilityIdentifier("playback-empty-results")
             }
             if !streams.isEmpty && visibleSources.isEmpty {
@@ -270,13 +265,10 @@ struct WatchAnimeView: View {
     }
     private func commitEpisode() { episodeFocused = false; selectEpisode(Int(episodeText) ?? episode) }
     private func resetSources() {
-        extensions.cancel(clear: true)
         searchTask?.cancel(); lookupID = UUID(); sourceResults = nil; searched = false; loading = false; error = nil; trackingError = nil; filter = ""
     }
     private func loadSources() {
-        guard initialized else { return }
-        extensions.search(anime: anime, episode: episode, includeAdult: store.includeAdult)
-        guard playback.ready else { searched = true; return }
+        guard initialized, playback.ready else { return }
         searchTask?.cancel()
         let attempt = UUID(); lookupID = attempt
         let requestedEpisode = episode

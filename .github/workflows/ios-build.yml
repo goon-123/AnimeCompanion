@@ -11,119 +11,12 @@ on:
   pull_request:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
-  ANYMEX_FLUTTER_VERSION: '3.38.5'
 jobs:
-  anymex-runtime:
-    name: Build complete on-device extension framework
-    runs-on: macos-15-intel
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      # Reuse the verified runtime for native UI-only edits. Its build inputs
-      # and toolchain must match exactly; expiry/download failure rebuilds it.
-      - name: Check verified extension runtime inputs
-        id: runtime-inputs
-        run: |
-          if [[ "$RUNNER_ARCH" == X64 && "$ANYMEX_FLUTTER_VERSION" == 3.38.5 && "$DEVELOPER_DIR" == /Applications/Xcode_26.0.1.app/Contents/Developer ]] && \
-             git fetch --depth=1 origin 44e4c8e1122fc6f665bc455b1fde0416c5ddd4bb && \
-             git diff --quiet 44e4c8e1122fc6f665bc455b1fde0416c5ddd4bb HEAD -- \
-               Tools/ExtensionBridge/lib Tools/ExtensionBridge/test \
-               Tools/ExtensionBridge/pubspec.yaml Tools/ExtensionBridge/pubspec.lock \
-               scripts/prepare-anymex.py scripts/build-anymex.sh scripts/anymex-xcode.py \
-               scripts/anymex-native-assets.py scripts/check-anymex-bundle.py; then
-            echo 'match=true' >> "$GITHUB_OUTPUT"
-          fi
-      - name: Restore verified extension frameworks
-        id: verified-runtime
-        if: steps.runtime-inputs.outputs.match == 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: AnimeCompanion-anymex-frameworks
-          run-id: 44764190005
-          github-token: ${{ github.token }}
-          path: .
-      - uses: subosito/flutter-action@v2
-        if: steps.verified-runtime.outcome != 'success'
-        with:
-          flutter-version: ${{ env.ANYMEX_FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - uses: actions/cache@v4
-        if: steps.verified-runtime.outcome != 'success'
-        id: extension-cache
-        with:
-          path: |
-            ~/.pub-cache
-            ~/Library/Caches/CocoaPods
-            Tools/ExtensionBridge/.dart_tool/flutter_build
-            Tools/ExtensionBridge/.dart_tool/hooks_runner
-            Tools/ExtensionBridge/build
-          key: anymex-build-v2-${{ runner.arch }}-3.38.5-${{ hashFiles('Tools/ExtensionBridge/pubspec.lock', 'Tools/ExtensionBridge/pubspec.yaml', 'Tools/ExtensionBridge/lib/**', 'scripts/*anymex*') }}
-          restore-keys: anymex-build-v2-${{ runner.arch }}-3.38.5-
-      - name: Build and check all extension backends
-        if: steps.verified-runtime.outcome != 'success'
-        run: bash scripts/build-anymex.sh
-      - name: Preserve extension intermediates for retries
-        if: ${{ failure() && steps.extension-cache.outputs.cache-primary-key != '' && steps.extension-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ~/Library/Caches/CocoaPods
-            Tools/ExtensionBridge/.dart_tool/flutter_build
-            Tools/ExtensionBridge/.dart_tool/hooks_runner
-            Tools/ExtensionBridge/build
-          key: ${{ steps.extension-cache.outputs.cache-primary-key }}
-      - name: Verify complete extension framework manifest
-        run: python3 scripts/anymex-xcode.py
-      - name: Upload extension frameworks and notices
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimeCompanion-anymex-frameworks
-          path: |
-            build/AnymeXFrameworks/Release
-            build/AnymeXFrameworks/Runtime
-            build/AnymeXDependencies.yml
-            App/ExtensionRuntimeNotices.txt
-          retention-days: 7
-  extension-startup:
-    name: Verify extension storage and system startup
-    needs: anymex-runtime
-    runs-on: macos-15
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: AnimeCompanion-anymex-frameworks
-          path: .
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.ANYMEX_FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - name: Prepare the simulator Dart bundle
-        run: bash scripts/prepare-extension-simulator.sh
-      - name: Exercise the real extension startup
-        run: |
-          brew install xcodegen
-          bash scripts/check-extension-startup.sh
-      - name: Upload extension startup result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimeCompanion-extension-startup
-          path: build/ExtensionStartup.xcresult
-          if-no-files-found: ignore
-          retention-days: 7
-
   dock-gallery-scope:
     if: ${{ github.event_name == 'pull_request' }}
     name: Detect dock and gallery changes
@@ -737,7 +630,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
   build:
-    needs: [core, safari-extension, manga-runtime, anymex-runtime, extension-startup]
+    needs: [core, safari-extension, manga-runtime]
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
@@ -768,17 +661,10 @@ jobs:
           path: Tests/MangaRuntimeTests/Fixtures
       - name: Verify encrypted AniList startup snapshots on Apple platforms
         run: env -u DEVELOPER_DIR swift test -j 2 --filter AniListLibraryCacheTests
-      - name: Download complete extension frameworks
-        uses: actions/download-artifact@v4
-        with:
-          name: AnimeCompanion-anymex-frameworks
-          path: .
-      - name: Verify extension framework manifest
-        run: python3 scripts/anymex-xcode.py
       - name: Generate Xcode project
         run: |
           brew install xcodegen
-          xcodegen generate --spec project-anymex.yml
+          xcodegen generate
       - name: Compile universal iPhone and iPad app
         run: |
           xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion \
@@ -786,7 +672,6 @@ jobs:
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
-          python3 scripts/check-anymex-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           python3 scripts/check-safari-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           python3 scripts/check-release-privacy.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           mkdir -p Payload
