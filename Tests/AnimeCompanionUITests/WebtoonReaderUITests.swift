@@ -2,6 +2,26 @@ import XCTest
 
 final class WebtoonReaderUITests: XCTestCase {
     @MainActor
+    func testLibraryLinkIsAtTheTopAndReaderCanJumpToASpecificPage() {
+        let app = launch()
+        openFirstTitle(app)
+        let link = app.buttons["manga-link-to-library"]
+        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        XCTAssertTrue(link.isHittable, "Library linking must be reachable before scrolling through chapters")
+        app.buttons["manga-read"].tap()
+        XCTAssertTrue(app.images["webtoon-page-image-0"].waitForExistence(timeout: 20))
+        app.buttons["webtoon-go-to-page"].tap()
+        let field = app.alerts["Go to page"].textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText(XCUIKeyboardKey.delete.rawValue + "3")
+        app.alerts["Go to page"].buttons["Go"].tap()
+        XCTAssertTrue(app.images["webtoon-page-image-2"].waitForExistence(timeout: 15))
+        let jumped = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "3 / 8"), object: app.buttons["webtoon-go-to-page"])
+        XCTAssertEqual(XCTWaiter.wait(for: [jumped], timeout: 10), .completed)
+        XCTAssertTrue(app.buttons["webtoon-actions"].exists)
+    }
+    @MainActor
     func testClearingHistoryRequiresConfirmationAndKeepsSavedMangaAndProgress() {
         let app = launch()
         openFirstTitle(app)
@@ -35,7 +55,7 @@ final class WebtoonReaderUITests: XCTestCase {
         let saved = app.buttons["manga-saved-title-0"]
         XCTAssertTrue(saved.waitForExistence(timeout: 10)); saved.tap()
         XCTAssertTrue(progress.waitForExistence(timeout: 10)); XCTAssertEqual(progress.label, savedProgress)
-        XCTAssertTrue(app.buttons["manga-save-title"].label.contains("In library"))
+        XCTAssertTrue(app.buttons["manga-save-title"].label.contains("Saved series"))
         capture("Cleared-History-Keeps-Progress", app)
     }
     @MainActor
@@ -167,8 +187,8 @@ final class WebtoonReaderUITests: XCTestCase {
         let retry = app.buttons["webtoon-retry-5"]
         XCTAssertTrue(retry.waitForExistence(timeout: 15)); retry.tap()
         XCTAssertTrue(app.images["webtoon-page-image-5"].waitForExistence(timeout: 20))
-        let counter = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "6 / 8"),
-            object: app.staticTexts["webtoon-page-counter"])
+        let counter = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "6 / 8"),
+            object: app.buttons["webtoon-go-to-page"])
         XCTAssertEqual(XCTWaiter.wait(for: [counter], timeout: 5), .completed)
         showControls(app)
         app.buttons["webtoon-settings"].tap()

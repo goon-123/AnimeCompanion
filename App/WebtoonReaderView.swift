@@ -27,7 +27,7 @@ final class WebtoonReaderModel: ObservableObject {
     var chapterIndex: Int { chapters.firstIndex(of: chapter) ?? 0 }
     var hasNext: Bool { chapterIndex + 1 < chapters.count }
     var hasPrevious: Bool { chapterIndex > 0 }
-    init(_ route: MangaReaderRoute) { title = route.title; chapters = route.chapters; chapter = route.chapter }
+    init(_ route: MangaReaderRoute) { title = route.title; chapters = route.chapters; chapter = route.chapter; startAtBeginning = route.startAtBeginning }
     func load(extensions: MangaExtensionStore, reading: MangaReadingStore) async {
         guard !loading else { return }
         self.reading = reading
@@ -44,7 +44,7 @@ final class WebtoonReaderModel: ObservableObject {
             guard list.count <= 5000 else { throw MangaExtensionError.oversized }
             let saved = reading.record(title.id)?.position(for: chapter.url)
             initial = !startAtBeginning && saved?.completed == false ? saved?.clamped(to: list.count) : nil
-            currentPage = initial?.pageIndex ?? 0; pages = list
+            currentPage = initial?.pageIndex ?? 0; pages = list; startAtBeginning = false
         } catch is CancellationError {} catch { if generation == token { self.error = error.localizedDescription } }
     }
     func position(page: Int, fraction: Double, complete: Bool) {
@@ -143,6 +143,12 @@ struct WebtoonReaderView: View {
     @State private var chapters = false
     @State private var website = false
     @State private var closing = false
+    @State private var pageJump = false
+    @State private var pageNumber = ""
+    @State private var restarting = false
+    @State private var finishingChapter = false
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var originalIdleTimer = false
     @State private var capturedIdleTimer = false
     init(route: MangaReaderRoute) { _model = StateObject(wrappedValue: WebtoonReaderModel(route)) }
@@ -166,7 +172,7 @@ struct WebtoonReaderView: View {
                         .accessibilityIdentifier("webtoon-source-website")
                 }.foregroundStyle(.white)
             }
-            if model.controls || model.pages.isEmpty { chrome }
+            if model.controls || model.pages.isEmpty { chrome.transition(.opacity) }
             if model.advancing {
                 VStack { Spacer(); ProgressView("Loading next chapter…").padding(16).readerControlSurface(in: Capsule()).padding(.bottom, 28) }
                     .allowsHitTesting(false)
@@ -178,7 +184,8 @@ struct WebtoonReaderView: View {
                 }.allowsHitTesting(false).accessibilityHidden(true)
             }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent).statusBarHidden(!model.controls && !model.pages.isEmpty)
-            .backSwipe(enabled: !closing && !settings && !chapters && !website) { Task { await close() } }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: model.controls)
+            .backSwipe(enabled: !closing && !settings && !chapters && !website && !pageJump && !restarting) { Task { await close() } }
             .persistentSystemOverlays(model.controls ? .visible : .hidden)
             .task(id: model.chapter.url) {
                 await reading.load()
@@ -205,6 +212,19 @@ struct WebtoonReaderView: View {
                 model.autoScroll = false; model.cancelPrefetch()
                 Task { await model.flush(); await reading.preferences(preferences) }
             }
+            .onChange(of: settings || chapters || website || pageJump || restarting) { _, presented in
+                if presented { model.autoScroll = false; holdScrolling = false; scrubbing = false }
+            }
+            .alert("Go to page", isPresented: $pageJump) {
+                TextField("Page number", text: $pageNumber).keyboardType(.numberPad)
+                Button("Go") { if let page = Int(pageNumber) { model.goToPage(page - 1) } }
+                    .disabled(Int(pageNumber).map { !(1...max(1, model.pages.count)).contains($0) } ?? true)
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Enter a page from 1 to \(model.pages.count).") }
+            .confirmationDialog("Read this chapter from the beginning?", isPresented: $restarting, titleVisibility: .visible) {
+                Button("Start at page 1") { model.goToPage(0) }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Your position in this chapter will resume from page 1.") }
             .sheet(isPresented: $settings, onDismiss: { Task { await reading.preferences(preferences) } }) {
                 WebtoonSettingsView(preferences: $preferences, autoScroll: $model.autoScroll)
                     .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
@@ -221,19 +241,19 @@ struct WebtoonReaderView: View {
         return WebtoonCanvas(source: source, version: extensions.imageVersion(source),
             chapterKey: model.chapter.url, pages: model.pages, initial: model.initial, jump: model.jump,
             preferences: preferences, autoScroll: model.autoScroll,
-            scrollingAllowed: !settings && !chapters && !website && !scrubbing && !closing && scene == .active,
+            scrollingAllowed: readerInteractionAllowed && !scrubbing,
             hasNext: model.hasNext,
             loader: { try await store.imageData(source, image: $0) },
             onPosition: {
                 guard model.chapter.url == chapterURL else { return }
                 model.position(page: $0, fraction: $1, complete: $2)
-                if preferences.autoLoadNextChapter && scene == .active && !settings && !chapters && !website && !closing { model.prefetchNext(extensions: extensions) }
+                if preferences.autoLoadNextChapter && readerInteractionAllowed { model.prefetchNext(extensions: extensions) }
             },
             onChapterEnd: { chapter, scrolling in
-                guard preferences.autoLoadNextChapter, !settings, !chapters, !website, !closing, scene == .active else { return }
+                guard preferences.autoLoadNextChapter, readerInteractionAllowed else { return }
                 Task {
                     await model.advanceAutomatically(from: chapter, keepScrolling: scrolling) {
-                        preferences.autoLoadNextChapter && scene == .active && !settings && !chapters && !website && !closing
+                        preferences.autoLoadNextChapter && readerInteractionAllowed
                     }
                     if scene != .active || closing { model.autoScroll = false }
                 }
@@ -271,42 +291,82 @@ struct WebtoonReaderView: View {
             }
             Spacer()
             if !model.pages.isEmpty {
-                scrollControls.padding(.horizontal, 24).padding(.bottom, 10)
-                HStack(spacing: 12) {
-                    Button { Task { await model.move(-1) } } label: { Image(systemName: "backward.end.fill") }
-                        .readerCircle().disabled(!model.hasPrevious).accessibilityLabel("Previous chapter").accessibilityIdentifier("webtoon-previous-chapter")
-                    VStack(spacing: 5) {
-                        Text("\(controlPage + 1) / \(model.pages.count)").font(.caption.monospacedDigit().bold())
-                            .accessibilityIdentifier("webtoon-page-counter")
-                        Slider(value: Binding(get: { scrubbing ? scrubPage : Double(model.currentPage) }, set: {
-                            scrubPage = $0
-                            // Accessibility adjustments can arrive without a touch-editing session.
-                            if !scrubbing { model.goToPage(Int($0.rounded())) }
-                        }), in: 0...Double(max(1, model.pages.count - 1)), step: 1, onEditingChanged: { editing in
-                            if editing { scrubPage = Double(model.currentPage); scrubbing = true; model.autoScroll = false }
-                            else {
-                                let target = Int(scrubPage.rounded()); scrubbing = false
-                                model.goToPage(target)
-                            }
-                        })
-                            .disabled(model.pages.count == 1).accessibilityLabel("Page")
-                            .accessibilityValue("Page \(controlPage + 1) of \(model.pages.count)")
-                            .accessibilityIdentifier("webtoon-page-scrubber")
-                    }.padding(.horizontal, 16).padding(.vertical, 10).readerControlSurface(in: Capsule())
-                    Button { Task { await model.move(1) } } label: { Image(systemName: "forward.end.fill") }
-                        .readerCircle().disabled(!model.hasNext).accessibilityLabel("Next chapter").accessibilityIdentifier("webtoon-next-chapter")
-                }.padding(.horizontal, 16).padding(.bottom, 12)
+                readingPanel.padding(.horizontal, 16).padding(.bottom, 12)
             }
         }.foregroundStyle(.white).environment(\.colorScheme, .dark)
     }
-    private var scrollControls: some View {
-        HStack(spacing: 10) {
-            Button { model.autoScroll.toggle() } label: {
-                Label(model.autoScroll ? "Pause" : "Auto-scroll", systemImage: model.autoScroll ? "pause.fill" : "play.fill")
-                    .font(.caption.bold()).frame(minHeight: 44)
-            }.accessibilityIdentifier("webtoon-auto-scroll-toggle")
-                .accessibilityValue(model.autoScroll ? "Scrolling" : "Paused")
-            Spacer(minLength: 0)
+    private var readerInteractionAllowed: Bool { !settings && !chapters && !website && !pageJump && !restarting && !closing && scene == .active }
+    private var readingPanel: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 14) {
+                Button { Task { await model.move(-1) } } label: { Image(systemName: "backward.end.fill").frame(width: 44, height: 44) }
+                    .disabled(!model.hasPrevious).accessibilityLabel("Previous chapter").accessibilityIdentifier("webtoon-previous-chapter")
+                Spacer(minLength: 0)
+                Button { pageNumber = String(model.currentPage + 1); pageJump = true } label: {
+                    VStack(spacing: 3) {
+                        Text("\(controlPage + 1) / \(model.pages.count)").font(.subheadline.monospacedDigit().bold())
+                            .accessibilityIdentifier("webtoon-page-counter")
+                        Text("Go to page").font(.caption2).foregroundStyle(.secondary)
+                    }.frame(minHeight: 44)
+                }.accessibilityLabel("Go to page").accessibilityValue("\(controlPage + 1) / \(model.pages.count)").accessibilityIdentifier("webtoon-go-to-page")
+                Spacer(minLength: 0)
+                Button { Task { await model.move(1) } } label: { Image(systemName: "forward.end.fill").frame(width: 44, height: 44) }
+                    .disabled(!model.hasNext).accessibilityLabel("Next chapter").accessibilityIdentifier("webtoon-next-chapter")
+                readerOptions
+            }
+            Slider(value: Binding(get: { scrubbing ? scrubPage : Double(model.currentPage) }, set: {
+                scrubPage = $0
+                if !scrubbing { model.goToPage(Int($0.rounded())) }
+            }), in: 0...Double(max(1, model.pages.count - 1)), step: 1, onEditingChanged: { editing in
+                if editing { scrubPage = Double(model.currentPage); scrubbing = true; model.autoScroll = false }
+                else { let target = Int(scrubPage.rounded()); scrubbing = false; model.goToPage(target) }
+            }).disabled(model.pages.count == 1).accessibilityLabel("Page")
+                .accessibilityValue("Page \(controlPage + 1) of \(model.pages.count)").accessibilityIdentifier("webtoon-page-scrubber")
+            Divider().overlay(.white.opacity(0.08))
+            scrollControls
+        }.padding(.horizontal, 16).padding(.vertical, 10).frame(maxWidth: 620)
+            .readerControlSurface(in: RoundedRectangle(cornerRadius: 24)).buttonStyle(.plain)
+    }
+    private var readerOptions: some View {
+        Menu {
+            Button("Read from beginning", systemImage: "backward.end") { restarting = true }
+            Button(model.hasNext ? "Mark read & next chapter" : "Mark chapter as read", systemImage: "checkmark.circle") {
+                guard !finishingChapter else { return }
+                let chapter = model.chapter
+                finishingChapter = true; model.autoScroll = false
+                Task {
+                    await model.flush()
+                    await reading.mark(model.title, chapter: chapter, read: true)
+                    if model.chapter.url == chapter.url, reading.record(model.title.id)?.position(for: chapter.url)?.completed == true, model.hasNext {
+                        await model.move(1)
+                    }
+                    finishingChapter = false
+                }
+            }.disabled(finishingChapter || reading.loading || reading.unreadable)
+            Button("Open source website", systemImage: "globe") { website = true }
+            if let url = model.title.source.webURL(for: model.chapter.url) {
+                ShareLink(item: url) { Label("Share chapter", systemImage: "square.and.arrow.up") }
+            }
+            Button("Hide controls", systemImage: "eye.slash") { model.controls = false }
+        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+            .accessibilityLabel("Reader actions").accessibilityIdentifier("webtoon-actions")
+    }
+    @ViewBuilder private var scrollControls: some View {
+        if textSize.isAccessibilitySize {
+            VStack(spacing: 6) { scrollToggle; speedControls }
+        } else {
+            HStack(spacing: 10) { scrollToggle; Spacer(minLength: 0); speedControls }
+        }
+    }
+    private var scrollToggle: some View {
+        Button { model.autoScroll.toggle() } label: {
+            Label(model.autoScroll ? "Pause" : "Auto-scroll", systemImage: model.autoScroll ? "pause.fill" : "play.fill")
+                .font(.caption.bold()).frame(minHeight: 44)
+        }.accessibilityIdentifier("webtoon-auto-scroll-toggle")
+            .accessibilityValue(model.autoScroll ? "Scrolling" : "Paused")
+    }
+    private var speedControls: some View {
+        HStack(spacing: 6) {
             Button { adjustSpeed(-15) } label: { Image(systemName: "minus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed <= WebtoonPreferences.scrollSpeedRange.lowerBound)
                 .accessibilityLabel("Scroll slower").accessibilityIdentifier("webtoon-scroll-slower")
@@ -314,29 +374,17 @@ struct WebtoonReaderView: View {
             Button { adjustSpeed(15) } label: { Image(systemName: "plus").frame(width: 40, height: 44) }
                 .disabled(preferences.autoScrollSpeed >= WebtoonPreferences.scrollSpeedRange.upperBound)
                 .accessibilityLabel("Scroll faster").accessibilityIdentifier("webtoon-scroll-faster")
-        }.padding(.horizontal, 14).readerControlSurface(in: Capsule()).buttonStyle(.plain)
+        }.buttonStyle(.plain)
     }
     private func adjustSpeed(_ delta: Double) {
         preferences.autoScrollSpeed += delta; preferences.normalize()
     }
     private var controlPage: Int { scrubbing ? Int(scrubPage.rounded()) : model.currentPage }
     private var chapterPicker: some View {
-        AppNavigationStack {
-            List(model.chapters) { chapter in
-                Button {
-                    chapters = false
-                    Task { await model.select(chapter) }
-                } label: {
-                    HStack {
-                        Text(chapter.name)
-                        Spacer()
-                        if chapter == model.chapter { Image(systemName: "book") }
-                        else if reading.record(model.title.id)?.position(for: chapter.url)?.completed == true { Image(systemName: "checkmark") }
-                    }.foregroundStyle(chapter == model.chapter ? MangaStyle.accent : Color.primary)
-                }.accessibilityIdentifier("webtoon-choose-chapter-\(model.chapters.firstIndex(of: chapter) ?? 0)")
-            }.navigationTitle("Chapters").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { chapters = false } } }
-        }.tint(MangaStyle.accent)
+        MangaReaderChapterPicker(title: model.title.manga.title, chapters: model.chapters, current: model.chapter,
+            record: reading.record(model.title.id), onSelect: { chapter in
+                chapters = false; Task { await model.select(chapter) }
+            }, onDone: { chapters = false })
     }
     private func updateAwake() { UIApplication.shared.isIdleTimerDisabled = scene == .active && preferences.keepAwake ? true : originalIdleTimer }
     private func close() async {
@@ -361,18 +409,13 @@ private struct WebtoonSettingsView: View {
     var body: some View {
         AppNavigationStack {
             Form {
-                Section {
-                    LabeledContent("Reading mode", value: "Continuous vertical")
-                    Text("Hold the page to scroll and lift your finger to stop. Tap for controls; pinch or double-tap to zoom.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("Appearance") {
+                Section("Display") {
                     Picker("Background", selection: $preferences.background) {
                         Text("Black").tag(WebtoonPreferences.Background.black)
                         Text("Charcoal").tag(WebtoonPreferences.Background.charcoal)
                         Text("Paper").tag(WebtoonPreferences.Background.paper)
-                    }
-                    VStack(alignment: .leading) {
+                    }.pickerStyle(.segmented)
+                    VStack(alignment: .leading, spacing: 10) {
                         LabeledContent("Side padding", value: "\(Int(preferences.sidePadding * 100))%")
                         Slider(value: $preferences.sidePadding, in: 0...0.12, step: 0.01).accessibilityIdentifier("webtoon-side-padding")
                     }
@@ -380,16 +423,23 @@ private struct WebtoonSettingsView: View {
                 Section {
                     Toggle("Automatically load next chapter", isOn: $preferences.autoLoadNextChapter)
                         .accessibilityIdentifier("webtoon-auto-next")
+                } header: { Text("Chapter flow") }
+                footer: { Text("Continue into the next chapter after reaching the end. Missing images pause automatic chapter loading.") }
+                Section {
                     Toggle("Hold to scroll", isOn: $preferences.holdToScroll).accessibilityIdentifier("webtoon-hold-to-scroll")
                     Toggle("Auto-scroll", isOn: $autoScroll).accessibilityIdentifier("webtoon-auto-scroll")
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 10) {
                         LabeledContent("Scroll speed") { WebtoonSpeedMenu(speed: $preferences.autoScrollSpeed) }
                         Slider(value: $preferences.autoScrollSpeed, in: WebtoonPreferences.scrollSpeedRange, step: 5)
                             .accessibilityLabel("Scroll speed").accessibilityIdentifier("webtoon-scroll-speed-slider")
                     }
+                } header: { Text("Scrolling") }
+                footer: { Text("Hold to scroll stops when you lift your finger. Auto-scroll continues until paused. Dragging, opening a reader sheet, changing chapters or leaving the app pauses it.") }
+                Section {
                     Toggle("Keep screen awake", isOn: $preferences.keepAwake)
-                } header: { Text("Reading") }
-                footer: { Text("Tap the speed for presets, or use the slider for 15–1,200 pt/s. Hold to scroll stops when you lift your finger. Auto-scroll keeps moving until paused. Auto-scroll continues into the next chapter when automatic chapter loading is on. Dragging, changing chapters manually or leaving the app pauses scrolling.") }
+                    Label("Tap to show or hide controls", systemImage: "hand.tap")
+                    Label("Pinch or double-tap to zoom", systemImage: "arrow.up.left.and.arrow.down.right")
+                } header: { Text("Comfort & gestures") }
             }.navigationTitle("Webtoon reader").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent)
