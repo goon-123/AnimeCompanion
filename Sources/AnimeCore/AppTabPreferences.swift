@@ -2,8 +2,8 @@ import Foundation
 
 public enum AppTab: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
     case home, explore, library, manga, schedule, news
-    /// Schedule and News remain routable features inside Home, never tabs.
-    public static let navigationTabs: [AppTab] = [.home, .explore, .library, .manga]
+    /// Retired destinations remain decodable for old backups and shortcuts.
+    public static let navigationTabs: [AppTab] = [.home, .explore, .library]
     public var belongsToHome: Bool { self == .schedule || self == .news }
     public var id: String { rawValue }
     public var title: String {
@@ -22,11 +22,14 @@ public struct AppTabPreferences: Equatable, Sendable {
     public static let storageKey = "navigation.tabs.v1"
     public var order: [AppTab]
     public private(set) var hidden: Set<AppTab>
-    public init(order: [AppTab] = AppTab.navigationTabs, hidden: Set<AppTab> = [.manga]) {
+    public init(order: [AppTab] = AppTab.navigationTabs, hidden: Set<AppTab> = []) {
         var seen = Set<AppTab>()
-        let upgraded = order.contains(.home) ? order : [.home] + order
-        self.order = (upgraded + AppTab.navigationTabs).filter { !$0.belongsToHome && seen.insert($0).inserted }
+        let movedReading = order.contains(.manga) && !hidden.contains(.manga)
+        let mapped = order.map { $0 == .manga ? AppTab.explore : $0 }
+        let upgraded = mapped.contains(.home) ? mapped : [.home] + mapped
+        self.order = (upgraded + AppTab.navigationTabs).filter { AppTab.navigationTabs.contains($0) && seen.insert($0).inserted }
         self.hidden = hidden.intersection(Set(AppTab.navigationTabs)).subtracting([.home])
+        if movedReading { self.hidden.remove(.explore) }
     }
     private struct Stored: Codable { let order: [String]; let hidden: [String] }
     public init(saved: String?) {
@@ -36,16 +39,19 @@ public struct AppTabPreferences: Equatable, Sendable {
         let hidden = Set(stored.hidden.compactMap(AppTab.init(rawValue:)))
         self.init(order: stored.order.compactMap(AppTab.init(rawValue:)), hidden: hidden)
     }
-    public var visible: [AppTab] { order.filter { !$0.belongsToHome && !hidden.contains($0) } }
+    public var visible: [AppTab] { order.filter { AppTab.navigationTabs.contains($0) && !hidden.contains($0) } }
     public var saved: String {
         let normalized = Self(order: order, hidden: hidden)
         let stored = Stored(order: normalized.order.map(\.rawValue), hidden: normalized.order.filter(normalized.hidden.contains).map(\.rawValue))
         return String(data: try! JSONEncoder().encode(stored), encoding: .utf8)!
     }
     public mutating func setVisible(_ tab: AppTab, _ shown: Bool) {
-        guard tab != .home, !tab.belongsToHome else { return }
+        guard tab != .home, AppTab.navigationTabs.contains(tab) else { return }
         if shown { hidden.remove(tab) }
         else if visible.count > 1 { hidden.insert(tab) }
     }
-    public func selection(for requested: AppTab) -> AppTab { visible.contains(requested) ? requested : .home }
+    public func selection(for requested: AppTab) -> AppTab {
+        let destination: AppTab = requested == .manga ? .explore : requested
+        return visible.contains(destination) ? destination : .home
+    }
 }

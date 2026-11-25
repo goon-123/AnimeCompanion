@@ -13,9 +13,7 @@ final class WebtoonReaderUITests: XCTestCase {
         let progress = app.staticTexts["manga-reading-progress"]
         XCTAssertTrue(progress.waitForExistence(timeout: 10))
         let savedProgress = progress.label
-        app.terminate(); app.launch(); app.appTab("Manga").tap()
-        let sections = app.segmentedControls["manga-hub-sections"]
-        XCTAssertTrue(sections.waitForExistence(timeout: 15)); sections.buttons["History"].tap()
+        app.terminate(); app.launch(); app.openReadingHistory()
         let clear = app.buttons["manga-clear-history"]
         XCTAssertTrue(clear.waitForExistence(timeout: 10)); XCTAssertTrue(clear.isEnabled)
         clear.tap()
@@ -31,10 +29,9 @@ final class WebtoonReaderUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No reading history yet"].waitForExistence(timeout: 10))
         XCTAssertFalse(clear.isEnabled)
         capture("Cleared-History", app)
-        app.terminate(); app.launch(); app.appTab("Manga").tap()
-        XCTAssertTrue(sections.waitForExistence(timeout: 15)); sections.buttons["History"].tap()
+        app.terminate(); app.launch(); app.openReadingHistory()
         XCTAssertTrue(app.staticTexts["No reading history yet"].waitForExistence(timeout: 10))
-        sections.buttons["Library"].tap()
+        app.openMangaCollection("saved")
         let saved = app.buttons["manga-saved-title-0"]
         XCTAssertTrue(saved.waitForExistence(timeout: 10)); saved.tap()
         XCTAssertTrue(progress.waitForExistence(timeout: 10)); XCTAssertEqual(progress.label, savedProgress)
@@ -119,7 +116,7 @@ final class WebtoonReaderUITests: XCTestCase {
         app.buttons["source-settings-cancel"].tap()
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
-        app.appTab("Manga").tap()
+        app.openMangaCollection("sources")
         XCTAssertTrue(source.waitForExistence(timeout: 15)); source.tap()
         openSourceSettings(app)
         XCTAssertTrue(app.buttons["source-setting-quality"].label.contains("High"))
@@ -149,7 +146,7 @@ final class WebtoonReaderUITests: XCTestCase {
         app.buttons["webtoon-close"].tap()
         XCTAssertTrue(app.staticTexts["manga-reading-progress"].waitForExistence(timeout: 10))
         app.terminate(); app.launch()
-        app.appTab("Manga").tap()
+        app.openMangaCollection("saved")
         let saved = app.buttons["manga-saved-title-0"]
         XCTAssertTrue(saved.waitForExistence(timeout: 15)); saved.tap()
         XCTAssertTrue(app.buttons["manga-read"].waitForExistence(timeout: 15)); app.buttons["manga-read"].tap()
@@ -208,7 +205,7 @@ final class WebtoonReaderUITests: XCTestCase {
         if chapterFailure { app.launchArguments.append("--ui-webtoon-chapter-runtime-error") }
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
-        app.appTab("Manga").tap()
+        app.openMangaCollection("sources")
         return app
     }
     @MainActor private func openFirstTitle(_ app: XCUIApplication) {

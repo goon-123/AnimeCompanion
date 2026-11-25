@@ -48,8 +48,9 @@ final class MangaBrowsingUITests: XCTestCase {
         XCTAssertTrue(result.waitForExistence(timeout: 15)); result.tap()
         XCTAssertTrue(app.buttons["manga-read"].waitForExistence(timeout: 10))
 
-        // A second shortcut must replace the retained manga detail stack.
-        app.appTab("Explore").tap()
+        // Return to the retained discovery root before choosing another anime.
+        app.openMangaExplore()
+        app.buttons["explore-media-switch"].tap()
         let explore = app.buttons["explore-shelf-entry-2"].firstMatch
         app.revealInContent(explore); explore.tap()
         openMangaShortcut(app, expected: "Phase 2 title 2")
@@ -62,7 +63,8 @@ final class MangaBrowsingUITests: XCTestCase {
         let iconID = "manga-icon-loaded-eu.kanade.tachiyomi.extension.en.webtoonpreview"
         XCTAssertTrue(app.images[iconID].firstMatch.waitForExistence(timeout: 15))
         capture("Source-Icon", app)
-        app.buttons["manga-manage-extensions"].tap()
+        app.buttons["local-reading-options"].tap()
+        app.buttons["Manage sources"].tap()
         let icon = app.images[iconID].firstMatch
         for _ in 0..<5 where !icon.isHittable { app.swipeUp() }
         XCTAssertTrue(icon.waitForExistence(timeout: 10))
@@ -75,7 +77,7 @@ final class MangaBrowsingUITests: XCTestCase {
         app.launchArguments = ["--ui-phase2-preview", "--ui-reset-content-preferences", "--ui-webtoon-preview", "--ui-webtoon-session", UUID().uuidString] + extra
         app.launch()
         XCTAssertTrue(app.buttons["explore-search"].waitForExistence(timeout: 15))
-        app.appTab("Manga").tap()
+        app.openMangaCollection("sources")
         XCTAssertTrue(app.buttons["manga-source-preview-en"].waitForExistence(timeout: 15))
         return app
     }

@@ -6,9 +6,9 @@ public enum ExploreSurface: String, CaseIterable, Sendable {
     public var catalog: [ExploreCatalogRow] {
         switch self {
         case .anime: return [.spotlight, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .upcoming]
-        case .discovery: return [.directory, .spotlight, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
-        case .grid: return [.directory, .posterWall, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime]
-        case .reading: return [.spotlight, .personal, .formats, .genres, .readingTrending, .rising, .gems, .popular, .topReading, .newReleases, .recentlyAdded]
+        case .discovery: return [.directory, .spotlight, .yourReading, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime, .novels, .manga, .personal, .gems, .upcoming]
+        case .grid: return [.directory, .posterWall, .yourReading, .trending, .topTen, .studios, .animeGenres, .seasonal, .previousSeason, .topAnime]
+        case .reading: return [.spotlight, .yourReading, .personal, .formats, .genres, .readingTrending, .rising, .gems, .popular, .topReading, .newReleases, .recentlyAdded]
         }
     }
     public var defaultRows: [ExploreRow] {
@@ -24,10 +24,11 @@ public enum ExploreCatalogRow: String, CaseIterable, Sendable {
     case spotlight, directory, trending, seasonal, previousSeason, topAnime, upcoming
     case novels, manga, personal, gems, posterWall, formats, genres
     case readingTrending, rising, popular, topReading, newReleases, recentlyAdded
-    case studios, animeGenres, topTen
+    case studios, animeGenres, topTen, yourReading
     public var title: String {
         switch self {
         case .spotlight: return "Spotlight"
+        case .yourReading: return "Your reading"
         case .directory: return "Browse by format"
         case .trending: return "Trending anime"
         case .topTen: return "Top 10 trending anime"
@@ -132,6 +133,14 @@ public struct ExplorePreferences: Equatable, Sendable {
         if addsRanking, let index = order.firstIndex(of: .catalog(.trending)) {
             order.insert(.catalog(.topTen), at: index + 1)
             seen.insert(.catalog(.topTen))
+        }
+        // Add the two reading shortcuts beneath the banner without resetting
+        // existing row order, hidden rows, card sizes or widget preferences.
+        if surface.catalog.contains(.yourReading), !seen.contains(.catalog(.yourReading)) {
+            let anchor: ExploreRow = surface == .grid ? .catalog(.posterWall) : .catalog(.spotlight)
+            let index = order.firstIndex(of: anchor).map { $0 + 1 } ?? 0
+            order.insert(.catalog(.yourReading), at: index)
+            seen.insert(.catalog(.yourReading))
         }
         order += surface.catalog.map(ExploreRow.catalog).filter { seen.insert($0).inserted }
         hidden = Set((value?.hidden ?? []).compactMap(ExploreRow.init(id:))).intersection(order)

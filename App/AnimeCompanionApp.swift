@@ -287,6 +287,7 @@ final class AppNavigationStore: ObservableObject {
     func open(_ tab: AppTab) {
         if tab == .schedule { openSchedule(); return }
         if tab == .news { openNews(); return }
+        if tab == .manga { openReading(); return }
         if tabPreferences.visible.contains(tab) { selectedTab = tab }
         else { supplementary = .init(kind: .tab(tab)) }
     }
@@ -315,7 +316,7 @@ final class AppNavigationStore: ObservableObject {
     let schedule = TabNavigationState()
     let library = TabNavigationState()
     let news = TabNavigationState()
-    let manga = TabNavigationState()
+    var manga: TabNavigationState { explore } // Compatibility for older reading routes.
 
     func openAccountLibrary(_ account: TrackingAccount) {
         UserDefaults.standard.set(account.rawValue, forKey: TrackingAccount.storageKey)
@@ -332,7 +333,7 @@ final class AppNavigationStore: ObservableObject {
     func applyLayoutPreference() {
         let value = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
         guard value != tabletLayout else { return }
-        for state in [home, explore, schedule, library, news, manga] {
+        for state in [home, explore, schedule, library, news] {
             state.path = NavigationPath(); state.detailPath = NavigationPath()
             state.animeID = nil; state.column = .sidebar; state.visibility = .all
         }
@@ -346,7 +347,7 @@ final class AppNavigationStore: ObservableObject {
         case .schedule: return schedule
         case .library: return library
         case .news: return news
-        case .manga: return manga
+        case .manga: return explore
         }
     }
 
@@ -369,22 +370,32 @@ final class AppNavigationStore: ObservableObject {
         openMangaSearch(titles: MangaSearchTitles.suggestions(for: anime))
     }
 
+    private func prepareReading() {
+        UserDefaults.standard.set("written", forKey: "app.mediaSection")
+        explore.path = NavigationPath(); explore.detailPath = NavigationPath()
+        explore.animeID = nil; explore.column = .sidebar; explore.visibility = .all
+    }
+    func openReading() {
+        prepareReading()
+        if tabPreferences.visible.contains(.explore) { supplementary = nil; selectedTab = .explore }
+        else { supplementary = .init(kind: .tab(.explore)) }
+    }
     func openMangaSearch(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
-        guard tabPreferences.visible.contains(.manga) else {
+        prepareReading()
+        guard tabPreferences.visible.contains(.explore) else {
             supplementary = .init(kind: .manga(titles, linkingTo: linkingTo)); return
         }
-        var path = NavigationPath()
-        path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
-        manga.path = path
-        selectedTab = .manga
+        supplementary = nil
+        explore.path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
+        selectedTab = .explore
     }
     func openLinkedManga(_ link: MangaSourceLink) {
-        guard tabPreferences.visible.contains(.manga) else {
+        prepareReading()
+        guard tabPreferences.visible.contains(.explore) else {
             supplementary = .init(kind: .linkedManga(link)); return
         }
-        var path = NavigationPath()
-        path.append(LinkedMangaRoute(link: link))
-        manga.path = path; selectedTab = .manga
+        supplementary = nil
+        explore.path.append(LinkedMangaRoute(link: link)); selectedTab = .explore
     }
 }
 
@@ -432,7 +443,7 @@ struct AppTabs: View {
     private var tabs: some View {
         navigationSurface.sheet(item: $navigation.supplementary) { destination in
             AppNavigationStack {
-                supplementary(destination.kind).animeNavigation().mangaBakaNavigation()
+                supplementary(destination.kind).animeNavigation().mangaBakaNavigation().mangaReadingNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
@@ -526,7 +537,7 @@ struct AppTabs: View {
             AnimeTabPane(state: navigation.explore, layout: paneLayout(tab)) { MediaExploreView() }
         case .library:
             AnimeTabPane(state: navigation.library, layout: paneLayout(tab)) { MediaLibraryView() }
-        case .manga: MangaTabPane(state: navigation.manga)
+        case .manga: AnimeTabPane(state: navigation.explore, layout: .fullWidth) { MediaExploreView() }
         case .schedule: AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
         case .news: AnimeTabPane(state: navigation.news, layout: .fullWidth) { NewsView().animeNavigation() }
         }
@@ -544,7 +555,7 @@ struct AppTabs: View {
             case .home: HomeView()
             case .explore: MediaExploreView()
             case .library: MediaLibraryView()
-            case .manga: MangaHubView()
+            case .manga: MangaHubView(destination: .saved)
             case .schedule: ScheduleView()
             case .news: NewsView()
             }
@@ -553,22 +564,6 @@ struct AppTabs: View {
 
 }
 
-private struct MangaTabPane: View {
-    @ObservedObject var state: TabNavigationState
-    var body: some View {
-        AppNavigationStack(path: $state.path) {
-            MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
-                MangaTitleSearchView(titles: route.titles, linkingTo: route.linkingTo).id(route.id)
-            }
-            .navigationDestination(for: LinkedMangaRoute.self) { route in
-                MangaTitleDetailView(title: route.link.title, linkingTo: route.link.library, resumeOnOpen: true).id(route.id)
-            }
-        }
-    }
-}
-
-/// The chosen topology stays stable through rotation. Full-width navigation is
-/// the default; iPad users can opt into a native, resizable split presentation.
 private struct AnimeTabPane<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ObservedObject var state: TabNavigationState
