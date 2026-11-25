@@ -19,6 +19,8 @@ final class WebtoonReaderModel: ObservableObject {
     private var confirmed: MangaReadingPosition?
     private var reading: MangaReadingStore?
     private var generation = UUID()
+    var onCompleted: ((MangaTitleReference, SourceMangaChapter) -> Void)?
+    private var completedReports = Set<String>()
     private var saveTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var prefetched: (url: String, pages: [SourceMangaImage])?
@@ -55,6 +57,7 @@ final class WebtoonReaderModel: ObservableObject {
         let point = MangaReadingPosition(chapterURL: chapter.url, chapterName: chapter.name, pageIndex: page,
             pageCount: pages.count, fraction: fraction, completed: complete)
         confirmed = point
+        if complete && completedReports.insert(chapter.url).inserted { onCompleted?(title, chapter) }
         guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
             // Keep disk writes and library publications out of the scroll hot
@@ -131,9 +134,13 @@ private enum WebtoonReaderError: LocalizedError {
 struct WebtoonReaderView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @EnvironmentObject private var reading: MangaReadingStore
+    @EnvironmentObject private var account: MangaBakaStore
+    @EnvironmentObject private var links: MangaSourceLinkStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scene
     @StateObject private var model: WebtoonReaderModel
+    @StateObject private var progressSync = MangaProgressSyncModel()
+    @State private var progressSettings = false
     @State private var preferences = WebtoonPreferences()
     @State private var loadedPreferences = false
     @State private var scrubbing = false
@@ -185,10 +192,16 @@ struct WebtoonReaderView: View {
             }
         }.preferredColorScheme(.dark).tint(MangaStyle.accent).statusBarHidden(!model.controls && !model.pages.isEmpty)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: model.controls)
-            .backSwipe(enabled: !closing && !settings && !chapters && !website && !pageJump && !restarting) { Task { await close() } }
+            .backSwipe(enabled: !closing && !settings && !chapters && !website && !pageJump && !restarting && !progressSettings) { Task { await close() } }
             .persistentSystemOverlays(model.controls ? .visible : .hidden)
             .task(id: model.chapter.url) {
                 await reading.load()
+                await links.load()
+                let tracker = progressSync, accountStore = account, linkStore = links
+                model.onCompleted = { title, chapter in
+                    guard UIApplication.shared.applicationState == .active else { return }
+                    tracker.completed(title: title, chapter: chapter, account: accountStore, links: linkStore)
+                }
                 if !loadedPreferences { preferences = reading.state.preferences; loadedPreferences = true }
                 await model.load(extensions: extensions, reading: reading)
             }
@@ -212,7 +225,7 @@ struct WebtoonReaderView: View {
                 model.autoScroll = false; model.cancelPrefetch()
                 Task { await model.flush(); await reading.preferences(preferences) }
             }
-            .onChange(of: settings || chapters || website || pageJump || restarting) { _, presented in
+            .onChange(of: settings || chapters || website || pageJump || restarting || progressSettings) { _, presented in
                 if presented { model.autoScroll = false; holdScrolling = false; scrubbing = false }
             }
             .alert("Go to page", isPresented: $pageJump) {
@@ -228,6 +241,10 @@ struct WebtoonReaderView: View {
             .sheet(isPresented: $settings, onDismiss: { Task { await reading.preferences(preferences) } }) {
                 WebtoonSettingsView(preferences: $preferences, autoScroll: $model.autoScroll)
                     .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $progressSettings) {
+                if let activeProgressLink { MangaProgressSettingsView(link: activeProgressLink, chapters: model.chapters).id(MangaProgressPolicy.consentKey(for: activeProgressLink)) }
+                else { Text("Link this source to your MangaBaka library to update progress.").padding() }
             }
             .sheet(isPresented: $chapters) { chapterPicker }
             .sheet(isPresented: $website) {
@@ -289,13 +306,25 @@ struct WebtoonReaderView: View {
             if let message = reading.error {
                 Text(message).font(.caption).padding(12).readerControlSurface(in: Capsule()).padding(.top, 8)
             }
+            if let message = progressSync.message {
+                HStack {
+                    Text(message).font(.caption)
+                    if progressSync.failed { Button("Retry") { progressSync.retry(account: account, links: links) }.font(.caption.bold()) }
+                }.padding(12).readerControlSurface(in: Capsule()).padding(.horizontal, 16).padding(.top, 8)
+            }
             Spacer()
             if !model.pages.isEmpty {
                 readingPanel.padding(.horizontal, 16).padding(.bottom, 12)
             }
         }.foregroundStyle(.white).environment(\.colorScheme, .dark)
     }
-    private var readerInteractionAllowed: Bool { !settings && !chapters && !website && !pageJump && !restarting && !closing && scene == .active }
+    private var activeProgressLink: MangaSourceLink? {
+        let all = Array(links.state.links.values)
+        let enabled = Set(all.filter { UserDefaults.standard.bool(forKey: MangaProgressPolicy.consentKey(for: $0)) }.map(MangaProgressPolicy.consentKey))
+        return MangaProgressPolicy.automaticLink(for: model.title.id, accountID: account.profile?.id, links: all, enabledKeys: enabled)
+            ?? MangaProgressPolicy.link(for: model.title.id, accountID: account.profile?.id, links: all)
+    }
+    private var readerInteractionAllowed: Bool { !settings && !chapters && !website && !pageJump && !restarting && !progressSettings && !closing && scene == .active }
     private var readingPanel: some View {
         VStack(spacing: 8) {
             HStack(spacing: 14) {
@@ -337,12 +366,18 @@ struct WebtoonReaderView: View {
                 Task {
                     await model.flush()
                     await reading.mark(model.title, chapter: chapter, read: true)
+                    if reading.record(model.title.id)?.position(for: chapter.url)?.completed == true {
+                        progressSync.completed(title: model.title, chapter: chapter, account: account, links: links)
+                    }
                     if model.chapter.url == chapter.url, reading.record(model.title.id)?.position(for: chapter.url)?.completed == true, model.hasNext {
                         await model.move(1)
                     }
                     finishingChapter = false
                 }
             }.disabled(finishingChapter || reading.loading || reading.unreadable)
+            if activeProgressLink != nil {
+                Button("MangaBaka progress", systemImage: "checkmark.circle") { progressSettings = true }
+            }
             Button("Open source website", systemImage: "globe") { website = true }
             if let url = model.title.source.webURL(for: model.chapter.url) {
                 ShareLink(item: url) { Label("Share chapter", systemImage: "square.and.arrow.up") }

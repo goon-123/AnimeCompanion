@@ -64,8 +64,10 @@ struct MangaSourceLinkControl: View {
     @EnvironmentObject private var reading: MangaReadingStore
     let title: MangaTitleReference
     let requestedTarget: MangaSourceLinkTarget?
+    var chapters: [SourceMangaChapter] = []
     @State private var chosen: MangaSourceLinkTarget?
     @State private var choosing = false
+    @State private var progressSettings = false
     @State private var saving = false
     @State private var removing: MangaSourceLinkTarget?
     private var target: MangaSourceLinkTarget? {
@@ -81,6 +83,8 @@ struct MangaSourceLinkControl: View {
                 Text(target.title).font(.subheadline.bold()).lineLimit(2)
                 if current?.title.id == title.id {
                     Label("Linked to this library entry", systemImage: "link").font(.subheadline).foregroundStyle(.mint)
+                    Button("MangaBaka progress", systemImage: "checkmark.circle") { progressSettings = true }
+                        .font(.subheadline).accessibilityIdentifier("manga-linked-progress")
                     Button("Remove link", role: .destructive) { removing = target }.font(.caption).disabled(saving || links.unreadable)
                         .accessibilityIdentifier("manga-source-remove-library-link")
                 } else {
@@ -114,6 +118,11 @@ struct MangaSourceLinkControl: View {
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Your saved series and reading progress are kept.") }
             .task { await links.load() }
+            .sheet(isPresented: $progressSettings) {
+                if let target, let link = links.link(for: target), link.title.id == title.id {
+                    MangaProgressSettingsView(link: link, chapters: chapters).id(MangaProgressPolicy.consentKey(for: link))
+                } else { Text("This source link changed. Reopen progress from your linked series.").padding() }
+            }
             .sheet(isPresented: $choosing) {
                 AppNavigationStack { MangaLibrarySourcePicker(title: title) { chosen = $0 } }
             }
