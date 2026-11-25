@@ -233,7 +233,7 @@ struct UnifiedExploreView: View {
                 Menu {
                     Button("Home", systemImage: "house") { navigation.open(.home) }
                     Button("Release calendar", systemImage: "calendar") { navigation.open(.schedule) }
-                    Button("Reading sources", systemImage: "book") { navigation.open(.manga) }
+                    NavigationLink(value: MangaReadingDestination.sources) { Label("Reading sources", systemImage: "book") }
                     Button("News", systemImage: "newspaper") { navigation.open(.news) }
                     Divider()
                     NavigationLink("Content preferences") { MangaBakaContentSettingsView().toolbar(.visible, for: .navigationBar) }
