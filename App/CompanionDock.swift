@@ -179,7 +179,7 @@ private struct CompanionTabEnvironment: Equatable {
     let interactionReady: Bool
     let theme: String
     init(_ environment: EnvironmentValues) {
-        theme = UserDefaults.standard.string(forKey: AppThemePreferences.storageKey) ?? ""
+        theme = ThemeSelection.shared.preferences.saved
         scheme = environment.colorScheme; typeSize = environment.dynamicTypeSize
         horizontal = environment.horizontalSizeClass; vertical = environment.verticalSizeClass
         scale = environment.displayScale; direction = environment.layoutDirection

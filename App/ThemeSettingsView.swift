@@ -71,7 +71,7 @@ struct ThemeSettingsControls: View {
             }, set: { color in
                 var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
                 guard UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return }
-                let hex = String(format: "%02X%02X%02X", Int((red * 255).rounded()), Int((green * 255).rounded()), Int((blue * 255).rounded()))
+                let hex = String(format: "%02X%02X%02X", Int((min(1, max(0, red)) * 255).rounded()), Int((min(1, max(0, green)) * 255).rounded()), Int((min(1, max(0, blue)) * 255).rounded()))
                 update { $0.customAccent = hex }
             }), supportsOpacity: false).accessibilityIdentifier("theme-custom-accent")
             Picker("Background & cards", selection: Binding(get: { preferences.canvas }, set: { canvas in update { $0.canvas = canvas } })) {
