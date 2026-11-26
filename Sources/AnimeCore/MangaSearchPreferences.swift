@@ -1,5 +1,6 @@
 import Foundation
 
+/// Legacy five-source selections remain readable for backup compatibility; bulk search uses MangaBulkSearch.
 public struct MangaSearchPreferences: Equatable, Sendable {
     public static let storageKey = "manga.search.sources.v1"
     public static let limit = 5

@@ -87,7 +87,7 @@ struct UnifiedExploreSearchView: View {
                 }
                 if key.text.isEmpty {
                     ContentUnavailableView(scope == .sources ? "Search your sources" : "Find your next story", systemImage: "magnifyingglass",
-                        description: Text(scope == .sources ? "Enter a title to search the installed sources you chose." : "One search for anime, manga, manhwa, light novels and more. No account needed."))
+                        description: Text(scope == .sources ? "Enter a title to search all enabled sources, or turn on Only pinned sources." : "One search for anime, manga, manhwa, light novels and more. No account needed."))
                 } else {
                     if scope != .sources {
                         Text("Catalog matches").font(.headline)
