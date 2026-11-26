@@ -94,7 +94,7 @@ struct MediaExploreView: View {
             .background(Theme.background.ignoresSafeArea())
             .safeAreaInset(edge: .top, spacing: 0) {
             if design == .classic { classicHeader }
-        }.mangaBakaNavigation()
+        }.mangaBakaNavigation().mangaReadingNavigation()
             .task(id: "\(design.rawValue)-\(preferences.mangaBakaContent.saved)", priority: .utility) {
                 guard design == .classic else { return }
                 do { try await Task.sleep(for: .milliseconds(700)) } catch { return }
@@ -120,13 +120,18 @@ struct MediaExploreView: View {
             Spacer()
             Button(action: switchMedia) {
                 Image(systemName: mode == "anime" ? "book.closed" : "play.rectangle")
-                    .font(.headline).frame(width: 44, height: 44).floatingHeaderGlass(in: Circle())
+                    .font(.headline).frame(width: 44, height: 44)
+                    .background { Color.clear.floatingHeaderGlass(in: Circle()).allowsHitTesting(false) }
                     .contentShape(.interaction, Rectangle())
             }.buttonStyle(.plain)
                 .accessibilityLabel(mode == "anime" ? "Switch to Manga & Novels" : "Switch to Anime")
                 .accessibilityValue(mode == "anime" ? "Anime" : "Manga & Novels")
                 .accessibilityIdentifier("explore-media-switch")
             Menu {
+                if mode == "written" {
+                    NavigationLink(value: MangaReadingDestination.sources) { Label("Installed sources", systemImage: "square.stack.3d.up") }
+                    NavigationLink(value: MangaReadingDestination.saved) { Label("Saved series", systemImage: "books.vertical") }
+                }
                 NavigationLink(value: ExploreSearchRoute()) { Label("Search", systemImage: "magnifyingglass") }
                     .accessibilityIdentifier("explore-search")
                 Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
@@ -407,6 +412,7 @@ private struct MangaBakaExploreContent: View {
     }
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
         switch row {
+        case .yourReading: MangaReadingTiles().padding(.horizontal, 20)
         case .spotlight:
             VStack(spacing: 0) {
                 if let featured = (model.items[.trending] ?? []).first(where: { $0.isVisible(contentFilter: preferences.mangaBakaContent) }) {

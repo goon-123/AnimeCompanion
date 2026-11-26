@@ -98,7 +98,7 @@ final class ExperiencePreferencesTests: XCTestCase {
     }
     func testPreviouslyHiddenHomeAndAllTabsVisibleUpgradeToOneHub() {
         let legacy = AppTabPreferences(saved: #"{"order":["explore","schedule","news","home","library","manga"],"hidden":["home"]}"#)
-        XCTAssertEqual(legacy.visible, [.explore, .home, .library, .manga])
+        XCTAssertEqual(legacy.visible, [.explore, .home, .library])
         XCTAssertFalse(legacy.saved.contains("schedule")); XCTAssertFalse(legacy.saved.contains("news"))
         let upgraded = HomePreferences(saved: #"{"order":["watching","reading","weekly","airing","shortcuts"],"hidden":["reading","weekly"]}"#)
         XCTAssertEqual(Array(upgraded.order.prefix(12)), [.greeting, .search, .featureLinks, .welcome, .syncStatus, .watching, .reading, .weekly, .news, .community, .airing, .shortcuts])

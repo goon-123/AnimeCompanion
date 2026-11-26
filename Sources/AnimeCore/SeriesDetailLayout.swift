@@ -14,7 +14,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .anime: return "Show or hide header sections and arrange More Info. Episodes and recommendations have their own tabs."
         case .manga: return "Drag the handles to arrange all manga and novel series pages."
-        case .reader: return "Drag the handles to arrange all reading-source detail pages."
+        case .reader: return "Reading controls and Link to My Library stay at the top. Arrange the remaining reading-source details below them."
         }
     }
     public var sections: [SeriesDetailSection] {
@@ -26,7 +26,7 @@ public enum SeriesDetailPage: String, CaseIterable, Hashable, Sendable {
             return [.watchlist, .reading, .synopsis, .publication, .tags, .adaptations,
                     .coverage, .related, .artwork, .links]
         case .reader:
-            return [.reading, .synopsis, .chapters, .genres, .sourceLink]
+            return [.synopsis, .genres, .chapters]
         }
     }
 }

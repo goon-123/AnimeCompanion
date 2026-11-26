@@ -6,12 +6,10 @@ struct MangaHubView: View {
     @EnvironmentObject private var reading: MangaReadingStore
     @EnvironmentObject private var contentPreferences: AppStore
     private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
-    @State private var section = "Library"
+    var destination: MangaReadingDestination = .saved
     @State private var query = ""
-    @State private var language = "en"
+    @State private var language = ""
     @State private var manage = false
-    @State private var appSettings = false
-    @State private var choseInitialSection = false
     @State private var confirmClearHistory = false
     @State private var clearingHistory = false
     private var sources: [MangaSourceReference] {
@@ -31,30 +29,23 @@ struct MangaHubView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Manga area", selection: $section) {
-                ForEach(["Library", "Sources", "History"], id: \.self) { Text($0) }
-            }.pickerStyle(.segmented).padding(.horizontal, 18).padding(.vertical, 12)
-                .accessibilityIdentifier("manga-hub-sections")
             if reading.loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if section == "Sources" { sourceList }
-            else if section == "History" { historyList }
+            else if destination == .sources { sourceList }
+            else if destination == .history { historyList }
             else { library }
-        }.background(Theme.background).navigationTitle("Manga").tint(MangaStyle.accent)
-            .searchable(text: $query, prompt: section == "Sources" ? "Find a source" : "Find a title")
+        }.background(Theme.background).navigationTitle(destination.title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar).tint(MangaStyle.accent)
+            .searchable(text: $query, prompt: destination == .sources ? "Find a source" : "Find a title")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: MangaSearchRoute(titles: [])) { Image(systemName: "magnifyingglass") }
-                        .accessibilityLabel("Search manga in installed sources").accessibilityIdentifier("manga-search-sources")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { manage = true } label: { Image(systemName: "puzzlepiece.extension") }
-                        .accessibilityLabel("Manage manga extensions").accessibilityIdentifier("manga-manage-extensions")
+                    Menu {
+                        NavigationLink(value: MangaSearchRoute(titles: [])) { Label("Search installed sources", systemImage: "magnifyingglass") }
+                        NavigationLink(value: MangaReadingDestination.sources) { Label("Installed sources", systemImage: "square.stack.3d.up") }
+                        NavigationLink(value: MangaReadingDestination.history) { Label("Reading history", systemImage: "clock") }
+                        Button("Manage sources", systemImage: "puzzlepiece.extension") { manage = true }
+                    } label: { Image(systemName: "ellipsis") }
+                        .accessibilityLabel("Reading options").accessibilityIdentifier("local-reading-options")
                 }
             }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) {
-                Button { appSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Account and settings")
-            } }
-            .appSettingsSheet(isPresented: $appSettings)
             .sheet(isPresented: $manage) { MangaExtensionSheet() }
             .confirmationDialog("Clear manga history?", isPresented: $confirmClearHistory, titleVisibility: .visible) {
                 Button("Clear history", role: .destructive) {
@@ -67,13 +58,8 @@ struct MangaHubView: View {
             }
             .task {
                 await reading.load()
-                if !choseInitialSection {
-                    choseInitialSection = true
-                    if reading.state.records.isEmpty { section = "Sources" }
-                }
-                await extensions.load()
+                await extensions.load(refreshCatalog: false)
             }
-            .onChange(of: section) { _, _ in query = "" }
             .alert("Manga", isPresented: Binding(get: { reading.error != nil }, set: { if !$0 { reading.error = nil } })) {
                 Button("OK") { reading.error = nil }
             } message: { Text(reading.error ?? "") }
@@ -81,7 +67,7 @@ struct MangaHubView: View {
     private var library: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                pageHeading("Your next chapter", subtitle: "Keep the stories you love close.")
+                pageHeading("Your next chapter", subtitle: "Saved from your sources, with your reading progress.")
                 if !history.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         sectionHeading("Continue reading", count: min(history.count, 8))
@@ -101,7 +87,7 @@ struct MangaHubView: View {
                     ContentUnavailableView {
                         Label(query.isEmpty ? "Your next story belongs here" : "No matching titles", systemImage: "books.vertical")
                     } description: { Text("Save titles from a source to keep their covers and reading progress together.") }
-                    actions: { Button("Browse sources") { section = "Sources" }.buttonStyle(.borderedProminent) }
+                    actions: { NavigationLink("Browse sources", value: MangaReadingDestination.sources).buttonStyle(.borderedProminent) }
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 12)], spacing: 12) {
                         ForEach(Array(saved.enumerated()), id: \.element.id) { index, entry in
@@ -230,7 +216,7 @@ struct MangaHubView: View {
                 if !others.isEmpty { sourceGroup("All sources", items: others) }
             }
             Button { manage = true } label: {
-                Label("Manage extensions", systemImage: "puzzlepiece.extension")
+                Label("Manage sources", systemImage: "puzzlepiece.extension")
                     .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(14)
             }.buttonStyle(.bordered).clipShape(RoundedRectangle(cornerRadius: 14))
           }.padding(18).frame(maxWidth: 1100).frame(maxWidth: .infinity)
