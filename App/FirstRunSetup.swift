@@ -84,7 +84,7 @@ struct FirstRunSetupView: View {
                     }.fixedSize(horizontal: false, vertical: true)
                     pageContent
                 }.padding(24).frame(maxWidth: 660, alignment: .leading).frame(maxWidth: .infinity)
-            }.background(Theme.background.ignoresSafeArea()).scrollDismissesKeyboard(.interactively)
+            }.id(stage).background(Theme.background.ignoresSafeArea()).scrollDismissesKeyboard(.interactively)
                 .safeAreaInset(edge: .bottom, spacing: 0) { footer }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
