@@ -144,9 +144,10 @@ struct FirstRunSetupView: View {
                     }.pickerStyle(.segmented)
                 }.companionPanel(padding: 18)
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Show adult titles (18+)", isOn: $store.includeAdult)
-                        .accessibilityIdentifier("setup-explicit-content")
-                    Text("Off by default. Your online lists are kept; this controls what appears while browsing.")
+                    NavigationLink { ContentPreferencesView() } label: {
+                        Label("Content preferences", systemImage: "eye")
+                    }.accessibilityIdentifier("setup-explicit-content")
+                    Text("Choose anime, manga and novel content in one place. You can change it later in Settings.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.companionPanel(padding: 18)
                 VStack(alignment: .leading, spacing: 12) {

@@ -5,7 +5,8 @@ import AnimeCore
 /// must not silently fan a title out to hundreds of websites.
 struct MangaTitleSearchView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     let titles: [String]
     let linkingTo: MangaSourceLinkTarget?
     @State private var query: String

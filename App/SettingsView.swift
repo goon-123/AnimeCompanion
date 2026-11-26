@@ -69,7 +69,7 @@ struct SettingsDirectoryView: View {
                     }.accessibilityIdentifier("settings-community")
                 }
                 if matches("Content browsing explicit adult ratings filters privacy") {
-                    NavigationLink { BrowsingSettingsView() } label: {
+                    NavigationLink { ContentPreferencesView() } label: {
                         SettingsCategoryLabel(title: "Content preferences", detail: "Ratings, explicit content & filtering", symbol: "line.3.horizontal.decrease.circle", tint: .orange)
                     }.accessibilityIdentifier("settings-browsing")
                 }
@@ -212,23 +212,6 @@ struct AniListSettingsView: View {
             .confirmationDialog("Disconnect from AniList?", isPresented: $confirmation) {
                 Button("Disconnect", role: .destructive) { store.disconnect() }
             } message: { Text("Your lists stay on AniList. This removes the connection from this device.") }
-    }
-}
-
-private struct BrowsingSettingsView: View {
-    @EnvironmentObject private var store: AppStore
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Show adult content (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
-            } header: { Text("AniList & video sources") } footer: {
-                Text("Applies to anime browsing, libraries, schedules and known adult video providers. Hidden entries stay in your online lists.")
-            }
-            MangaBakaRatingSection(filter: $store.mangaBakaContent)
-            Section {
-                NavigationLink("More MangaBaka content options") { MangaBakaContentSettingsView() }
-            }
-        }.navigationTitle("Browsing & content").navigationBarTitleDisplayMode(.inline)
     }
 }
 

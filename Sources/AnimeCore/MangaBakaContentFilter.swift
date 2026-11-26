@@ -5,6 +5,9 @@ public struct MangaBakaContentFilter: Hashable, Sendable {
     public static let storageKey = "mangabaka.contentFilter.v1"
     public var ratings: Set<MangaBakaContentRating>
     public var includeUnrated: Bool
+    /// Extension repositories usually expose a single mature flag rather than
+    /// MangaBaka's individual ratings. Use the same saved rating selection.
+    public var allowsMatureSources: Bool { ratings.contains(where: \.isMature) }
 
     public init(ratings: Set<MangaBakaContentRating> = [.safe, .suggestive], includeUnrated: Bool = false) {
         self.ratings = ratings; self.includeUnrated = includeUnrated

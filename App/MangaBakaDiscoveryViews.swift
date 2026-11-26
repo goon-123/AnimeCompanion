@@ -55,15 +55,9 @@ struct MangaBakaTaxonomyView: View {
     private var ratings: some View {
         Section {
             NavigationLink { MangaBakaContentSettingsView() } label: {
-                LabeledContent("Content settings", value: preferences.mangaBakaContent.summary)
+                LabeledContent("Content preferences", value: preferences.mangaBakaContent.summary)
             }
-            ForEach(MangaBakaContentRating.allCases, id: \.self) { rating in
-                NavigationLink(value: MangaBakaBrowseRoute(query: .init(contentRatings: [rating]))) {
-                    Label(rating.label, systemImage: rating.isMature ? "eye" : "books.vertical")
-                }.disabled(!preferences.mangaBakaContent.ratings.contains(rating))
-            }
-        } header: { Text("Content ratings") }
-        footer: { Text("Content ratings and genres are separate filters. Choose which ratings to enable in Content settings.") }
+        } header: { Text("Content") }
     }
     @ViewBuilder private func genreRow(_ genre: MangaBakaGenre) -> some View {
         if selecting {
@@ -120,22 +114,21 @@ struct MangaBakaFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding private var query: MangaBakaQuery
     @State private var draft: MangaBakaQuery
-    init(query: Binding<MangaBakaQuery>) { _query = query; _draft = State(initialValue: query.wrappedValue) }
+    init(query: Binding<MangaBakaQuery>) {
+        _query = query
+        var value = query.wrappedValue
+        value.contentRatings = []
+        _draft = State(initialValue: value)
+    }
     var body: some View {
         AppNavigationStack {
             Form {
                 Section {
                     NavigationLink { MangaBakaContentSettingsView() } label: {
-                        LabeledContent("Enabled in the app", value: preferences.mangaBakaContent.summary)
-                    }
-                    ForEach(MangaBakaContentRating.allCases, id: \.self) { rating in
-                        Toggle(rating.label, isOn: Binding(get: { draft.contentRatings.contains(rating) }, set: { selected in
-                            if selected { draft.contentRatings.insert(rating) } else { draft.contentRatings.remove(rating) }
-                            regularQuery()
-                        })).disabled(!preferences.mangaBakaContent.ratings.contains(rating))
+                        LabeledContent("Content preferences", value: preferences.mangaBakaContent.summary)
                     }
                 } header: { Text("Content ratings") }
-                footer: { Text("These filters narrow this search. With none selected, results use your enabled app ratings. Change Enabled in the app to make another rating available.") }
+                footer: { Text("Results use your saved content preferences. No second rating selection is needed.") }
                 Section("Genres & tags") {
                     NavigationLink { MangaBakaTaxonomyView(selection: $draft) } label: {
                         Label("Browse all genres & tags", systemImage: "tag")
