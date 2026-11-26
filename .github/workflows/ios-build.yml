@@ -409,6 +409,7 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_ci_cache_mtimes.py'
       - name: Check release privacy guards and source credentials
         run: |
+          python3 scripts/check-launch-artwork.py
           python3 scripts/test-release-privacy.py
           python3 scripts/check-release-privacy.py --source .
       - name: Verify current Keiyoushi repository and package checksums

@@ -2,7 +2,7 @@
 
 # AniNext
 
-<img src="App/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="112" alt="AniNext page-turn app icon">
+<img src="docs/assets/aninext-icon.png" width="112" alt="AniNext page-turn app icon">
 
 ### Your next anime. Your entire manga shelf.
 
@@ -79,7 +79,9 @@ The selected player must be installed separately. The included Safari → VidHub
 
 1. **Install a build.** Download the unsigned IPA artifact from a successful [GitHub Actions build](https://github.com/goon-123/AnimeCompanion/actions/workflows/ios-build.yml), then sign and install it using your preferred method. Supports iOS/iPadOS 17 or later; the optional Safari extension requires 18 or later.
 2. **Make it yours.** Follow the setup guide, connect AniList and/or MangaBaka, and choose your player. Public catalog browsing is available without signing in.
-3. **Bring your sources.** Add your AIOStreams/Stremio install link and configure any compatible extensions or TorBox connection you want to use.
+3. **Set up watching.** Configure AIOStreams/Stremio, or enable a Seanime torrent extension **and** connect TorBox. Install and select VidHub, Infuse or Outplayer for either route.
+4. **Set up reading.** Add Keiyoushi, then install and enable a manga source.
+5. **Choose your colors.** Change accents, backgrounds and light/dark mode in Settings → Appearance & layout. Reopen the guided checklist anytime through Settings → Setup Guide.
 
 AniNext is a client for your configured services and sources. It does not include a streaming subscription or host anime or manga content.
 

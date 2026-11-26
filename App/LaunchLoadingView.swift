@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// Match the system launch screen, then let the session's existing two-second
-/// launch budget and reduce-motion-aware content reveal own the transition.
+/// The system storyboard and this overlay use the same fixed artwork, size,
+/// center and background. No live text or appearance tint changes at handoff.
 struct LaunchLoadingView: View {
     var body: some View {
         ZStack {
             AniNextBrand.background
-            VStack(spacing: 4) {
-                Image("CinematicLaunch").resizable().scaledToFit().frame(width: 232, height: 232)
-                    .accessibilityHidden(true)
-                AniNextWordmark()
-            }
+            Image("CinematicLaunch")
+                .renderingMode(.original)
+                .resizable().scaledToFit()
+                .frame(width: 232, height: 280)
+                .accessibilityHidden(true)
         }.ignoresSafeArea()
             .accessibilityElement(children: .ignore).accessibilityLabel("Loading AniNext")
             .accessibilityIdentifier("app-startup-logo")
