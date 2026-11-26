@@ -125,7 +125,7 @@ struct MangaTitleDetailView: View {
                     header
                     VStack(alignment: .leading, spacing: 14) {
                         readingAction
-                        MangaSourceLinkControl(title: current, requestedTarget: linkingTo)
+                        MangaSourceLinkControl(title: current, requestedTarget: linkingTo, chapters: model.chapters)
                     }.padding(.horizontal, 20).accessibilityIdentifier("manga-primary-actions")
                     if visibleSections.isEmpty {
                         Text("Details are hidden. Use Arrange sections in the options menu to show more.")

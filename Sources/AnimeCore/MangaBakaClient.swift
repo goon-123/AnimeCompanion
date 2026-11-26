@@ -275,6 +275,12 @@ public actor MangaBakaClient {
         let bytes = try await request(api("/v1/my/library/\(id)"), method: existing ? "PUT" : "POST", body: JSONEncoder().encode(update), credential: credential)
         guard bytes.isEmpty || (try? decode(MBEnvelope<Bool>.self, bytes).data) == true else { throw MangaBakaError.invalidResponse }
     }
+    public func updateChapterProgress(id: Int, chapter: Double, credential: MangaBakaCredential, isAllowed: (@Sendable () async -> Bool)? = nil) async throws {
+        guard id > 0 else { throw MangaBakaError.invalidResponse }
+        let update = try MangaBakaProgressUpdate(chapter: chapter)
+        let bytes = try await request(api("/v1/my/library/\(id)"), method: "PATCH", body: JSONEncoder().encode(update), credential: credential, isAllowed: isAllowed)
+        guard bytes.isEmpty || (try? decode(MBEnvelope<Bool>.self, bytes).data) == true else { throw MangaBakaError.invalidResponse }
+    }
     public func remove(id: Int, credential: MangaBakaCredential) async throws {
         guard id > 0 else { throw MangaBakaError.invalidResponse }
         let bytes = try await request(api("/v1/my/library/\(id)"), method: "DELETE", credential: credential)
@@ -326,7 +332,7 @@ public actor MangaBakaClient {
             try? persistence.write(data, to: file, options: .atomic)
         }
     }
-    private func request(_ url: URL, method: String = "GET", body: Data? = nil, form: Bool = false, credential: MangaBakaCredential? = nil) async throws -> Data {
+    private func request(_ url: URL, method: String = "GET", body: Data? = nil, form: Bool = false, credential: MangaBakaCredential? = nil, isAllowed: (@Sendable () async -> Bool)? = nil) async throws -> Data {
         let now = Date()
         if blockedUntil > now { throw MangaBakaError.rateLimited(max(1, Int(ceil(blockedUntil.timeIntervalSince(now))))) }
         let searching = url.path.hasSuffix("/series/search")
@@ -338,6 +344,7 @@ public actor MangaBakaClient {
         if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
         try Task.checkCancellation()
         if blockedUntil > Date() { throw MangaBakaError.rateLimited(max(1, Int(ceil(blockedUntil.timeIntervalSinceNow)))) }
+        if let isAllowed { guard await isAllowed() else { throw CancellationError() }; try Task.checkCancellation() }
         var r = URLRequest(url: url); r.httpMethod = method; r.httpBody = body; r.timeoutInterval = 20
         r.setValue("application/json", forHTTPHeaderField: "Accept")
         r.setValue("AnimeCompanion/0.25 (https://github.com/goon-123/AnimeCompanion)", forHTTPHeaderField: "User-Agent")

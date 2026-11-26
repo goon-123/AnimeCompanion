@@ -42,9 +42,7 @@ final class MangaBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         field.typeText("The Glass Harbor\n")
         XCTAssertEqual(field.value as? String, "The Glass Harbor")
-        let source = app.buttons["manga-search-source-preview-en"]
-        XCTAssertTrue(source.waitForExistence(timeout: 10)); source.tap()
-        let result = app.buttons["manga-title-0"]
+        let result = app.buttons["unified-source-title-preview-en-/series/0"]
         XCTAssertTrue(result.waitForExistence(timeout: 15)); result.tap()
         XCTAssertTrue(app.buttons["manga-read"].waitForExistence(timeout: 10))
 
@@ -56,6 +54,24 @@ final class MangaBrowsingUITests: XCTestCase {
         openMangaShortcut(app, expected: "Phase 2 title 2")
         XCTAssertFalse(app.buttons["manga-read"].exists)
         capture("Anime-To-Manga-Search", app)
+    }
+    @MainActor
+    func testUnifiedSearchShowsSourceGroupsAndOpensTheNativeSeries() {
+        let app = launch()
+        app.openMangaExplore()
+        app.buttons["explore-search"].tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("Glass\n")
+        app.buttons["search-scope-sources"].tap()
+        let pinned = app.switches["manga-search-pinned-only"]
+        XCTAssertTrue(pinned.waitForExistence(timeout: 10))
+        if pinned.value as? String == "1" { pinned.tap() }
+        XCTAssertTrue(app.buttons["manga-search-source-preview-en"].waitForExistence(timeout: 10))
+        let result = app.buttons["unified-source-title-preview-en-/series/0"]
+        XCTAssertTrue(result.waitForExistence(timeout: 15))
+        capture("Bulk-Source-Search", app)
+        result.tap()
+        XCTAssertTrue(app.buttons["manga-read"].waitForExistence(timeout: 10))
     }
     @MainActor
     func testRepositoryIconsAppearInSourcesAndExtensionInstallRows() {
