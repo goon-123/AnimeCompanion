@@ -104,7 +104,7 @@ struct AppSessionView: View {
             root.opacity(launchRevealing || launchFinished ? 1 : 0)
                 .allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
             if !launchFinished { LaunchLoadingView().opacity(launchRevealing ? 0 : 1).zIndex(1) }
-        }.background(AniNextBrand.background.ignoresSafeArea())
+        }.background(Theme.background.ignoresSafeArea())
             .environment(\.browseInteractionReady, launchFinished)
     }
     @MainActor private func revealLaunchWhenReady() async {

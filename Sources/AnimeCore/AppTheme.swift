@@ -81,7 +81,10 @@ public struct AppThemePreferences: Codable, Equatable, Sendable {
         self = decoded
         customAccent = decoded.customAccent.flatMap { ThemeRGB(hex: $0)?.hex }
     }
-    public var saved: String { String(data: try! JSONEncoder().encode(self), encoding: .utf8)! }
+    public var saved: String {
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        return String(data: try! encoder.encode(self), encoding: .utf8)!
+    }
     public func accentColor(dark: Bool) -> ThemeRGB {
         let color = ThemeRGB(hex: customAccent ?? accent.hex(dark: dark))!
         return color.legible(on: [ThemeRGB(hex: canvas.background(dark: dark))!, ThemeRGB(hex: canvas.surface(dark: dark))!], dark: dark)

@@ -16,6 +16,14 @@ final class AppThemeTests: XCTestCase {
         XCTAssertNil(AppThemePreferences(saved: value.saved).customAccent)
         XCTAssertTrue(DeviceSyncPreferences.keys.contains(AppThemePreferences.storageKey))
     }
+    func testSavedThemeIdentityIsStableAcrossReadsAndRoundTrips() {
+        var value = AppThemePreferences(); value.accent = .ocean; value.canvas = .midnight; value.customAccent = "AA44FF"
+        let expected = value.saved
+        for _ in 0..<100 {
+            XCTAssertEqual(value.saved, expected)
+            XCTAssertEqual(AppThemePreferences(saved: expected).saved, expected)
+        }
+    }
     func testAllPresetsAndCustomAccentsStayReadableOnEveryCanvas() {
         for dark in [false, true] {
             for canvas in AppCanvas.allCases {
