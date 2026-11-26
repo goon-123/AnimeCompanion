@@ -4,7 +4,7 @@ import AnimeCore
 
 /// Home is independent of the Schedule screen's Sub/Dub and library filters.
 /// It shares original broadcasts and the existing dub snapshot, then intersects
-/// them with every visible status in the user's actual AniList library.
+/// them with the user's visible AniList library, excluding ended broadcasts.
 struct AiringThisWeekView: View {
     @Environment(\.animeSplitPresentation) private var usesSplit
     @EnvironmentObject private var store: AppStore
@@ -32,7 +32,11 @@ struct AiringThisWeekView: View {
                 return ReleaseEvent(anime: anime, episode: next.episode, kind: .sub, date: next.date, certainty: .broadcast)
             }
         }
-        return events.filter { store.isVisible($0.anime) }
+        // Dub releases may continue after the original broadcast has finished.
+        // Check the source metadata too: DubSnapshot prefers the library copy,
+        // which can still say RELEASING until the next library refresh.
+        let metadata = Array(known.values) + (dubs.snapshot?.upcoming.compactMap { $0.media?.media } ?? [])
+        return WeeklyAiring.events(from: events, metadata: metadata).filter { store.isVisible($0.anime) }
     }
     private var refreshKey: String { "\(scenePhase)-\(navigation.selectedTab)-\(week.window.start)-\(!trackedIDs.isEmpty)" }
 
