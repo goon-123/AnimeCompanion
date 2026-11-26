@@ -49,8 +49,12 @@ final class FirstRunSetupUITests: XCTestCase {
         XCTAssertFalse(app.textFields["Custom OAuth client ID (optional)"].exists)
         app.buttons["setup-continue"].tap()
 
-        XCTAssertTrue(app.switches["setup-explicit-content"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.switches["setup-explicit-content"].value as? String, "0")
+        XCTAssertTrue(app.buttons["setup-explicit-content"].waitForExistence(timeout: 10))
+        app.buttons["setup-explicit-content"].tap()
+        XCTAssertTrue(app.switches["settings-adult-content"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.switches["settings-adult-content"].value as? String, "0")
+        XCTAssertEqual(app.switches["mangabaka-rating-erotica"].value as? String, "0")
+        app.navigationBars["Content preferences"].buttons["Back"].firstMatch.tap()
         app.buttons["setup-continue"].tap()
 
         XCTAssertTrue(app.otherElements["setup-summary"].waitForExistence(timeout: 10)

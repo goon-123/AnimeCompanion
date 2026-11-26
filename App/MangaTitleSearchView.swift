@@ -1,84 +1,53 @@
 import SwiftUI
 import AnimeCore
 
-/// Choose a source before making a search request. Installing many extensions
-/// must not silently fan a title out to hundreds of websites.
+/// A series title searches enabled sources together and keeps the library-link destination.
 struct MangaTitleSearchView: View {
-    @EnvironmentObject private var extensions: MangaExtensionStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
     let titles: [String]
     let linkingTo: MangaSourceLinkTarget?
     @State private var query: String
-    @State private var language = "en"
     @State private var manage = false
+    @State private var refresh = 0
     @FocusState private var editing: Bool
     init(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
         self.titles = titles; self.linkingTo = linkingTo
         _query = State(initialValue: titles.first ?? "")
     }
     private var search: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var sources: [MangaSourceReference] {
-        extensions.state.installations.filter { $0.enabled && (showMature || !$0.descriptor.adult) }
-            .flatMap { entry in entry.sources.map { MangaSourceReference(installation: entry, source: $0) } }
-            .filter { language.isEmpty || $0.language == language || $0.language == "all" }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
     var body: some View {
-        List {
-            Section {
-                Label(linkingTo.map { "Link a source for " + $0.title } ?? (titles.isEmpty ? "Search manga and manhwa" : "Find a reading source"), systemImage: "books.vertical").font(.headline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let linkingTo {
+                    Label("Link a source for " + linkingTo.title, systemImage: "link").font(.subheadline).foregroundStyle(.secondary)
+                }
                 HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField("Series title", text: $query).submitLabel(.search).autocorrectionDisabled()
                         .focused($editing).onSubmit { editing = false }
-                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-                        .simultaneousGesture(TapGesture().onEnded { _ in editing = true })
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .accessibilityIdentifier("manga-search-title")
                     Button { query = ""; editing = true } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).frame(width: 44, height: 44)
-                    }.buttonStyle(.borderless).opacity(query.isEmpty ? 0 : 1).disabled(query.isEmpty)
+                    }.buttonStyle(.plain).opacity(query.isEmpty ? 0 : 1).disabled(query.isEmpty)
                         .accessibilityHidden(query.isEmpty).accessibilityLabel("Clear series title")
                         .accessibilityIdentifier("manga-search-clear")
-                }
+                }.padding(.horizontal, 12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
                 if titles.count > 1 {
-                    ForEach(titles, id: \.self) { title in
-                        Button { query = title } label: {
-                            HStack { Text(title); Spacer(); if search == title { Image(systemName: "checkmark") } }
-                        }.font(.subheadline)
-                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(Set(titles)).sorted(), id: \.self) { title in
+                                CompanionFilterChip(title: title, selected: search == title) { query = title; editing = false }
+                            }
+                        }
+                    }.accessibilityLabel("Alternative series titles")
                 }
-            } footer: { Text("Edit the title or try its original name. Availability varies by source; a matching adaptation is not guaranteed.") }
-            Section {
-                Picker("Language", selection: $language) {
-                    Text("All languages").tag("")
-                    ForEach(Array(Set(extensions.state.installations.flatMap(\.sources).map(\.language) + ["en"])).filter { $0 != "all" }.sorted(), id: \.self) {
-                        Text(Locale.current.localizedString(forLanguageCode: $0) ?? $0.uppercased()).tag($0)
-                    }
-                }
-                if extensions.loading { ProgressView("Loading sources…") }
-                else if sources.isEmpty {
-                    ContentUnavailableView {
-                        Label("Choose a manga source", systemImage: "puzzlepiece.extension")
-                    } description: { Text("Install or enable an extension, or try another language. Your search title will stay here.") }
-                    actions: { Button("Manage extensions") { manage = true }.buttonStyle(.borderedProminent) }
-                } else {
-                    ForEach(sources) { source in
-                        NavigationLink { MangaSourceBrowseView(source: source, initialQuery: search, linkingTo: linkingTo) } label: {
-                            HStack(spacing: 12) {
-                                if let entry = extensions.installed(source.extensionID)?.descriptor { MangaExtensionIcon(entry: entry) }
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(source.name).font(.headline)
-                                    Text(source.language == "all" ? "Multilingual" : source.language.uppercased())
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "magnifyingglass").foregroundStyle(MangaStyle.accent)
-                            }.padding(.vertical, 4)
-                        }.disabled(search.isEmpty).accessibilityIdentifier("manga-search-source-\(source.sourceID)")
-                    }
-                }
-            } header: { Text("Search in a source") } footer: { Text("Only the source you select receives your search. Read results vertically in the webtoon reader.") }
-        }.scrollContentBackground(.hidden).background(Theme.background).navigationTitle("Find manga")
+                InstalledMangaSearchView(query: search, compact: false, refresh: refresh, linkingTo: linkingTo, showAll: {})
+                Text("Try the original or alternative title if a source has no matches. Tap a source's arrow for all its results and source settings.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding(16).frame(maxWidth: 1180).frame(maxWidth: .infinity)
+        }.background(Theme.background).navigationTitle("Find manga")
             .navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { manage = true } label: { Image(systemName: "puzzlepiece.extension") }
@@ -86,6 +55,6 @@ struct MangaTitleSearchView: View {
                 }
             }
             .sheet(isPresented: $manage) { MangaExtensionSheet() }
-            .task { await extensions.load() }
+            .refreshable { refresh += 1 }
     }
 }

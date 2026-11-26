@@ -1,3 +1,7 @@
+## Device sync and backups — version 0.59.2 / build 134
+
+Open **Settings → Sync & backup → Enable Automatic iCloud** to create and reconnect the app's iCloud folder without choosing it. This requires signing with a registered iCloud Documents container; an unsigned IPA cannot grant itself that access. If unavailable, **Use a Files Folder** uses the system folder importer and remembers one writable iCloud Drive folder grant. The app creates its own sync subfolder and checks on launch/return while your local library stays usable. Settings, layouts, local manga, progress, source links and manga extension setup merge across devices. Portable backups remain available. [Setup, signing requirements and device checks](docs/device-sync.md).
+
 ## Catalog switching and video players — version 0.58.4 / build 131
 
 Anime/Manga switching owns the complete header touch area and crossfades the retained catalogs in 0.20 seconds (0.10 with Reduce Motion). Loaded shelves, Spotlight space and scroll positions are retained. Native tabs receive app models and public display preferences explicitly. Each hosting controller owns its interaction and accessibility graph; opaque SwiftUI environments are never copied between hosts.

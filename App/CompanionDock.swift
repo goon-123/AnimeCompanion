@@ -18,6 +18,7 @@ struct CompanionSessionStores {
     let links: MangaSourceLinkStore
     let mangaBaka: MangaBakaStore
     let reset: AppResetCoordinator
+    let deviceSync: DeviceSyncStore
 
     @MainActor func install<V: View>(in view: V) -> some View {
         view.environmentObject(app).environmentObject(app.exploreDubs)
@@ -25,7 +26,7 @@ struct CompanionSessionStores {
             .environmentObject(seanime).environmentObject(navigation)
             .environmentObject(weekly).environmentObject(extensions)
             .environmentObject(reading).environmentObject(links)
-            .environmentObject(mangaBaka).environmentObject(reset)
+            .environmentObject(mangaBaka).environmentObject(reset).environmentObject(deviceSync)
     }
 }
 private struct CompanionSessionStoresKey: EnvironmentKey {

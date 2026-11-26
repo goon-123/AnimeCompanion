@@ -35,6 +35,7 @@ struct AnimeDetailView: View {
     @State private var arranging = false
     @State private var appearance = false
     @State private var synopsisExpanded = false
+    @State private var navigationTitleVisible = true
     private enum SeriesTab: String, CaseIterable { case episodes = "Episodes", info = "More Info", recommendations = "Similar" }
     private var layout: SeriesDetailLayout { SeriesDetailLayout(page: .anime, saved: sectionOrder) }
     private var style: AnimeSeriesStyle { AnimeSeriesStyle(preference: savedStyle) }
@@ -61,7 +62,17 @@ struct AnimeDetailView: View {
             .toolbarBackground(.hidden, for: .navigationBar)
             .companionDockHidden()
             .overlay(alignment: .bottomLeading) { commentsButton }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { optionsMenu } }
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(knownNavigationTitle).font(.headline).lineLimit(1)
+                        .opacity(navigationTitleVisible ? 1 : 0)
+                        .accessibilityHidden(!navigationTitleVisible)
+                        .accessibilityIdentifier("anime-navigation-title")
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: navigationTitleVisible)
+                }
+                ToolbarItem(placement: .topBarTrailing) { optionsMenu }
+            }
+            .onChange(of: mediaID) { _, _ in navigationTitleVisible = true }
             .task(id: "\(mediaID)-\(store.includeAdult)") { await load() }
             .refreshable { episodeRefreshID += 1; await load(refresh: true) }
             .appSettingsSheet(isPresented: $showSettings)
@@ -96,7 +107,9 @@ struct AnimeDetailView: View {
                             .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 90).readableContent(width: 1060)
                             .id("series-tab-content")
                     }
-                }
+                }.background(SeriesScrollTitleObserver { visible in
+                    navigationTitleVisible = visible
+                }.id(mediaID))
             }.accessibilityIdentifier("anime-detail-scroll")
                 .contentMargins(.top, 0, for: .scrollContent)
                 .ignoresSafeArea(.container, edges: style == .cinematic ? .top : [])

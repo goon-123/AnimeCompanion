@@ -64,9 +64,12 @@ struct MangaSourceLinkControl: View {
     @EnvironmentObject private var reading: MangaReadingStore
     let title: MangaTitleReference
     let requestedTarget: MangaSourceLinkTarget?
+    var chapters: [SourceMangaChapter] = []
     @State private var chosen: MangaSourceLinkTarget?
     @State private var choosing = false
+    @State private var progressSettings = false
     @State private var saving = false
+    @State private var removing: MangaSourceLinkTarget?
     private var target: MangaSourceLinkTarget? {
         guard account.connected, let accountID = account.profile?.id else { return nil }
         if let value = chosen ?? requestedTarget, value.accountID == accountID { return value }
@@ -80,10 +83,9 @@ struct MangaSourceLinkControl: View {
                 Text(target.title).font(.subheadline.bold()).lineLimit(2)
                 if current?.title.id == title.id {
                     Label("Linked to this library entry", systemImage: "link").font(.subheadline).foregroundStyle(.mint)
-                    Button("Remove link", role: .destructive) {
-                        saving = true
-                        Task { await links.setSource(nil, for: target); saving = false }
-                    }.font(.caption).disabled(saving || links.unreadable)
+                    Button("MangaBaka progress", systemImage: "checkmark.circle") { progressSettings = true }
+                        .font(.subheadline).accessibilityIdentifier("manga-linked-progress")
+                    Button("Remove link", role: .destructive) { removing = target }.font(.caption).disabled(saving || links.unreadable)
                         .accessibilityIdentifier("manga-source-remove-library-link")
                 } else {
                     if let current { Text("Current source: " + current.title.source.name).font(.caption).foregroundStyle(.secondary) }
@@ -101,12 +103,26 @@ struct MangaSourceLinkControl: View {
             } else {
                 Button { choosing = true } label: { Label("Link to My Library", systemImage: "link.badge.plus") }
                     .buttonStyle(.bordered).accessibilityIdentifier("manga-link-to-library")
-                Text("Save this source as the reading shortcut for a MangaBaka library title.").font(.caption).foregroundStyle(.secondary)
+                Text("Open this source directly from a title in your MangaBaka library.").font(.caption).foregroundStyle(.secondary)
             }
             if let error = links.error { Text(error).font(.caption).foregroundStyle(.orange) }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
             .background(MangaStyle.surface, in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityIdentifier("manga-library-link-control")
+            .confirmationDialog("Remove this library link?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+                if let removing {
+                    Button("Remove link", role: .destructive) {
+                        saving = true; Task { await links.setSource(nil, for: removing); saving = false }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Your saved series and reading progress are kept.") }
             .task { await links.load() }
+            .sheet(isPresented: $progressSettings) {
+                if let target, let link = links.link(for: target), link.title.id == title.id {
+                    MangaProgressSettingsView(link: link, chapters: chapters).id(MangaProgressPolicy.consentKey(for: link))
+                } else { Text("This source link changed. Reopen progress from your linked series.").padding() }
+            }
             .sheet(isPresented: $choosing) {
                 AppNavigationStack { MangaLibrarySourcePicker(title: title) { chosen = $0 } }
             }

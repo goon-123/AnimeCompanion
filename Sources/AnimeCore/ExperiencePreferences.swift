@@ -271,11 +271,12 @@ public struct HomePreferences: Equatable, Sendable {
 }
 
 public enum StorySearchScope: String, CaseIterable, Identifiable, Sendable {
-    case all, anime, manga, novels
+    case all, anime, manga, novels, sources
     public var id: String { rawValue }
     public var label: String { self == .all ? "All stories" : rawValue.capitalized }
     public var needsAnime: Bool { self == .all || self == .anime }
-    public var needsReading: Bool { self != .anime }
+    public var needsReading: Bool { self == .all || self == .manga || self == .novels }
+    public var needsInstalledSources: Bool { self == .all || self == .manga || self == .sources }
     public func includes(_ story: ExploreStory) -> Bool {
         switch story {
         case .anime: return needsAnime

@@ -85,18 +85,20 @@ final class MangaBrowseModelTests: XCTestCase {
         XCTAssertEqual(client.calls.count, 1)
         XCTAssertNil(model.error)
     }
-    func testAnimeShortcutReplacesOnlyMangaPathAndKeepsAnimeNavigation() {
+    func testAnimeShortcutReplacesOnlyExplorePathAndKeepsLibraryNavigation() {
+        let oldMedia = UserDefaults.standard.object(forKey: "app.mediaSection")
+        defer { UserDefaults.standard.set(oldMedia, forKey: "app.mediaSection") }
         let navigation = AppNavigationStore()
         navigation.selectedTab = .library
         navigation.library.path.append(AnimeRoute(id: 7))
-        navigation.manga.path.append(AnimeRoute(id: 123))
+        navigation.explore.path.append(AnimeRoute(id: 123))
         navigation.openMangaSearch(for: Anime(id: 7, title: "Owned title"))
-        XCTAssertEqual(navigation.selectedTab, .manga)
-        XCTAssertEqual(navigation.manga.path.count, 1)
+        XCTAssertEqual(navigation.selectedTab, .explore)
+        XCTAssertEqual(navigation.explore.path.count, 1)
         XCTAssertEqual(navigation.library.path.count, 1)
         navigation.selectedTab = .explore
         navigation.openMangaSearch(for: Anime(id: 8, title: "Another title"))
-        XCTAssertEqual(navigation.manga.path.count, 1, "A second shortcut must not stack an old title search")
+        XCTAssertEqual(navigation.explore.path.count, 1, "A second shortcut must not stack an old title search")
     }
     private func load(_ model: MangaBrowseModel, _ client: OwnedCatalog, reset: Bool = false, automatic: Bool = false, query: String = "") async {
         await model.load(source, extensions: client, mode: query.isEmpty ? "popular" : "search", query: query, reset: reset, automatic: automatic)

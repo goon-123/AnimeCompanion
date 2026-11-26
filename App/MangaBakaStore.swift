@@ -2,6 +2,12 @@ import SwiftUI
 import AnimeCore
 
 @MainActor
+private final class MangaProgressAuthorization {
+    let permits: () -> Bool
+    init(_ permits: @escaping () -> Bool) { self.permits = permits }
+}
+
+@MainActor
 final class MangaBakaStore: ObservableObject {
     let api: MangaBakaClient
     private let keychain: MangaBakaAccountKeychain
@@ -374,6 +380,68 @@ final class MangaBakaStore: ObservableObject {
             guard attempt == connectionID else { throw CancellationError() }
             notice = "Saved on MangaBaka. Refresh to load the latest progress."
         }
+        libraryPage = 0; revision = UUID()
+    }
+    func progressEntry(for link: MangaSourceLink, expectedConnection: UUID) async throws -> MangaBakaLibraryEntry {
+        try checkProgressAccount(link, connection: expectedConnection)
+        let key = try await validCredential()
+        try checkProgressAccount(link, connection: expectedConnection)
+        guard let entry = try await api.entry(id: link.library.seriesID, credential: key) else {
+            throw MangaBakaError.message("Add this title to your MangaBaka library before updating progress.")
+        }
+        try checkProgressAccount(link, connection: expectedConnection)
+        guard entry.id == link.library.seriesID else { throw MangaBakaError.invalidResponse }
+        return entry
+    }
+    /// Re-read the remote value and patch only forward chapter progress on the linked account.
+    func advanceChapterProgress(for link: MangaSourceLink, chapter: Double, expectedConnection: UUID,
+                                isAllowed: @escaping () -> Bool) async throws -> Double {
+        _ = try MangaBakaProgressUpdate(chapter: chapter)
+        try checkProgressAccount(link, connection: expectedConnection)
+        guard isAllowed() else { throw CancellationError() }
+        let id = link.library.seriesID
+        guard saving.insert(id).inserted else { throw MangaBakaError.message("This entry is being saved. Try again in a moment.") }
+        defer { saving.remove(id) }
+        let key = try await validCredential()
+        try checkProgressAccount(link, connection: expectedConnection)
+        guard isAllowed() else { throw CancellationError() }
+        guard let entry = try await api.entry(id: id, credential: key) else {
+            throw MangaBakaError.message("This title is no longer in your MangaBaka library. Link it again before updating progress.")
+        }
+        try checkProgressAccount(link, connection: expectedConnection)
+        guard isAllowed() else { throw CancellationError() }
+        guard entry.id == id else { throw MangaBakaError.invalidResponse }
+        guard MangaProgressPolicy.shouldAdvance(current: entry.chapter, proposed: chapter) else {
+            applyProgressEntry(entry); return entry.chapter ?? 0
+        }
+        let permission = MangaProgressAuthorization(isAllowed)
+        try await api.updateChapterProgress(id: id, chapter: chapter, credential: key, isAllowed: { [weak self] in
+            guard let owner = self else { return false }
+            return await MainActor.run {
+                guard owner.connected, owner.connectionID == expectedConnection, owner.profile?.id == link.library.accountID else { return false }
+                return permission.permits()
+            }
+        })
+        try checkProgressAccount(link, connection: expectedConnection)
+        // A confirmed write remains successful if only the follow-up read fails.
+        if let confirmed = try? await api.entry(id: id, credential: key) {
+            try checkProgressAccount(link, connection: expectedConnection)
+            applyProgressEntry(confirmed)
+            return confirmed.chapter ?? chapter
+        }
+        try checkProgressAccount(link, connection: expectedConnection)
+        libraryPage = 0; revision = UUID()
+        notice = "Chapter progress saved on MangaBaka. Refresh to see the latest value."
+        return chapter
+    }
+    private func checkProgressAccount(_ link: MangaSourceLink, connection: UUID) throws {
+        guard !Task.isCancelled, connected, connection == connectionID, profile?.id == link.library.accountID else { throw CancellationError() }
+    }
+    private func applyProgressEntry(_ entry: MangaBakaLibraryEntry) {
+        let series = entries[entry.id]?.series ?? library.first(where: { $0.id == entry.id })?.series
+        let value = series.flatMap { try? entry.attaching($0) } ?? entry
+        entries[entry.id] = value
+        library = library.map { $0.id == value.id ? value : $0 }
         libraryPage = 0; revision = UUID()
     }
     func remove(_ series: MangaBakaSeries, expectedConnection: UUID? = nil) async throws {

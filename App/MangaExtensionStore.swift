@@ -23,6 +23,7 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     private var settingsCache: [String: MangaSourceSettings] = [:]
     private var writingSettings = false
     private var loaded = false
+    private var loadTask: Task<Void, Never>?
     init() {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MangaExtensions", isDirectory: true)
@@ -39,11 +40,28 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     func update(for entry: InstalledMangaExtension) -> MangaExtensionDescriptor? {
         catalog?.update(for: entry)
     }
-    func load() async {
-        guard !loaded else { return }; loaded = true
+    func load(refreshCatalog: Bool = true) async {
+        if let loadTask { await loadTask.value }
+        else if !loaded {
+            loaded = true
+            let task = Task { [weak self] in
+                guard let self else { return }
+                await self.loadLocalState()
+            }
+            loadTask = task; await task.value
+        }
+        #if DEBUG
+        if MangaReaderPreview.active { return }
+        #endif
+        // Cloud sync only needs the installed local state. A catalog download
+        // must not delay its initial check or the app's foreground arrival.
+        if refreshCatalog && state.repositoryAdded && !unreadableState && Date().timeIntervalSince(lastRefresh ?? .distantPast) > 6 * 3600 { await refresh() }
+    }
+    private func loadLocalState() async {
+        defer { loading = false; loadTask = nil }
         #if DEBUG
         if MangaReaderPreview.active {
-            state = MangaReaderPreview.extensionState; catalog = MangaReaderPreview.catalog; loading = false; return
+            state = MangaReaderPreview.extensionState; catalog = MangaReaderPreview.catalog; return
         }
         #endif
         do {
@@ -55,8 +73,6 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
             unreadableState = true
             self.error = "Saved manga extensions could not be read. Existing files have been kept. Reopen the app before changing them."
         }
-        loading = false
-        if state.repositoryAdded && !unreadableState && Date().timeIntervalSince(lastRefresh ?? .distantPast) > 6 * 3600 { await refresh() }
     }
     func refresh(link: String = "https://keiyoushi.github.io") async {
         guard !refreshing, installing == nil, !updatingAll, !unreadableState, !loading else { return }
@@ -138,6 +154,43 @@ final class MangaExtensionStore: ObservableObject, MangaCatalogLoading {
     func removeRepository() async {
         guard !busy else { return }
         do { state = try await storage.removeRepository(); catalog = nil; lastRefresh = nil } catch { self.error = error.localizedDescription }
+    }
+    /// Packages are fetched from the original allowlisted repository and go
+    /// through the same release digest and runtime inspection as a manual
+    /// installation. Synced metadata never supplies executable bytes.
+    func applyDeviceSync(expected: [String: Data], desired: [String: Data], payload: DeviceSyncPayload) async -> String? {
+        guard !busy else { return "Extension changes will retry when the extension manager is free." }
+        var failures: [String] = []
+        var attempted = 0
+        let keys = Set(expected.keys).union(desired.keys).filter { $0.hasPrefix("extension.") }.sorted()
+        for key in keys where expected[key] != desired[key] {
+            if Task.isCancelled { break }
+            guard let id = try? DeviceSyncCoding.string(String(key.dropFirst(10))) else { continue }
+            let current = installed(id).flatMap { try? DeviceSyncCoding.encode(DeviceSyncMangaExtension(descriptor: $0.descriptor, enabled: $0.enabled)) }
+            guard current == expected[key], !busy else { continue }
+            if let item = payload.extensions[id] {
+                if let present = installed(id), present.descriptor == item.descriptor {
+                    await setEnabled(id, item.enabled)
+                    continue
+                }
+                // Bound a pass; remaining packages stay in the durable journal.
+                guard attempted < 3 else { failures.append(item.descriptor.name); continue }
+                attempted += 1
+                do {
+                    try await installPackage(item.descriptor)
+                    await setEnabled(id, item.enabled)
+                } catch is CancellationError { break }
+                catch { failures.append(item.descriptor.name) }
+            } else { await remove(id) }
+        }
+        if expected["extensions.repository"] != desired["extensions.repository"], !busy {
+            let current = try? DeviceSyncCoding.encode(state.repositoryAdded)
+            if current == expected["extensions.repository"] {
+                if payload.repositoryAdded { await refresh() }
+                else { await removeRepository() }
+            }
+        }
+        return failures.isEmpty ? nil : "Still to restore: \(failures.joined(separator: ", ")). Sync again to retry. Older packages that are no longer published need a manual update."
     }
     func browse(extensionID: String, sourceID: String, mode: String, query: String, page: Int) async throws -> SourceMangaPage {
         #if DEBUG

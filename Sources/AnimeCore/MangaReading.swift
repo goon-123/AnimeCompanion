@@ -153,6 +153,24 @@ public struct MangaReadingState: Codable, Sendable {
         recentSources.removeAll { $0 == id }; recentSources.insert(id, at: 0)
         recentSources = Array(recentSources.prefix(20))
     }
+    /// One storage mutation for a confirmed batch; keep history and resume selection.
+    public mutating func mark(_ title: MangaTitleReference, chapters: [SourceMangaChapter], read: Bool, now: Date = Date()) {
+        let existing = record(title.id)?.positions ?? []
+        let previous = Dictionary(existing.map { ($0.chapterURL, $0) }, uniquingKeysWith: { _, latest in latest })
+        var seen = Set<String>()
+        let unique = chapters.filter { !$0.url.isEmpty && seen.insert($0.url).inserted }
+        guard !unique.isEmpty else { return }
+        let retained = existing.filter { !seen.contains($0.chapterURL) }
+        // Keep the existing storage bound, including positions for source chapters no longer listed.
+        guard retained.count + unique.count <= 10000 else { return }
+        let i = ensure(title)
+        records[i].positions = retained + unique.map { chapter in
+            let point = previous[chapter.url]
+            return MangaReadingPosition(chapterURL: chapter.url, chapterName: chapter.name,
+                pageIndex: read ? max(0, (point?.pageCount ?? 1) - 1) : 0,
+                pageCount: point?.pageCount ?? 0, fraction: read ? 1 : 0, completed: read, updatedAt: now)
+        }
+    }
     private mutating func ensure(_ title: MangaTitleReference) -> Int {
         if let index = records.firstIndex(where: { $0.id == title.id }) {
             records[index].title = title; return index
@@ -233,10 +251,10 @@ public actor MangaReadingStorage {
         } catch { throw MangaReadingStorageError.unreadable }
     }
     @discardableResult
-    public func update(_ mutation: @Sendable (inout MangaReadingState) -> Void) throws -> MangaReadingState {
+    public func update(_ mutation: @Sendable (inout MangaReadingState) throws -> Void) throws -> MangaReadingState {
         return try persistence.perform {
             var value = try load()
-            mutation(&value); value.preferences.normalize()
+            try mutation(&value); value.preferences.normalize()
             guard value.revision < UInt64.max, value.records.count <= 5000,
                   value.records.allSatisfy({ $0.positions.count <= 10000 }) else { throw MangaReadingStorageError.tooLarge }
             value.revision += 1
