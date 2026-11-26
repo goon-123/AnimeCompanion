@@ -64,6 +64,7 @@ struct UnifiedExploreSearchView: View {
     @StateObject private var model = UnifiedExploreSearchModel()
     @State private var text = ""
     @State private var scope = StorySearchScope.all
+    @State private var sourceRefresh = 0
     private var key: UnifiedSearchKey { .init(text: String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)), adult: anime.includeAdult, contentFilter: anime.mangaBakaContent, scope: scope) }
     private var results: [ExploreStory] { ExploreStory.mix(anime: model.anime, reading: model.reading, includeAdult: anime.includeAdult, contentFilter: anime.mangaBakaContent).filter(scope.includes) }
     var body: some View {
@@ -77,16 +78,21 @@ struct UnifiedExploreSearchView: View {
                         }
                     }
                 }
+                if scope.needsInstalledSources {
+                    InstalledMangaSearchView(query: key.text, compact: scope != .sources, refresh: sourceRefresh) { scope = .sources }
+                }
                 if !text.isEmpty {
                     Button { text = "" } label: { Label("Clear search", systemImage: "xmark.circle") }
                         .font(.caption).accessibilityLabel("Clear all-catalog search")
                 }
                 if key.text.isEmpty {
-                    ContentUnavailableView("Find your next story", systemImage: "magnifyingglass",
-                        description: Text("One search for anime, manga, manhwa, light novels and more. No account needed."))
+                    ContentUnavailableView(scope == .sources ? "Search your sources" : "Find your next story", systemImage: "magnifyingglass",
+                        description: Text(scope == .sources ? "Enter a title to search all enabled sources, or turn on Only pinned sources." : "One search for anime, manga, manhwa, light novels and more. No account needed."))
                 } else {
-                    Text(scope == .all ? "\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded" : "\(results.count) \(scope.label.lowercased()) loaded")
-                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("unified-search-counts")
+                    if scope != .sources {
+                        Text("Catalog matches").font(.headline)
+                        Text(scope == .all ? "\(model.anime.filter { anime.isVisible($0) }.count) anime · \(model.reading.filter { $0.isVisible(contentFilter: anime.mangaBakaContent) }.count) manga & novels loaded" : "\(results.count) \(scope.label.lowercased()) loaded")
+                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("unified-search-counts") }
                     ForEach(activeProviders, id: \.self) { provider in
                         if let error = model.errors[provider] {
                             NoticeView(message: (provider == .anime ? "Anime: " : "Manga & novels: ") + error) {
@@ -94,9 +100,9 @@ struct UnifiedExploreSearchView: View {
                             }.accessibilityIdentifier("unified-search-error-" + provider.rawValue)
                         }
                     }
-                    ExploreStoryGrid(items: results)
+                    if scope != .sources { ExploreStoryGrid(items: results) }
                     if !model.loading.isEmpty { ProgressView("Searching catalogs…").frame(maxWidth: .infinity).padding() }
-                    if results.isEmpty && model.loading.isEmpty && model.errors.isEmpty && key == modelKey {
+                    if scope != .sources && results.isEmpty && model.loading.isEmpty && model.errors.isEmpty && key == modelKey {
                         ContentUnavailableView.search(text: key.text)
                     }
                     ForEach(activeProviders, id: \.self) { provider in
@@ -131,6 +137,7 @@ struct UnifiedExploreSearchView: View {
             }
             .refreshable {
                 guard !key.text.isEmpty else { return }
+                sourceRefresh += 1
                 async let shows: Void = load(.anime, refresh: true)
                 async let written: Void = load(.reading, refresh: true)
                 _ = await (shows, written)

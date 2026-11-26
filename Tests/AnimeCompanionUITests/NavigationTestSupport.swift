@@ -1,6 +1,28 @@
 import XCTest
 
 extension XCUIApplication {
+    @MainActor func openMangaExplore() {
+        appTab("Explore").tap()
+        let switcher = buttons["explore-media-switch"]
+        for _ in 0..<8 where !switcher.exists {
+            let back = navigationBars.buttons.firstMatch
+            if back.exists && back.isHittable { back.tap() } else { break }
+        }
+        XCTAssertTrue(switcher.waitForExistence(timeout: 15))
+        if switcher.value as? String != "Manga & Novels" { switcher.tap() }
+    }
+    @MainActor func openMangaCollection(_ collection: String) {
+        openMangaExplore()
+        let tile = buttons["explore-reading-" + collection]
+        revealInContent(tile)
+        XCTAssertTrue(tile.waitForExistence(timeout: 15)); tile.tap()
+    }
+    @MainActor func openReadingHistory() {
+        openMangaCollection("saved")
+        buttons["local-reading-options"].tap()
+        buttons["Reading history"].tap()
+        XCTAssertTrue(navigationBars["Reading history"].waitForExistence(timeout: 10))
+    }
     @MainActor func openAnimeActions() {
         let options = buttons["detail-options"]
         XCTAssertTrue(options.waitForExistence(timeout: 45)); options.tap()

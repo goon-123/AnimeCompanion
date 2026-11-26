@@ -1,4 +1,4 @@
-name: iOS unsigned IPA
+name: AniNext iOS unsigned IPA
 on:
   workflow_dispatch:
     inputs:
@@ -409,9 +409,12 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_ci_cache_mtimes.py'
       - name: Check release privacy guards and source credentials
         run: |
+          python3 scripts/check-launch-artwork.py
           python3 scripts/test-release-privacy.py
           python3 scripts/check-release-privacy.py --source .
       - name: Verify current Keiyoushi repository and package checksums
+        env:
+          ANIMECOMPANION_GITHUB_READ_TOKEN: ${{ github.token }}
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_MANGA=1 swift test -j 2 --filter MangaExtensionTests.testLiveKeiyoushiCatalogWhenExplicitlyEnabled
       - name: Verify previous-season, top-anime and studio queries
         run: env -u DEVELOPER_DIR ANIMECOMPANION_LIVE_SERVICES=1 swift test -j 2 --filter LiveServiceTests.testAniListExploreShelvesAndStudio
@@ -784,8 +787,8 @@ jobs:
           python3 scripts/check-release-privacy.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
-          unzip -tq AnimeCompanion-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload AniNext-unsigned.ipa
+          unzip -tq AniNext-unsigned.ipa
       - name: Record successful Xcode input timestamps
         run: python3 scripts/ci-cache-mtimes.py save build/.ci-input-mtimes.json App Sources SafariExtension AnimeCompanion.xcodeproj Package.swift Package.resolved build/MangaRuntime.xcframework
       - uses: actions/cache/save@v4
@@ -803,8 +806,8 @@ jobs:
         timeout-minutes: 3
         uses: actions/upload-artifact@v4
         with:
-          name: AnimeCompanion-unsigned-IPA
-          path: AnimeCompanion-unsigned.ipa
+          name: AniNext-unsigned-IPA
+          path: AniNext-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
       - name: Check public data providers

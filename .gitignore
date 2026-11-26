@@ -15,3 +15,13 @@ App/SeanimeRuntimeResources/
 Tools/MangaRuntime/target/
 App/MangaRuntimeLicenses.txt
 Tests/MangaRuntimeTests/Fixtures/
+App/ExtensionRuntimeNotices.txt
+Tools/ExtensionBridge/.dart_tool/
+Tools/ExtensionBridge/.ios/
+Tools/ExtensionBridge/.android/
+Tools/ExtensionBridge/build/
+Tools/ExtensionBridge/assets/*.jar
+
+ExtensionStartup.yml
+ExtensionStartup.xcodeproj/
+scripts/__pycache__/

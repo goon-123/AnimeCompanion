@@ -16,7 +16,7 @@ struct AppSessionHost: View {
                         Button("Retry Reset") { reset.start() }.buttonStyle(.borderedProminent)
                     } else {
                         ProgressView().tint(.white)
-                        Text("Resetting AnimeCompanion…").font(.headline)
+                        Text("Resetting AniNext…").font(.headline)
                     }
                 }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black.ignoresSafeArea()).foregroundStyle(.white)

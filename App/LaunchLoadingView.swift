@@ -1,21 +1,18 @@
 import SwiftUI
 
-/// iOS's static launch screen is black. The in-app mark fades in, and the
-/// parent fades this entire overlay out when the first content is ready.
+/// The system storyboard and this overlay use the same fixed artwork, size,
+/// center and background. No live text or appearance tint changes at handoff.
 struct LaunchLoadingView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var appeared = false
-
     var body: some View {
         ZStack {
-            Color.black
-            Image("CinematicLaunch").resizable().scaledToFit().frame(width: 224, height: 224)
-                .opacity(appeared ? 1 : 0)
+            AniNextBrand.background
+            Image("CinematicLaunch")
+                .renderingMode(.original)
+                .resizable().scaledToFit()
+                .frame(width: 232, height: 280)
+                .accessibilityHidden(true)
         }.ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: reduceMotion ? 0.1 : 0.24)) { appeared = true }
-            }
-            .accessibilityElement(children: .ignore).accessibilityLabel("Loading Anime Companion")
+            .accessibilityElement(children: .ignore).accessibilityLabel("Loading AniNext")
             .accessibilityIdentifier("app-startup-logo")
     }
 }

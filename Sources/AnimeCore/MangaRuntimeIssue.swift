@@ -9,7 +9,7 @@ public struct MangaRuntimeIssue: Decodable, LocalizedError, Equatable, Sendable 
         switch kind {
         case "unsupportedAPI":
             let detail = safeAPI.map { " Missing support: \($0)." } ?? ""
-            return "This extension needs a runtime API that this build does not support. Update AnimeCompanion to try the latest compatibility fixes." + detail
+            return "This extension needs a runtime API that this build does not support. Update AniNext to try the latest compatibility fixes." + detail
         case "executionLimit":
             return "This extension exceeded the device’s execution limit. Try again or use another source."
         case "sourceResponse":

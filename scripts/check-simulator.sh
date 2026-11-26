@@ -252,7 +252,8 @@ if [[ "$test_scope" == dock-gallery ]]; then
     -only-testing:MangaRuntimeTests/CompanionTabTransitionTests
     -only-testing:MangaRuntimeTests/TabResponsivenessTests
     -only-testing:MangaRuntimeTests/ExternalPlayerStoreTests
-    -only-testing:AnimeCompanionUITests/FirstRunSetupUITests/testPlayerChoiceDuringSetupIsSharedWithSettings
+    -only-testing:MangaRuntimeTests/DeviceSyncFileAccessTests
+    -only-testing:AnimeCompanionUITests/FirstRunSetupUITests/testGuidedSourcesExplainBothRoutesAndReadingBeforeFinish
     -only-testing:AnimeCompanionUITests/TabResponsivenessUITests)
 fi
 test_retry_arguments=(-retry-tests-on-failure -test-iterations 2)

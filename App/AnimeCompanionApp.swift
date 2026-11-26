@@ -23,6 +23,7 @@ struct AppSessionView: View {
     @StateObject private var mangaReading = MangaReadingStore()
     @StateObject private var mangaSourceLinks = MangaSourceLinkStore()
     @StateObject private var mangaBaka = MangaBakaStore()
+    @StateObject private var deviceSync = DeviceSyncStore()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var reset: AppResetCoordinator
@@ -30,14 +31,19 @@ struct AppSessionView: View {
     @State private var launchRevealing = false
     @State private var launchContentReady = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AppThemePreferences.storageKey) private var themeSaved = AppThemePreferences().saved
+    private var sessionStores: CompanionSessionStores {
+        CompanionSessionStores(app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
+            navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions, reading: mangaReading,
+            links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset, deviceSync: deviceSync)
+    }
     var body: some View {
-            launchRoot.environment(\.companionSessionStores, CompanionSessionStores(
-                app: store, filters: discoveryFilters, playback: playback, seanime: seanime,
-                navigation: navigation, weekly: weeklySchedule, extensions: mangaExtensions,
-                reading: mangaReading, links: mangaSourceLinks, mangaBaka: mangaBaka, reset: reset))
+            launchRoot.background(Theme.background).scrollContentBackground(.hidden).environment(\.companionSessionStores, sessionStores)
                 .environmentObject(store).environmentObject(store.exploreDubs).environmentObject(discoveryFilters).tint(Theme.accent)
                 .onAppear {
-                    reset.prepareForReset = { [weak store, weak mangaBaka] in
+                    ThemeSelection.shared.reload()
+                    reset.prepareForReset = { [weak store, weak mangaBaka, weak deviceSync] in
+                        deviceSync?.stop()
                         store?.prepareForAppReset(); mangaBaka?.prepareForAppReset()
                     }
                 }
@@ -52,10 +58,12 @@ struct AppSessionView: View {
                 .environmentObject(mangaExtensions).environmentObject(mangaReading)
                 .environmentObject(mangaSourceLinks)
                 .environmentObject(mangaBaka)
+                .environmentObject(deviceSync)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     Task { await ArtworkPipeline.shared.clearMemory() }
                     Task { await MangaImagePipeline.shared.clearMemory() }
                 }
+                .onChange(of: themeSaved) { _, _ in ThemeSelection.shared.reload() }
                 .preferredColorScheme(Theme.scheme(appearance)).task { if !artworkPreview { await store.restore() } }
                 .task { if !artworkPreview { await mangaBaka.restore() } }
                 .task { if !artworkPreview { await mangaSourceLinks.load() } }
@@ -65,6 +73,12 @@ struct AppSessionView: View {
                     launchContentReady = true
                 }
                 .task { await revealLaunchWhenReady() }
+                .task { if !artworkPreview { await deviceSync.start(session: sessionStores) } }
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    guard !artworkPreview else { return }
+                    deviceSync.setActive(phase == .active)
+                    if phase == .background { Task { await deviceSync.pause() } }
+                }
                 .task(id: scenePhase) {
                     guard scenePhase == .active, !artworkPreview else { return }
                     async let library: Void = store.refreshLibraryIfNeeded()
@@ -90,7 +104,7 @@ struct AppSessionView: View {
             root.opacity(launchRevealing || launchFinished ? 1 : 0)
                 .allowsHitTesting(launchFinished).accessibilityHidden(!launchFinished)
             if !launchFinished { LaunchLoadingView().opacity(launchRevealing ? 0 : 1).zIndex(1) }
-        }.background(Color.black.ignoresSafeArea())
+        }.background(Theme.background.ignoresSafeArea())
             .environment(\.browseInteractionReady, launchFinished)
     }
     @MainActor private func revealLaunchWhenReady() async {
@@ -265,6 +279,7 @@ struct AppTabSelectionReader<Content: View>: View {
 /// Genre links always open one fresh Explore result page, even from another tab's detail stack.
 @MainActor
 final class AppNavigationStore: ObservableObject {
+    var settingsPresented = false
     let tabSelection = AppTabSelection()
     var selectedTab: AppTab {
         get { tabSelection.value }
@@ -275,6 +290,7 @@ final class AppNavigationStore: ObservableObject {
     func open(_ tab: AppTab) {
         if tab == .schedule { openSchedule(); return }
         if tab == .news { openNews(); return }
+        if tab == .manga { openReading(); return }
         if tabPreferences.visible.contains(tab) { selectedTab = tab }
         else { supplementary = .init(kind: .tab(tab)) }
     }
@@ -303,7 +319,7 @@ final class AppNavigationStore: ObservableObject {
     let schedule = TabNavigationState()
     let library = TabNavigationState()
     let news = TabNavigationState()
-    let manga = TabNavigationState()
+    var manga: TabNavigationState { explore } // Compatibility for older reading routes.
 
     func openAccountLibrary(_ account: TrackingAccount) {
         UserDefaults.standard.set(account.rawValue, forKey: TrackingAccount.storageKey)
@@ -320,7 +336,7 @@ final class AppNavigationStore: ObservableObject {
     func applyLayoutPreference() {
         let value = TabletLayout(preference: UserDefaults.standard.string(forKey: TabletLayout.preferenceKey))
         guard value != tabletLayout else { return }
-        for state in [home, explore, schedule, library, news, manga] {
+        for state in [home, explore, schedule, library, news] {
             state.path = NavigationPath(); state.detailPath = NavigationPath()
             state.animeID = nil; state.column = .sidebar; state.visibility = .all
         }
@@ -334,7 +350,7 @@ final class AppNavigationStore: ObservableObject {
         case .schedule: return schedule
         case .library: return library
         case .news: return news
-        case .manga: return manga
+        case .manga: return explore
         }
     }
 
@@ -357,22 +373,32 @@ final class AppNavigationStore: ObservableObject {
         openMangaSearch(titles: MangaSearchTitles.suggestions(for: anime))
     }
 
+    private func prepareReading() {
+        UserDefaults.standard.set("written", forKey: "app.mediaSection")
+        explore.path = NavigationPath(); explore.detailPath = NavigationPath()
+        explore.animeID = nil; explore.column = .sidebar; explore.visibility = .all
+    }
+    func openReading() {
+        prepareReading()
+        if tabPreferences.visible.contains(.explore) { supplementary = nil; selectedTab = .explore }
+        else { supplementary = .init(kind: .tab(.explore)) }
+    }
     func openMangaSearch(titles: [String], linkingTo: MangaSourceLinkTarget? = nil) {
-        guard tabPreferences.visible.contains(.manga) else {
+        prepareReading()
+        guard tabPreferences.visible.contains(.explore) else {
             supplementary = .init(kind: .manga(titles, linkingTo: linkingTo)); return
         }
-        var path = NavigationPath()
-        path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
-        manga.path = path
-        selectedTab = .manga
+        supplementary = nil
+        explore.path.append(MangaSearchRoute(titles: titles, linkingTo: linkingTo))
+        selectedTab = .explore
     }
     func openLinkedManga(_ link: MangaSourceLink) {
-        guard tabPreferences.visible.contains(.manga) else {
+        prepareReading()
+        guard tabPreferences.visible.contains(.explore) else {
             supplementary = .init(kind: .linkedManga(link)); return
         }
-        var path = NavigationPath()
-        path.append(LinkedMangaRoute(link: link))
-        manga.path = path; selectedTab = .manga
+        supplementary = nil
+        explore.path.append(LinkedMangaRoute(link: link)); selectedTab = .explore
     }
 }
 
@@ -420,7 +446,7 @@ struct AppTabs: View {
     private var tabs: some View {
         navigationSurface.sheet(item: $navigation.supplementary) { destination in
             AppNavigationStack {
-                supplementary(destination.kind).animeNavigation().mangaBakaNavigation()
+                supplementary(destination.kind).animeNavigation().mangaBakaNavigation().mangaReadingNavigation()
                     .environment(\.animeSplitPresentation, false)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { navigation.supplementary = nil } } }
             }.environment(\.companionDockPresentation, nil)
@@ -489,7 +515,7 @@ struct AppTabs: View {
                     Button { navigation.openSearch() } label: { Label("Search all stories", systemImage: "magnifyingglass") }
                     Button { sidebarSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                 }
-            }.listStyle(.sidebar).navigationTitle("AnimeCompanion").navigationBarTitleDisplayMode(.inline)
+            }.listStyle(.sidebar).navigationTitle("AniNext").navigationBarTitleDisplayMode(.inline)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
                 .appSettingsSheet(isPresented: $sidebarSettings)
                 .accessibilityIdentifier("companion-sidebar")
@@ -514,7 +540,7 @@ struct AppTabs: View {
             AnimeTabPane(state: navigation.explore, layout: paneLayout(tab)) { MediaExploreView() }
         case .library:
             AnimeTabPane(state: navigation.library, layout: paneLayout(tab)) { MediaLibraryView() }
-        case .manga: MangaTabPane(state: navigation.manga)
+        case .manga: AnimeTabPane(state: navigation.explore, layout: .fullWidth) { MediaExploreView() }
         case .schedule: AnimeTabPane(state: navigation.schedule, layout: navigation.tabletLayout) { ScheduleView() }
         case .news: AnimeTabPane(state: navigation.news, layout: .fullWidth) { NewsView().animeNavigation() }
         }
@@ -532,7 +558,7 @@ struct AppTabs: View {
             case .home: HomeView()
             case .explore: MediaExploreView()
             case .library: MediaLibraryView()
-            case .manga: MangaHubView()
+            case .manga: MangaHubView(destination: .saved)
             case .schedule: ScheduleView()
             case .news: NewsView()
             }
@@ -541,22 +567,6 @@ struct AppTabs: View {
 
 }
 
-private struct MangaTabPane: View {
-    @ObservedObject var state: TabNavigationState
-    var body: some View {
-        AppNavigationStack(path: $state.path) {
-            MangaHubView().navigationDestination(for: MangaSearchRoute.self) { route in
-                MangaTitleSearchView(titles: route.titles, linkingTo: route.linkingTo).id(route.id)
-            }
-            .navigationDestination(for: LinkedMangaRoute.self) { route in
-                MangaTitleDetailView(title: route.link.title, linkingTo: route.link.library, resumeOnOpen: true).id(route.id)
-            }
-        }
-    }
-}
-
-/// The chosen topology stays stable through rotation. Full-width navigation is
-/// the default; iPad users can opt into a native, resizable split presentation.
 private struct AnimeTabPane<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ObservedObject var state: TabNavigationState

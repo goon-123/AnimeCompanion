@@ -87,4 +87,17 @@ public actor MangaSourceLinkStorage {
         !link.title.source.extensionID.isEmpty && !link.title.source.sourceID.isEmpty &&
         !link.title.manga.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+    public func applyDeviceSync(expected: [String: Data], desired: [String: Data]) throws -> MangaSourceLinkState {
+        try persistence.perform {
+            let current = try load()
+            let values = try DeviceSyncPayload.linkValues(current)
+            var updated = try DeviceSyncPayload(values: DeviceSyncPayload.patch(current: values,
+                expected: expected.filter { $0.key.hasPrefix("link.") }, desired: desired.filter { $0.key.hasPrefix("link.") })).links
+            guard updated.links.allSatisfy({ Self.valid($0.value) }), current.revision < UInt64.max else { throw MangaSourceLinkError.invalidLink }
+            updated.revision = current.revision + 1
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try persistence.write(DeviceSyncCoding.encode(updated), to: directory.appendingPathComponent("source-links.json"), options: .atomic)
+            cached = updated; return updated
+        }
+    }
 }

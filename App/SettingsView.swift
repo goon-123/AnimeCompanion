@@ -58,13 +58,24 @@ struct SettingsDirectoryView: View {
                 }
             }
             Section("Preferences") {
+                if matches("Safari VidHub extension website videos") {
+                    NavigationLink { SafariVideoSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Safari → VidHub", detail: "Play videos from websites", symbol: "safari", tint: .blue)
+                    }.accessibilityIdentifier("settings-safari-vidhub")
+                }
+
+                if matches("iCloud sync backup devices restore export import library settings extensions") {
+                    NavigationLink { DeviceSyncSettingsView() } label: {
+                        SettingsCategoryLabel(title: "Sync & backup", detail: "iCloud Drive, devices & portable backups", symbol: "icloud", tint: .blue)
+                    }.accessibilityIdentifier("settings-device-sync")
+                }
                 if matches("Community discussions AniList comments sources") {
                     NavigationLink { CommunitySourcesView() } label: {
                         SettingsCategoryLabel(title: "Community sources", detail: "Discussions, readers & access", symbol: "bubble.left.and.bubble.right", tint: Theme.accent)
                     }.accessibilityIdentifier("settings-community")
                 }
                 if matches("Content browsing explicit adult ratings filters privacy") {
-                    NavigationLink { BrowsingSettingsView() } label: {
+                    NavigationLink { ContentPreferencesView() } label: {
                         SettingsCategoryLabel(title: "Content preferences", detail: "Ratings, explicit content & filtering", symbol: "line.3.horizontal.decrease.circle", tint: .orange)
                     }.accessibilityIdentifier("settings-browsing")
                 }
@@ -85,7 +96,7 @@ struct SettingsDirectoryView: View {
                         Label("Reset App & Sign Out of Everything", systemImage: "arrow.counterclockwise")
                     }.accessibilityIdentifier("settings-reset-app")
                 } footer: {
-                    Text("Remove saved accounts, keys, extensions, downloads, reading history and settings from this app on this device, then start setup again.")
+                Text("Remove saved accounts, keys, extensions, downloads, reading history and settings from this app on this device, then start setup again. Your sync folder is kept and this device disconnects.")
                 }
             }
             Section {
@@ -96,17 +107,17 @@ struct SettingsDirectoryView: View {
                     NavigationLink { AboutSettingsView() } label: { Label("About & data sources", systemImage: "info.circle") }.accessibilityIdentifier("settings-about")
                 }
             } footer: {
-                Text("AnimeCompanion \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")")
+                Text("AniNext \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")")
                     .font(.caption).frame(maxWidth: .infinity).padding(.top, 8)
             }
         }.navigationTitle("Settings").searchable(text: $query, prompt: "Search settings & services")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
             .fullScreenCover(isPresented: $setupGuide) { FirstRunSetupView(revisiting: true) { setupGuide = false } }
-            .confirmationDialog("Reset AnimeCompanion completely?", isPresented: $confirmReset, titleVisibility: .visible) {
+            .confirmationDialog("Reset AniNext completely?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Erase Local Data & Restart Setup", role: .destructive) { reset.start() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes every saved account, API key, installed extension, local download, reading position and preference on this device. Your AniList and MangaBaka online libraries will stay intact. This cannot be undone.")
+                Text("This removes every saved account, API key, installed extension, local download, reading position and preference on this device. Your sync folder and AniList and MangaBaka online libraries stay intact. Reconnect your folder after setup to restore synced data. Local erasure cannot be undone.")
             }
     }
 }
@@ -117,11 +128,12 @@ private struct AppSettingsSheet: ViewModifier {
     @State private var selectedAccount: TrackingAccount?
     func body(content: Content) -> some View {
         content.sheet(isPresented: $isPresented, onDismiss: {
+            navigation.settingsPresented = false
             navigation.applyLayoutPreference(); navigation.applyTabPreferences()
             if let selectedAccount { self.selectedAccount = nil; navigation.openAccountLibrary(selectedAccount) }
         }) {
             SettingsView { account in selectedAccount = account; isPresented = false }
-        }
+        }.onChange(of: isPresented) { _, presented in navigation.settingsPresented = presented }
     }
 }
 
@@ -209,23 +221,6 @@ struct AniListSettingsView: View {
     }
 }
 
-private struct BrowsingSettingsView: View {
-    @EnvironmentObject private var store: AppStore
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Show adult content (18+)", isOn: $store.includeAdult).accessibilityIdentifier("settings-adult-content")
-            } header: { Text("AniList & video sources") } footer: {
-                Text("Applies to anime browsing, libraries, schedules and known adult video providers. Hidden entries stay in your online lists.")
-            }
-            MangaBakaRatingSection(filter: $store.mangaBakaContent)
-            Section {
-                NavigationLink("More MangaBaka content options") { MangaBakaContentSettingsView() }
-            }
-        }.navigationTitle("Browsing & content").navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 private struct TrackingSettingsView: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
@@ -280,7 +275,7 @@ struct PlayerSettingsView: View {
 private struct AboutSettingsView: View {
     var body: some View {
         Form {
-            Section("Anime Companion") {
+            Section("AniNext") {
                 Text("Anime discovery, manga & novels · AniList & MangaBaka tracking")
                 Text("Broadcast times and dub dates may change. Times use your device timezone. Japanese broadcasts do not guarantee local subtitle availability.").font(.caption).foregroundStyle(.secondary)
             }
@@ -301,7 +296,7 @@ private struct AboutSettingsView: View {
                 Text("LiveChart visual galleries and AniList artwork. Image copyrights belong to their respective owners.").font(.caption)
                 Link("LiveChart.me", destination: URL(string: "https://www.livechart.me")!)
                 Link("TMDB · textless Spotlight artwork", destination: URL(string: "https://www.themoviedb.org")!)
-                Text("AnimeCompanion is not endorsed or certified by TMDB.").font(.caption).foregroundStyle(.secondary)
+                Text("AniNext is not endorsed or certified by TMDB.").font(.caption).foregroundStyle(.secondary)
                 Link("AnimeAPI · ID mapping data", destination: URL(string: "https://github.com/nattadasu/animeApi")!)
                 Text("Contains information from AnimeAPI, available under ODbL 1.0 and DbCL 1.0. The source mapping data is not modified.").font(.caption).foregroundStyle(.secondary)
                 Link("Mapping database license · ODbL 1.0", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)

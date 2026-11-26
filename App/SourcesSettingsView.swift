@@ -40,11 +40,7 @@ struct SourcesSettingsRows: View {
                     SettingsCategoryLabel(title: "Video player", detail: "\(playback.player.label) · Playback & resume", symbol: "play.rectangle", tint: .pink)
                 }.accessibilityIdentifier("settings-player")
             }
-            if matches("Safari VidHub extension website videos") {
-                NavigationLink { SafariVideoSettingsView() } label: {
-                    SettingsCategoryLabel(title: "Safari → VidHub", detail: "Play videos from websites", symbol: "safari", tint: .blue)
-                }.accessibilityIdentifier("settings-safari-vidhub")
-            }
+
         }
         Section("Read") {
             if matches("Manga manhwa webtoon source extensions Keiyoushi") {
@@ -57,14 +53,9 @@ struct SourcesSettingsRows: View {
 }
 
 struct AppearanceSettingsView: View {
-    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     var body: some View {
         Form {
-            Section("Appearance") {
-                Picker("Color scheme", selection: $appearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.label).tag($0.rawValue) }
-                }.accessibilityIdentifier("appearance-scheme")
-            }
+            Section("Theme & colors") { ThemeSettingsControls() }
             Section {
                 NavigationLink { HomeCustomizationView() } label: { Label("Home sections", systemImage: "house") }
                     .accessibilityIdentifier("settings-home-sections")

@@ -18,6 +18,7 @@ struct CompanionSessionStores {
     let links: MangaSourceLinkStore
     let mangaBaka: MangaBakaStore
     let reset: AppResetCoordinator
+    let deviceSync: DeviceSyncStore
 
     @MainActor func install<V: View>(in view: V) -> some View {
         view.environmentObject(app).environmentObject(app.exploreDubs)
@@ -25,7 +26,8 @@ struct CompanionSessionStores {
             .environmentObject(seanime).environmentObject(navigation)
             .environmentObject(weekly).environmentObject(extensions)
             .environmentObject(reading).environmentObject(links)
-            .environmentObject(mangaBaka).environmentObject(reset)
+            .environmentObject(mangaBaka).environmentObject(reset).environmentObject(deviceSync)
+            .background(Theme.background).scrollContentBackground(.hidden)
     }
 }
 private struct CompanionSessionStoresKey: EnvironmentKey {
@@ -175,7 +177,9 @@ private struct CompanionTabEnvironment: Equatable {
     let reduceTransparency: Bool
     let reduceMotion: Bool
     let interactionReady: Bool
+    let theme: String
     init(_ environment: EnvironmentValues) {
+        theme = ThemeSelection.shared.preferences.saved
         scheme = environment.colorScheme; typeSize = environment.dynamicTypeSize
         horizontal = environment.horizontalSizeClass; vertical = environment.verticalSizeClass
         scale = environment.displayScale; direction = environment.layoutDirection
@@ -207,6 +211,7 @@ private struct CompanionActivePane<Content: View>: View {
 @available(iOS 26.0, *)
 struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
     @Environment(\.self) private var inheritedEnvironment
+    @AppStorage(AppThemePreferences.storageKey) private var themeSaved = AppThemePreferences().saved
     let presentation: CompanionDockPresentation
     let tabs: [AppTab]
     @Binding var selection: AppTab
@@ -231,6 +236,9 @@ struct CompanionNativeTabs<Content: View>: UIViewControllerRepresentable {
     }
     private func update(_ controller: UITabBarController, context: Context) {
         let coordinator = context.coordinator
+        _ = themeSaved
+        controller.view.backgroundColor = UIColor(Theme.background)
+        controller.view.tintColor = UIColor(Theme.accent)
         let stamp = CompanionTabEnvironment(context.environment)
         let environmentChanged = stamp != coordinator.environmentStamp
         var hosts: [UIViewController] = []
