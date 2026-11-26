@@ -7,6 +7,7 @@ final class ExtensionRepositoryUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--repository-editor-ui"]
         app.launch()
+        app.buttons["Open settings"].tap()
         let open = app.buttons["Open repository editor"]
         XCTAssertTrue(open.waitForExistence(timeout: 30))
         let ready = NSPredicate(format: "enabled == true")
@@ -52,5 +53,28 @@ final class ExtensionRepositoryUITests: XCTestCase {
         XCTAssertTrue(field.exists)
         XCTAssertEqual(field.value as? String, repository)
         XCTAssertFalse(app.staticTexts["Repository added"].exists)
+    }
+
+    @MainActor func testAddReportedSoraRepositoryAndPersistAfterRelaunch() {
+        continueAfterFailure = false
+        let app = openEditor()
+        app.buttons["extensions-paste-repository"].tap()
+        let field = app.textFields["extensions-repository-url"]
+        expectation(for: NSPredicate(format: "value == %@", repository), evaluatedWith: field)
+        waitForExpectations(timeout: 10)
+        app.buttons["extensions-save-repository"].tap()
+        let confirmation = app.descendants(matching: .any)["extensions-repository-saved"].firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 130), app.debugDescription)
+        XCTAssertTrue(app.navigationBars["Add repository"].exists, "A successful request must keep the setup page visible.")
+        let savedURL = app.staticTexts["extensions-repository-saved-url"]
+        XCTAssertTrue(savedURL.exists, app.debugDescription)
+        XCTAssertEqual(savedURL.label, repository)
+        XCTAssertTrue(app.staticTexts["Jormungandr (Beta) - Recommended"].exists, app.debugDescription)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts[repository].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launch()
+        app.buttons["Open settings"].tap()
+        XCTAssertTrue(app.staticTexts[repository].waitForExistence(timeout: 30), "Repository must remain saved after an app restart.")
     }
 }

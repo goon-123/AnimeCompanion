@@ -13,7 +13,7 @@ project={
  'targets':{
   'ExtensionStartupHost':{
    'type':'application','platform':'iOS',
-   'sources':[{'path':'Tests/ExtensionStartupHost.swift'}, {'path':'App/AnymeXRuntime.swift'}, {'path':'App/ExtensionAddRepositorySheet.swift'}, {'path':'build/AnymeXFrameworks/Runtime','type':'folder','buildPhase':'resources'}],
+   'sources':[{'path':'Tests/ExtensionStartupHost.swift'}, {'path':'App/AnymeXRuntime.swift'}, {'path':'App/BackSwipeNavigation.swift'}, {'path':'App/ExtensionAddRepositorySheet.swift'}, {'path':'build/AnymeXFrameworks/Runtime','type':'folder','buildPhase':'resources'}],
    'dependencies':dependencies+[{'package':'AnimeCore','product':'AnimeCore'}],
    'settings':{'base':{'PRODUCT_BUNDLE_IDENTIFIER':'com.animecompanion.extension-startup','GENERATE_INFOPLIST_FILE':'YES','OTHER_LDFLAGS':'$(inherited) -ObjC'}}},
   'ExtensionStartupTests':{
@@ -33,7 +33,7 @@ python3 - <<'PY'
 import json,subprocess,pathlib
 values=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','--json']))['devices']
 choices=[(runtime,device) for runtime,items in values.items() if 'iOS-18' in runtime or 'iOS-26' in runtime for device in items if device.get('isAvailable') and device['name'].startswith('iPhone')]
-choices.sort(key=lambda item: (0 if 'iOS-18' in item[0] else 1,item[0],item[1]['name']))
+choices.sort(key=lambda item: (0 if 'iOS-26' in item[0] else 1,item[0],item[1]['name']))
 if not choices: raise SystemExit('No iPhone simulator available')
 identifier=choices[0][1]['udid']
 subprocess.run(['xcrun','simctl','boot',identifier],timeout=90,check=False)
