@@ -20,7 +20,8 @@ struct HomeWidgetContent: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.homeVisuals) private var visuals
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("manga.showMatureSources") private var matureSources = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var matureSources: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @State private var settings = false
     @State private var watching: Anime?
     private var preferences: HomePreferences { HomePreferences(saved: saved) }

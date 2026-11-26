@@ -60,7 +60,7 @@ public enum VidHubPlayback {
         var parts = try launchComponents(stream: stream, title: pending.title, position: position, subtitle: subtitle)
         parts.queryItems? += [
             URLQueryItem(name: "request-id", value: pending.requestID.uuidString),
-            URLQueryItem(name: "x-source", value: "Anime Companion"),
+            URLQueryItem(name: "x-source", value: "AniNext"),
             URLQueryItem(name: "x-success", value: "animecompanion://playback/success"),
             URLQueryItem(name: "x-error", value: "animecompanion://playback/error"),
             URLQueryItem(name: "x-cancel", value: "animecompanion://playback/cancel")

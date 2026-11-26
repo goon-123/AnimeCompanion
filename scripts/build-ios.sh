@@ -17,5 +17,5 @@ xcodebuild -project AnimeCompanion.xcodeproj -scheme AnimeCompanion -configurati
 python3 scripts/check-safari-bundle.py build/Build/Products/Release-iphoneos/AnimeCompanion.app
 mkdir -p Payload
 cp -R build/Build/Products/Release-iphoneos/AnimeCompanion.app Payload/
-ditto -c -k --sequesterRsrc --keepParent Payload AnimeCompanion-unsigned.ipa
-echo 'Created AnimeCompanion-unsigned.ipa. It must be signed before installation.'
+ditto -c -k --sequesterRsrc --keepParent Payload AniNext-unsigned.ipa
+echo 'Created AniNext-unsigned.ipa. It must be signed before installation.'

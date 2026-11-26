@@ -1,6 +1,8 @@
 <div align="center">
 
-# Anime Companion
+# AniNext
+
+<img src="App/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="112" alt="AniNext page-turn app icon">
 
 ### Your next anime. Your entire manga shelf.
 
@@ -21,7 +23,7 @@ Discover anime, manga and novels. Keep your place. Make it yours.
     <td align="center" width="33%"><strong>Find your next favorite</strong><br><sub>Overgeared in Explore</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/home.jpg"><img src="docs/assets/screenshots/home.jpg" width="260" alt="Anime Companion Home with calendar, catch-up and news shortcuts, weekly anime artwork and headlines"></a></td>
+    <td align="center"><a href="docs/assets/screenshots/home.jpg"><img src="docs/assets/screenshots/home.jpg" width="260" alt="AniNext Home with calendar, catch-up and news shortcuts, weekly anime artwork and headlines"></a></td>
     <td align="center"><a href="docs/assets/screenshots/anime-details-bleach.jpg"><img src="docs/assets/screenshots/anime-details-bleach.jpg" width="260" alt="BLEACH series page with cinematic banner, title logo, dub progress, Watch Now and characters"></a></td>
     <td align="center"><a href="docs/assets/screenshots/anime-discovery-overgeared.jpg"><img src="docs/assets/screenshots/anime-discovery-overgeared.jpg" width="260" alt="Overgeared featured in the app's anime discovery carousel with full-screen artwork and watch actions"></a></td>
   </tr>
@@ -31,8 +33,8 @@ Discover anime, manga and novels. Keep your place. Make it yours.
     <td align="center"><strong>Find it. Choose it. Play it.</strong><br><sub>AIOStreams results and audio filters.</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/screenshots/manga-discovery.jpg"><img src="docs/assets/screenshots/manga-discovery.jpg" width="260" alt="MangaBaka discovery inside Anime Companion, showing trending manga and manhwa and rising library picks"></a></td>
-    <td align="center"><a href="docs/assets/screenshots/anime-details-tomb-raider-king.jpg"><img src="docs/assets/screenshots/anime-details-tomb-raider-king.jpg" width="260" alt="Tomb Raider King in Anime Companion with banner artwork, title logo, dub information, synopsis and character cards"></a></td>
+    <td align="center"><a href="docs/assets/screenshots/manga-discovery.jpg"><img src="docs/assets/screenshots/manga-discovery.jpg" width="260" alt="MangaBaka discovery inside AniNext, showing trending manga and manhwa and rising library picks"></a></td>
+    <td align="center"><a href="docs/assets/screenshots/anime-details-tomb-raider-king.jpg"><img src="docs/assets/screenshots/anime-details-tomb-raider-king.jpg" width="260" alt="Tomb Raider King in AniNext with banner artwork, title logo, dub information, synopsis and character cards"></a></td>
     <td align="center"><a href="docs/assets/screenshots/stream-picker.png"><img src="docs/assets/screenshots/stream-picker.png" width="260" alt="Find streams for The Laid-Off Cheat-Granting Mage, with AIOStreams 1080p results, English and Japanese audio filters, and play actions"></a></td>
   </tr>
 </table>
@@ -68,7 +70,7 @@ Choose **VidHub, Infuse or Outplayer** during setup or under **Settings → Sour
 | Player | Playback support |
 | --- | --- |
 | **VidHub** | External video playback, subtitles and resume callbacks on supported versions. |
-| **Infuse** | External video playback and subtitles; version 8.4.7 or later supports resume callbacks. Mark episodes watched in Anime Companion because Infuse does not report completion. |
+| **Infuse** | External video playback and subtitles; version 8.4.7 or later supports resume callbacks. Mark episodes watched in AniNext because Infuse does not report completion. |
 | **Outplayer** | External video playback, subtitles, resume position and completion callbacks. |
 
 The selected player must be installed separately. The included Safari → VidHub extension continues to open videos in VidHub.
@@ -79,7 +81,7 @@ The selected player must be installed separately. The included Safari → VidHub
 2. **Make it yours.** Follow the setup guide, connect AniList and/or MangaBaka, and choose your player. Public catalog browsing is available without signing in.
 3. **Bring your sources.** Add your AIOStreams/Stremio install link and configure any compatible extensions or TorBox connection you want to use.
 
-Anime Companion is a client for your configured services and sources. It does not include a streaming subscription or host anime or manga content.
+AniNext is a client for your configured services and sources. It does not include a streaming subscription or host anime or manga content.
 
 <details>
 <summary><strong>Building from source & developer notes</strong></summary>

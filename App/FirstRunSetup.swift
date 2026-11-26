@@ -21,6 +21,8 @@ final class FirstRunSetupState: ObservableObject {
             defaults.set(0, forKey: stepKey)
             defaults.removeObject(forKey: resultsKey)
             defaults.removeObject(forKey: SetupStage.storageKey)
+            defaults.removeObject(forKey: SetupStage.previousStorageKey)
+            defaults.removeObject(forKey: "setup.player.confirmed.v1")
             defaults.set(false, forKey: "content.includeAdult")
             return true
         }
@@ -58,7 +60,6 @@ struct FirstRunSetupView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var mangaBaka: MangaBakaStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     let revisiting: Bool
     let onFinish: () -> Void
     @State private var stage: SetupStage
@@ -69,7 +70,8 @@ struct FirstRunSetupView: View {
         let defaults = UserDefaults.standard
         _stage = State(initialValue: revisiting ? .welcome : SetupStage.restoring(
             savedStep: defaults.object(forKey: SetupStage.storageKey) as? Int,
-            legacyStep: defaults.integer(forKey: FirstRunSetupState.stepKey)))
+            legacyStep: defaults.integer(forKey: FirstRunSetupState.stepKey),
+            previousStep: defaults.object(forKey: SetupStage.previousStorageKey) as? Int))
     }
     var body: some View {
         NavigationStack {
@@ -90,7 +92,7 @@ struct FirstRunSetupView: View {
                         if stage != .welcome { Button("Back", systemImage: "chevron.left") { move(-1) }.disabled(busy) }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        if stage != .ready { Button("Set up later", action: finish).disabled(busy).accessibilityIdentifier("setup-skip-all") }
+                        if stage != .ready { Button("Set up later") { stage = .ready; if !revisiting { UserDefaults.standard.set(stage.rawValue, forKey: SetupStage.storageKey) } }.disabled(busy).accessibilityIdentifier("setup-skip-all") }
                     }
                 }
         }.interactiveDismissDisabled(!revisiting)
@@ -98,7 +100,7 @@ struct FirstRunSetupView: View {
     private var progress: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("ANIME COMPANION").font(.caption.bold()).tracking(2).foregroundStyle(Theme.accent)
+                Text("ANINEXT").font(.caption.bold()).tracking(2).foregroundStyle(Theme.accent)
                 Spacer()
                 Text("\(stage.rawValue + 1) of \(SetupStage.allCases.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -113,11 +115,12 @@ struct FirstRunSetupView: View {
         switch stage {
         case .welcome:
             VStack(alignment: .leading, spacing: 22) {
-                Image(systemName: "sparkles.rectangle.stack.fill").font(.system(size: 72, weight: .light))
-                    .foregroundStyle(Theme.accent).padding(.vertical, 16).accessibilityHidden(true)
+                Image("AniNextLogo").resizable().scaledToFit().frame(width: 128, height: 128)
+                    .padding(8).background(AniNextBrand.background, in: RoundedRectangle(cornerRadius: 28))
+                    .padding(.vertical, 8).accessibilityHidden(true)
                 feature("Find your next favorite", detail: "Anime, manga and novels in one place.", symbol: "sparkles")
                 feature("Keep your place", detail: "Connect your own libraries and continue reading.", symbol: "bookmark.fill")
-                feature("Start with what you need", detail: "Browse right away. Add sources and playback later.", symbol: "slider.horizontal.3")
+                feature("Set up watching & reading", detail: "Add a video source and player, plus manga extensions for chapters.", symbol: "slider.horizontal.3")
                 Label("No account is required to explore.", systemImage: "person.crop.circle.badge.checkmark")
                     .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
             }
@@ -137,35 +140,31 @@ struct FirstRunSetupView: View {
             }
         case .preferences:
             VStack(alignment: .leading, spacing: 20) {
+                ThemeSettingsControls().companionPanel(padding: 18)
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Appearance", systemImage: "circle.lefthalf.filled").font(.headline)
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppAppearance.allCases) { value in Text(value.label).tag(value.rawValue) }
-                    }.pickerStyle(.segmented)
-                }.companionPanel(padding: 18)
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Show adult titles (18+)", isOn: $store.includeAdult)
-                        .accessibilityIdentifier("setup-explicit-content")
-                    Text("Off by default. Your online lists are kept; this controls what appears while browsing.")
+                    NavigationLink { ContentPreferencesView() } label: {
+                        Label("Content preferences", systemImage: "eye")
+                    }.accessibilityIdentifier("setup-explicit-content")
+                    Text("Choose anime, manga and novel content in one place. You can change it later in Settings.")
                         .font(.caption).foregroundStyle(.secondary)
-                }.companionPanel(padding: 18)
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Playback", systemImage: "play.rectangle").font(.headline)
-                        .accessibilityIdentifier("setup-video-player")
-                    VideoPlayerSelection()
                 }.companionPanel(padding: 18)
                 feature("Your layout, your choice", detail: "Hide, add and rearrange Home and Explore widgets whenever you like.", symbol: "rectangle.3.group")
             }
+        case .watch:
+            WatchSourceSetupView()
+        case .reading:
+            ReadingSourceSetupView()
         case .ready:
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 16) {
                     connectionHeading("AniList", symbol: "play.rectangle", connected: store.isSignedIn)
                     connectionHeading("MangaBaka", symbol: "books.vertical", connected: mangaBaka.connected)
                 }.companionPanel(padding: 18).accessibilityIdentifier("setup-summary")
-                NavigationLink { SourcesSettingsView() } label: {
-                    feature("Reading & playback", detail: "Optional: add reading sources, TorBox or streaming add-ons.", symbol: "play.rectangle.on.rectangle")
+                SourceSetupSummary()
+                Button { stage = .watch } label: {
+                    feature("Review watching & reading setup", detail: "AIOStreams or Seanime + TorBox, your player, and manga sources.", symbol: "play.rectangle.on.rectangle")
                         .padding(18).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-                }.buttonStyle(.plain).accessibilityIdentifier("setup-optional-playback")
+                }.buttonStyle(.plain).accessibilityIdentifier("setup-review-playback")
                 Label("Everything here can be changed later in Settings.", systemImage: "checkmark.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -214,7 +213,7 @@ struct FirstRunSetupView: View {
                 Text(stage == .ready ? "Start exploring" : stage == .welcome ? "Get started" : "Continue")
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
             }
-                .buttonStyle(.borderedProminent).disabled(busy)
+                .buttonStyle(.borderedProminent).foregroundStyle(Theme.onAccent).disabled(busy)
                 .accessibilityIdentifier(stage == .ready ? "setup-start-exploring" : "setup-continue")
             if stage == .libraries { Text("You can continue without connecting an account.").font(.caption2).foregroundStyle(.secondary) }
         }.padding(.horizontal, 24).padding(.vertical, 12).frame(maxWidth: 660).frame(maxWidth: .infinity)

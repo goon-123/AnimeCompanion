@@ -16,7 +16,7 @@ public enum ExternalVideoPlayer: String, CaseIterable, Codable, Identifiable, Se
         switch self {
         case .vidHub: return "Videos open in VidHub. Supported versions return your position and completion status when you come back."
         case .outplayer: return "Videos open in Outplayer. Closing a video returns your resume position; finishing it can mark the episode watched."
-        case .infuse: return "Requires Infuse 8.4.7 or later. Returning from Infuse saves your resume position. Infuse does not report episode completion, so mark watched in AnimeCompanion."
+        case .infuse: return "Requires Infuse 8.4.7 or later. Returning from Infuse saves your resume position. Infuse does not report episode completion, so mark watched in AniNext."
         }
     }
     public var helpURL: URL {

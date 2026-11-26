@@ -1,5 +1,19 @@
 import Foundation
 
+/// The compact weekly widget follows the original broadcast status, even when
+/// a finished series still has dub releases or stale next-episode metadata.
+/// Keep this separate from the full calendar, which also shows dub history.
+public enum WeeklyAiring {
+    public static func events(from events: [ReleaseEvent], metadata: [Anime] = []) -> [ReleaseEvent] {
+        // Any explicit terminal status wins over an older copy of the same
+        // series. Missing status alone is not evidence that a show has ended.
+        let endedIDs = Set((metadata + events.map(\.anime)).filter {
+            $0.status == "FINISHED" || $0.status == "CANCELLED"
+        }.map(\.id))
+        return events.filter { !endedIDs.contains($0.anime.id) }
+    }
+}
+
 /// Local calendar dates, not fixed 24-hour offsets: weeks can cross daylight-saving changes.
 public struct ScheduleWeek {
     public let window: DateInterval

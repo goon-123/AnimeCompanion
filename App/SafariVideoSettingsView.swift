@@ -10,9 +10,9 @@ struct SafariVideoSettingsView: View {
             }
             Section("Enable the extension") {
                 instruction("1", title: "Open Settings", detail: "Go to Apps → Safari → Extensions.")
-                instruction("2", title: "Turn on Anime Companion – VidHub", detail: "The extension is included with this app. It requires iOS or iPadOS 18 or later.")
+                instruction("2", title: "Turn on AniNext – VidHub", detail: "The extension is included with this app. It requires iOS or iPadOS 18 or later.")
                 instruction("3", title: "Allow website access", detail: "Choose All Websites → Allow to detect videos wherever you browse. If asked, also allow access to an embedded player’s website.")
-                instruction("4", title: "Start a video in Safari", detail: "Tap Open in VidHub when the prompt appears. You can also open Safari’s page menu, choose Extensions, then Anime Companion – VidHub.")
+                instruction("4", title: "Start a video in Safari", detail: "Tap Open in VidHub when the prompt appears. You can also open Safari’s page menu, choose Extensions, then AniNext – VidHub.")
             }
             Section("Make it yours") {
                 Label("Automatic prompts", systemImage: "play.bubble")

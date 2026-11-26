@@ -18,6 +18,10 @@ final class DiscoveryFilterStore: ObservableObject {
     func includes(_ anime: Anime, dubs: ExploreDubStore, library: AppStore) -> Bool {
         selection.matches(anime: anime, progress: dubs.progress(for: anime), next: dubs.nextDub(for: anime.id), entry: library.entry(for: anime.id))
     }
+    func reloadSyncedPreferences() {
+        let value = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(DiscoveryPreferences.self, from: $0) } ?? DiscoveryPreferences()
+        if selection != value { selection = value }
+    }
 }
 
 struct DubFiltersView: View {

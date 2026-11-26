@@ -61,7 +61,7 @@ final class SeriesDetailLayoutTests: XCTestCase {
         XCTAssertEqual(restored.order.first, .synopsis)
         XCTAssertEqual(restored, layout)
         XCTAssertEqual(Set(SeriesDetailPage.allCases.map(\.storageKey)).count, 3)
-        XCTAssertEqual(SeriesDetailLayout(page: .reader).order.first, .reading)
+        XCTAssertEqual(SeriesDetailLayout(page: .reader).order.first, .synopsis)
     }
     func testUnknownDuplicatesAndRemovedSectionsDoNotHideAvailableContent() {
         let saved = #"["reviews","actors","synopsis","reviews","read","chapters","future-section"]"#
@@ -82,8 +82,8 @@ final class SeriesDetailLayoutTests: XCTestCase {
         var layout = SeriesDetailLayout(page: .reader)
         let original = layout.order
         layout.move(fromOffsets: IndexSet([0, 2]), toOffset: original.count)
-        XCTAssertEqual(layout.order, [original[1], original[3], original[4], original[0], original[2]])
-        layout.move(fromOffsets: IndexSet(integer: 4), toOffset: 0)
+        XCTAssertEqual(layout.order, [original[1], original[0], original[2]])
+        layout.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
         XCTAssertEqual(layout.order.first, original[2])
         XCTAssertEqual(SeriesDetailLayout(page: .reader, saved: layout.saved).order, layout.order)
     }

@@ -27,11 +27,7 @@ struct AnimeEpisodesSection: View {
     private var currentFilterBinding: Binding<AnimeEpisodeFilter> {
         Binding(get: { activeFilter }, set: { filter = $0 })
     }
-    private var defaultFilterBinding: Binding<AnimeEpisodeFilter> {
-        Binding(get: { AnimeEpisodeFilter.defaultValue(saved: defaultFilter) }, set: {
-            defaultFilter = $0.rawValue; filter = $0
-        })
-    }
+    private var isDefaultFilter: Bool { activeFilter == AnimeEpisodeFilter.defaultValue(saved: defaultFilter) }
     private var trackingBusy: Bool { store.savingMedia.contains(anime.id) || (store.isSignedIn && (store.loadingLibrary || store.savedAt == nil)) }
     private var watched: Int { store.entry(for: anime.id)?.progressValue ?? 0 }
     private var available: [AnimeEpisodeMetadata] {
@@ -104,9 +100,10 @@ struct AnimeEpisodesSection: View {
                 Picker("Show episodes", selection: currentFilterBinding) {
                     ForEach(AnimeEpisodeFilter.allCases) { Text($0.title).tag($0) }
                 }
-                Picker("Default on opening", selection: defaultFilterBinding) {
-                    ForEach(AnimeEpisodeFilter.allCases) { Text($0.title).tag($0) }
-                }
+                Button { defaultFilter = activeFilter.rawValue } label: {
+                    Label(isDefaultFilter ? "Default: \(activeFilter.title)" : "Make \(activeFilter.title) the default",
+                          systemImage: isDefaultFilter ? "checkmark.circle" : "pin")
+                }.disabled(isDefaultFilter).accessibilityIdentifier("episode-save-default-filter")
                 Toggle("Newest first", isOn: $newest)
             } label: { Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).frame(minWidth: 44, minHeight: 44) }
                 .accessibilityLabel("Episode filters and default").accessibilityIdentifier("episode-filter-options")

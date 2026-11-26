@@ -45,7 +45,8 @@ final class MangaBrowseModel: ObservableObject {
 struct MangaSourceBrowseView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @EnvironmentObject private var reading: MangaReadingStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     let source: MangaSourceReference
     let linkingTo: MangaSourceLinkTarget?
     @StateObject private var model = MangaBrowseModel()
@@ -66,7 +67,7 @@ struct MangaSourceBrowseView: View {
         Group {
             if source.adult && !showMature {
                 ContentUnavailableView("Source collection hidden", systemImage: "eye.slash",
-                    description: Text("This collection is hidden by your mature-source setting."))
+                    description: Text("This collection is hidden by your Content preferences."))
             } else { catalog }
         }.background(Theme.background).navigationTitle(source.name).navigationBarTitleDisplayMode(.large).tint(MangaStyle.accent)
             .searchable(text: $query, prompt: "Search this source")

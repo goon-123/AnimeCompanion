@@ -29,12 +29,14 @@ struct MangaReaderRoute: Identifiable {
     let title: MangaTitleReference
     let chapters: [SourceMangaChapter]
     let chapter: SourceMangaChapter
+    var startAtBeginning = false
 }
 
 struct MangaTitleDetailView: View {
     @EnvironmentObject private var extensions: MangaExtensionStore
     @EnvironmentObject private var reading: MangaReadingStore
-    @AppStorage("manga.showMatureSources") private var showMature = false
+    @EnvironmentObject private var contentPreferences: AppStore
+    private var showMature: Bool { contentPreferences.mangaBakaContent.allowsMatureSources }
     @AppStorage("manga.chaptersNewestFirst") private var newestFirst = false
     @AppStorage("series.layout.reader.v1") private var sectionOrder = ""
     let title: MangaTitleReference
@@ -44,7 +46,14 @@ struct MangaTitleDetailView: View {
     @State private var expanded = false
     @State private var searchChapters = false
     @State private var chapterQuery = ""
-    @State private var unreadOnly = false
+    @State private var chapterFilter = MangaChapterFilter.all
+    @State private var arranging = false
+    @State private var sourceSettings = false
+    @State private var marking: [SourceMangaChapter] = []
+    @State private var confirmMark = false
+    @State private var updatingChapters = false
+    @State private var jumpURL: String?
+    @State private var jumpToken = UUID()
     @State private var reader: MangaReaderRoute?
     @State private var showWebsite = false
     @State private var manageExtensions = false
@@ -72,21 +81,31 @@ struct MangaTitleDetailView: View {
         }
     }
     private var shownChapters: [SourceMangaChapter] {
-        let filtered = model.chapters.filter {
-            (chapterQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(chapterQuery)) &&
-            (!unreadOnly || record?.position(for: $0.url)?.completed != true)
-        }
-        return newestFirst ? Array(filtered.reversed()) : filtered
+        MangaChapterBrowsing.chapters(model.chapters, record: record, query: chapterQuery, filter: chapterFilter, newestFirst: newestFirst)
     }
+    private var readCount: Int {
+        let read = Set((record?.positions ?? []).filter(\.completed).map(\.chapterURL))
+        return model.chapters.filter { read.contains($0.url) }.count
+    }
+    private var nextChapter: SourceMangaChapter? { MangaChapterSequence.nextToRead(model.chapters, record: record) }
     var body: some View {
         Group {
             if matureSource && !showMature { ContentUnavailableView("Collection hidden", systemImage: "eye.slash") }
             else if !sourceReady && !extensions.loading { unavailableSource }
             else { content }
         }.background(Theme.background).navigationBarTitleDisplayMode(.inline).tint(MangaStyle.accent)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { SeriesLayoutButton(page: .reader) } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { if showMature || !matureSource { seriesOptions } } }
+            .sheet(isPresented: $sourceSettings) { MangaSourceSettingsView(source: source) { Task { await loadChapters(force: true) } } }
+            .sheet(isPresented: $arranging) { AppNavigationStack { SeriesLayoutEditor(page: .reader) } }
+            .confirmationDialog("Mark \(marking.count) chapters as read?", isPresented: $confirmMark, titleVisibility: .visible) {
+                Button("Mark as read") {
+                    let chapters = marking; updatingChapters = true
+                    Task { await reading.mark(current, chapters: chapters, read: true); updatingChapters = false }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("This changes read status. Your saved series and reading history are kept.") }
             .task(id: availabilityKey) {
-                await extensions.load()
+                await extensions.load(refreshCatalog: false)
                 guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }
                 await reading.load()
                 await loadChapters()
@@ -100,26 +119,33 @@ struct MangaTitleDetailView: View {
             .sheet(isPresented: $manageExtensions) { MangaExtensionSheet() }
     }
     private var content: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-                header
-                if visibleSections.isEmpty {
-                    Text("Sections are hidden or unavailable. Use Arrange sections in the toolbar to show more.")
-                        .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    header
+                    VStack(alignment: .leading, spacing: 14) {
+                        readingAction
+                        MangaSourceLinkControl(title: current, requestedTarget: linkingTo, chapters: model.chapters)
+                    }.padding(.horizontal, 20).accessibilityIdentifier("manga-primary-actions")
+                    if visibleSections.isEmpty {
+                        Text("Details are hidden. Use Arrange sections in the options menu to show more.")
+                            .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
+                    }
+                    ForEach(visibleSections) { section in detailSection(section).id(section.rawValue) }
+                }.padding(.bottom, 100).frame(maxWidth: 1000).frame(maxWidth: .infinity)
+            }.accessibilityIdentifier("manga-title-detail")
+                .refreshable { await loadChapters(force: true) }
+                .task(id: jumpToken) {
+                    guard let jumpURL else { return }
+                    do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+                    withAnimation { proxy.scrollTo("chapter:" + jumpURL, anchor: .center) }
                 }
-                ForEach(visibleSections) { section in
-                    detailSection(section).id(section.rawValue)
-                }
-            }.padding(.bottom, 32)
-        }.accessibilityIdentifier("manga-title-detail")
-            .refreshable { await loadChapters(force: true) }
+        }
     }
     @ViewBuilder private func detailSection(_ section: SeriesDetailSection) -> some View {
         switch section {
-        case .reading: readingAction.padding(.horizontal, 20)
         case .synopsis: synopsis
         case .genres: genres
-        case .sourceLink: MangaSourceLinkControl(title: current, requestedTarget: linkingTo).padding(.horizontal, 20)
         case .chapters: chapterSection.padding(.horizontal, 20)
         default: EmptyView()
         }
@@ -155,7 +181,7 @@ struct MangaTitleDetailView: View {
                 Text(source.name).font(.caption).foregroundStyle(.secondary)
                 Button {
                     Task { await reading.save(current, saved: record?.saved != true) }
-                } label: { Label(record?.saved == true ? "In library" : "Add to library", systemImage: record?.saved == true ? "bookmark.fill" : "bookmark") }
+                } label: { Label(record?.saved == true ? "Saved series" : "Save series", systemImage: record?.saved == true ? "bookmark.fill" : "bookmark") }
                     .font(.subheadline.bold()).buttonStyle(.bordered).buttonBorderShape(.capsule).disabled(reading.loading || reading.unreadable)
                     .accessibilityIdentifier("manga-save-title")
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -166,12 +192,23 @@ struct MangaTitleDetailView: View {
             }
     }
     private var readingAction: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let chapter = MangaChapterSequence.nextToRead(model.chapters, record: record) {
+        VStack(alignment: .leading, spacing: 12) {
+            if let chapter = nextChapter {
                 Button { open(chapter) } label: {
                     Label(record?.position(for: chapter.url)?.completed == false ? "Continue \(chapter.name)" : "Read \(chapter.name)", systemImage: "play.fill")
-                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
                 }.buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(MangaStyle.accent).foregroundStyle(.black).accessibilityIdentifier("manga-read")
+            }
+            if !model.chapters.isEmpty {
+                HStack {
+                    Label("\(readCount) / \(model.chapters.count) read", systemImage: "checkmark.circle")
+                    Spacer()
+                    if let latest = model.chapters.last {
+                        Button("Read latest") { open(latest) }.fontWeight(.semibold).accessibilityIdentifier("manga-read-latest")
+                    }
+                }.font(.caption).foregroundStyle(.secondary)
+                ProgressView(value: Double(readCount), total: Double(model.chapters.count)).tint(MangaStyle.accent)
+                    .accessibilityLabel("Chapters read")
             }
             if let url = record?.lastChapterURL, let point = record?.position(for: url) {
                 Text(point.chapterName + (point.completed ? " · Finished" : " · Page \(point.pageIndex + 1) of \(point.pageCount)"))
@@ -183,52 +220,94 @@ struct MangaTitleDetailView: View {
                 Button("Open source website / verify") { showWebsite = true }
                 Button("Try again") { Task { await loadChapters(force: true) } }
             }
+            if let error = reading.error { Text(error).font(.caption).foregroundStyle(.orange) }
         }
     }
+    private var seriesOptions: some View {
+        Menu {
+            Button("Refresh chapters", systemImage: "arrow.clockwise") { Task { await loadChapters(force: true) } }.disabled(model.loading || !sourceReady)
+            Button("Open source website", systemImage: "globe") { showWebsite = true }
+            Button("Source settings", systemImage: "slider.horizontal.3") { sourceSettings = true }.disabled(!sourceReady)
+            if let url = source.webURL(for: model.manga.url) { ShareLink(item: url) { Label("Share series", systemImage: "square.and.arrow.up") } }
+            Divider()
+            Button("Arrange sections", systemImage: "rectangle.3.group") { arranging = true }.accessibilityIdentifier("series-arrange-reader")
+        } label: { Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel("Series options").accessibilityIdentifier("manga-series-options")
+    }
     private var chapterSection: some View {
-        LazyVStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("\(model.chapters.count) chapters").font(.title3.bold())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Chapters").font(.title3.bold())
+                    Text("\(model.chapters.count) total · \(model.chapters.count - readCount) unread").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button { searchChapters.toggle(); if !searchChapters { chapterQuery = "" } } label: { Image(systemName: "magnifyingglass") }
+                Button { searchChapters.toggle(); if !searchChapters { chapterQuery = "" } } label: { Image(systemName: "magnifyingglass").frame(width: 40, height: 44) }
                     .accessibilityLabel("Search chapters")
                 Menu {
                     Toggle("Newest first", isOn: $newestFirst)
-                    Toggle("Unread only", isOn: $unreadOnly)
-                } label: { Image(systemName: "line.3.horizontal.decrease") }.accessibilityLabel("Chapter order and filters")
-            }.padding(.bottom, 16)
+                    if let nextChapter { Button("Show current chapter", systemImage: "bookmark") { jump(to: nextChapter) } }
+                    Button("Mark all as read", systemImage: "checkmark.circle") { confirmRead(model.chapters) }
+                        .disabled(model.chapters.isEmpty || updatingChapters || reading.loading || reading.unreadable)
+                } label: { Image(systemName: "line.3.horizontal.decrease").frame(width: 40, height: 44) }.accessibilityLabel("Chapter order and actions")
+            }
+            Picker("Chapter status", selection: $chapterFilter) {
+                ForEach(MangaChapterFilter.allCases) { Text($0.title).tag($0) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("manga-chapter-filter")
             if searchChapters {
-                TextField("Find a chapter", text: $chapterQuery).textFieldStyle(.roundedBorder).padding(.bottom, 14).autocorrectionDisabled()
+                TextField("Chapter name or number", text: $chapterQuery).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+                    .accessibilityIdentifier("manga-chapter-search")
             }
             if !model.loading && shownChapters.isEmpty && model.error == nil {
-                Text(model.chapters.isEmpty ? "This source returned no chapters." : "No chapters match these filters.")
-                    .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 20)
+                ContentUnavailableView("No chapters", systemImage: "text.book.closed", description: Text(model.chapters.isEmpty ? "This source returned no chapters." : "Try another search or read-status filter."))
             }
             ForEach(shownChapters) { chapter in
-                Button { open(chapter) } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: record?.position(for: chapter.url)?.completed == true ? "checkmark.circle.fill" : "circle")
-                            .font(.subheadline).foregroundStyle(record?.position(for: chapter.url)?.completed == true ? MangaStyle.accent : .secondary)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(chapter.name.isEmpty ? "Chapter" : chapter.name).font(.subheadline.weight(.medium))
-                            HStack(spacing: 6) {
-                                if chapter.uploadedAt > 0 { Text(Date(timeIntervalSince1970: Double(chapter.uploadedAt) / 1000), style: .date) }
-                                if !chapter.scanlator.isEmpty { Text(chapter.scanlator).lineLimit(1) }
-                            }.font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 4)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                    }.padding(.vertical, 16).contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityIdentifier("manga-chapter-\(model.chapters.firstIndex(of: chapter) ?? 0)")
-                    .contextMenu {
-                        Button(record?.position(for: chapter.url)?.completed == true ? "Mark unread" : "Mark read") {
-                            Task { await reading.mark(current, chapter: chapter, read: record?.position(for: chapter.url)?.completed != true) }
-                        }
-                    }
-                Divider().overlay(.white.opacity(0.05))
+                chapterRow(chapter).id("chapter:" + chapter.url)
             }
         }
     }
+    private func chapterRow(_ chapter: SourceMangaChapter) -> some View {
+        let isRead = record?.position(for: chapter.url)?.completed == true
+        let isCurrent = record?.lastChapterURL == chapter.url
+        return HStack(spacing: 8) {
+            Button { Task { await reading.mark(current, chapter: chapter, read: !isRead) } } label: {
+                Image(systemName: isRead ? "checkmark.circle.fill" : "circle").font(.title3)
+                    .foregroundStyle(isRead ? MangaStyle.accent : Color.secondary).frame(width: 44, height: 52)
+            }.buttonStyle(.plain).disabled(updatingChapters || reading.loading || reading.unreadable)
+                .accessibilityLabel((isRead ? "Mark unread: " : "Mark read: ") + chapter.name)
+            Button { open(chapter) } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(chapter.name.isEmpty ? "Chapter" : chapter.name).font(.subheadline.weight(.semibold))
+                            if isCurrent { Text("Current").font(.caption2.weight(.semibold)).foregroundStyle(MangaStyle.accent) }
+                        }
+                        HStack(spacing: 6) {
+                            if chapter.uploadedAt > 0 { Text(Date(timeIntervalSince1970: Double(chapter.uploadedAt) / 1000), style: .date) }
+                            if let scanlator = MangaChapterBrowsing.scanlator(chapter.scanlator) { Text(scanlator).lineLimit(1) }
+                        }.font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "play.fill").font(.caption).foregroundStyle(MangaStyle.accent)
+                }.padding(.vertical, 14).padding(.trailing, 12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("manga-chapter-\(model.chapters.firstIndex(of: chapter) ?? 0)")
+        }.background(isCurrent ? MangaStyle.accent.opacity(0.09) : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+            .contextMenu {
+                Button("Read from beginning", systemImage: "backward.end") { open(chapter, fromBeginning: true) }
+                Button(isRead ? "Mark unread" : "Mark read", systemImage: "checkmark.circle") {
+                    Task { await reading.mark(current, chapter: chapter, read: !isRead) }
+                }.disabled(updatingChapters || reading.loading || reading.unreadable)
+                if let index = model.chapters.firstIndex(of: chapter) {
+                    Button("Mark read through this chapter", systemImage: "checkmark.circle.fill") { confirmRead(Array(model.chapters.prefix(index + 1))) }
+                        .disabled(updatingChapters || reading.loading || reading.unreadable)
+                }
+                if let url = source.webURL(for: chapter.url) { ShareLink(item: url) { Label("Share chapter", systemImage: "square.and.arrow.up") } }
+            }
+    }
+    private func jump(to chapter: SourceMangaChapter) {
+        chapterFilter = .all; chapterQuery = ""; jumpURL = chapter.url; jumpToken = UUID()
+    }
+    private func confirmRead(_ chapters: [SourceMangaChapter]) { marking = chapters; confirmMark = true }
     private var status: String {
         switch model.manga.status {
         case 1: return "Ongoing"
@@ -240,7 +319,7 @@ struct MangaTitleDetailView: View {
         default: return "Manga & manhwa"
         }
     }
-    private func open(_ chapter: SourceMangaChapter) { reader = MangaReaderRoute(title: current, chapters: model.chapters, chapter: chapter) }
+    private func open(_ chapter: SourceMangaChapter, fromBeginning: Bool = false) { reader = MangaReaderRoute(title: current, chapters: model.chapters, chapter: chapter, startAtBeginning: fromBeginning) }
     private func loadChapters(force: Bool = false) async {
         guard !Task.isCancelled, sourceReady, showMature || !matureSource else { return }
         await model.load(current, extensions: extensions, reading: reading, force: force || model.error != nil)
