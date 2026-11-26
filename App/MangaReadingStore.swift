@@ -46,6 +46,15 @@ final class MangaReadingStore: ObservableObject {
     func mark(_ title: MangaTitleReference, chapter: SourceMangaChapter, read: Bool) async {
         await change { $0.mark(title, chapter: chapter, read: read) }
     }
+    func mark(_ title: MangaTitleReference, chapters: [SourceMangaChapter], read: Bool) async {
+        guard !loading, !unreadable else { return }
+        let existing = Set((record(title.id)?.positions ?? []).map(\.chapterURL))
+        let selected = Set(chapters.map(\.url).filter { !$0.isEmpty })
+        guard existing.union(selected).count <= 10000 else {
+            error = "This selection contains too many chapter records. Mark a smaller group instead."; return
+        }
+        await change { $0.mark(title, chapters: chapters, read: read) }
+    }
     func visit(_ source: MangaSourceReference) async { await change { $0.visitSource(source.id) } }
     func pin(_ source: MangaSourceReference) async {
         await change { value in

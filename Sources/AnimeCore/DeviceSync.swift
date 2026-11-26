@@ -11,7 +11,7 @@ public enum DeviceSyncPreferences {
         "library.anime.defaultStatus", "library.reading.defaultStatus", "library.combined.defaultStatus",
         "library.shared.grid.minimum.v1", "library.airingProgressSource", "library.mediaSection",
         "mangabaka.library.layout", "mangabaka.library.sort", "mangabaka.library.ascending",
-        "mangabaka.browseLayout", "mangabaka.contentFilter.v1", "combined.library.sort", "combined.library.ascending",
+        "mangabaka.browseLayout", "mangabaka.contentFilter.v1", "combined.library.sort", "combined.library.ascending", "manga.search.sources.v1", "manga.search.pinnedOnly.v1",
         "discovery.layout", "discovery.columns", "discovery.dub.preferences.v1", "app.mediaSection",
         "content.includeAdult", "tracking.automaticallyComplete", "episodes.defaultFilter.v1",
         "series.appearance.style.v1", "series.more-info.layout.v1", "series.layout.anime.v1",
