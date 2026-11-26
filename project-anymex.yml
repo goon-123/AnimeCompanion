@@ -1,6 +1,0 @@
-# Device releases include the complete AnymeX runtime. Ordinary simulator
-# regression jobs can compile the native UI without booting an embedded JVM.
-include:
-  - project.yml
-  - path: build/AnymeXDependencies.yml
-    relativePaths: false

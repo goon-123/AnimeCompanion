@@ -48,7 +48,6 @@ final class AppResetCoordinator: ObservableObject {
         Task {
             // Remove the old UI and cancel its view tasks before clearing data.
             await Task.yield()
-            await AnymeXRuntime.shared.shutdownForReset()
             await AppNetworkSessions.shared.cancelAndClear()
             LiveChartPageTransport.cancelAllForReset()
             await MangaRuntimeBrowser.closeAllForReset()

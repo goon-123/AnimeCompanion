@@ -129,6 +129,7 @@ struct UnifiedExploreView: View {
     }
     @ViewBuilder private func catalogRow(_ row: ExploreCatalogRow) -> some View {
         switch row {
+        case .yourReading: MangaReadingTiles()
         case .directory: catalogDirectory
         case .spotlight:
             if !trending.isEmpty { spotlight } else if isLoading { loadingPosters }
@@ -175,6 +176,8 @@ struct UnifiedExploreView: View {
                 }
                 Spacer()
                 Menu {
+                    NavigationLink(value: MangaReadingDestination.sources) { Label("Installed sources", systemImage: "square.stack.3d.up") }
+                    NavigationLink(value: MangaReadingDestination.saved) { Label("Saved series", systemImage: "books.vertical") }
                     Button("Customize Explore", systemImage: "slider.horizontal.3") { customizing = true }
                     Button("Settings", systemImage: "gearshape") { settings = true }
                 } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
@@ -230,7 +233,7 @@ struct UnifiedExploreView: View {
                 Menu {
                     Button("Home", systemImage: "house") { navigation.open(.home) }
                     Button("Release calendar", systemImage: "calendar") { navigation.open(.schedule) }
-                    Button("Reading sources", systemImage: "book") { navigation.open(.manga) }
+                    NavigationLink(value: MangaReadingDestination.sources) { Label("Reading sources", systemImage: "book") }
                     Button("News", systemImage: "newspaper") { navigation.open(.news) }
                     Divider()
                     NavigationLink("Content preferences") { MangaBakaContentSettingsView().toolbar(.visible, for: .navigationBar) }

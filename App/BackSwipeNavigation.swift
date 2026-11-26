@@ -95,6 +95,8 @@ private final class BackSwipeController: UIViewController, UIGestureRecognizerDe
         // Embedded source/add-on browsers retain their own page-back history.
         var touched = touch.view
         while let view = touched {
+            // Text selection and paste-menu gestures belong to the editor.
+            if view is UITextField || view is UITextView { return false }
             if let web = view as? WKWebView, web.allowsBackForwardNavigationGestures, web.canGoBack { return false }
             touched = view.superview
         }
